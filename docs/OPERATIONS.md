@@ -129,6 +129,36 @@ docker compose up -d             # db / web / nginx が起動
 
 - アプリ: http://127.0.0.1:8080 （nginx 経由）
 
+## DB に直接つなぎたいとき
+
+DB はホストにポートを持たない（同じ Docker ネットワークの中からしか到達できない）。
+保守はコンテナの中で行う。パスワードはコンテナ内の環境変数を使い、コマンド行にも
+シェル履歴にも残さない（`sh -c` に `'` シングルクォートで渡す）。
+
+```bash
+# 対話シェル（アプリ用ユーザー）
+docker compose exec db sh -c 'mysql -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"'
+
+# 1 文だけ実行する
+docker compose exec db sh -c 'mysql -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" -e "SHOW TABLES;"'
+```
+
+ダンプ・リストア（`-T` を付けて標準入出力をそのまま繋ぐ）:
+
+```bash
+docker compose exec -T db sh -c 'mysqldump -u root -p"$MARIADB_ROOT_PASSWORD" "$MARIADB_DATABASE"' > dump.sql
+docker compose exec -T db sh -c 'mysql -u root -p"$MARIADB_ROOT_PASSWORD" "$MARIADB_DATABASE"' < dump.sql
+```
+
+別のコンテナからつなぎたいときは、同じネットワーク（`.env` の
+`DOCKER_NETWORK_NAME`。既定は `fastapitemplate`）に参加させ、ホスト名 `db`・
+ポート 3306 を指す:
+
+```bash
+docker run --rm -it --network fastapitemplate mariadb:10.11 \
+  mysql -h db -u web_user -p appdb
+```
+
 ## デプロイしたいとき
 
 配置先サーバーの `<app>/<stg|prod>/` に `dist/` の中身をそのまま置いて実行する:
