@@ -1,5 +1,6 @@
 /** ナビゲーション: scope による出し分けと、狭い画面での引き出しの閉じ方。 */
 import { fireEvent, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { renderWithProviders } from '../test-support/renderWithProviders'
@@ -61,5 +62,58 @@ describe('Sidebar', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('開くと先頭の項目へ焦点を移す', () => {
+    renderWithProviders(<Sidebar open onClose={vi.fn()} />, {
+      scopes: ['dashboard:view', 'member:view'],
+    })
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Dashboard' }))
+  })
+
+  it('最後の要素から Tab すると先頭へ戻す（背後の操作子へ抜けない）', () => {
+    renderWithProviders(<Sidebar open onClose={vi.fn()} />, {
+      scopes: ['dashboard:view', 'member:view'],
+    })
+    // 巡回の最後は背景の「閉じる」ボタン
+    screen.getByRole('button', { name: CLOSE_LABEL }).focus()
+
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Dashboard' }))
+  })
+
+  it('先頭から Shift+Tab すると末尾へ回す', () => {
+    renderWithProviders(<Sidebar open onClose={vi.fn()} />, {
+      scopes: ['dashboard:view', 'member:view'],
+    })
+
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: CLOSE_LABEL }))
+  })
+
+  it('閉じると開いた操作子（ヘッダーの開閉ボタン）へ焦点を戻す', () => {
+    // 開閉ボタンの代役。引き出しを開いた時点で焦点を持っている前提。
+    const opener = document.createElement('button')
+    document.body.append(opener)
+    opener.focus()
+
+    function Drawer() {
+      const [open, setOpen] = useState(true)
+      return (
+        <Sidebar
+          open={open}
+          onClose={() => {
+            setOpen(false)
+          }}
+        />
+      )
+    }
+
+    renderWithProviders(<Drawer />, { scopes: ['member:view'] })
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Points' }))
+
+    fireEvent.click(screen.getByRole('button', { name: CLOSE_LABEL }))
+    expect(document.activeElement).toBe(opener)
+    opener.remove()
   })
 })

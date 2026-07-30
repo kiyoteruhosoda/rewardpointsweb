@@ -158,6 +158,9 @@ select {
   gap: 0.2rem;
   min-width: 12rem;
   padding: 1rem 0.5rem;
+  /* セーフエリアは幅に関わらず避ける。viewport-fit=cover は全幅で効くため、
+   * 横向きのノッチ付き端末（CSS 幅が 48rem を超える）でも切り欠きは左右に来る。 */
+  padding-left: calc(0.5rem + var(--safe-left));
   border-right: 1px solid var(--border);
 }
 
@@ -172,15 +175,27 @@ select {
   font-weight: 600;
 }
 
+/* 引き出しを開くと先頭の項目へ焦点が移る（Sidebar.tsx）。どこに居るのかが
+ * 分かるよう、選択中の背景とは別に枠を出す。 */
+.sidebar a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .content {
   flex: 1;
   min-width: 0;
   padding: 1.2rem;
+  /* 本文はナビゲーションの右にあるので、避けるのは右側の切り欠き。
+   * 引き出しになる狭い画面では左右とも本文が端まで来るため、下で左も足す。 */
+  padding-right: calc(1.2rem + var(--safe-right));
 }
 
 .footer {
   padding: 0.4rem 1rem;
+  padding-right: calc(1rem + var(--safe-right));
   padding-bottom: calc(0.4rem + var(--safe-bottom));
+  padding-left: calc(1rem + var(--safe-left));
   font-size: 0.8rem;
   color: var(--text-muted);
   border-top: 1px solid var(--border);
@@ -365,18 +380,26 @@ td {
     background: var(--surface);
     border-right: 1px solid var(--border);
     /* visibility も切り替える。transform で画面外へ出しただけだと、閉じている
-     * あいだも Tab キーでリンクへ入れてしまう。 */
+     * あいだも Tab キーでリンクへ入れてしまう。
+     *
+     * visibility は途中の値を持たない（滑らかには変わらない）ので、切り替わる時点を
+     * 遅延で指定する。閉じるときは滑り終わってから hidden にし、開くときは即座に
+     * visible にする。開くのを遅らせると、滑っているあいだ項目に焦点を当てられず、
+     * Sidebar.tsx が引き出しの先頭へ焦点を移せない。 */
     visibility: hidden;
     transform: translateX(-100%);
     transition:
       transform 0.2s ease,
-      visibility 0.2s ease;
+      visibility 0s linear 0.2s;
   }
 
   .sidebar-open {
     visibility: visible;
     transform: none;
     box-shadow: 0 0 1.5rem rgb(0 0 0 / 35%);
+    transition:
+      transform 0.2s ease,
+      visibility 0s linear 0s;
   }
 
   .nav-backdrop {
