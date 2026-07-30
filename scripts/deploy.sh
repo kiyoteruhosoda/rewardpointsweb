@@ -122,11 +122,6 @@ WEB_HOST_PORT="$(env_file_value WEB_HOST_PORT)"
 WEB_HOST_PORT="${WEB_HOST_PORT:-$DEFAULT_WEB_HOST_PORT}"
 HEALTH_URL="http://127.0.0.1:${WEB_HOST_PORT}/healthz"
 
-# compose の default ネットワーク名（docker-compose.yml の
-# `${DOCKER_NETWORK_NAME:-fastapitemplate}` と同じ解決をここでも行う）。
-DOCKER_NETWORK_NAME="$(env_file_value DOCKER_NETWORK_NAME)"
-DOCKER_NETWORK_NAME="${DOCKER_NETWORK_NAME:-$APP_NAME}"
-
 # compose interpolation はシェル環境変数 > --env-file の優先順位のため、ここで
 # export した値が優先される。stg / prod が同一ホストでイメージを取り合わないよう
 # 環境別タグに統一する。
@@ -298,6 +293,13 @@ DOCKER_NETWORK_NAME=$DEFAULT_NETWORK
 ENVEOF
 fi
 
+# compose の default ネットワーク名（docker-compose.yml の
+# `${DOCKER_NETWORK_NAME:-fastapitemplate}` と同じ解決をここでも行う）。
+# .env を生成した後で読むこと。初回デプロイでは生成された .env に環境別の名前
+# （fastapitemplate-prod 等）が入るため、先に読むと素の既定値を見てしまう。
+DOCKER_NETWORK_NAME="$(env_file_value DOCKER_NETWORK_NAME)"
+DOCKER_NETWORK_NAME="${DOCKER_NETWORK_NAME:-$APP_NAME}"
+
 # ===== Ensure DB image is available under the env-specific tag =====
 ensure_db_image() {
   if docker image inspect "$DB_IMAGE" >/dev/null 2>&1; then
@@ -334,12 +336,30 @@ count_nonempty_lines() { # 標準入力の行数（0 件でも 0 を出して成
   grep -c . || true
 }
 
+network_endpoint_ids() { # 引数: ネットワーク ID → 接続中コンテナの ID
+  docker network inspect -f '{{range $cid, $c := .Containers}}{{$cid}} {{end}}' "$1" 2>/dev/null \
+    || true
+}
+
+# このプロジェクト以外のコンテナが繋がっていれば、その名前を出力する。
+# 既に存在しないコンテナ（残骸のエンドポイント）は無視する。
+foreign_endpoints() { # 引数: ネットワーク ID
+  local cid info name
+  for cid in $(network_endpoint_ids "$1"); do
+    info="$(
+      docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}|{{.Name}}' "$cid" 2>/dev/null
+    )" || continue
+    [ "${info%%|*}" = "$PROJECT" ] && continue
+    name="${info#*|}"
+    printf '%s\n' "${name#/}"
+  done
+}
+
 remove_network() { # 引数: ネットワーク ID
   local id="$1" endpoint
-  # 接続中のコンテナが残っていると削除できないため、先に切り離す。
-  for endpoint in $(
-    docker network inspect -f '{{range $cid, $c := .Containers}}{{$cid}} {{end}}' "$id" 2>/dev/null || true
-  ); do
+  # 接続中のコンテナが残っていると削除できないため、先に切り離す。ここへ来る時点で
+  # 繋がっているのはこのプロジェクトのものだけ（resolve_duplicate_networks が検査済み）。
+  for endpoint in $(network_endpoint_ids "$id"); do
     docker network disconnect -f "$id" "$endpoint" >/dev/null 2>&1 || true
   done
   docker network rm "$id" >/dev/null 2>&1 || true
@@ -347,16 +367,29 @@ remove_network() { # 引数: ネットワーク ID
 
 # 同名ネットワークが 2 つ以上あれば削除する。解消できなければ非 0 を返す。
 resolve_duplicate_networks() {
-  local ids count id
+  local ids count foreign id
   ids="$(network_ids_by_name "$DOCKER_NETWORK_NAME")"
   count="$(printf '%s' "$ids" | count_nonempty_lines)"
   [ "$count" -gt 1 ] || return 0
+
+  # このプロジェクト以外のコンテナが繋がっているときは何もしない。切り離すと
+  # そのコンテナは動いたまま通信できなくなり、続く up でも復旧しないため
+  # （OPERATIONS.md のとおり、保守用のコンテナをこのネットワークへ繋ぐ運用がある）。
+  foreign="$(for id in $ids; do foreign_endpoints "$id"; done | sort -u | tr '\n' ' ')"
+  if [ -n "${foreign// /}" ]; then
+    err "Docker network '$DOCKER_NETWORK_NAME' is duplicated, but containers outside this project are attached: ${foreign% }"
+    err "先にそれらのコンテナを停止するか別のネットワークへ移してから、デプロイし直してください。"
+    return 1
+  fi
+
   warn "Docker network '$DOCKER_NETWORK_NAME' is duplicated ($count networks share the name); removing them so compose can recreate a single one"
   for id in $ids; do
     remove_network "$id"
   done
   count="$(network_ids_by_name "$DOCKER_NETWORK_NAME" | count_nonempty_lines)"
-  [ "$count" -le 1 ]
+  [ "$count" -le 1 ] && return 0
+  err "'docker network ls' で ID を確認し、'docker network rm <ID>' で 1 つだけ残して削除してください。"
+  return 1
 }
 
 # ===== Stop running containers =====
@@ -401,7 +434,7 @@ mkdir -p "$HOST_DATA_ROOT" || fail "Could not create host mount root: $HOST_DATA
 # ===== Start containers =====
 # 起動前に同名ネットワークの重複を解消しておく（残っていると up が必ず失敗する）。
 resolve_duplicate_networks \
-  || fail "Docker network '$DOCKER_NETWORK_NAME' is still duplicated. 'docker network ls' で ID を確認し、'docker network rm <ID>' で余分な方を削除してください。"
+  || fail "Could not resolve the duplicated Docker network '$DOCKER_NETWORK_NAME'（復旧手順は docs/OPERATIONS.md「デプロイが network ... is ambiguous で失敗したとき」）"
 
 UP_OUTPUT="$(mktemp)"
 

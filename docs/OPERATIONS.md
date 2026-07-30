@@ -181,8 +181,13 @@ docker run --rm -it --network fastapitemplate mariadb:10.11 \
 ./deploy.sh app
 ```
 
-それでも「is still duplicated」で止まるときは手で消す（ネットワークは作り直せる。
-消しても DB・アプリのデータには影響しない）:
+**「containers outside this project are attached」で止まったとき**は、そのネットワークに
+このアプリ以外のコンテナ（保守用に繋いだ mysql クライアント等）が接続している。
+自動では触らないので、表示されたコンテナを停止するか別のネットワークへ移してから
+デプロイし直す。
+
+それでも「Could not resolve the duplicated Docker network」で止まるときは手で消す
+（ネットワークは作り直せる。消しても DB・アプリのデータには影響しない）:
 
 ```bash
 docker network ls | grep fastapitemplate      # 同名で ID が違う行を確認する
