@@ -9,6 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from werkzeug.security import generate_password_hash
 
+from bounded_contexts.reward_points.application.use_cases.ensure_user_can_be_deleted import (
+    EnsureUserCanBeDeletedUseCase,
+)
+from bounded_contexts.reward_points.domain.exceptions import UserStillOwnsMembersError
+from bounded_contexts.reward_points.presentation.dependencies import (
+    get_ensure_user_can_be_deleted_use_case,
+)
 from presentation.fastapi.dependencies.auth import require_permission
 from presentation.fastapi.schemas.admin import (
     UserCreateRequest,
@@ -25,6 +32,7 @@ router = APIRouter(
 )
 
 DbDep = Annotated[Session, Depends(get_db)]
+DeletableDep = Annotated[EnsureUserCanBeDeletedUseCase, Depends(get_ensure_user_can_be_deleted_use_case)]
 
 
 def _to_response(user: User) -> UserResponse:
@@ -91,9 +99,19 @@ async def update_user(user_id: int, body: UserUpdateRequest, db: DbDep) -> UserR
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(user_id: int, db: DbDep) -> None:
+async def delete_user(user_id: int, db: DbDep, deletable: DeletableDep) -> None:
+    """アカウントを削除する。
+
+    メンバーを登録したままのアカウントは削除できない（409）。無効化したいだけなら
+    `is_active` を偽にする。共有・本人の紐付け・ポイント履歴の記録者は、
+    アカウントが消えても外部キーの `ON DELETE` が追随する（ADR-0007）。
+    """
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "user_not_found"})
+    try:
+        deletable.execute(user_id=user_id)
+    except UserStillOwnsMembersError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error": error.code}) from error
     user.roles = []
     db.delete(user)

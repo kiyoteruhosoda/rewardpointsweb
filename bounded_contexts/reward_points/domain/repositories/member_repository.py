@@ -27,6 +27,14 @@ class IMemberRepository(ABC):
         """
 
     @abstractmethod
+    def count_owned_by(self, user_id: int) -> int:
+        """*user_id* が登録したメンバーの数。
+
+        アカウントを削除してよいかの判断に使う。所有者が消えるとそのメンバーを
+        管理できる人がいなくなるため、残っていれば削除を拒む。
+        """
+
+    @abstractmethod
     def delete(self, member_id: int) -> None:
         """メンバーと、それに属する履歴・共有をまとめて消す。"""
 

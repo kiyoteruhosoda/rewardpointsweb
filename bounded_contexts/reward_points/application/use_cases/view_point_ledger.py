@@ -25,6 +25,7 @@ class ViewPointLedgerUseCase:
             member_name=access.member.name_value,
             balance=ledger.balance.value,
             access_level=access.level,
+            is_owner=access.member.is_owned_by(user_id),
             entries=tuple(PointEntryDTO.of(entry) for entry in ledger.entries),
         )
 

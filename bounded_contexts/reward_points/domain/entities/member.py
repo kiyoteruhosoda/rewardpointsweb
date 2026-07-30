@@ -30,5 +30,13 @@ class Member:
     def is_linked_to(self, user_id: int) -> bool:
         return self.linked_user_id is not None and self.linked_user_id == user_id
 
+    def is_owned_by(self, user_id: int) -> bool:
+        """*user_id* が登録した本人か。
+
+        共有を配る・取り消す権限は所有者だけが持つ。``MANAGE`` で共有された相手は
+        ポイントを記録できるが、共有の配り直しはできない（ADR-0007）。
+        """
+        return self.owner_user_id == user_id
+
 
 __all__ = ["Member"]

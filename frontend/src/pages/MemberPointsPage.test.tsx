@@ -44,6 +44,7 @@ function ledger(overrides: Partial<PointLedger> = {}): PointLedger {
     member_name: 'ハナ',
     balance: 70,
     access_level: 'manage',
+    is_owner: true,
     entries: [
       {
         id: 9,
@@ -149,7 +150,7 @@ describe('MemberPointsPage', () => {
   })
 
   it('メンバー本人には閲覧のみを見せる（変更 UI は出さない）', async () => {
-    viewPoints.mockResolvedValue(ledger({ access_level: 'view' }))
+    viewPoints.mockResolvedValue(ledger({ access_level: 'view', is_owner: false }))
     renderPage(MEMBER_SCOPES)
 
     expect(await screen.findByText('70 pt')).toBeInTheDocument()
@@ -161,18 +162,20 @@ describe('MemberPointsPage', () => {
   })
 
   it('point:manage を持っていても view で共有されたメンバーは変更できない', async () => {
-    viewPoints.mockResolvedValue(ledger({ access_level: 'view' }))
+    viewPoints.mockResolvedValue(ledger({ access_level: 'view', is_owner: false }))
     renderPage(MANAGER_SCOPES)
     await screen.findByText('70 pt')
 
     expect(screen.queryByRole('button', { name: 'Add points' })).not.toBeInTheDocument()
   })
 
-  it('共有の管理は manage のときだけ出す', async () => {
-    viewPoints.mockResolvedValue(ledger({ access_level: 'view' }))
+  it('共有の管理は所有者のときだけ出す（manage で共有されただけでは出ない）', async () => {
+    viewPoints.mockResolvedValue(ledger({ access_level: 'manage', is_owner: false }))
     renderPage(MANAGER_SCOPES)
     await screen.findByText('70 pt')
 
+    // 記録はできるが、共有を配り直す入り口は出さない
+    expect(screen.getByRole('button', { name: 'Add points' })).toBeInTheDocument()
     expect(screen.queryByText('Sharing')).not.toBeInTheDocument()
     expect(listShares).not.toHaveBeenCalled()
   })

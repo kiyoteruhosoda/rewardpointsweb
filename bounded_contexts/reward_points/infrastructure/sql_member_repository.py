@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from bounded_contexts.reward_points.domain.entities.member import Member
@@ -48,6 +48,12 @@ class SqlMemberRepository(IMemberRepository):
             .order_by(MemberModel.name, MemberModel.id)
         ).all()
         return [_to_member(row) for row in rows]
+
+    def count_owned_by(self, user_id: int) -> int:
+        total = self._session.scalar(
+            select(func.count()).select_from(MemberModel).where(MemberModel.owner_user_id == user_id)
+        )
+        return total or 0
 
     def delete(self, member_id: int) -> None:
         # SQLite では外部キーの ON DELETE CASCADE が既定で働かない（PRAGMA 未設定）

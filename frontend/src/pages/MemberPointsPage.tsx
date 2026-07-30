@@ -62,7 +62,8 @@ export function MemberPointsPage() {
   if (ledger === null) return <p className="loading">{t('common.loading')}</p>
 
   const canChange = hasScope('point:manage') && ledger.access_level === 'manage'
-  const canShare = hasScope('member:manage') && ledger.access_level === 'manage'
+  // 共有を配れるのは所有者だけ（manage で共有された相手は記録のみ）
+  const canShare = hasScope('member:manage') && ledger.is_owner
 
   return (
     <div className="card">

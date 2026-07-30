@@ -4,6 +4,9 @@
 ``user:manage`` を持たない管理者にも全アカウントが見えてしまうため。
 
 渡す範囲は ``view``（見るだけ）と ``manage``（加算・消費もできる）から選ぶ。
+
+共有できるのは **所有者だけ**。``manage`` で共有された相手はポイントを記録できるが、
+共有の配り直しはできない（ADR-0007）。
 """
 
 from __future__ import annotations
@@ -45,7 +48,7 @@ class ShareMemberUseCase:
         self._directory = directory
 
     def execute(self, command: ShareMemberCommand) -> MemberShareDTO:
-        member = self._access.require_manage(member_id=command.member_id, user_id=command.user_id).member
+        member = self._access.require_ownership(member_id=command.member_id, user_id=command.user_id).member
         target = self._require_target(command.target_email)
         if target.user_id == member.owner_user_id:
             raise ShareWithOwnerNotAllowedError

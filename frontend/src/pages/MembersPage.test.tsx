@@ -25,6 +25,7 @@ function member(overrides: Partial<MemberSummary> = {}): MemberSummary {
     balance: 70,
     access_level: 'manage',
     is_self: false,
+    is_owner: true,
     has_linked_user: false,
     ...overrides,
   }
@@ -85,8 +86,8 @@ describe('MembersPage', () => {
     })
   })
 
-  it('閲覧のみで共有されたメンバーには削除を出さない', async () => {
-    listMembers.mockResolvedValue([member({ access_level: 'view' })])
+  it('共有されただけのメンバーには削除を出さない（manage でも所有者ではない）', async () => {
+    listMembers.mockResolvedValue([member({ access_level: 'manage', is_owner: false })])
     renderWithProviders(<MembersPage />, { scopes: MANAGER_SCOPES })
     await screen.findByRole('link', { name: 'ハナ' })
 
@@ -94,7 +95,9 @@ describe('MembersPage', () => {
   })
 
   it('自分自身のメンバーには目印を付ける', async () => {
-    listMembers.mockResolvedValue([member({ is_self: true, access_level: 'view' })])
+    listMembers.mockResolvedValue([
+      member({ is_self: true, access_level: 'view', is_owner: false }),
+    ])
     renderWithProviders(<MembersPage />, { scopes: ['member:view'] })
 
     expect(await screen.findByText(/\(you\)/)).toBeInTheDocument()

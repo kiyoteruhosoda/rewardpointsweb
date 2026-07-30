@@ -36,7 +36,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["owner_user_id"], ["users.id"]),
-        sa.ForeignKeyConstraint(["linked_user_id"], ["users.id"]),
+        # アカウントが消えてもメンバーは残す（本人ログインの紐付けだけが外れる）
+        sa.ForeignKeyConstraint(["linked_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         # 1 つのアカウントが「自分のポイント」として見られるメンバーは 1 人だけ
         sa.UniqueConstraint("linked_user_id"),
@@ -50,7 +51,8 @@ def upgrade() -> None:
         sa.Column("access_level", _MEMBER_ACCESS_LEVEL, nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["member_id"], ["members.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
+        # 共有先のアカウントが消えれば、その共有はもう意味を持たない
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("member_id", "user_id"),
     )
 
@@ -63,11 +65,12 @@ def upgrade() -> None:
         sa.Column("points", sa.Integer(), nullable=False),
         sa.Column("reason", sa.String(length=255), nullable=True),
         sa.Column("application", sa.String(length=255), nullable=True),
-        sa.Column("recorded_by_user_id", _BIGINT, nullable=False),
+        # 記録者のアカウントが消えても履歴は残す（履歴はメンバーのもの）
+        sa.Column("recorded_by_user_id", _BIGINT, nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["member_id"], ["members.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["recorded_by_user_id"], ["users.id"]),
+        sa.ForeignKeyConstraint(["recorded_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_point_entries_member_id"), "point_entries", ["member_id"])

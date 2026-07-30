@@ -47,6 +47,7 @@ class RegisterMemberUseCase:
             balance=0,
             access_level=MemberAccessLevel.MANAGE,
             is_self=member.is_linked_to(command.owner_user_id),
+            is_owner=True,
             linked_user_email=linked.email if linked else None,
         )
 

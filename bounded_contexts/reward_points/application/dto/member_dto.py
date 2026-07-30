@@ -22,6 +22,7 @@ class MemberSummaryDTO:
     balance: int
     access_level: MemberAccessLevel
     is_self: bool
+    is_owner: bool
     has_linked_user: bool
 
     @classmethod
@@ -32,6 +33,8 @@ class MemberSummaryDTO:
             balance=balance,
             access_level=level,
             is_self=member.is_linked_to(viewer_user_id),
+            # メンバーの削除と共有の管理は所有者だけができる（ADR-0007）
+            is_owner=member.is_owned_by(viewer_user_id),
             # 紐付いたアカウントのメールアドレスは返さない。共有先にまでメンバー
             # 本人のアドレスを見せる理由が無いため、有無だけを伝える。
             has_linked_user=member.linked_user_id is not None,
@@ -45,6 +48,7 @@ class MemberDetailDTO:
     balance: int
     access_level: MemberAccessLevel
     is_self: bool
+    is_owner: bool
     linked_user_email: str | None
 
 

@@ -114,7 +114,7 @@ export function MembersPage() {
                 <td>{t('points.value', { points: member.balance })}</td>
                 <td>
                   <Link to={`/members/${member.id}`}>{t('members.history')}</Link>
-                  {canRegister && member.access_level === 'manage' && (
+                  {canRegister && member.is_owner && (
                     <>
                       {' '}
                       <button

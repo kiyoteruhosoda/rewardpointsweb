@@ -73,6 +73,7 @@ def _to_summary(dto: MemberSummaryDTO) -> MemberSummaryResponse:
         balance=dto.balance,
         access_level=dto.access_level,
         is_self=dto.is_self,
+        is_owner=dto.is_owner,
         has_linked_user=dto.has_linked_user,
     )
 
@@ -84,6 +85,7 @@ def _to_member(dto: MemberDetailDTO) -> MemberResponse:
         balance=dto.balance,
         access_level=dto.access_level,
         is_self=dto.is_self,
+        is_owner=dto.is_owner,
         linked_user_email=dto.linked_user_email,
     )
 
@@ -150,6 +152,7 @@ async def view_points(member_id: int, use_case: ViewLedgerDep, principal: PointV
         member_name=dto.member_name,
         balance=dto.balance,
         access_level=dto.access_level,
+        is_owner=dto.is_owner,
         entries=[_to_entry(entry) for entry in dto.entries],
     )
 

@@ -23,8 +23,11 @@ class MemberModel(Base):
     id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
     owner_user_id: Mapped[int] = mapped_column(BigIntPk, sa.ForeignKey("users.id"), nullable=False, index=True)
-    # 1 つのアカウントが「自分のポイント」として見られるメンバーは 1 人だけ
-    linked_user_id: Mapped[int | None] = mapped_column(BigIntPk, sa.ForeignKey("users.id"), nullable=True, unique=True)
+    # 1 つのアカウントが「自分のポイント」として見られるメンバーは 1 人だけ。
+    # アカウントが消えてもメンバーは残す（本人ログインの紐付けだけが外れる）。
+    linked_user_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, unique=True
+    )
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 
@@ -33,7 +36,8 @@ class MemberShareModel(Base):
     __tablename__ = "member_shares"
 
     member_id: Mapped[int] = mapped_column(BigIntPk, sa.ForeignKey("members.id", ondelete="CASCADE"), primary_key=True)
-    user_id: Mapped[int] = mapped_column(BigIntPk, sa.ForeignKey("users.id"), primary_key=True)
+    # 共有先のアカウントが消えれば、その共有はもう意味を持たない
+    user_id: Mapped[int] = mapped_column(BigIntPk, sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     access_level: Mapped[str] = mapped_column(MEMBER_ACCESS_LEVEL, nullable=False)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
 
@@ -51,7 +55,11 @@ class PointEntryModel(Base):
     # 加算なら理由、消費なら用途。種別によって片方だけが埋まる
     reason: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
     application: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
-    recorded_by_user_id: Mapped[int] = mapped_column(BigIntPk, sa.ForeignKey("users.id"), nullable=False)
+    # 記録した人のアカウントが消えても履歴は残す（履歴はメンバーのもので、
+    # 記録者のものではない）。誰が記録したか分からなくなるだけ。
+    recorded_by_user_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 

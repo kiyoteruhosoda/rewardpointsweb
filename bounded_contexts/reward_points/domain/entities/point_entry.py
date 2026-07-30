@@ -23,7 +23,8 @@ class PointEntry(ABC):
     member_id: int
     occurred_at: datetime
     amount: PointAmount
-    recorded_by_user_id: int
+    # 記録した人。そのアカウントが削除されると分からなくなる（履歴自体は残る）
+    recorded_by_user_id: int | None
 
     @property
     @abstractmethod

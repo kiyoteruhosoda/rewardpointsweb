@@ -133,6 +133,7 @@ def test_member_list_shows_the_balance(client: TestClient, manager_headers: Head
             "balance": 40,
             "access_level": "manage",
             "is_self": False,
+            "is_owner": True,
             "has_linked_user": False,
         }
     ]
@@ -374,21 +375,172 @@ def test_sharing_with_an_unknown_address_is_rejected(client: TestClient, manager
     assert response.json()["detail"]["error"] == "share_target_not_found"
 
 
-def test_a_shared_viewer_cannot_manage_shares(
-    client: TestClient, manager_headers: Headers, other_manager_headers: Headers
+@pytest.mark.parametrize("shared_level", ["view", "manage"])
+def test_only_the_owner_can_manage_shares(
+    client: TestClient,
+    manager_headers: Headers,
+    other_manager_headers: Headers,
+    member_user_id: int,
+    shared_level: str,
 ) -> None:
-    """共有されただけの相手が、さらに共有を広げられてはいけない。"""
+    """共有された相手は、共有を配り直せない（``manage`` で共有されていても）。
+
+    許すと、所有者の知らないところで共有先が増え、所有者が配った他の共有を取り消す
+    こともできてしまう。誰に渡すかを決めるのは所有者だけ。
+    """
+    assert member_user_id
     member_id = _register_member(client, manager_headers, name="ハナ")
-    client.post(
+    target_user_id = client.post(
         f"/api/members/{member_id}/shares",
         headers=manager_headers,
-        json={"email": OTHER_MANAGER_EMAIL, "access_level": "view"},
-    )
+        json={"email": OTHER_MANAGER_EMAIL, "access_level": shared_level},
+    ).json()["user_id"]
 
-    response = client.post(
+    # 一覧・追加・解除のいずれも所有者以外は拒む
+    assert client.get(f"/api/members/{member_id}/shares", headers=other_manager_headers).status_code == 403
+    added = client.post(
         f"/api/members/{member_id}/shares",
         headers=other_manager_headers,
         json={"email": MEMBER_EMAIL},
     )
+    assert added.status_code == 403
+    assert added.json()["detail"]["error"] == "member_access_denied"
+    revoked = client.delete(f"/api/members/{member_id}/shares/{target_user_id}", headers=other_manager_headers)
+    assert revoked.status_code == 403
+
+    # 所有者から見て共有は 1 件のまま（増えても減ってもいない）
+    assert len(client.get(f"/api/members/{member_id}/shares", headers=manager_headers).json()) == 1
+
+
+def test_a_manage_share_does_not_allow_deleting_the_member(
+    client: TestClient, manager_headers: Headers, other_manager_headers: Headers
+) -> None:
+    """共有先がメンバーと履歴すべてを消せてはいけない。記録と削除は分ける。"""
+    member_id = _register_member(client, manager_headers, name="ハナ")
+    _add_points(client, manager_headers, member_id, points=100)
+    client.post(
+        f"/api/members/{member_id}/shares",
+        headers=manager_headers,
+        json={"email": OTHER_MANAGER_EMAIL, "access_level": "manage"},
+    )
+
+    response = client.delete(f"/api/members/{member_id}", headers=other_manager_headers)
     assert response.status_code == 403
-    assert client.get(f"/api/members/{member_id}/shares", headers=other_manager_headers).status_code == 403
+    assert response.json()["detail"]["error"] == "member_access_denied"
+    assert client.get(f"/api/members/{member_id}/points", headers=manager_headers).json()["balance"] == 100
+
+
+def test_shared_manager_sees_is_owner_false(
+    client: TestClient, manager_headers: Headers, other_manager_headers: Headers
+) -> None:
+    member_id = _register_member(client, manager_headers, name="ハナ")
+    client.post(
+        f"/api/members/{member_id}/shares",
+        headers=manager_headers,
+        json={"email": OTHER_MANAGER_EMAIL, "access_level": "manage"},
+    )
+
+    shared_view = client.get("/api/members", headers=other_manager_headers).json()
+    assert [(item["access_level"], item["is_owner"]) for item in shared_view] == [("manage", False)]
+    ledger = client.get(f"/api/members/{member_id}/points", headers=other_manager_headers).json()
+    assert ledger["is_owner"] is False
+    assert client.get(f"/api/members/{member_id}/points", headers=manager_headers).json()["is_owner"] is True
+
+
+def test_a_manage_share_still_allows_recording_points(
+    client: TestClient, manager_headers: Headers, other_manager_headers: Headers
+) -> None:
+    """共有の管理を所有者に限っても、``manage`` 共有先の記録は妨げない。"""
+    member_id = _register_member(client, manager_headers, name="ハナ")
+    client.post(
+        f"/api/members/{member_id}/shares",
+        headers=manager_headers,
+        json={"email": OTHER_MANAGER_EMAIL, "access_level": "manage"},
+    )
+
+    assert _add_points(client, other_manager_headers, member_id, points=50).status_code == 201
+    assert client.get(f"/api/members/{member_id}/points", headers=other_manager_headers).json()["balance"] == 50
+
+
+# --- アカウント削除との関係 --------------------------------------------------
+#
+# 本番（MariaDB）は外部キーを検査するため、参照を残したままアカウントを消すと
+# DB が拒む。参照ごとに何が起きるべきかをここで固定する。
+
+
+def test_deleting_an_account_that_owns_members_is_refused(
+    client: TestClient, admin_headers: Headers, manager_headers: Headers
+) -> None:
+    """メンバーを登録したままのアカウントは消せない（履歴ごと失われるため）。"""
+    member_id = _register_member(client, manager_headers, name="ハナ")
+    _add_points(client, manager_headers, member_id, points=100)
+    owner_id = client.get("/api/auth/me", headers=manager_headers).json()["user_id"]
+
+    response = client.delete(f"/api/admin/users/{owner_id}", headers=admin_headers)
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "user_still_owns_members"
+
+    # 拒んだので、アカウントもメンバーも履歴も残っている
+    assert client.get(f"/api/admin/users/{owner_id}", headers=admin_headers).status_code == 200
+    assert client.get(f"/api/members/{member_id}/points", headers=manager_headers).json()["balance"] == 100
+
+
+def test_an_account_can_be_deleted_once_its_members_are_gone(
+    client: TestClient, admin_headers: Headers, manager_headers: Headers
+) -> None:
+    member_id = _register_member(client, manager_headers, name="ハナ")
+    owner_id = client.get("/api/auth/me", headers=manager_headers).json()["user_id"]
+    assert client.delete(f"/api/admin/users/{owner_id}", headers=admin_headers).status_code == 409
+
+    client.delete(f"/api/members/{member_id}", headers=manager_headers)
+    assert client.delete(f"/api/admin/users/{owner_id}", headers=admin_headers).status_code == 204
+
+
+def test_deleting_a_shared_account_removes_only_the_share(
+    client: TestClient, admin_headers: Headers, manager_headers: Headers, other_manager_headers: Headers
+) -> None:
+    """共有先のアカウントを消しても、メンバーと履歴は所有者の側に残る。"""
+    member_id = _register_member(client, manager_headers, name="ハナ")
+    _add_points(client, manager_headers, member_id, points=100)
+    shared_user_id = client.post(
+        f"/api/members/{member_id}/shares",
+        headers=manager_headers,
+        json={"email": OTHER_MANAGER_EMAIL, "access_level": "manage"},
+    ).json()["user_id"]
+
+    assert client.delete(f"/api/admin/users/{shared_user_id}", headers=admin_headers).status_code == 204
+
+    assert client.get(f"/api/members/{member_id}/shares", headers=manager_headers).json() == []
+    assert client.get(f"/api/members/{member_id}/points", headers=manager_headers).json()["balance"] == 100
+
+
+def test_deleting_a_linked_account_keeps_the_member(
+    client: TestClient, admin_headers: Headers, manager_headers: Headers, member_user_id: int
+) -> None:
+    """本人のアカウントを消しても、メンバーは残る（紐付けだけが外れる）。"""
+    member_id = _register_member(client, manager_headers, name="ハナ", linked_email=MEMBER_EMAIL)
+    _add_points(client, manager_headers, member_id, points=100)
+
+    assert client.delete(f"/api/admin/users/{member_user_id}", headers=admin_headers).status_code == 204
+
+    listed = client.get("/api/members", headers=manager_headers).json()
+    assert [(item["id"], item["balance"], item["has_linked_user"]) for item in listed] == [(member_id, 100, False)]
+
+
+def test_deleting_the_recording_account_keeps_the_history(
+    client: TestClient, admin_headers: Headers, manager_headers: Headers, other_manager_headers: Headers
+) -> None:
+    """記録した人のアカウントを消しても履歴は残る（履歴はメンバーのもの）。"""
+    member_id = _register_member(client, manager_headers, name="ハナ")
+    recorder_id = client.post(
+        f"/api/members/{member_id}/shares",
+        headers=manager_headers,
+        json={"email": OTHER_MANAGER_EMAIL, "access_level": "manage"},
+    ).json()["user_id"]
+    _add_points(client, other_manager_headers, member_id, points=60)
+
+    assert client.delete(f"/api/admin/users/{recorder_id}", headers=admin_headers).status_code == 204
+
+    ledger = client.get(f"/api/members/{member_id}/points", headers=manager_headers).json()
+    assert ledger["balance"] == 60
+    assert [entry["signed_points"] for entry in ledger["entries"]] == [60]

@@ -66,6 +66,16 @@ class LinkedUserAlreadyTakenError(RewardPointsError):
     code = "linked_user_already_taken"
 
 
+class UserStillOwnsMembersError(RewardPointsError):
+    """登録したメンバーが残っているアカウントは削除できない。
+
+    所有者が消えるとそのメンバーを管理できる人がいなくなる。黙って一緒に消すと
+    ポイント履歴まで失われるため、先にメンバーを片付けてもらう。
+    """
+
+    code = "user_still_owns_members"
+
+
 __all__ = [
     "LinkedUserAlreadyTakenError",
     "MemberAccessDeniedError",
@@ -76,4 +86,5 @@ __all__ = [
     "RewardPointsError",
     "ShareTargetNotFoundError",
     "ShareWithOwnerNotAllowedError",
+    "UserStillOwnsMembersError",
 ]

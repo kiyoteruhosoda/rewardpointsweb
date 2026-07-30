@@ -1,4 +1,4 @@
-"""共有を取り消す（要 ``MANAGE``）。"""
+"""共有を取り消す（所有者のみ）。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ class RevokeMemberShareUseCase:
         self._shares = shares
 
     def execute(self, *, member_id: int, target_user_id: int, user_id: int) -> None:
-        self._access.require_manage(member_id=member_id, user_id=user_id)
+        self._access.require_ownership(member_id=member_id, user_id=user_id)
         if not self._shares.revoke(member_id=member_id, user_id=target_user_id):
             raise MemberShareNotFoundError
 

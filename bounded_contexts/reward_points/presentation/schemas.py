@@ -48,6 +48,7 @@ class MemberSummaryResponse(BaseModel):
     balance: int
     access_level: MemberAccessLevel
     is_self: bool
+    is_owner: bool
     has_linked_user: bool
 
 
@@ -57,6 +58,7 @@ class MemberResponse(BaseModel):
     balance: int
     access_level: MemberAccessLevel
     is_self: bool
+    is_owner: bool
     linked_user_email: str | None
 
 
@@ -87,6 +89,7 @@ class PointLedgerResponse(BaseModel):
     member_name: str
     balance: int
     access_level: MemberAccessLevel
+    is_owner: bool
     entries: list[PointEntryResponse]
 
 

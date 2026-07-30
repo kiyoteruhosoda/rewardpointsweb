@@ -45,5 +45,17 @@ class MemberAccessResolver:
             raise MemberAccessDeniedError
         return access
 
+    def require_ownership(self, *, member_id: int, user_id: int) -> MemberAccess:
+        """共有の管理（一覧・追加・解除）に使う。所有者以外は ``MANAGE`` でも拒む。
+
+        ``MANAGE`` で共有された相手にまで共有の管理を許すと、所有者の知らないところ
+        で共有先が増え、所有者が配った他の共有を取り消すこともできてしまう。
+        誰に渡すかを決めるのは所有者だけ（ADR-0007）。
+        """
+        access = self.resolve(member_id=member_id, user_id=user_id)
+        if not access.member.is_owned_by(user_id):
+            raise MemberAccessDeniedError
+        return access
+
 
 __all__ = ["MemberAccessResolver"]

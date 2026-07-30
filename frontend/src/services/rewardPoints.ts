@@ -16,6 +16,8 @@ export interface MemberSummary {
   balance: number
   access_level: AccessLevel
   is_self: boolean
+  /** 登録した本人か。削除と共有の管理はこれが真のときだけ通る。 */
+  is_owner: boolean
   has_linked_user: boolean
 }
 
@@ -25,6 +27,7 @@ export interface Member {
   balance: number
   access_level: AccessLevel
   is_self: boolean
+  is_owner: boolean
   linked_user_email: string | null
 }
 
@@ -42,6 +45,7 @@ export interface PointLedger {
   member_name: string
   balance: number
   access_level: AccessLevel
+  is_owner: boolean
   entries: PointEntry[]
 }
 

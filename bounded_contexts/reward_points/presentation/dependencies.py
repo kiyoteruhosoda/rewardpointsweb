@@ -14,6 +14,9 @@ from sqlalchemy.orm import Session
 from bounded_contexts.reward_points.application.member_access_resolver import MemberAccessResolver
 from bounded_contexts.reward_points.application.use_cases.delete_member import DeleteMemberUseCase
 from bounded_contexts.reward_points.application.use_cases.delete_point_entry import DeletePointEntryUseCase
+from bounded_contexts.reward_points.application.use_cases.ensure_user_can_be_deleted import (
+    EnsureUserCanBeDeletedUseCase,
+)
 from bounded_contexts.reward_points.application.use_cases.list_accessible_members import (
     ListAccessibleMembersUseCase,
 )
@@ -90,6 +93,10 @@ def get_register_member_use_case(members: MemberRepoDep, directory: DirectoryDep
 
 def get_delete_member_use_case(access: AccessDep, members: MemberRepoDep) -> DeleteMemberUseCase:
     return DeleteMemberUseCase(access, members)
+
+
+def get_ensure_user_can_be_deleted_use_case(members: MemberRepoDep) -> EnsureUserCanBeDeletedUseCase:
+    return EnsureUserCanBeDeletedUseCase(members)
 
 
 def get_view_ledger_use_case(access: AccessDep, entries: EntryRepoDep) -> ViewPointLedgerUseCase:

@@ -37,6 +37,8 @@ class PointLedgerDTO:
     member_name: str
     balance: int
     access_level: MemberAccessLevel
+    # 共有の管理を出すかは「所有者か」で決まる（`access_level` では決まらない）
+    is_owner: bool
     entries: tuple[PointEntryDTO, ...]
 
 
