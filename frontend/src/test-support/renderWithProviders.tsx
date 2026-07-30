@@ -1,7 +1,7 @@
 /**
  * 画面テスト用の描画補助。
  *
- * 画面は i18n・トースト・ルーター・認証（scope）の上でしか動かない。毎回同じ
+ * 画面は i18n・テーマ・トースト・ルーター・認証（scope）の上でしか動かない。毎回同じ
  * 入れ子を書かずに済むよう、ここでまとめて用意する。scope は引数で差し替えられる
  * ので、「権限があるとき／ないとき」の描き分けをそのまま検証できる。
  */
@@ -13,6 +13,7 @@ import { ToastProvider } from '../components/ToastNotification'
 import { I18nProvider } from '../i18n'
 import type { UiSettings } from '../services/uiSettings'
 import { AuthContext, type AuthValue, type Me } from '../store/AuthContext'
+import { ThemeProvider } from '../theme'
 
 const SETTINGS: UiSettings = {
   languages: ['en'],
@@ -55,15 +56,17 @@ export function renderWithProviders(ui: ReactElement, options: Options = {}): Re
 
   return render(
     <I18nProvider settings={SETTINGS}>
-      <AuthContext.Provider value={authValueOf(scopes)}>
-        <ToastProvider>
-          <MemoryRouter initialEntries={[route]}>
-            <Routes>
-              <Route path={path} element={ui} />
-            </Routes>
-          </MemoryRouter>
-        </ToastProvider>
-      </AuthContext.Provider>
+      <ThemeProvider settings={SETTINGS}>
+        <AuthContext.Provider value={authValueOf(scopes)}>
+          <ToastProvider>
+            <MemoryRouter initialEntries={[route]}>
+              <Routes>
+                <Route path={path} element={ui} />
+              </Routes>
+            </MemoryRouter>
+          </ToastProvider>
+        </AuthContext.Provider>
+      </ThemeProvider>
     </I18nProvider>,
   )
 }

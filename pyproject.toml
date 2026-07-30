@@ -25,6 +25,7 @@ dependencies = [
 dev = [
     "httpx>=0.28.1",
     "mypy>=1.14",
+    "pillow>=12.3.0",
     "pytest>=9.0.3",
     "ruff>=0.11.0",
     "types-qrcode>=8.2.0.20260518",
@@ -97,6 +98,12 @@ select = [
     "RET",  # flake8-return: return 改善
     "PTH",  # flake8-use-pathlib: pathlib 利用推奨
     "RUF",  # Ruff 独自ルール
+    # 設計品質の定量基準（ADR-0008）。閾値は [tool.ruff.lint.mccabe] /
+    # [tool.ruff.lint.pylint] に置く。
+    "C901",    # 複雑度
+    "PLR0912", # 分岐の数
+    "PLR0913", # 引数の数
+    "PLR0915", # 文の数（関数長の代替）
 ]
 
 ignore = [
@@ -108,6 +115,21 @@ ignore = [
     "RUF002",
     "RUF003",
 ]
+
+[tool.ruff.lint.mccabe]
+# 開発標準どおり。導入時点の違反は 0 件（ADR-0008）。
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+# 分岐と文の数。関数長 30 行そのものを見るルールは Ruff に無いため、
+# 文の数（30）で近似する。導入時点の違反はいずれも 0 件（ADR-0008）。
+max-branches = 8
+max-statements = 30
+# 引数は開発標準の 3 ではなく 5。PLR0913 はキーワード専用引数と FastAPI の
+# Depends() も 1 個として数えるため、3 にすると呼び出し側の読みやすさを
+# 損なっていない箇所まで落ちる。位置引数 3 個までは引き続きレビュー観点
+# （理由と計測結果は ADR-0008）。
+max-args = 5
 
 [tool.ruff.lint.per-file-ignores]
 # ARG001: pytest フィクスチャは引数として受け取るだけで参照しないことがある

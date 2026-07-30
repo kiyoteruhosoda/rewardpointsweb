@@ -13,6 +13,30 @@ React + TypeScript + Vite の SPA。ルーティングは `src/App.tsx`、レイ
 scope だけでは「そのメンバーを触れるか」が決まらない（理由は ADR-0007）。両方が
 揃ったときにだけ操作の入り口を出す。
 
+## 画面幅による違い
+
+`48rem`（768px）を境に振る舞いが変わる（`src/index.css` のメディアクエリ）。
+画面は 1 種類で、DOM も同じ。狭い側でだけ次が加わる。
+
+| 要素                          | 広い画面                 | 狭い画面                                                                                          |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `Sidebar`                     | 本文の左に出たまま       | 画面外から滑り出す引き出し。ヘッダーの `☰` で開き、**項目を選ぶ・背景に触れる・Escape** で閉じる |
+| 表                            | そのまま                 | `.table-scroll` で表だけを横に送る（ページ全体は横に動かない）                                    |
+| `button` / `input` / `select` | 既定                     | 高さ 2.75rem 以上（指で押す的を 44px 以上にする）                                                 |
+| 入力・フォーム                | 横並び（`.inline-form`） | 縦積み                                                                                            |
+| 余白                          | 1.2rem                   | 0.9rem ＋ `env(safe-area-inset-*)`（ノッチ・ホームインジケータを避ける）                          |
+
+入力欄の文字は 16px を下回らせない。下回ると iOS がフォーカス時に画面を拡大する。
+
+## アイコン
+
+`public/favicon.svg`・`pwa-192x192.png`・`pwa-512x512.png`・
+`pwa-maskable-512x512.png`・`apple-touch-icon.png` は
+`scripts/generate_app_icons.py` が生成する。手で編集しない
+（SVG だけ直しても PNG は追随しない）。maskable はランチャー側で切り抜かれるため、
+角丸のアイコンを流用せず、端まで塗って図柄をセーフゾーン（内側 80%）に収めた
+別画像になっている。
+
 ## 画面一覧
 
 `RequireAuth` の内側はログインが必要で、未ログインなら `/login` へ置き換え遷移する。
@@ -28,8 +52,9 @@ scope だけでは「そのメンバーを触れるか」が決まらない（�
 
 ### ログイン必須
 
-共通枠として `Header`（言語・テーマ・ユーザー名・ログアウト）、`Sidebar`、`Footer`
-が付く。Sidebar の項目は scope を持つものだけが並ぶ（`components/Sidebar.tsx`）。
+共通枠として `Header`（メニュー開閉・アプリ名・ユーザー名・ログアウト）、`Sidebar`、
+`Footer` が付く。Sidebar の項目は scope を持つものだけが並ぶ（`components/Sidebar.tsx`）。
+言語とテーマの切り替えは `/profile` にある（ヘッダーに置くと、狭い画面で 3 行になるため）。
 
 | パス                 | 実装                           | 必要な scope            | 何をする画面か                                                                          |
 | -------------------- | ------------------------------ | ----------------------- | --------------------------------------------------------------------------------------- |
@@ -37,7 +62,7 @@ scope だけでは「そのメンバーを触れるか」が決まらない（�
 | `/members`           | `pages/MembersPage.tsx`        | `member:view`           | **メンバー一覧。** 見られるメンバーと残高。登録は `member:manage`                       |
 | `/members/:memberId` | `pages/MemberPointsPage.tsx`   | `point:view`            | **メンバーのポイント。** 残高・履歴・加算・消費、および共有の管理                       |
 | `/items`             | `pages/ItemsPage.tsx`          | `item:view`             | 見本のアイテム CRUD（`bounded_contexts/example`）                                       |
-| `/profile`           | `pages/ProfilePage.tsx`        | —                       | 自分の情報と付与されている scope                                                        |
+| `/profile`           | `pages/ProfilePage.tsx`        | —                       | 自分の情報・付与されている scope・表示設定（言語 / テーマ）                             |
 | `/change-password`   | `pages/ChangePasswordPage.tsx` | —                       | パスワード変更                                                                          |
 | `/security`          | `pages/SecurityPage.tsx`       | —                       | 二要素認証とパスキーの登録・解除                                                        |
 | `/admin/users`       | `pages/UsersPage.tsx`          | `user:manage`           | ユーザー管理                                                                            |

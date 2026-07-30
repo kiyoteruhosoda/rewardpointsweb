@@ -99,32 +99,34 @@ export function MemberSharePanel({ memberId }: { memberId: number }) {
       {shares.length === 0 ? (
         <p>{t('shares.empty')}</p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>{t('shares.email')}</th>
-              <th>{t('shares.level')}</th>
-              <th>{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shares.map((item) => (
-              <tr key={item.user_id}>
-                <td>{item.email}</td>
-                <td>{t(`shares.level.${item.access_level}`)}</td>
-                <td>
-                  <button
-                    onClick={() => {
-                      void revoke(item.user_id)
-                    }}
-                  >
-                    {t('shares.revoke')}
-                  </button>
-                </td>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>{t('shares.email')}</th>
+                <th>{t('shares.level')}</th>
+                <th>{t('common.actions')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {shares.map((item) => (
+                <tr key={item.user_id}>
+                  <td>{item.email}</td>
+                  <td>{t(`shares.level.${item.access_level}`)}</td>
+                  <td>
+                    <button
+                      onClick={() => {
+                        void revoke(item.user_id)
+                      }}
+                    >
+                      {t('shares.revoke')}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   )

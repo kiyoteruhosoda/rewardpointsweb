@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react'
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 
 import { Footer } from './components/Footer'
@@ -24,13 +25,23 @@ import { useAuth } from './store/AuthContext'
 function RequireAuth() {
   const { user, loading } = useAuth()
   const { t } = useI18n()
+  // 狭い画面でナビゲーションを引き出しにするための開閉状態。広い画面では
+  // ナビゲーションが出たままなので、この値は使われない（index.css 側で無視される）。
+  const [navOpen, setNavOpen] = useState(false)
+  const toggleNav = useCallback(() => {
+    setNavOpen((open) => !open)
+  }, [])
+  const closeNav = useCallback(() => {
+    setNavOpen(false)
+  }, [])
+
   if (loading) return <p className="loading">{t('common.loading')}</p>
   if (!user) return <Navigate to="/login" replace />
   return (
     <div className="layout">
-      <Header />
+      <Header navOpen={navOpen} onToggleNav={toggleNav} />
       <div className="layout-body">
-        <Sidebar />
+        <Sidebar open={navOpen} onClose={closeNav} />
         <main className="content">
           <Outlet />
         </main>

@@ -361,6 +361,7 @@ dependencies = [
 dev = [
     { name = "httpx" },
     { name = "mypy" },
+    { name = "pillow" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "types-qrcode" },
@@ -389,6 +390,7 @@ requires-dist = [
 dev = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "mypy", specifier = ">=1.14" },
+    { name = "pillow", specifier = ">=12.3.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "ruff", specifier = ">=0.11.0" },
     { name = "types-qrcode", specifier = ">=8.2.0.20260518" },

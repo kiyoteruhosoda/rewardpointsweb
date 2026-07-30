@@ -97,36 +97,38 @@ export function MemberPointsPage() {
       {ledger.entries.length === 0 ? (
         <p>{t('points.historyEmpty')}</p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>{t('points.when')}</th>
-              <th>{t('points.what')}</th>
-              <th>{t('points.change')}</th>
-              {canChange && <th>{t('common.actions')}</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {ledger.entries.map((entry) => (
-              <tr key={entry.id}>
-                <td>{parseUtc(entry.occurred_at).toLocaleString(locale)}</td>
-                <td>{entry.description}</td>
-                <td>{t('points.value', { points: withSign(entry.signed_points) })}</td>
-                {canChange && (
-                  <td>
-                    <button
-                      onClick={() => {
-                        void removeEntry(entry.id)
-                      }}
-                    >
-                      {t('common.delete')}
-                    </button>
-                  </td>
-                )}
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>{t('points.when')}</th>
+                <th>{t('points.what')}</th>
+                <th>{t('points.change')}</th>
+                {canChange && <th>{t('common.actions')}</th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {ledger.entries.map((entry) => (
+                <tr key={entry.id}>
+                  <td>{parseUtc(entry.occurred_at).toLocaleString(locale)}</td>
+                  <td>{entry.description}</td>
+                  <td>{t('points.value', { points: withSign(entry.signed_points) })}</td>
+                  {canChange && (
+                    <td>
+                      <button
+                        onClick={() => {
+                          void removeEntry(entry.id)
+                        }}
+                      >
+                        {t('common.delete')}
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {canShare && <MemberSharePanel memberId={id} />}

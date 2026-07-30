@@ -95,42 +95,44 @@ export function MembersPage() {
       {members.length === 0 ? (
         <p>{t('members.empty')}</p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>{t('members.name')}</th>
-              <th>{t('members.balance')}</th>
-              <th>{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {members.map((member) => (
-              <tr key={member.id}>
-                <td>
-                  <Link to={`/members/${member.id}`}>{member.name}</Link>
-                  {member.is_self && ` (${t('members.self')})`}
-                  {!member.is_self && member.has_linked_user && ` (${t('members.linked')})`}
-                </td>
-                <td>{t('points.value', { points: member.balance })}</td>
-                <td>
-                  <Link to={`/members/${member.id}`}>{t('members.history')}</Link>
-                  {canRegister && member.is_owner && (
-                    <>
-                      {' '}
-                      <button
-                        onClick={() => {
-                          void remove(member)
-                        }}
-                      >
-                        {t('common.delete')}
-                      </button>
-                    </>
-                  )}
-                </td>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>{t('members.name')}</th>
+                <th>{t('members.balance')}</th>
+                <th>{t('common.actions')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {members.map((member) => (
+                <tr key={member.id}>
+                  <td>
+                    <Link to={`/members/${member.id}`}>{member.name}</Link>
+                    {member.is_self && ` (${t('members.self')})`}
+                    {!member.is_self && member.has_linked_user && ` (${t('members.linked')})`}
+                  </td>
+                  <td>{t('points.value', { points: member.balance })}</td>
+                  <td>
+                    <Link to={`/members/${member.id}`}>{t('members.history')}</Link>
+                    {canRegister && member.is_owner && (
+                      <>
+                        {' '}
+                        <button
+                          onClick={() => {
+                            void remove(member)
+                          }}
+                        >
+                          {t('common.delete')}
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )
