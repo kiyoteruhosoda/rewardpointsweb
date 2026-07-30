@@ -481,7 +481,9 @@ def test_deleting_an_account_that_owns_members_is_refused(
     assert response.json()["detail"]["error"] == "user_still_owns_members"
 
     # 拒んだので、アカウントもメンバーも履歴も残っている
-    assert client.get(f"/api/admin/users/{owner_id}", headers=admin_headers).status_code == 200
+    # （個別取得の口は無いので一覧で確かめる。SPA のフォールバックに当たらないため）
+    listed = client.get("/api/admin/users", headers=admin_headers).json()
+    assert owner_id in [user["id"] for user in listed]
     assert client.get(f"/api/members/{member_id}/points", headers=manager_headers).json()["balance"] == 100
 
 
