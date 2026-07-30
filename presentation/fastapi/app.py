@@ -20,6 +20,10 @@ from bounded_contexts.account_security.presentation.router import (
     router as account_security_router,
 )
 from bounded_contexts.example.presentation.router import router as items_router
+from bounded_contexts.reward_points.presentation.error_handling import (
+    register_reward_points_error_handler,
+)
+from bounded_contexts.reward_points.presentation.router import router as members_router
 from presentation.fastapi.middleware.request_logging import RequestLoggingMiddleware
 from presentation.fastapi.routers import spa
 from presentation.fastapi.routers.admin.config import router as admin_config_router
@@ -61,9 +65,9 @@ def create_app() -> FastAPI:
 
     build_info = load_build_info()
     app = FastAPI(
-        title="fastapitemplate",
+        title="RewardPoints",
         version=build_info.version,
-        description="FastAPI + DDD template (photonest-based).",
+        description="人ごとのポイントを記録・共有する PWA のバックエンド（FastAPI + DDD）。",
         lifespan=_lifespan,
     )
     app.state.build_info = build_info
@@ -83,6 +87,7 @@ def create_app() -> FastAPI:
         )
 
     register_account_security_error_handler(app)
+    register_reward_points_error_handler(app)
 
     app.include_router(health_router)
     app.include_router(ui_settings_router)
@@ -96,6 +101,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_logs_router)
     app.include_router(admin_system_router)
     app.include_router(items_router)
+    app.include_router(members_router)
 
     # SPA は最後（catch-all のため）。ビルド済みの場合のみ配信する。
     if spa.dist_available():

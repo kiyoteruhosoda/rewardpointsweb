@@ -15,4 +15,16 @@ def utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-__all__ = ["utcnow"]
+def as_naive_utc(moment: datetime) -> datetime:
+    """外から受け取った時刻を、保存できる形（UTC の naive datetime）へ揃える。
+
+    API のリクエストにはタイムゾーン付きの時刻（``2026-07-30T09:00:00+09:00``）が
+    来る。tz 付きのまま保存すると、tz 無しで保存された既存行との比較で例外になる。
+    tz が無い時刻は、すでに UTC として渡されたものとして扱う。
+    """
+    if moment.tzinfo is None:
+        return moment
+    return moment.astimezone(UTC).replace(tzinfo=None)
+
+
+__all__ = ["as_naive_utc", "utcnow"]

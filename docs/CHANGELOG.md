@@ -2,6 +2,37 @@
 
 新しいものを上に追記する。細かな進捗は書かない（Progress.md 完了時に要約を移す）。
 
+## 2026-07 人ごとのポイント（reward_points コンテキスト）と PWA 化
+
+ネイティブアプリ（Flutter + SQLite の RewardPoints）を、この Web アプリへ移した。
+端末内 DB からログイン付きの共有サーバーへ移ったことで、ネイティブ版には無かった
+「誰のポイントか」「誰が触れるか」を決める必要が生まれた。
+
+- **`bounded_contexts/reward_points/` を追加**（ADR-0007）。メンバー（ポイントを
+  貯める人）・共有・履歴を扱う。認可は二段で、scope（`member:*` / `point:*`）が
+  「その操作を行える立場か」を、`MemberAccessPolicy` が「そのメンバーを触れるか」を
+  決める。`point:manage` を持つ管理者でも、共有されていないメンバーは触れない。
+- **メンバー本人は閲覧のみ**。`members.linked_user_id` にログインアカウントを
+  紐付けると、本人が自分の残高と履歴を見られる。変更は scope（`member` ロールに
+  `point:manage` を与えない）と関係（本人は `view` 止まり）の両方で塞がれている。
+- **共有はメールアドレスで指定する**。ユーザー一覧を返す API を作ると、
+  `user:manage` を持たない管理者にも全アカウントが見えるため。
+- **残高は履歴の合計として導出する**（残高列を持たない）。符号は各履歴が知っていて
+  （加算は正・消費は負）、合計側に種別の分岐が出ない。一覧では 1 クエリでまとめて
+  読み、メンバーごとに合計する。
+- **PWA の名前を RewardPoints にした**（manifest / `index.html` / `app.title` /
+  FastAPI の title）。Service Worker の方針は変えていない（シェルのみ precache、
+  API はキャッシュしない）。JWT の issuer・audience、TOTP の issuer、
+  WebAuthn の RP 名は既存トークン・登録済み認証器を壊さないため変更していない。
+- マイグレーション `0004_reward_points`（3 テーブル）と
+  `0005_seed_reward_points_permissions`（権限 4 件）を追加。
+- ネイティブ版の JSON エクスポート／インポートは移していない。共有サーバー上の
+  データになったため、端末間の持ち運び手段としての役目が無くなった。
+
+画面は `frontend/src/pages/MembersPage.tsx`（一覧・登録）と
+`MemberPointsPage.tsx`（残高・加算・消費・履歴・共有）。どちらもサーバーが返す
+`access_level` で操作の出し分けを決め、ロール名では判断しない。
+
 ## 2026-07 品質ゲートの必須化（整形・静的解析・型・テスト）
 
 CI を「Lint → Type Check → Test」の必須ゲートにした（ADR-0006）。

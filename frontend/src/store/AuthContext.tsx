@@ -16,7 +16,7 @@ interface TokenPair {
   refresh_token: string
 }
 
-interface AuthValue {
+export interface AuthValue {
   user: Me | null
   loading: boolean
   /** 二要素認証が有効なアカウントでは totpCode が必要（未指定なら totp_required）。 */
@@ -27,7 +27,8 @@ interface AuthValue {
   hasScope: (...codes: string[]) => boolean
 }
 
-const AuthContext = createContext<AuthValue | null>(null)
+/** テストが scope を差し替えて描画できるよう公開する（本番の生成は AuthProvider）。 */
+export const AuthContext = createContext<AuthValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Me | null>(null)

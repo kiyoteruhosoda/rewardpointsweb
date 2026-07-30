@@ -12,6 +12,7 @@ interface Item {
 
 const ITEMS: Item[] = [
   { to: '/', labelKey: 'nav.dashboard', scopes: ['dashboard:view'] },
+  { to: '/members', labelKey: 'nav.members', scopes: ['member:view'] },
   { to: '/items', labelKey: 'nav.items', scopes: ['item:view'] },
   { to: '/admin/users', labelKey: 'nav.users', scopes: ['user:manage'] },
   { to: '/admin/roles', labelKey: 'nav.roles', scopes: ['role:manage'] },

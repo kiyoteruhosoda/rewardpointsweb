@@ -37,6 +37,13 @@ PERMISSION_CODES: Sequence[str] = (
     "gui:view",
     "item:view",
     "item:manage",
+    # --- ポイント（reward_points コンテキスト） ---
+    # scope は「その操作を行える立場か」までを決める。「そのメンバーを触れるか」は
+    # 所有・共有・本人の関係で別に判定する（ADR-0007）。
+    "member:view",
+    "member:manage",
+    "point:view",
+    "point:manage",
 )
 
 # --- ロールへの権限付与 ------------------------------------------------------
@@ -49,11 +56,19 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
         "log:view",
         "dashboard:view",
         "gui:view",
+        # メンバーを登録・共有し、ポイントを加算・消費できる
+        "member:view",
+        "member:manage",
+        "point:view",
+        "point:manage",
     ),
     "member": (
         "item:view",
         "dashboard:view",
         "gui:view",
+        # 自分のポイントと履歴は見られるが、変更する scope は持たない
+        "member:view",
+        "point:view",
     ),
     "guest": (
         "dashboard:view",
