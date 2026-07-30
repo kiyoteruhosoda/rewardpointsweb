@@ -64,6 +64,19 @@ Domain がフレームワーク・DB（`fastapi` / `sqlalchemy` / `pydantic` 等
 
 サービスアカウント認証・外部 IdP 連携は初期スコープに含めない（ADR-0002）。
 
+### scope で表せない「対象ごとの認可」
+
+scope は「その操作を行える立場か」を表す。「*その* データを触れるか」は表せない
+（誰のデータかという関係が scope に現れない）。関係で決まる認可が必要な場合は、
+**scope をエンドポイントに宣言したうえで、対象ごとの判定を Domain のポリシーに置く**
+二段構えにする。
+
+`reward_points` がこの形（ADR-0007）。`member:*` / `point:*` の scope で立場を見て、
+`MemberAccessPolicy` が所有・共有・本人の関係から `view` / `manage` を決める。
+`point:manage` を持っていても、共有されていないメンバーは触れない。判定は
+Application 層の `MemberAccessResolver` を通す一点に集約し、ユースケースが
+個別に条件を書かないようにする。
+
 ## 自己再起動の設計
 
 管理画面から保存した設定のうち、起動時にしか読まれないもの（ログ・CORS）は

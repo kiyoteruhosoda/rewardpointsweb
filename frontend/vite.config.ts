@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'fastapitemplate',
-        short_name: 'fastapitemplate',
-        description: 'FastAPI + React application template',
+        name: 'RewardPoints',
+        short_name: 'RewardPoints',
+        description: 'ポイントの加算・消費・履歴を人ごとに管理する',
         lang: 'ja',
         start_url: '/',
         scope: '/',

@@ -10,6 +10,8 @@ import { ConfigPage } from './pages/ConfigPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ItemsPage } from './pages/ItemsPage'
 import { LoginPage } from './pages/LoginPage'
+import { MemberPointsPage } from './pages/MemberPointsPage'
+import { MembersPage } from './pages/MembersPage'
 import { PermissionsPage } from './pages/PermissionsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
@@ -46,6 +48,8 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<RequireAuth />}>
         <Route path="/" element={<AdminDashboardPage />} />
+        <Route path="/members" element={<MembersPage />} />
+        <Route path="/members/:memberId" element={<MemberPointsPage />} />
         <Route path="/items" element={<ItemsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />

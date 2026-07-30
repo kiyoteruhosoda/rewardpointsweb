@@ -1,8 +1,11 @@
-# fastapitemplate
+# RewardPoints
 
-FastAPI + DDD のアプリケーションテンプレートです（photonest の構成・設計思想がベース）。
-認証認可（JWT + scope）・システム設定管理・構造化ログ・管理画面 SPA・
-Docker / デプロイスクリプトまで含んだ状態から開発を始められます。
+人ごとのポイントを記録・共有する PWA です。FastAPI + DDD のテンプレート
+（photonest の構成・設計思想がベース）上に作られており、認証認可（JWT + scope）・
+システム設定管理・構造化ログ・管理画面 SPA・Docker / デプロイスクリプトを引き継いでいます。
+
+ポイント機能そのものは `bounded_contexts/reward_points/`（README あり）。
+ネイティブアプリ版は別リポジトリ（Flutter + SQLite の RewardPoints）。
 
 ## 技術スタック
 
@@ -15,6 +18,11 @@ Docker / デプロイスクリプトまで含んだ状態から開発を始め�
 
 ## 主な機能
 
+- **人ごとのポイント**（`bounded_contexts/reward_points/`）。メンバーの登録、
+  加算・消費、履歴。メンバーは他のログインアカウントへ共有でき（閲覧のみ / 変更も可）、
+  メンバー本人は自分の残高と履歴を**閲覧のみ**できる（ADR-0007）
+- **PWA**（`vite-plugin-pwa`）。ホーム画面へインストールして開ける。
+  Service Worker が precache するのは SPA のシェルだけで、API 応答は常にネットワークへ
 - JWT 認証（access / refresh）・パスワード変更・パスワードリセット（SMTP）
 - **二要素認証（TOTP）とパスキー（WebAuthn）**（`bounded_contexts/account_security/`）
 - **scope（権限コード）ベースの認可**（ユーザー / ロール / 権限の管理 API + 画面）
