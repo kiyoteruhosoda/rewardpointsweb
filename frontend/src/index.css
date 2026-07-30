@@ -34,16 +34,31 @@
     'Segoe UI',
     sans-serif;
   line-height: 1.5;
+
+  /* 端末のセーフエリア（ノッチ・ホームインジケータ）。index.html の
+   * viewport-fit=cover で画面いっぱいに描く代わりに、避けたい余白をここで持つ。
+   * env() に対応しないブラウザでは第 2 引数の 0px になる。 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  /* 横向きにしたときに iOS が本文を勝手に拡大するのを止める */
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: var(--surface);
   color: var(--text);
+  /* 引き出しの出入りで横スクロールバーが出ないようにする */
+  overflow-x: hidden;
 }
 
 a {
@@ -71,10 +86,16 @@ select {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 0.3rem;
+  /* 16px 未満だと iOS が入力欄へのフォーカスで画面を拡大する。狭い画面でも
+   * 縮めないこと。 */
+  font-size: 1rem;
 }
 
 .layout {
+  /* dvh: モバイルブラウザのアドレスバーの出入りで高さが飛ばないようにする
+   * （対応していないブラウザは直前の 100vh を使う）。 */
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -83,24 +104,52 @@ select {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.6rem;
   padding: 0.6rem 1rem;
+  padding-top: calc(0.6rem + var(--safe-top));
+  padding-right: calc(1rem + var(--safe-right));
+  padding-left: calc(1rem + var(--safe-left));
   border-bottom: 1px solid var(--border);
+  /* スクロールしてもメニューの開閉ボタンへ手が届くようにする */
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--surface);
 }
 
 .header-title {
   font-weight: 700;
   text-decoration: none;
+  /* 幅の足りない端末ではタイトルから先に詰める（右側の操作は残す） */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-actions {
   display: flex;
+  flex: 0 0 auto;
   gap: 0.8rem;
   align-items: center;
+}
+
+/* 引き出しの開閉ボタン。広い画面ではナビゲーションが出たままなので出さない。 */
+.nav-toggle {
+  display: none;
+}
+
+/* 引き出しの背景。開いているあいだだけ DOM に現れ、広い画面では出さない。 */
+.nav-backdrop {
+  display: none;
 }
 
 .layout-body {
   display: flex;
   flex: 1;
+  /* 子の table が overflow-x で縮めるようにする（既定の min-width:auto を外す） */
+  min-width: 0;
 }
 
 .sidebar {
@@ -109,6 +158,9 @@ select {
   gap: 0.2rem;
   min-width: 12rem;
   padding: 1rem 0.5rem;
+  /* セーフエリアは幅に関わらず避ける。viewport-fit=cover は全幅で効くため、
+   * 横向きのノッチ付き端末（CSS 幅が 48rem を超える）でも切り欠きは左右に来る。 */
+  padding-left: calc(0.5rem + var(--safe-left));
   border-right: 1px solid var(--border);
 }
 
@@ -123,13 +175,27 @@ select {
   font-weight: 600;
 }
 
+/* 引き出しを開くと先頭の項目へ焦点が移る（Sidebar.tsx）。どこに居るのかが
+ * 分かるよう、選択中の背景とは別に枠を出す。 */
+.sidebar a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .content {
   flex: 1;
+  min-width: 0;
   padding: 1.2rem;
+  /* 本文はナビゲーションの右にあるので、避けるのは右側の切り欠き。
+   * 引き出しになる狭い画面では左右とも本文が端まで来るため、下で左も足す。 */
+  padding-right: calc(1.2rem + var(--safe-right));
 }
 
 .footer {
   padding: 0.4rem 1rem;
+  padding-right: calc(1rem + var(--safe-right));
+  padding-bottom: calc(0.4rem + var(--safe-bottom));
+  padding-left: calc(1rem + var(--safe-left));
   font-size: 0.8rem;
   color: var(--text-muted);
   border-top: 1px solid var(--border);
@@ -220,6 +286,13 @@ select {
   border-radius: 0.4rem;
 }
 
+/* 表は列を落とさず、入りきらなければ横に送る。表だけをスクロールさせ、
+ * ページ全体が横に動かないようにするためのラッパー。 */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
@@ -250,8 +323,11 @@ td {
 
 .toast-container {
   position: fixed;
-  right: 1rem;
-  bottom: 1rem;
+  right: calc(1rem + var(--safe-right));
+  bottom: calc(1rem + var(--safe-bottom));
+  /* 狭い画面でも画面外へはみ出さない（文言が長いと右端が切れるため） */
+  max-width: calc(100vw - 2rem - var(--safe-left) - var(--safe-right));
+  align-items: flex-end;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -271,4 +347,135 @@ td {
 
 .toast-error {
   background: var(--danger);
+}
+
+/* ここから狭い画面（スマートフォン）向け。
+ *
+ * 48rem を境に、左に固定していたナビゲーションを画面外から滑り出す引き出しへ
+ * 変える。DOM は変わらず、開いているかどうかだけを Sidebar が `sidebar-open` で
+ * 伝える（App.tsx の状態）。 */
+@media (max-width: 48rem) {
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    width: min(16rem, 78vw);
+    padding: calc(1rem + var(--safe-top)) 0.6rem calc(1rem + var(--safe-bottom))
+      calc(0.6rem + var(--safe-left));
+    overflow-y: auto;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    /* visibility も切り替える。transform で画面外へ出しただけだと、閉じている
+     * あいだも Tab キーでリンクへ入れてしまう。
+     *
+     * visibility は途中の値を持たない（滑らかには変わらない）ので、切り替わる時点を
+     * 遅延で指定する。閉じるときは滑り終わってから hidden にし、開くときは即座に
+     * visible にする。開くのを遅らせると、滑っているあいだ項目に焦点を当てられず、
+     * Sidebar.tsx が引き出しの先頭へ焦点を移せない。 */
+    visibility: hidden;
+    transform: translateX(-100%);
+    transition:
+      transform 0.2s ease,
+      visibility 0s linear 0.2s;
+  }
+
+  .sidebar-open {
+    visibility: visible;
+    transform: none;
+    box-shadow: 0 0 1.5rem rgb(0 0 0 / 35%);
+    transition:
+      transform 0.2s ease,
+      visibility 0s linear 0s;
+  }
+
+  .nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    width: 100%;
+    padding: 0;
+    background: rgb(0 0 0 / 45%);
+    border: none;
+    border-radius: 0;
+  }
+
+  /* 指で押す的は 44px 四方を下回らないようにする */
+  button,
+  input,
+  select {
+    min-height: 2.75rem;
+  }
+
+  .sidebar a {
+    padding: 0.7rem 0.8rem;
+  }
+
+  .header {
+    padding-right: calc(0.7rem + var(--safe-right));
+    padding-left: calc(0.7rem + var(--safe-left));
+  }
+
+  .header-actions {
+    gap: 0.5rem;
+  }
+
+  .content {
+    padding: 0.9rem;
+    padding-right: calc(0.9rem + var(--safe-right));
+    padding-left: calc(0.9rem + var(--safe-left));
+  }
+
+  .card {
+    padding: 0.9rem;
+  }
+
+  /* 横並びの入力は縦に積む。狭い画面では 1 行に 2 つ入れても読めない。 */
+  .inline-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .config-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+  }
+
+  /* 差し込みの枠（共有パネル等）の中でも入力を横いっぱいに伸ばす。
+   * 広い画面では内容の幅で収まるが、狭い画面では読み書きしづらくなる。 */
+  .card-inset {
+    align-items: stretch;
+  }
+
+  th,
+  td {
+    /* 折り返して 1 文字幅の列にならないようにする（入りきらない分は横送り） */
+    white-space: nowrap;
+  }
+
+  .qr-code {
+    width: min(12rem, 60vw);
+    height: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
 }

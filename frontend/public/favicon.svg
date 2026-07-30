@@ -1,6 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#4f46e5"/>
-  <rect x="176" y="144" width="56" height="224" fill="#fff"/>
-  <rect x="176" y="144" width="176" height="56" fill="#fff"/>
-  <rect x="176" y="240" width="144" height="48" fill="#fff"/>
+  <defs>
+    <clipPath id="frame"><rect width="512" height="512" rx="102"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+  <rect width="512" height="512" fill="#1c80fa"/>
+  <path d="M231.9 553 L231.9 382.5 A98.3 98.3 0 0 1 428.5 382.5 L428.5 553 Z" fill="#ffffff"/>
+  <circle cx="330.2" cy="240.6" r="61.4" fill="#1c80fa"/>
+  <circle cx="330.2" cy="240.6" r="54.8" fill="#ffffff"/>
+  <circle cx="174.1" cy="219.6" r="65.5" fill="#1c80fa"/>
+  <path d="M61.4 553 L61.4 375.3 A112.6 112.6 0 0 1 286.7 375.3 L286.7 553 Z" fill="#1c80fa"/>
+  <path d="M68.1 553 L68.1 375.3 A106.0 106.0 0 0 1 280.1 375.3 L280.1 553 Z" fill="#ffffff"/>
+  <circle cx="174.1" cy="219.6" r="65.5" fill="#1c80fa"/>
+  <circle cx="174.1" cy="219.6" r="58.9" fill="#ffffff"/>
+  <circle cx="302.1" cy="383.0" r="38.9" fill="#1c80fa"/>
+  <path d="M263.2 553 L263.2 456.7 A46.6 46.6 0 0 1 356.4 456.7 L356.4 553 Z" fill="#1c80fa"/>
+  <path d="M269.8 553 L269.8 456.7 A39.9 39.9 0 0 1 349.7 456.7 L349.7 553 Z" fill="#ffffff"/>
+  <circle cx="302.1" cy="383.0" r="38.9" fill="#1c80fa"/>
+  <circle cx="302.1" cy="383.0" r="32.3" fill="#ffffff"/>
+  <circle cx="202.8" cy="347.6" r="46.6" fill="#1c80fa"/>
+  <path d="M132.6 553 L132.6 450.0 A69.6 69.6 0 0 1 271.9 450.0 L271.9 553 Z" fill="#1c80fa"/>
+  <path d="M139.3 553 L139.3 450.0 A63.0 63.0 0 0 1 265.2 450.0 L265.2 553 Z" fill="#ffffff"/>
+  <circle cx="202.8" cy="347.6" r="46.6" fill="#1c80fa"/>
+  <circle cx="202.8" cy="347.6" r="39.9" fill="#ffffff"/>
+  <polygon points="399.9,39.4 419.4,79.1 463.2,85.4 431.5,116.3 439.0,159.8 399.9,139.3 360.7,159.8 368.2,116.3 336.6,85.4 380.3,79.1" fill="#fecf42"/>
+  <line x1="453.6" y1="25.6" x2="438.3" y2="51.2" stroke="#fecf42" stroke-width="8.7" stroke-linecap="round"/>
+  <line x1="484.9" y1="51.2" x2="454.1" y2="70.1" stroke="#fecf42" stroke-width="8.7" stroke-linecap="round"/>
+  </g>
 </svg>

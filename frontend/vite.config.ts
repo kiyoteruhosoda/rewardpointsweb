@@ -17,13 +17,16 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        theme_color: '#4f46e5',
+        theme_color: '#1c80fa',
         background_color: '#ffffff',
         icons: [
           { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          // maskable は端まで塗り、図柄を内側 80%（セーフゾーン）に収めた別画像を渡す。
+          // 角丸のアイコンをそのまま maskable にすると、ランチャー側の切り抜きで
+          // 角が削れて縁が欠ける。
           {
-            src: '/pwa-512x512.png',
+            src: '/pwa-maskable-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
