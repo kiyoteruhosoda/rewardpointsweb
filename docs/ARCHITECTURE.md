@@ -113,6 +113,7 @@ Application 層の `MemberAccessResolver` を通す一点に集約し、ユー�
 ## フロントエンド
 
 `frontend/` は React + TypeScript + Vite の SPA スケルトン。
+画面一覧・遷移図・各画面の仕様は `frontend/README.md`。
 
 - `services/api.ts` — fetch ラッパー。JWT の保持・期限切れ時の refresh・401 処理。
 - `store/` — 認証状態（React Context）。
