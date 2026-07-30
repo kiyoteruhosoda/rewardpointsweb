@@ -172,6 +172,36 @@ docker run --rm -it --network fastapitemplate mariadb:10.11 \
 環境（stg / prod）は配置ディレクトリ名から自動判定される。
 `.env` が無ければ初回実行時にテンプレートが自動生成される。
 
+## デプロイが `network ... is ambiguous` で失敗したとき
+
+同じ名前の Docker ネットワークが 2 つ以上できている。`deploy.sh` は起動前と
+失敗時に自動で掃除するので、まずはもう一度デプロイし直す。
+
+```bash
+./deploy.sh app
+```
+
+**「containers outside this project are attached」で止まったとき**は、そのネットワークに
+このアプリ以外のコンテナ（保守用に繋いだ mysql クライアント等）が接続している。
+自動では触らないので、表示されたコンテナを停止するか別のネットワークへ移してから
+デプロイし直す。
+
+それでも「Could not resolve the duplicated Docker network」で止まるときは手で消す
+（ネットワークは作り直せる。消しても DB・アプリのデータには影響しない）:
+
+```bash
+docker network ls | grep fastapitemplate      # 同名で ID が違う行を確認する
+docker network rm <ID> <ID>                   # 1 つ残して他を削除する
+./deploy.sh app                               # 残った 1 つを compose が再利用する
+```
+
+コンテナが接続中で消せないときは、先に切り離す:
+
+```bash
+docker network inspect <ID>                   # Containers に出るコンテナ名を確認
+docker network disconnect -f <ID> <コンテナ名>
+```
+
 ## デプロイ先に git が無いホスト（Synology 等）で一括デプロイしたいとき
 
 `scripts/build-remote-container.sh` をデプロイ先の `<app>/<stg|prod>/` に一度だけ手で置き、
