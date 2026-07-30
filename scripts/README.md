@@ -23,5 +23,12 @@
   従来どおり動く。
 - `reset` は `mnt/db_data` と `mnt/data` を削除する破壊的操作。DB イメージ
   （`image-db.tar`）もこのとき再ロードされる。
+- 停止（`docker compose down`）が失敗したときは、プロジェクトのコンテナを
+  `docker rm -f` してからもう一度 `down` する。ネットワークを残したまま次へ進まない。
+- 起動前に `.env` の `DOCKER_NETWORK_NAME`（既定は `fastapitemplate`）と同名の
+  Docker ネットワークが 2 つ以上ないかを見る。あれば全部削除して compose に 1 つだけ
+  作り直させる（ネットワークは永続データを持たないため消して差し支えない）。
+  起動が `network ... is ambiguous` で失敗した場合も、同じ掃除をして 1 度だけ再試行する。
+  それでも重複が残るときは、手で消すよう促して終了する。
 - ヘルスチェックは `http://127.0.0.1:<WEB_HOST_PORT>/healthz`。失敗時は
   各コンテナのログを出力して終了する。

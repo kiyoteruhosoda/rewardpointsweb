@@ -122,6 +122,11 @@ WEB_HOST_PORT="$(env_file_value WEB_HOST_PORT)"
 WEB_HOST_PORT="${WEB_HOST_PORT:-$DEFAULT_WEB_HOST_PORT}"
 HEALTH_URL="http://127.0.0.1:${WEB_HOST_PORT}/healthz"
 
+# compose の default ネットワーク名（docker-compose.yml の
+# `${DOCKER_NETWORK_NAME:-fastapitemplate}` と同じ解決をここでも行う）。
+DOCKER_NETWORK_NAME="$(env_file_value DOCKER_NETWORK_NAME)"
+DOCKER_NETWORK_NAME="${DOCKER_NETWORK_NAME:-$APP_NAME}"
+
 # compose interpolation はシェル環境変数 > --env-file の優先順位のため、ここで
 # export した値が優先される。stg / prod が同一ホストでイメージを取り合わないよう
 # 環境別タグに統一する。
@@ -312,9 +317,63 @@ ensure_db_image() {
   fail "DB image not found: $DB_IMAGE（'./scripts/build.sh' で dist/image-db.tar を作成し配置してください）"
 }
 
+# ===== Docker ネットワークの重複解消 =====
+# docker daemon はネットワーク「名」の一意性を保証しない（一意なのは ID だけ）。
+# down が途中で失敗して古いネットワークが残ったまま up したり、compose の作成が
+# 競合したりすると同じ名前のネットワークが 2 つでき、以降は名前で参照できなくなる。
+# そうなるとコンテナの起動が
+# `network <name> is ambiguous (N matches found on name)` で必ず失敗する。
+# ネットワーク自体は永続データを持たないので、重複を見つけたら全部消して
+# compose に 1 つだけ作り直させる。
+network_ids_by_name() { # 引数: ネットワーク名（完全一致）
+  docker network ls --format '{{.ID}} {{.Name}}' \
+    | awk -v name="$1" '$2 == name { print $1 }'
+}
+
+count_nonempty_lines() { # 標準入力の行数（0 件でも 0 を出して成功で返す）
+  grep -c . || true
+}
+
+remove_network() { # 引数: ネットワーク ID
+  local id="$1" endpoint
+  # 接続中のコンテナが残っていると削除できないため、先に切り離す。
+  for endpoint in $(
+    docker network inspect -f '{{range $cid, $c := .Containers}}{{$cid}} {{end}}' "$id" 2>/dev/null || true
+  ); do
+    docker network disconnect -f "$id" "$endpoint" >/dev/null 2>&1 || true
+  done
+  docker network rm "$id" >/dev/null 2>&1 || true
+}
+
+# 同名ネットワークが 2 つ以上あれば削除する。解消できなければ非 0 を返す。
+resolve_duplicate_networks() {
+  local ids count id
+  ids="$(network_ids_by_name "$DOCKER_NETWORK_NAME")"
+  count="$(printf '%s' "$ids" | count_nonempty_lines)"
+  [ "$count" -gt 1 ] || return 0
+  warn "Docker network '$DOCKER_NETWORK_NAME' is duplicated ($count networks share the name); removing them so compose can recreate a single one"
+  for id in $ids; do
+    remove_network "$id"
+  done
+  count="$(network_ids_by_name "$DOCKER_NETWORK_NAME" | count_nonempty_lines)"
+  [ "$count" -le 1 ]
+}
+
 # ===== Stop running containers =====
+# down が途中で失敗するとネットワークが残り、次の up が同名のものを作って
+# ambiguous になる。コンテナを強制削除してでも down を最後まで通す。
+compose_down() {
+  $COMPOSE down --remove-orphans && return 0
+  warn "docker compose down failed; force-removing project containers and retrying"
+  local cid
+  for cid in $(docker ps -aq --filter "label=com.docker.compose.project=$PROJECT" 2>/dev/null || true); do
+    docker rm -f "$cid" >/dev/null 2>&1 || true
+  done
+  $COMPOSE down --remove-orphans || warn "docker compose down still failed; continuing"
+}
+
 log "docker compose down"
-$COMPOSE down || true
+compose_down
 
 # ===== Reset mode: clear data =====
 if [ "$MODE" = "reset" ]; then
@@ -340,15 +399,31 @@ log "Ensuring host mount root exists: $HOST_DATA_ROOT"
 mkdir -p "$HOST_DATA_ROOT" || fail "Could not create host mount root: $HOST_DATA_ROOT"
 
 # ===== Start containers =====
-log "docker compose up -d"
+# 起動前に同名ネットワークの重複を解消しておく（残っていると up が必ず失敗する）。
+resolve_duplicate_networks \
+  || fail "Docker network '$DOCKER_NETWORK_NAME' is still duplicated. 'docker network ls' で ID を確認し、'docker network rm <ID>' で余分な方を削除してください。"
+
 UP_OUTPUT="$(mktemp)"
-if ! $COMPOSE up -d --remove-orphans 2>&1 | tee "$UP_OUTPUT"; then
-  err "docker compose up failed"
-  cat "$UP_OUTPUT" >&2
+
+start_containers() { # 起動を 1 回試す。出力は画面と $UP_OUTPUT の両方へ
+  $COMPOSE up -d --remove-orphans 2>&1 | tee "$UP_OUTPUT"
+}
+
+fail_up() {
   rm -f "$UP_OUTPUT"
-  dump_module_logs "${ALL_SERVICES[@]}"
-  err "Deploy failed (mode: $MODE, env: $ENV_NAME)"
-  exit 1
+  fail "docker compose up failed" "${ALL_SERVICES[@]}"
+}
+
+log "docker compose up -d"
+if ! start_containers; then
+  # compose 自身が同名ネットワークを二重に作った場合は、ここで初めて分かる。
+  # 掃除して 1 度だけやり直す。
+  if grep -q "is ambiguous" "$UP_OUTPUT" && resolve_duplicate_networks; then
+    warn "Retrying 'docker compose up' after cleaning up the duplicated network"
+    start_containers || fail_up
+  else
+    fail_up
+  fi
 fi
 rm -f "$UP_OUTPUT"
 
