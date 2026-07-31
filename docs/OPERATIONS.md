@@ -172,6 +172,28 @@ docker run --rm -it --network fastapitemplate mariadb:10.11 \
 環境（stg / prod）は配置ディレクトリ名から自動判定される。
 `.env` が無ければ初回実行時にテンプレートが自動生成される。
 
+## アプリのアイコンを変えたいとき
+
+`scripts/generate_app_icons.py` の定数を直して実行し、生成された 5 ファイルを
+コミットしてからデプロイする（詳細は `scripts/README.md`）。
+
+```bash
+uv run python scripts/generate_app_icons.py
+```
+
+参照 URL に付く版はビルド時に画像の中身から決まるので、手で書き換える箇所は無い。
+
+デプロイ後の反映は開き方で変わる。
+
+| 開き方 | 反映 |
+|---|---|
+| ブラウザのタブ（favicon） | 再読み込みで変わる |
+| Android にインストールした PWA | Chrome が manifest の変更に気づいてから。即座ではなく、最大 1 日ほどかかる |
+| iOS にインストールした PWA | **変わらない。** ホーム画面から削除し、追加し直す |
+
+iOS はホーム画面に追加した時点のアイコンを端末に焼き付けるため、配信側で
+できることは無い。急ぐ場合は追加し直してもらう。
+
 ## デプロイが `network ... is ambiguous` で失敗したとき
 
 同じ名前の Docker ネットワークが 2 つ以上できている。`deploy.sh` は起動前と

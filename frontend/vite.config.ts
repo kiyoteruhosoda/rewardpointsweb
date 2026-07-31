@@ -1,14 +1,43 @@
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
+import type { Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+
+// アイコンは `public/` に固定の名前で置く（scripts/generate_app_icons.py が書き出す）。
+// 絵柄を差し替えても URL が同じままだと、ブラウザは手元のアイコンを使い続け、
+// インストール済みの PWA は manifest が変わっていないと見なして古い絵を出し続ける。
+// 中身から作った版を問い合わせに付け、絵柄が変われば URL も変わるようにする。
+const PUBLIC_DIR = fileURLToPath(new URL('./public', import.meta.url))
+const ICON_LINKS_IN_HTML = ['favicon.svg', 'apple-touch-icon.png'] as const
+
+const iconUrl = (name: string): string => {
+  const digest = createHash('sha256')
+    .update(readFileSync(`${PUBLIC_DIR}/${name}`))
+    .digest('hex')
+  return `/${name}?v=${digest.slice(0, 8)}`
+}
+
+/** index.html のアイコン参照にも版を付ける（manifest 側は icons で付ける）。 */
+const versionIconUrls = (): Plugin => ({
+  name: 'version-icon-urls',
+  transformIndexHtml: (html: string): string =>
+    ICON_LINKS_IN_HTML.reduce(
+      (acc, name) => acc.replaceAll(`"/${name}"`, `"${iconUrl(name)}"`),
+      html,
+    ),
+})
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    versionIconUrls(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'RewardPoints',
         short_name: 'RewardPoints',
@@ -20,13 +49,13 @@ export default defineConfig({
         theme_color: '#1c80fa',
         background_color: '#ffffff',
         icons: [
-          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: iconUrl('pwa-192x192.png'), sizes: '192x192', type: 'image/png' },
+          { src: iconUrl('pwa-512x512.png'), sizes: '512x512', type: 'image/png' },
           // maskable は端まで塗り、図柄を内側 80%（セーフゾーン）に収めた別画像を渡す。
           // 角丸のアイコンをそのまま maskable にすると、ランチャー側の切り抜きで
           // 角が削れて縁が欠ける。
           {
-            src: '/pwa-maskable-512x512.png',
+            src: iconUrl('pwa-maskable-512x512.png'),
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
@@ -38,6 +67,11 @@ export default defineConfig({
         // 運用エンドポイントはナビゲーションフォールバックの対象外にし、SW が
         // index.html を返して JSON 応答を壊さないようにする。
         globPatterns: ['**/*.{js,css,html,svg,png,ico,json}'],
+        // アイコンは precache しない。参照はすべて版付き URL（`?v=` 付き）になり
+        // precache の登録名とは一致しないため、置いても使われないまま SW の更新の
+        // たびに 110KB を落とすだけになる。圏外で取れなくても、ブラウザとランチャーは
+        // インストール時のアイコンを使うので画面には影響しない。
+        globIgnores: ['favicon.svg', 'apple-touch-icon.png', 'pwa-*.png'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [
           /^\/api\//,
