@@ -42,7 +42,7 @@ uv run python main.py                # http://127.0.0.1:8000
 ```
 
 - Swagger UI: http://127.0.0.1:8000/docs
-- 初期管理者: `admin@example.com` / `admin`（`ADMIN_INITIAL_PASSWORD` で上書き可）
+- 初期管理者: `admin@example.com` / `admin@example.com`（`ADMIN_INITIAL_PASSWORD` で上書き可）
 
 フロントエンド:
 

@@ -1,5 +1,5 @@
 # ================================
-# fastapitemplate Makefile（ビルドの実体は scripts/build.sh）
+# rewardpointsweb Makefile（ビルドの実体は scripts/build.sh）
 # ================================
 
 .PHONY: build clean \

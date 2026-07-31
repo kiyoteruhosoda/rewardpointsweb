@@ -18,8 +18,8 @@ services:
     restart: "no"
 
   db:
-    image: ${DB_IMAGE:-fastapitemplate-db:latest}
-    container_name: ${DB_CONTAINER_NAME:-fastapitemplate-mariadb}
+    image: ${DB_IMAGE:-rewardpointsweb-db:latest}
+    container_name: ${DB_CONTAINER_NAME:-rewardpointsweb-mariadb}
     environment:
       - TZ=UTC
       # 初期設定のみ（.env 未作成／項目未記入）でも DB が初期化されるようデフォルト値を
@@ -56,7 +56,7 @@ services:
       start_period: 600s
 
   web:
-    image: ${WEB_IMAGE:-fastapitemplate:latest}
+    image: ${WEB_IMAGE:-rewardpointsweb:latest}
     init: true
     stop_grace_period: 60s
     command: web
@@ -105,4 +105,4 @@ services:
 
 networks:
   default:
-    name: ${DOCKER_NETWORK_NAME:-fastapitemplate}
+    name: ${DOCKER_NETWORK_NAME:-rewardpointsweb}

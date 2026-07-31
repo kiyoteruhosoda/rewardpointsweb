@@ -21,8 +21,8 @@
 # 前提: docker。
 set -euo pipefail
 
-log() { printf '[fastapitemplate] %s\n' "$*" >&2; }
-die() { printf '[fastapitemplate][error] %s\n' "$*" >&2; exit 1; }
+log() { printf '[rewardpointsweb] %s\n' "$*" >&2; }
+die() { printf '[rewardpointsweb][error] %s\n' "$*" >&2; exit 1; }
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
@@ -36,7 +36,7 @@ esac
 
 command -v docker >/dev/null 2>&1 || die "docker が見つかりません。"
 
-app_name="fastapitemplate"
+app_name="rewardpointsweb"
 git_commit="$(git rev-parse HEAD 2>/dev/null || printf unknown)"
 git_commit_short="$(git rev-parse --short HEAD 2>/dev/null || printf unknown)"
 git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf unknown)"

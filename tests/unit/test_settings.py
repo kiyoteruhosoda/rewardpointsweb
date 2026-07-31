@@ -8,7 +8,7 @@ from shared.kernel.settings.settings import ApplicationSettings
 
 def test_default_value_used_when_env_missing() -> None:
     s = ApplicationSettings(env={})
-    assert s.access_token_issuer == "fastapitemplate"
+    assert s.access_token_issuer == "rewardpointsweb"
     assert s.mail_enabled is False
 
 
@@ -20,7 +20,7 @@ def test_env_overrides_default() -> None:
 
 def test_blank_env_value_is_ignored() -> None:
     s = ApplicationSettings(env={"ACCESS_TOKEN_ISSUER": ""})
-    assert s.access_token_issuer == "fastapitemplate"
+    assert s.access_token_issuer == "rewardpointsweb"
 
 
 def test_int_parsing_with_invalid_value_falls_back() -> None:

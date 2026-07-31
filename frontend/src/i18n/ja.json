@@ -191,5 +191,6 @@
   "error.share_with_owner_not_allowed": "このメンバーはすでにあなたが管理しています。",
   "error.linked_user_already_taken": "そのアカウントは、すでに別のメンバーへ紐付いています。",
   "error.unknown_error": "エラーが発生しました。",
+  "error.internal_error": "サーバー側でエラーが発生しました。少し時間をおいて試し、続くようなら管理者へ連絡してください。",
   "error.user_still_owns_members": "このアカウントにはメンバーが登録されています。先にメンバーを削除するか、アカウントを無効化してください。"
 }

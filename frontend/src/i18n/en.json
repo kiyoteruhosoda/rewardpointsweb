@@ -191,5 +191,6 @@
   "error.share_with_owner_not_allowed": "You already manage this member.",
   "error.linked_user_already_taken": "That account is already linked to another member.",
   "error.unknown_error": "Something went wrong.",
+  "error.internal_error": "The server hit an error. Please try again in a moment; if it keeps happening, contact your administrator.",
   "error.user_still_owns_members": "This account still has members registered. Delete or move them first, or deactivate the account instead."
 }
