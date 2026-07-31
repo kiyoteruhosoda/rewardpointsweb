@@ -14,6 +14,24 @@ function field(): HTMLInputElement {
   return screen.getByLabelText('Password')
 }
 
+/** 値を親が持つ実際の使われ方。「clear」は送信に成功した画面の後始末に当たる。 */
+function Controlled({ initial }: { initial: string }) {
+  const [value, setValue] = useState(initial)
+  return (
+    <>
+      <PasswordField label="Password" value={value} onChange={setValue} />
+      <button
+        type="button"
+        onClick={() => {
+          setValue('')
+        }}
+      >
+        clear
+      </button>
+    </>
+  )
+}
+
 describe('PasswordField', () => {
   it('はじめは伏せ字にする', () => {
     renderWithProviders(<PasswordField label="Password" value="s3cret" onChange={vi.fn()} />)
@@ -84,6 +102,31 @@ describe('PasswordField', () => {
 
     expect(screen.getByLabelText('Current password')).toHaveAttribute('type', 'text')
     expect(screen.getByLabelText('New password')).toHaveAttribute('type', 'password')
+  })
+
+  it('親が値を空へ戻したら伏せ字へ戻す（送信後に次の入力が見えたままにならない）', () => {
+    renderWithProviders(<Controlled initial="s3cret" />)
+    fireEvent.click(screen.getByRole('button', { name: SHOW_LABEL }))
+    expect(field()).toHaveAttribute('type', 'text')
+
+    // 送信に成功した画面のふるまい。部品は置かれたまま値だけが空へ戻る。
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }))
+    expect(field()).toHaveAttribute('type', 'password')
+
+    // 続けて打った文字も伏せ字のまま
+    fireEvent.change(field(), { target: { value: 'next' } })
+    expect(field()).toHaveAttribute('type', 'password')
+  })
+
+  it('何も打っていない欄でも先に表示へ切り替えられる', () => {
+    renderWithProviders(<Controlled initial="" />)
+
+    fireEvent.click(screen.getByRole('button', { name: SHOW_LABEL }))
+    expect(field()).toHaveAttribute('type', 'text')
+
+    // 打ち始めても表示のまま（空だからと伏せ字へ戻さない）
+    fireEvent.change(field(), { target: { value: 's' } })
+    expect(field()).toHaveAttribute('type', 'text')
   })
 
   it('画面を作り直すと伏せ字へ戻す（表示は持ち越さない）', () => {

@@ -58,7 +58,17 @@ export function PasswordField({
 }: Props) {
   const { t } = useI18n()
   const [visible, setVisible] = useState(false)
+  const [previous, setPrevious] = useState(value)
   const id = useId()
+
+  // 送信に成功した画面は入力欄を空へ戻す（部品は置かれたまま）。表示にしたままだと
+  // 次に打つパスワードが最初から見えてしまうので、値が空へ変わった時点で伏せ字へ戻す。
+  // 「空になった瞬間」だけを見る。空かどうかで判定すると、何も打っていない欄で先に
+  // 表示を押せなくなる。
+  if (previous !== value) {
+    setPrevious(value)
+    if (value === '') setVisible(false)
+  }
 
   return (
     <div className="password-field">
