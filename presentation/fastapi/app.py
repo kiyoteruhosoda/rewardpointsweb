@@ -25,6 +25,7 @@ from bounded_contexts.reward_points.presentation.error_handling import (
 )
 from bounded_contexts.reward_points.presentation.router import router as members_router
 from presentation.fastapi.error_handling import register_internal_error_handler
+from presentation.fastapi.middleware.internal_error import InternalErrorMiddleware
 from presentation.fastapi.middleware.request_logging import RequestLoggingMiddleware
 from presentation.fastapi.routers import spa
 from presentation.fastapi.routers.admin.config import router as admin_config_router
@@ -77,6 +78,10 @@ def create_app() -> FastAPI:
     # Prometheus metrics at /metrics
     Instrumentator(excluded_handlers=["/metrics"]).instrument(app).expose(app, include_in_schema=False)
 
+    # ``add_middleware`` は積み増しなので、**先に足したものほど内側**になる。
+    # 例外を応答へ変える層を最も内側に置き、リクエストログ（500 の行を残す）と
+    # CORS（応答ヘッダーを付ける）が必ずその外側を通るようにする。
+    app.add_middleware(InternalErrorMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
     if settings.cors_allowed_origins:
         app.add_middleware(
@@ -87,7 +92,7 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
-    # 最後の受け皿を先に。個別のドメイン例外ハンドラが優先される。
+    # ミドルウェアより外側で落ちたとき用の保険。個別のドメイン例外ハンドラが優先される。
     register_internal_error_handler(app)
     register_account_security_error_handler(app)
     register_reward_points_error_handler(app)

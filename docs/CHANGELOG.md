@@ -13,9 +13,17 @@
 本文 `Internal Server Error` の **text/plain** を返す。API クライアント
 （`frontend/src/services/api.ts`）は本文を JSON として読むため、パースに失敗して
 コードを取り出せず、どんな障害も一律 `unknown_error` になっていた。最後の受け皿
-（`presentation/fastapi/error_handling.py`）を足し、`{"detail": {"error":
-"internal_error"}}` の JSON・`X-Request-Id` ヘッダー・traceback つきのログに揃えた。
-例外の中身は応答に出さない（追跡は `requestId` で行う）。
+を足し、`{"detail": {"error": "internal_error"}}` の JSON・`X-Request-Id` ヘッダー・
+traceback つきのログに揃えた。例外の中身は応答に出さない（追跡は `requestId` で行う）。
+
+受け皿は 2 段にしてある。通常の経路は最も内側のミドルウェア
+（`presentation/fastapi/middleware/internal_error.py`）で、CORS とリクエストログの
+**内側**で応答へ変える。`Exception` ハンドラ（`presentation/fastapi/error_handling.py`）
+だけに頼ると、Starlette がそれを全ミドルウェアの外側の `ServerErrorMiddleware` へ
+載せるため、別オリジンのフロントエンドでは `Access-Control-Allow-Origin` が付かず
+ブラウザが本文を捨て、結局 `unknown_error` に戻ってしまう。500 がアクセスログに
+残らない問題も同時に解消した。ハンドラのほうはミドルウェア自身が落ちたとき用の
+保険として残している。
 
 **2. 初期管理者のパスワードが `admin` で、締め出されると戻せなかった。** 既定を
 メールアドレスと同じ `admin@example.com` に変更した（`shared/domain/auth/master_data.py`）。

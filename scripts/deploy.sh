@@ -448,13 +448,41 @@ compose_down() {
 # compose プロジェクト名も APP_NAME から導くため、名前を変えた直後の down は
 # 新プロジェクトを見に行き、旧名で動いているコンテナを見つけられない。放置すると
 # 同じ container_name とホストポートを握ったまま残り、続く up が必ず失敗する。
-# この環境ディレクトリのコンテナなので、旧名で down して畳んでよい（データは
-# ホスト側のバインドマウントにある）。
+#
+# ただし「旧アプリ名の compose プロジェクト」は、まさに共存させたい**本物の別アプリ**
+# かもしれない（同じ名前を使っていたのがこの改名の理由）。プロジェクト名ラベルでの
+# 絞り込みは docker デーモン全体を見るため、それだけを根拠に down すると無関係の
+# アプリを停止・削除してしまう。compose が付ける working_dir ラベルがこの環境
+# ディレクトリと一致するコンテナ（＝過去にこのディレクトリから起動したもの）だけを
+# 自分のものとみなし、1 つでも他所のものが混ざっていたら何もしない。
+legacy_container_names_outside_this_deployment() { # 引数: コンテナ ID の並び
+  local cid working_dir name
+  for cid in $1; do
+    working_dir="$(
+      docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$cid" 2>/dev/null
+    )" || working_dir=""
+    # ラベルが読めないもの（compose v1 期の残骸等）は「自分のものと確認できない」
+    # 側に倒す。触らずに人へ委ねるほうが、消して壊すより安い。
+    [ "$working_dir" = "$BASE_DIR" ] && continue
+    name="$(docker inspect -f '{{.Name}}' "$cid" 2>/dev/null)" || name="$cid"
+    printf '%s\n' "${name#/}"
+  done
+}
+
 take_down_legacy_projects() {
-  local legacy project
+  local legacy project cids foreign
   for legacy in $LEGACY_APP_NAMES; do
     [ "$ENV_KIND" = "stg" ] && project="${legacy}-stg" || project="${legacy}"
-    [ -n "$(docker ps -aq --filter "label=com.docker.compose.project=$project" 2>/dev/null || true)" ] || continue
+    cids="$(docker ps -aq --filter "label=com.docker.compose.project=$project" 2>/dev/null || true)"
+    [ -n "$cids" ] || continue
+
+    foreign="$(legacy_container_names_outside_this_deployment "$cids" | sort -u | tr '\n' ' ')"
+    if [ -n "${foreign// /}" ]; then
+      warn "旧アプリ名の compose プロジェクト '$project' が動いていますが、この配置（$BASE_DIR）以外のコンテナを含むため触りません: ${foreign% }"
+      warn "同じ名前を使う別のアプリだと思われます。'$PROJECT' の起動が container_name やポートの衝突で失敗する場合は、どちらの名前を変えるか決めてください。"
+      continue
+    fi
+
     warn "旧アプリ名の compose プロジェクト '$project' が残っています。新しい名前 '$PROJECT' へ移行するため畳みます。"
     docker compose -p "$project" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down --remove-orphans \
       || warn "'$project' の down に失敗しました。続行します（up が失敗する場合は手動で削除してください）。"
