@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 
+import { PasswordField } from '../components/PasswordField'
 import { useToast } from '../components/ToastNotification'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
@@ -33,29 +34,21 @@ export function ChangePasswordPage() {
       }}
     >
       <h1>{t('changePassword.title')}</h1>
-      <label>
-        {t('changePassword.current')}
-        <input
-          type="password"
-          value={current}
-          onChange={(e) => {
-            setCurrent(e.target.value)
-          }}
-          required
-        />
-      </label>
-      <label>
-        {t('changePassword.new')}
-        <input
-          type="password"
-          value={next}
-          onChange={(e) => {
-            setNext(e.target.value)
-          }}
-          minLength={8}
-          required
-        />
-      </label>
+      <PasswordField
+        label={t('changePassword.current')}
+        autoComplete="current-password"
+        value={current}
+        onChange={setCurrent}
+        required
+      />
+      <PasswordField
+        label={t('changePassword.new')}
+        autoComplete="new-password"
+        value={next}
+        onChange={setNext}
+        minLength={8}
+        required
+      />
       <button type="submit">{t('changePassword.submit')}</button>
     </form>
   )

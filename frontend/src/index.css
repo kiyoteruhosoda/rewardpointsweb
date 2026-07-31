@@ -254,6 +254,48 @@ select {
   align-items: flex-end;
 }
 
+/* パスワード入力欄（PasswordField.tsx）。見出しの有無で高さが変わるだけで、
+ * 縦積み（.card label）でも横並び（.inline-form）でも同じ形で置ける。 */
+.password-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.password-field-control {
+  display: flex;
+  position: relative;
+}
+
+.password-field-control input {
+  flex: 1;
+  min-width: 0;
+  /* 伏せ字の末尾が目のボタンの下に隠れないよう、ボタンの幅だけ空ける */
+  padding-right: 2.4rem;
+}
+
+/* 入力欄の枠の中に載せる。枠を二重に描かないよう背景・境界は持たない。 */
+.password-field-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+}
+
+.password-field-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 0.3rem;
+}
+
 .config-row {
   display: flex;
   justify-content: space-between;

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
+import { PasswordField } from '../components/PasswordField'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 
@@ -35,18 +36,14 @@ export function ResetPasswordPage() {
       >
         <h1>{t('reset.title')}</h1>
         {error && <p className="error">{t(error)}</p>}
-        <label>
-          {t('reset.newPassword')}
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value)
-            }}
-            minLength={8}
-            required
-          />
-        </label>
+        <PasswordField
+          label={t('reset.newPassword')}
+          autoComplete="new-password"
+          value={password}
+          onChange={setPassword}
+          minLength={8}
+          required
+        />
         <button type="submit">{t('reset.submit')}</button>
       </form>
     </div>
