@@ -18,9 +18,18 @@
 - イメージは `image.tar`（`scripts/build.sh` の成果物）を `docker load` し、
   環境別タグ（`rewardpointsweb:stg` 等）を付け直す。stg / prod を同一ホストで
   運用してもイメージを取り合わない。
-- イメージタグ・compose プロジェクト名・DB コンテナ名・ネットワーク名はすべて
-  スクリプト冒頭の `APP_NAME`（`rewardpointsweb`）から導く。別のアプリと同じ名前に
-  すると、同じ `container_name` とホストポートを奪い合って起動できない。
+- **配置場所がデプロイの名前を決める。** アプリ名は親ディレクトリ名、環境は自分の
+  ディレクトリ名から取る（`<アプリ名>/<stg|prod>/deploy.sh`）。イメージタグ・compose
+  プロジェクト名・DB コンテナ名・ネットワーク名はすべてそこから導くため、別のアプリを
+  別のディレクトリへ置けば名前は構造的に衝突しない。スクリプトにアプリ名を焼き込むと、
+  同じ名前を使う別アプリと `container_name` やホストポートを奪い合う。
+- アプリ名の優先順位は `.env` の `APP_NAME` > 親ディレクトリ名 > `BUILD_APP_NAME`。
+  ディレクトリ名は docker の識別子として使うため、小文字英数と `-` `_` へ正規化する
+  （`RewardPoints Web` → `rewardpoints-web`）。正規化しても空になるときだけ
+  `BUILD_APP_NAME` へ落ちる。実際に使われた名前と出所は起動時に 1 行で出す。
+- `BUILD_APP_NAME` は「デプロイの名前」ではなく「`image.tar` の中身がどう tag されて
+  いるか」。`manifest.env` が無いときの load 後の参照先にだけ使う（あればそちらの
+  `app_ref` / `db_ref` が正）。配置ディレクトリを変えても tar の中身は変わらない。
 - `LEGACY_APP_NAMES` に挙げた旧アプリ名（`fastapitemplate`）で動いているコンテナが
   あれば、旧名の compose プロジェクトを一度だけ `down` してから新しい名前で起動し直す。
   ただし down するのは、compose の `com.docker.compose.project.working_dir` ラベルが
