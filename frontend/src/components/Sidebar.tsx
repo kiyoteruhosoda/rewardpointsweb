@@ -1,6 +1,10 @@
 /**
  * ナビゲーション。表示はロール名ではなく scope で制御する。
  *
+ * 並べるのは家族が日常で使う画面だけ。管理者は親（家族）なので、システム管理
+ * （ユーザー・ロール・権限・システム設定・ログ）はここに出さず、プロフィール設定
+ * （ProfilePage）の中から入る。
+ *
  * 広い画面では本文の左に置いたままにし、狭い画面では画面外から滑り出す引き出しに
  * なる（切り替えは index.css のメディアクエリ。DOM は 1 つで、開いているかどうかだけを
  * `open` で受け取る）。閉じ方は「項目を選ぶ」「背景に触れる」「Escape」の 3 つ。
@@ -24,12 +28,7 @@ interface Item {
 const ITEMS: Item[] = [
   { to: '/', labelKey: 'nav.dashboard', scopes: ['dashboard:view'] },
   { to: '/members', labelKey: 'nav.members', scopes: ['member:view'] },
-  { to: '/items', labelKey: 'nav.items', scopes: ['item:view'] },
-  { to: '/admin/users', labelKey: 'nav.users', scopes: ['user:manage'] },
-  { to: '/admin/roles', labelKey: 'nav.roles', scopes: ['role:manage'] },
-  { to: '/admin/permissions', labelKey: 'nav.permissions', scopes: ['permission:manage'] },
-  { to: '/admin/config', labelKey: 'nav.config', scopes: ['admin:system-settings'] },
-  { to: '/admin/logs', labelKey: 'nav.logs', scopes: ['log:view'] },
+  { to: '/profile', labelKey: 'nav.profile', scopes: [] },
 ]
 
 /** 引き出しの id。ヘッダーの開閉ボタンが `aria-controls` で指す。 */
