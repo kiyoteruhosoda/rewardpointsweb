@@ -5,11 +5,10 @@ import { Footer } from './components/Footer'
 import { Header } from './components/Header'
 import { Sidebar } from './components/Sidebar'
 import { useI18n } from './i18n'
-import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ConfigPage } from './pages/ConfigPage'
+import { DashboardPage } from './pages/DashboardPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
-import { ItemsPage } from './pages/ItemsPage'
 import { LoginPage } from './pages/LoginPage'
 import { MemberPointsPage } from './pages/MemberPointsPage'
 import { MembersPage } from './pages/MembersPage'
@@ -58,10 +57,9 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<RequireAuth />}>
-        <Route path="/" element={<AdminDashboardPage />} />
+        <Route path="/" element={<DashboardPage />} />
         <Route path="/members" element={<MembersPage />} />
         <Route path="/members/:memberId" element={<MemberPointsPage />} />
-        <Route path="/items" element={<ItemsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
         <Route path="/security" element={<SecurityPage />} />

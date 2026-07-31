@@ -14,7 +14,17 @@ describe('Sidebar', () => {
       scopes: ['member:view'],
     })
     expect(screen.getByRole('link', { name: 'Points' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
+  })
+
+  it('システム管理は scope があっても出さない（プロフィール設定から入る）', () => {
+    renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
+      scopes: ['member:view', 'user:manage', 'admin:system-settings', 'log:view'],
+    })
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'System settings' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'System logs' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Profile & settings' })).toBeInTheDocument()
   })
 
   it('閉じているあいだは背景を出さない', () => {
