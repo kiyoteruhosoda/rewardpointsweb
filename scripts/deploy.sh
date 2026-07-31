@@ -25,7 +25,16 @@
 
 set -Eeuo pipefail
 
-APP_NAME="fastapitemplate"
+APP_NAME="rewardpointsweb"
+
+# 以前このアプリが名乗っていた名前。イメージタグ・compose プロジェクト名・
+# コンテナ名・ネットワーク名はすべて APP_NAME から導くため、名前を変えると
+# 旧名で起動中のコンテナが「別プロジェクトの残骸」として残り、同じ
+# container_name / ホストポートを奪い合って次の up が必ず失敗する。
+# 一度だけ旧名で down を通し、.env に焼き付いた旧名も新名へ移す（下記
+# take_down_legacy_projects / migrate_legacy_env_names）。
+# 永続データはホスト側の $HOST_DATA_ROOT にあるので、この入れ替えで消えない。
+LEGACY_APP_NAMES="fastapitemplate"
 
 # 配置は dist/ をそのまま展開した形（<env>/deploy.sh）のみ。環境ディレクトリ直下で動く。
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -293,10 +302,40 @@ DOCKER_NETWORK_NAME=$DEFAULT_NETWORK
 ENVEOF
 fi
 
+# ===== 旧アプリ名で焼き付いた .env の値を移す（名前変更の一度きりの移行） =====
+# 生成した .env に入る DB_CONTAINER_NAME / DOCKER_NETWORK_NAME は、この環境
+# ディレクトリに閉じた「スクリプトが決めた名前」であって運用者の設定値ではない。
+# 旧名のまま残すと、元テンプレート（同じ名前を使う別プロジェクト）と
+# container_name / ネットワーク名を奪い合う。旧既定値と一致するときだけ書き換え、
+# 運用者が自分で決めた値には触れない。
+migrate_legacy_env_names() {
+  [ -f "$ENV_FILE" ] || return 0
+  local legacy key current expected
+  for legacy in $LEGACY_APP_NAMES; do
+    for key in DB_CONTAINER_NAME DOCKER_NETWORK_NAME; do
+      current="$(env_file_value "$key")"
+      [ -n "$current" ] || continue
+      case "$key" in
+        DB_CONTAINER_NAME)
+          [ "$ENV_KIND" = "stg" ] && expected="${legacy}-mariadb-stg" || expected="${legacy}-mariadb"
+          ;;
+        *)
+          [ "$ENV_KIND" = "stg" ] && expected="${legacy}-stg" || expected="${legacy}-prod"
+          ;;
+      esac
+      [ "$current" = "$expected" ] || continue
+      local replacement="${expected/#$legacy/$APP_NAME}"
+      log "$ENV_FILE: $key を旧アプリ名から移行します（$current -> $replacement）"
+      sed -i.bak -E "s|^${key}=.*|${key}=${replacement}|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+    done
+  done
+}
+migrate_legacy_env_names
+
 # compose の default ネットワーク名（docker-compose.yml の
-# `${DOCKER_NETWORK_NAME:-fastapitemplate}` と同じ解決をここでも行う）。
-# .env を生成した後で読むこと。初回デプロイでは生成された .env に環境別の名前
-# （fastapitemplate-prod 等）が入るため、先に読むと素の既定値を見てしまう。
+# `${DOCKER_NETWORK_NAME:-rewardpointsweb}` と同じ解決をここでも行う）。
+# .env を生成・移行した後で読むこと。初回デプロイでは生成された .env に環境別の
+# 名前（rewardpointsweb-prod 等）が入るため、先に読むと素の既定値を見てしまう。
 DOCKER_NETWORK_NAME="$(env_file_value DOCKER_NETWORK_NAME)"
 DOCKER_NETWORK_NAME="${DOCKER_NETWORK_NAME:-$APP_NAME}"
 
@@ -404,6 +443,24 @@ compose_down() {
   done
   $COMPOSE down --remove-orphans || warn "docker compose down still failed; continuing"
 }
+
+# ===== 旧アプリ名の compose プロジェクトを畳む（名前変更の一度きりの移行） =====
+# compose プロジェクト名も APP_NAME から導くため、名前を変えた直後の down は
+# 新プロジェクトを見に行き、旧名で動いているコンテナを見つけられない。放置すると
+# 同じ container_name とホストポートを握ったまま残り、続く up が必ず失敗する。
+# この環境ディレクトリのコンテナなので、旧名で down して畳んでよい（データは
+# ホスト側のバインドマウントにある）。
+take_down_legacy_projects() {
+  local legacy project
+  for legacy in $LEGACY_APP_NAMES; do
+    [ "$ENV_KIND" = "stg" ] && project="${legacy}-stg" || project="${legacy}"
+    [ -n "$(docker ps -aq --filter "label=com.docker.compose.project=$project" 2>/dev/null || true)" ] || continue
+    warn "旧アプリ名の compose プロジェクト '$project' が残っています。新しい名前 '$PROJECT' へ移行するため畳みます。"
+    docker compose -p "$project" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down --remove-orphans \
+      || warn "'$project' の down に失敗しました。続行します（up が失敗する場合は手動で削除してください）。"
+  done
+}
+take_down_legacy_projects
 
 log "docker compose down"
 compose_down

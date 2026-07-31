@@ -32,10 +32,10 @@
 #   APP_DIST_DIR       ホストから見えるビルド済み dist/ の絶対パス（必須。無指定はエラー）
 #   APP_TARGET_DIR     デプロイ先ディレクトリ（既定: このスクリプトの場所）
 #
-# ディレクトリ構成の前提は **/<プロジェクト名>/<環境>**（例: /volume1/docker/fastapitemplate/prod）。
+# ディレクトリ構成の前提は **/<プロジェクト名>/<環境>**（例: /volume1/docker/rewardpointsweb/prod）。
 #   * 環境（stg/prod 等）  … デプロイ先ディレクトリ名から取得
 #   * プロジェクト名        … デプロイ先ディレクトリの親ディレクトリ名から取得
-# プロジェクト名の優先順位: APP_PROJECT > 設定ファイル PROJECT > 親ディレクトリ名 > 既定値 fastapitemplate。
+# プロジェクト名の優先順位: APP_PROJECT > 設定ファイル PROJECT > 親ディレクトリ名 > 既定値 rewardpointsweb。
 # この構成に従っていれば PROJECT の指定は不要。従わない場合は APP_PROJECT／PROJECT で明示する。
 #
 # 設定は上記の環境変数のほか、**スクリプトと同じ場所の `build-remote-container.env`**（KEY=VALUE 形式）
@@ -73,11 +73,11 @@ if [[ -f "$_config_file" ]]; then
   done <"$_config_file"
 fi
 
-log() { printf '[fastapitemplate:container] %s\n' "$*" >&2; }
-die() { printf '[fastapitemplate:container][error] %s\n' "$*" >&2; exit 1; }
+log() { printf '[rewardpointsweb:container] %s\n' "$*" >&2; }
+die() { printf '[rewardpointsweb:container][error] %s\n' "$*" >&2; exit 1; }
 
 # ---- ターゲットディレクトリ・自分自身のパスを先に確定する ---------------------------
-# 想定ディレクトリ構成は /<プロジェクト名>/<環境>（例: /volume1/docker/fastapitemplate/prod）。
+# 想定ディレクトリ構成は /<プロジェクト名>/<環境>（例: /volume1/docker/rewardpointsweb/prod）。
 # 環境はターゲットディレクトリ名、プロジェクト名はその親ディレクトリ名から取得する（下記）。
 target_dir="${APP_TARGET_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 # 相対・非正規化パス（例 APP_TARGET_DIR=stg や 末尾 /.）でも親ディレクトリを正しく導出できるよう、
@@ -93,10 +93,10 @@ self_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOUR
 # ここの既定値は直接書き換えないこと（self-update が本ファイルを差し替えるため編集は失われる。
 # 環境固有の設定は build-remote-container.env か環境変数で与える）。
 # プロジェクト名は 1 度だけ確定する。優先順位: 環境変数 APP_PROJECT > 設定ファイル PROJECT >
-# ターゲットディレクトリの親ディレクトリ名（/<プロジェクト名>/<環境> 前提）> 既定値 fastapitemplate。
+# ターゲットディレクトリの親ディレクトリ名（/<プロジェクト名>/<環境> 前提）> 既定値 rewardpointsweb。
 _project_from_dir="$(basename "$(dirname "$target_dir")")"
 case "$_project_from_dir" in '' | '/' | '.' | '..') _project_from_dir='' ;; esac
-project="${APP_PROJECT:-${PROJECT:-${_project_from_dir:-fastapitemplate}}}"
+project="${APP_PROJECT:-${PROJECT:-${_project_from_dir:-rewardpointsweb}}}"
 # プロジェクト名の出所（起動ログで「なぜこの値か」を分かるように表示する）。
 if   [[ -n "${APP_PROJECT:-}" ]]; then project_source="環境変数 APP_PROJECT"
 elif [[ -n "${PROJECT:-}"     ]]; then project_source="設定ファイル PROJECT"

@@ -2,6 +2,47 @@
 
 新しいものを上に追記する。細かな進捗は書かない（Progress.md 完了時に要約を移す）。
 
+## 2026-07 ログインできない原因を切り分けられるようにし、アプリ名を自分のものにした
+
+「ログインできない」という報告の画面には `unknown_error` の文言（「エラーが発生
+しました。」）だけが出ていた。パスワード違いなら `invalid_credentials` の文言が出る
+はずで、実際にはサーバー側の例外（HTTP 500）が起きていたが、画面からもログからも
+それが分からなかった。原因は 3 つあり、それぞれ直した。
+
+**1. 想定外の例外が読めない応答になっていた。** ハンドラが無いと Starlette は
+本文 `Internal Server Error` の **text/plain** を返す。API クライアント
+（`frontend/src/services/api.ts`）は本文を JSON として読むため、パースに失敗して
+コードを取り出せず、どんな障害も一律 `unknown_error` になっていた。最後の受け皿
+（`presentation/fastapi/error_handling.py`）を足し、`{"detail": {"error":
+"internal_error"}}` の JSON・`X-Request-Id` ヘッダー・traceback つきのログに揃えた。
+例外の中身は応答に出さない（追跡は `requestId` で行う）。
+
+**2. 初期管理者のパスワードが `admin` で、締め出されると戻せなかった。** 既定を
+メールアドレスと同じ `admin@example.com` に変更した（`shared/domain/auth/master_data.py`）。
+投入は冪等で既存の管理者に触れない設計だったため、既定値のままの環境が新しい既定値へ
+追随できず、パスワードを忘れると復旧手段も無かった。
+
+- 既定値のまま（`SUPERSEDED_ADMIN_PASSWORD_HASHES` に一致）の管理者だけを新しい既定値
+  へ追随させる（`migrations/versions/0006_default_admin_password.py`）。運用者が自分で
+  決めたパスワードには触れない。
+- 明示したときだけ戻す復旧経路として `scripts/seed_master_data.py --reset-admin-password`
+  を追加した（手順は OPERATIONS.md）。
+- 平文とハッシュの食い違いは `tests/unit/test_master_data.py` が検出する。ドキュメント
+  どおりに入れてもログインできない、という状態を機械で防ぐ。
+
+**3. 元テンプレートと同じ名前（`fastapitemplate`）を名乗り続けていた。** イメージタグ・
+compose プロジェクト名・DB コンテナ名・ネットワーク名がすべてこの名前から導かれるため、
+元テンプレート由来の別プロジェクトを同じホストで動かすと、同じ `container_name` と
+ホストポートを奪い合う。過去 2 回の deploy 修正（ネットワークの重複、他プロジェクトの
+コンテナの切り離し）はこの衝突の症状だった。`rewardpointsweb` へ改名し、`deploy.sh` に
+一度きりの移行（旧名の compose プロジェクトを畳む・自動生成した `.env` の旧既定名を
+書き換える）を入れた。永続データはホスト側の `HOST_DATA_ROOT` にあるため消えない。
+
+`ACCESS_TOKEN_ISSUER` / `ACCESS_TOKEN_AUDIENCE` も改名したので、**発行済みの JWT は
+すべて無効になる**（`iss` / `aud` を検証しているため）。全員が一度ログインし直す。
+パスキーの結び付け先である `WEBAUTHN_RP_ID` は変えていないので、登録済みのパスキーは
+そのまま使える。
+
 ## 2026-07 画面を家族向けに整理し、システム関連をプロフィール設定へ寄せた
 
 管理者は親（家族）であって運用エンジニアではないのに、ホームが「管理ダッシュボード」

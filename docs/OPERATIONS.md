@@ -18,7 +18,7 @@ uv run alembic upgrade head
 uv run python scripts/seed_master_data.py
 ```
 
-- 初期管理者: `admin@example.com` / `admin`
+- 初期管理者: `admin@example.com` / `admin@example.com`（メールアドレスと同じ文字列）
   （`ADMIN_INITIAL_PASSWORD` 環境変数で上書き可。本番では必ず変更する）
 
 ## フロントエンドを開発したいとき
@@ -151,13 +151,42 @@ docker compose exec -T db sh -c 'mysql -u root -p"$MARIADB_ROOT_PASSWORD" "$MARI
 ```
 
 別のコンテナからつなぎたいときは、同じネットワーク（`.env` の
-`DOCKER_NETWORK_NAME`。既定は `fastapitemplate`）に参加させ、ホスト名 `db`・
+`DOCKER_NETWORK_NAME`。既定は `rewardpointsweb`）に参加させ、ホスト名 `db`・
 ポート 3306 を指す:
 
 ```bash
-docker run --rm -it --network fastapitemplate mariadb:10.11 \
+docker run --rm -it --network rewardpointsweb mariadb:10.11 \
   mysql -h db -u web_user -p appdb
 ```
+
+## 管理者のパスワードが分からなくなったとき
+
+初期管理者（`admin@example.com`）のパスワードを再設定する。メールが使えない
+環境でも復旧できるよう、サーバー側から直接戻す経路を用意してある。
+
+```bash
+# 既定値（admin@example.com）へ戻す
+docker compose exec web python scripts/seed_master_data.py --reset-admin-password
+
+# 好きなパスワードにする
+docker compose exec -e ADMIN_INITIAL_PASSWORD='新しいパスワード' web \
+  python scripts/seed_master_data.py --reset-admin-password
+```
+
+`--reset-admin-password` を付けないとパスワードは変わらない（投入は冪等で、
+運用者が決めたパスワードを黙って壊さないため）。
+
+## ログインが「サーバー側でエラーが発生しました」になるとき
+
+パスワード違いなら「メールアドレスまたはパスワードが正しくありません」が出る。
+この文言はサーバー側の例外（HTTP 500）なので、原因はログにある。画面の応答
+ヘッダー `X-Request-Id` と同じ `requestId` で該当行を引く。
+
+```bash
+docker compose logs web | grep unhandled_exception     # traceback つきで出る
+```
+
+DB の `log` テーブルにも同じ行が入る（`trace` 列に traceback）。
 
 ## デプロイしたいとき
 
@@ -212,7 +241,7 @@ iOS はホーム画面に追加した時点のアイコンを端末に焼き付�
 （ネットワークは作り直せる。消しても DB・アプリのデータには影響しない）:
 
 ```bash
-docker network ls | grep fastapitemplate      # 同名で ID が違う行を確認する
+docker network ls | grep rewardpointsweb      # 同名で ID が違う行を確認する
 docker network rm <ID> <ID>                   # 1 つ残して他を削除する
 ./deploy.sh app                               # 残った 1 つを compose が再利用する
 ```

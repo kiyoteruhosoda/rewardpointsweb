@@ -24,6 +24,7 @@ from bounded_contexts.reward_points.presentation.error_handling import (
     register_reward_points_error_handler,
 )
 from bounded_contexts.reward_points.presentation.router import router as members_router
+from presentation.fastapi.error_handling import register_internal_error_handler
 from presentation.fastapi.middleware.request_logging import RequestLoggingMiddleware
 from presentation.fastapi.routers import spa
 from presentation.fastapi.routers.admin.config import router as admin_config_router
@@ -86,6 +87,8 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
+    # 最後の受け皿を先に。個別のドメイン例外ハンドラが優先される。
+    register_internal_error_handler(app)
     register_account_security_error_handler(app)
     register_reward_points_error_handler(app)
 
