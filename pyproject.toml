@@ -1,7 +1,7 @@
 [project]
 name = "rewardpointsweb"
 version = "0.2.0"
-description = "FastAPI + DDD template (photonest-based) – Clean Architecture / DDD"
+description = "RewardPoints — 人ごとのポイントを記録・共有する PWA（FastAPI + DDD）"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.136.1",
