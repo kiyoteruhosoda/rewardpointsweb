@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
+import { PasswordField } from '../components/PasswordField'
 import { useI18n } from '../i18n'
 import { ApiError, errorMessageKey } from '../services/api'
 import { isPasskeyCancellation, isPasskeySupported } from '../services/webauthn'
@@ -88,18 +89,13 @@ export function LoginPage() {
                 required
               />
             </label>
-            <label>
-              {t('login.password')}
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value)
-                }}
-                required
-              />
-            </label>
+            <PasswordField
+              label={t('login.password')}
+              autoComplete="current-password"
+              value={password}
+              onChange={setPassword}
+              required
+            />
             <button type="submit">{t('login.submit')}</button>
             {isPasskeySupported() && (
               <button
