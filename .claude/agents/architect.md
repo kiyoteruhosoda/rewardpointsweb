@@ -56,14 +56,24 @@ Nothing in `domain/` may import from `application/`, `infrastructure/`, or
 5. Alembic migration under `migrations/versions/` for any table change
    (never raw `ALTER TABLE`; no native DB ENUM — use `native_enum=False`)
 6. Pydantic `〇〇Request` / `〇〇Response` in that context's `presentation/`
-7. Router with `Depends(require_permission("<scope>"))` on every endpoint
+7. Router. Guard scope-protected resource endpoints with
+   `Depends(require_permission("<scope>"))`. Public routes (login, passkey login,
+   recovery, `/healthz`, SPA) take no principal, and self-service routes where every
+   authenticated user manages their own credentials (`account_security`) take
+   `Depends(get_current_principal)` without a scope — adding a scope there would lock
+   out ordinary users.
 8. Unit tests for domain, integration tests for the API
 
 ## Key invariants
 
-- Domain objects are **pure Python**; use cases own the transaction boundary.
+- Domain objects are **pure Python** (stdlib only).
+- The transaction is **request-wide and owned by `get_db`**
+  (`shared/kernel/database/session.py`): it commits after the request dependency yields
+  and rolls back on exceptions. Use cases receive repositories, not a session, and must
+  not commit — repositories `flush()` when they need generated IDs.
 - Schemas never build domain models directly — the application layer converts.
-- Authorization is by **scope**, never by role name.
+- Authorization is by **scope**, never by role name (see the checklist for the
+  public / self-service exceptions).
 - Settings are read only through `settings` properties, never `os.getenv()` directly.
 - Dependency injection via `Depends()` / factories, not direct `new`.
 - No `util` / `helper` names; no dynamic dispatch (`getattr` / `eval` / `exec`).
