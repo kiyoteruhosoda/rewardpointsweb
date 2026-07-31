@@ -34,7 +34,7 @@ describe('DashboardPage', () => {
 
   it('挨拶と、メンバーごとの残高カードを出す', async () => {
     listMembers.mockResolvedValue([member(), member({ id: 2, name: 'タロウ', balance: 30 })])
-    renderWithProviders(<DashboardPage />)
+    renderWithProviders(<DashboardPage />, { scopes: ['member:view'] })
 
     expect(await screen.findByText('70 pt')).toBeInTheDocument()
     expect(screen.getByText('30 pt')).toBeInTheDocument()
@@ -44,14 +44,14 @@ describe('DashboardPage', () => {
 
   it('自分自身のメンバーには目印を付ける', async () => {
     listMembers.mockResolvedValue([member({ is_self: true })])
-    renderWithProviders(<DashboardPage />)
+    renderWithProviders(<DashboardPage />, { scopes: ['member:view'] })
 
     expect(await screen.findByText(/\(you\)/)).toBeInTheDocument()
   })
 
   it('システム運用の情報（API ドキュメント）は出さない', async () => {
     listMembers.mockResolvedValue([member()])
-    renderWithProviders(<DashboardPage />)
+    renderWithProviders(<DashboardPage />, { scopes: ['member:view'] })
     await screen.findByText('70 pt')
 
     expect(screen.queryByRole('link', { name: '/docs' })).not.toBeInTheDocument()
@@ -60,7 +60,7 @@ describe('DashboardPage', () => {
 
   it('メンバーがいなければポイント画面への案内を出す', async () => {
     listMembers.mockResolvedValue([])
-    renderWithProviders(<DashboardPage />)
+    renderWithProviders(<DashboardPage />, { scopes: ['member:view'] })
 
     expect(await screen.findByRole('link', { name: 'Add members' })).toHaveAttribute(
       'href',
@@ -70,10 +70,21 @@ describe('DashboardPage', () => {
 
   it('読み込みに失敗しても画面は壊さない', async () => {
     listMembers.mockRejectedValue(new Error('offline'))
-    renderWithProviders(<DashboardPage />)
+    renderWithProviders(<DashboardPage />, { scopes: ['member:view'] })
 
     expect(
       await screen.findByText('No members yet. Add them from the Points page.'),
     ).toBeInTheDocument()
+  })
+
+  it('member:view が無ければ一覧を取得せず、空の案内も出さない（guest 等）', async () => {
+    renderWithProviders(<DashboardPage />, { scopes: ['dashboard:view'] })
+
+    expect(await screen.findByText('Hello, manager')).toBeInTheDocument()
+    expect(listMembers).not.toHaveBeenCalled()
+    expect(
+      screen.queryByText('No members yet. Add them from the Points page.'),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Add members' })).not.toBeInTheDocument()
   })
 })
