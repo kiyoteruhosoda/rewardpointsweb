@@ -1,7 +1,7 @@
 /** 認証状態（ログイン中ユーザーと scope）。認可判定は hasScope で行う。 */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
-import { api, clearTokens, hasTokens, setTokens } from '../services/api'
+import { api, clearOfflineViewCache, clearTokens, hasTokens, setTokens } from '../services/api'
 import { assertPasskey, type PasskeyChallenge } from '../services/webauthn'
 
 export interface Me {
@@ -63,6 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       totp_code: totpCode || null,
     })
+    // ログアウトを経ずに別のアカウントで入り直しても、前のユーザーの
+    // オフライン閲覧キャッシュを持ち越さない（ADR-0015）
+    await clearOfflineViewCache()
     setTokens(pair.access_token, pair.refresh_token)
     await refreshMe()
   }
@@ -74,6 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       challenge_id: challenge.challenge_id,
       credential,
     })
+    // login と同じく、別アカウントでの入り直しに備えて消す（ADR-0015）
+    await clearOfflineViewCache()
     setTokens(pair.access_token, pair.refresh_token)
     await refreshMe()
   }

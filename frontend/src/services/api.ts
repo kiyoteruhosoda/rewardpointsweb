@@ -81,12 +81,23 @@ export function setTokens(access: string, refresh: string): void {
   localStorage.setItem(REFRESH_KEY, refresh)
 }
 
+/**
+ * オフライン閲覧キャッシュを消す（ADR-0015）。
+ *
+ * キャッシュは URL だけで引かれ、Authorization ヘッダーを見ない。誰の応答かを
+ * 区別できないので、ユーザーが替わり得る節目（ログアウト・セッション失効・
+ * ログイン成功）で丸ごと消す。
+ */
+export async function clearOfflineViewCache(): Promise<void> {
+  if (typeof caches !== 'undefined') await caches.delete(OFFLINE_VIEW_CACHE)
+}
+
 export function clearTokens(): void {
   localStorage.removeItem(ACCESS_KEY)
   localStorage.removeItem(REFRESH_KEY)
   // ログアウト・セッション失効の後、同じブラウザの別ユーザーに前のユーザーの
   // 残高・履歴が見えないようにする（ADR-0015）。
-  if (typeof caches !== 'undefined') void caches.delete(OFFLINE_VIEW_CACHE)
+  void clearOfflineViewCache()
 }
 
 export function hasTokens(): boolean {

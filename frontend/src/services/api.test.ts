@@ -3,7 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import en from '../i18n/en.json'
 import ja from '../i18n/ja.json'
-import { api, ApiError, clearTokens, errorMessageKey, hasTokens, setTokens } from './api'
+import {
+  api,
+  ApiError,
+  clearOfflineViewCache,
+  clearTokens,
+  errorMessageKey,
+  hasTokens,
+  setTokens,
+} from './api'
 
 describe('errorMessageKey', () => {
   it('ApiError のコードを i18n キーへ変換する', () => {
@@ -88,6 +96,19 @@ describe('トークンの保持', () => {
     vi.stubGlobal('caches', { delete: deleteCache })
     try {
       clearTokens()
+      expect(deleteCache).toHaveBeenCalledWith('offline-views')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('ログイン成功時にも使えるよう、キャッシュ削除を単独で呼べる（ADR-0015）', async () => {
+    // キャッシュは URL だけで引かれ誰の応答か区別できないため、ログアウトを
+    // 経ない別アカウントへの入り直し（AuthContext の login）でも丸ごと消す。
+    const deleteCache = vi.fn<(name: string) => Promise<boolean>>().mockResolvedValue(true)
+    vi.stubGlobal('caches', { delete: deleteCache })
+    try {
+      await clearOfflineViewCache()
       expect(deleteCache).toHaveBeenCalledWith('offline-views')
     } finally {
       vi.unstubAllGlobals()
