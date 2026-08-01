@@ -70,7 +70,12 @@ class ChangePasswordRequest(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
+    """ログイン識別子で申し込む。
+
+    メールアドレスは任意項目なので、それを起点にはできない（ADR-0011）。
+    """
+
+    username: str = Field(min_length=1, max_length=USERNAME_MAX_LENGTH)
 
 
 class ResetPasswordRequest(BaseModel):

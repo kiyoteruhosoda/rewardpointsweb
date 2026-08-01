@@ -21,7 +21,10 @@ from bounded_contexts.reward_points.domain.repositories.point_transaction_reposi
 from bounded_contexts.reward_points.domain.value_objects.idempotency_key import IdempotencyKey
 from bounded_contexts.reward_points.domain.value_objects.point_amount import PointAmount
 from bounded_contexts.reward_points.domain.value_objects.transaction_reason import TransactionReason
-from bounded_contexts.reward_points.infrastructure.reward_points_models import PointTransactionModel
+from bounded_contexts.reward_points.infrastructure.reward_points_models import (
+    PointLedgerModel,
+    PointTransactionModel,
+)
 
 
 class SqlPointTransactionRepository(IPointTransactionRepository):
@@ -99,6 +102,23 @@ class SqlPointTransactionRepository(IPointTransactionRepository):
             select(func.count()).select_from(PointTransactionModel).where(PointTransactionModel.ledger_id == ledger_id)
         )
         return total or 0
+
+    def frequent_reasons(self, *, family_id: int, limit: int) -> list[str]:
+        occurrences = func.count().label("occurrences")
+        rows = self._session.execute(
+            select(PointTransactionModel.reason, occurrences)
+            .join(PointLedgerModel, PointLedgerModel.id == PointTransactionModel.ledger_id)
+            .where(
+                PointLedgerModel.family_id == family_id,
+                # 打ち消しは元の理由をそのまま引き継ぐので、数えると二重になる
+                PointTransactionModel.reversal_of_id.is_(None),
+            )
+            .group_by(PointTransactionModel.reason)
+            # 同数のときは文字列順。並びが実行のたびに変わらないようにする
+            .order_by(occurrences.desc(), PointTransactionModel.reason)
+            .limit(limit)
+        ).all()
+        return [str(row[0]) for row in rows]
 
     def _find_by_key(self, *, ledger_id: int, key: str) -> PointTransaction | None:
         row = self._session.scalar(

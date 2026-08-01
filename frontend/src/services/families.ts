@@ -154,6 +154,10 @@ export const families = {
   redeemInvitation: (code: string, username: string, password: string) =>
     api.post<RedeemedInvitation>('/api/families/invitations/redeem', { code, username, password }),
 
+  /** その家族でよく使われている理由（入力候補）。頻度の高い順。 */
+  reasonSuggestions: (familyId: number) =>
+    api.get<string[]>(`/api/families/${familyId}/reason-suggestions`),
+
   viewLedger: (familyId: number, ledgerId: number) =>
     api.get<Ledger>(ledgerPath(familyId, ledgerId)),
 

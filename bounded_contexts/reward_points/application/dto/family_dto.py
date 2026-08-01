@@ -62,6 +62,8 @@ class TemporaryPasswordDTO:
     username: str
     password: str
     expires_at: datetime
+    # 発行の事実をログへ残すために返す（応答本文には載せない）
+    issued_by_membership_id: int
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -87,20 +87,28 @@ describe('FamilyPage', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('親には子の追加と招待を出す', async () => {
+  it('親には子の追加を出す', async () => {
     view.mockResolvedValue(detail('parent', [member()]))
     renderPage()
 
     expect(await screen.findByRole('button', { name: 'Add a child' })).toBeInTheDocument()
-    expect(screen.getByText('Invitations')).toBeInTheDocument()
   })
 
-  it('除名は owner だけに出す（parent には出さない）', async () => {
+  it('家族の管理（招待・除名）は owner だけに出す', async () => {
     view.mockResolvedValue(detail('parent', [member()]))
     renderPage()
 
     await screen.findByText('70 pt')
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Invitations')).not.toBeInTheDocument()
+  })
+
+  it('owner には招待を出す', async () => {
+    view.mockResolvedValue(detail('owner', [member()]))
+    renderPage()
+
+    await screen.findByText('70 pt')
+    expect(screen.getByText('Invitations')).toBeInTheDocument()
   })
 
   it('アカウント未設定の子には一時パスワードを出さない', async () => {

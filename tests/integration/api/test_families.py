@@ -52,8 +52,9 @@ def test_child_gets_a_ledger_on_creation(client: TestClient, parent: Account) ->
 def test_other_family_is_not_visible(client: TestClient, parent: Account, other_parent: Account) -> None:
     family_id = create_family(client, parent.headers)
 
-    # 所属していない家族は「無い」ものとして扱う（403 だと存在が分かる）
-    assert client.get(f"/api/families/{family_id}", headers=other_parent.headers).status_code == 404
+    denied = client.get(f"/api/families/{family_id}", headers=other_parent.headers)
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["error"] == "family_access_denied"
     assert client.get("/api/families", headers=other_parent.headers).json() == []
 
 
@@ -83,7 +84,9 @@ def test_siblings_cannot_see_each_other(client: TestClient, parent: Account) -> 
     assert by_name["おとうと"]["balance"] is None
 
     younger_ledger = younger["ledger_id"]
-    assert client.get(f"/api/families/{family_id}/ledgers/{younger_ledger}", headers=child_headers).status_code == 404
+    denied = client.get(f"/api/families/{family_id}/ledgers/{younger_ledger}", headers=child_headers)
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["error"] == "family_access_denied"
 
 
 def test_child_cannot_modify_own_ledger(client: TestClient, parent: Account) -> None:
@@ -134,6 +137,7 @@ def test_invited_parent_can_manage_every_child(client: TestClient, parent: Accou
 
 
 def test_parent_cannot_administer_family(client: TestClient, parent: Account, other_parent: Account) -> None:
+    """家族の管理（招待・除名）は owner のみ。子の作成と記録は parent もできる。"""
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
     invitation = issue_invitation(client, parent.headers, family_id, role="parent")
@@ -143,10 +147,27 @@ def test_parent_cannot_administer_family(client: TestClient, parent: Account, ot
         json={"code": invitation["code"], "display_name": "おかあさん"},
     )
 
-    # 除名は owner だけ（parent は子の作成・記録まで）
     removal = client.delete(f"/api/families/{family_id}/memberships/{child['id']}", headers=other_parent.headers)
     assert removal.status_code == 403
     assert removal.json()["detail"]["error"] == "family_access_denied"
+
+    issuing = client.post(
+        f"/api/families/{family_id}/invitations",
+        headers=other_parent.headers,
+        json={"role": "child", "target_membership_id": child["id"]},
+    )
+    assert issuing.status_code == 403
+    assert client.get(f"/api/families/{family_id}/invitations", headers=other_parent.headers).status_code == 403
+
+    # 子の作成はできる
+    assert (
+        client.post(
+            f"/api/families/{family_id}/memberships",
+            headers=other_parent.headers,
+            json={"display_name": "はなこ"},
+        ).status_code
+        == 201
+    )
 
 
 def test_membership_with_records_cannot_be_removed(client: TestClient, parent: Account) -> None:

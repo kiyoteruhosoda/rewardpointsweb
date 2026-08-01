@@ -37,8 +37,12 @@ def can_administer_family(membership: FamilyMembership) -> bool:
 
 
 def can_invite(membership: FamilyMembership) -> bool:
-    """招待コードの発行。子の作成と同じく親の権限。"""
-    return membership.role.is_guardian
+    """招待コードの発行。**家族の管理**にあたるので owner のみ。
+
+    子の追加（呼び名と台帳を作る）は parent にも許すが、誰をこの家族へ入れるかは
+    owner が決める。招待は「家族の構成を変える」操作で、除名と対になる。
+    """
+    return membership.role.can_administer_family
 
 
 def can_create_child(membership: FamilyMembership) -> bool:

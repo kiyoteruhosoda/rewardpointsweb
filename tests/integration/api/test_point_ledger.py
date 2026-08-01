@@ -117,7 +117,7 @@ def test_reversal_of_a_reversal_is_rejected(client: TestClient, parent: Account,
         headers=parent.headers,
         json={"idempotency_key": "k3"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert response.json()["detail"]["error"] == "reversal_of_reversal_not_allowed"
 
 

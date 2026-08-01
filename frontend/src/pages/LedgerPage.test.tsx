@@ -7,12 +7,14 @@ import { renderWithProviders } from '../test-support/renderWithProviders'
 import { LedgerPage } from './LedgerPage'
 
 const viewLedger = vi.fn<() => Promise<Ledger>>()
+const reasonSuggestions = vi.fn<() => Promise<string[]>>()
 
 vi.mock('../services/families', () => ({
   parseUtc: (value: string) => new Date(`${value}Z`),
   newIdempotencyKey: () => 'test-key',
   families: {
     viewLedger: () => viewLedger(),
+    reasonSuggestions: () => reasonSuggestions(),
   },
 }))
 
@@ -54,6 +56,8 @@ function renderPage() {
 describe('LedgerPage', () => {
   beforeEach(() => {
     viewLedger.mockReset()
+    reasonSuggestions.mockReset()
+    reasonSuggestions.mockResolvedValue([])
   })
 
   it('残高と履歴、記録した人を出す', async () => {
@@ -109,6 +113,28 @@ describe('LedgerPage', () => {
 
     expect(await screen.findByText('-30 pt')).toBeInTheDocument()
     expect(screen.getByText('30 pt short of zero.')).toBeInTheDocument()
+  })
+
+  it('よく使う理由を入力候補として出す', async () => {
+    viewLedger.mockResolvedValue(ledger())
+    reasonSuggestions.mockResolvedValue(['おてつだい', 'そうじ'])
+    renderPage()
+
+    await screen.findByText('100 pt')
+    const options = document.querySelectorAll('datalist option')
+    expect([...options].map((option) => option.getAttribute('value'))).toEqual([
+      'おてつだい',
+      'そうじ',
+    ])
+  })
+
+  it('候補が取れなくても記録はできる（自由入力なので）', async () => {
+    viewLedger.mockResolvedValue(ledger())
+    reasonSuggestions.mockRejectedValue(new Error('offline'))
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: 'Add points' })).toBeInTheDocument()
+    expect(document.querySelectorAll('datalist option')).toHaveLength(0)
   })
 
   it('履歴が無ければその旨を出す', async () => {

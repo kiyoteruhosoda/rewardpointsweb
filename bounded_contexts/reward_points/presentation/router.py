@@ -53,6 +53,7 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     ResetChildPasswordDep,
     ReverseTransactionDep,
     RevokeInvitationDep,
+    SuggestReasonsDep,
     ViewFamilyDep,
     ViewLedgerDep,
 )
@@ -274,9 +275,15 @@ async def reset_child_password(
     発行の事実は構造化ログと ``log`` テーブルに残る。平文はこの応答でだけ返す。
     """
     dto = use_case.execute(family_id=family_id, membership_id=membership_id, account_id=principal.user_id)
+    # 発行の事実（発行者・対象・日時）を残す。平文のパスワードは載せない（ADR-0011）。
+    # 発行者は user.id_hash（PII を残さない識別子）としてリクエストログにも付く。
     logger.info(
         "temporary_password_issued",
-        extra={"family_id": family_id, "membership_id": membership_id},
+        extra={
+            "family_id": family_id,
+            "membership_id": membership_id,
+            "issued_by_membership_id": dto.issued_by_membership_id,
+        },
     )
     return TemporaryPasswordResponse(
         membership_id=dto.membership_id,
@@ -331,6 +338,12 @@ async def revoke_invitation(
 
 
 # --- 台帳 --------------------------------------------------------------------
+
+
+@router.get("/{family_id}/reason-suggestions", response_model=list[str])
+async def suggest_reasons(family_id: int, use_case: SuggestReasonsDep, principal: PointManager) -> list[str]:
+    """その家族でよく使われている理由（入力候補）。頻度の高い順。"""
+    return use_case.execute(family_id=family_id, account_id=principal.user_id)
 
 
 @router.get("/{family_id}/ledgers/{ledger_id}", response_model=LedgerResponse)

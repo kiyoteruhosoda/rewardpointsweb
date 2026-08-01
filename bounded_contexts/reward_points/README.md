@@ -27,19 +27,24 @@ API 仕様は Swagger UI（`/docs`）・`/openapi.json` を参照（手書きし
 2. **家族の中での立場** — `owner` / `parent` / `child`。
    `domain/services/family_access_policy.py` が唯一の判定者。
 
-| role | 家族の管理 | 子の作成・招待 | 加算・消費・訂正 | 閲覧 |
+| role | 家族の管理（招待・除名） | 子の作成 | 加算・消費・訂正 | 閲覧 |
 |---|---|---|---|---|
 | owner | ○ | ○ | 全ての子 | 全ての子 |
 | parent | × | ○ | 全ての子 | 全ての子 |
 | child | × | × | × | 自分の台帳のみ |
 
 兄弟の残高・履歴は相互に参照できない。1 つのアカウントが複数の家族へ所属できるが、
-同一家族では 1 アカウント 1 参加（`UNIQUE (family_id, account_id)`）。
+同一家族では 1 アカウント 1 参加（`UNIQUE (family_id, account_id)`。DB 制約に頼らず
+アプリケーション層でも断る）。
 
-所属していない家族・見えない台帳には **404**（`family_not_found` /
-`ledger_not_found`）。所属はしているが立場が足りない場合だけ **403**
-（`family_access_denied`）。すべてのユースケースは `FamilyAccessResolver` を
-通してから対象を触る。
+届かないときは **403**（`family_access_denied`）で揃える。「所属していない」
+「立場が足りない」「他家族のものだった」を呼び出し元から区別させない。存在しない
+家族 ID でも同じ 403 になる（参加が引けない、という同じ結末を辿る）。台帳だけは、
+そもそも行が無い場合に 404（`ledger_not_found`）。すべてのユースケースは
+`FamilyAccessResolver` を通してから対象を触る。
+
+判定が散らかっていないことは `tests/unit/test_reward_points_invariants.py` が
+AST で見る（`FamilyRole` を比較してよいのはポリシーと変換の層だけ）。
 
 ## 台帳
 
@@ -56,7 +61,11 @@ API 仕様は Swagger UI（`/docs`）・`/openapi.json` を参照（手書きし
   idempotency_key)` に抵触した場合はエラーとせず既存レコードを返す。
 
 `occurred_at`（出来事の発生日時。遡って入力できる）と `created_at`（レコード作成
-日時）は別物。どちらも UTC。
+日時）は別物。どちらも UTC。一覧は `occurred_at` の降順（同値なら `id` の降順）。
+
+`GET /api/families/{id}/reason-suggestions` が、その家族でよく使われた理由を頻度順に
+返す（入力候補）。他家族の理由は混ざらず、打ち消しは数えない（元の理由を引き継ぐため
+二重に効いてしまう）。理由の文言は他の子の記録から来ることがあるので、親にだけ返す。
 
 ## 参加の追加
 

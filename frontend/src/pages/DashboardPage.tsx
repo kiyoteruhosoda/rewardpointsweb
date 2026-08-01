@@ -74,6 +74,8 @@ export function DashboardPage() {
                   {member.display_name}
                   {member.is_me && ` (${t('families.self')})`}
                 </span>
+                {/* 複数の家族に所属できる。どの家族の子かを添える（ADR-0009） */}
+                <span className="member-card-family">{family.name}</span>
                 <span className="member-card-balance">
                   {t('points.value', { points: member.balance ?? 0 })}
                 </span>

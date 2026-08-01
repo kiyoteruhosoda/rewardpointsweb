@@ -67,14 +67,17 @@ def test_only_the_owner_administers_the_family() -> None:
     assert not family_access_policy.can_administer_family(_membership(id=3, role=FamilyRole.CHILD))
 
 
-def test_both_guardians_create_children_and_invite() -> None:
+def test_both_guardians_create_children() -> None:
     for role in (FamilyRole.OWNER, FamilyRole.PARENT):
-        membership = _membership(id=1, role=role)
-        assert family_access_policy.can_create_child(membership)
-        assert family_access_policy.can_invite(membership)
-    child = _membership(id=3, role=FamilyRole.CHILD)
-    assert not family_access_policy.can_create_child(child)
-    assert not family_access_policy.can_invite(child)
+        assert family_access_policy.can_create_child(_membership(id=1, role=role))
+    assert not family_access_policy.can_create_child(_membership(id=3, role=FamilyRole.CHILD))
+
+
+def test_only_the_owner_invites() -> None:
+    """招待は「家族の構成を変える」操作なので、除名と同じく owner のみ。"""
+    assert family_access_policy.can_invite(_membership(id=1, role=FamilyRole.OWNER))
+    assert not family_access_policy.can_invite(_membership(id=2, role=FamilyRole.PARENT))
+    assert not family_access_policy.can_invite(_membership(id=3, role=FamilyRole.CHILD))
 
 
 def test_password_reset_targets_children_only() -> None:

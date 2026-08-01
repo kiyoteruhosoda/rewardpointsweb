@@ -41,7 +41,7 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     InvitationTargetUnavailableError: status.HTTP_409_CONFLICT,
     UsernameAlreadyTakenError: status.HTTP_409_CONFLICT,
     LedgerNotEmptyError: status.HTTP_409_CONFLICT,
-    ReversalOfReversalError: status.HTTP_400_BAD_REQUEST,
+    ReversalOfReversalError: status.HTTP_409_CONFLICT,
     ChildAccountRequiredError: status.HTTP_403_FORBIDDEN,
     MembershipNotLinkedError: status.HTTP_400_BAD_REQUEST,
     DisplayNameRequiredError: status.HTTP_400_BAD_REQUEST,

@@ -1,4 +1,4 @@
-"""未使用かつ期限内の招待の一覧（owner / parent）。
+"""未使用かつ期限内の招待の一覧（owner のみ）。
 
 平文のコードは保存していないので、この一覧には載らない。
 """
@@ -28,7 +28,7 @@ class ListInvitationsUseCase:
         self._memberships = memberships
 
     def execute(self, *, family_id: int, account_id: int) -> list[InvitationDTO]:
-        self._access.require_guardian(family_id=family_id, account_id=account_id)
+        self._access.require_owner(family_id=family_id, account_id=account_id)
         pending = self._invitations.list_pending(family_id, now=utcnow())
         names = {
             membership.id: membership.display_name_value

@@ -15,9 +15,13 @@ import { newIdempotencyKey } from '../services/families'
 
 interface Props {
   onSubmit: (amount: number, reason: string, idempotencyKey: string) => Promise<void>
+  /** その家族でよく使われている理由。同じ言い回しを打ち直さずに済ませる。 */
+  reasonSuggestions: string[]
 }
 
-export function PointEntryForm({ onSubmit }: Props) {
+const REASON_LIST_ID = 'point-entry-reasons'
+
+export function PointEntryForm({ onSubmit, reasonSuggestions }: Props) {
   const { t } = useI18n()
   const [points, setPoints] = useState('')
   const [reason, setReason] = useState('')
@@ -67,9 +71,16 @@ export function PointEntryForm({ onSubmit }: Props) {
           onChange={(event) => {
             setReason(event.target.value)
           }}
+          list={REASON_LIST_ID}
           required
         />
       </label>
+      {/* 候補は datalist で出す。自由入力のままにしておきたいので select にしない */}
+      <datalist id={REASON_LIST_ID}>
+        {reasonSuggestions.map((suggestion) => (
+          <option key={suggestion} value={suggestion} />
+        ))}
+      </datalist>
       <button type="submit" disabled={busy}>
         {t('points.add')}
       </button>

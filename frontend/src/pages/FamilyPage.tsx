@@ -1,9 +1,10 @@
 /**
  * 家族の詳細。参加者と、見える範囲の残高が並ぶ。
  *
- * 子の追加・招待・一時パスワードの発行は、サーバーが返した `my_role` が親
- * （owner / parent）のときだけ出す。子が開いた場合は自分の台帳への入り口だけが
- * 残る（兄弟の残高は最初から返ってこない。ADR-0009）。
+ * 子の追加と一時パスワードの発行は `my_role` が親（owner / parent）のとき、
+ * 招待と除名は owner のときだけ出す。家族の構成を変えるのは owner の役目
+ * （ADR-0009 の認可表）。子が開いた場合は自分の台帳への入り口だけが残る
+ * （兄弟の残高は最初から返ってこない）。
  */
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -186,7 +187,7 @@ export function FamilyPage() {
         </section>
       )}
 
-      {isGuardian && (
+      {isOwner && (
         <InvitationPanel
           familyId={family.id}
           unlinkedChildren={unlinkedChildren}

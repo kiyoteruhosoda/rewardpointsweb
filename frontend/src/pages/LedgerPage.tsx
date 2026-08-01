@@ -26,6 +26,7 @@ export function LedgerPage() {
   const { t, locale } = useI18n()
   const { notify } = useToast()
   const [ledger, setLedger] = useState<Ledger | null>(null)
+  const [reasons, setReasons] = useState<string[]>([])
   const [failed, setFailed] = useState(false)
 
   const family = Number(familyId)
@@ -46,6 +47,16 @@ export function LedgerPage() {
   useEffect(() => {
     void reload()
   }, [reload])
+
+  // 候補が取れなくても記録はできる（自由入力なので、無ければ何も出さないだけ）
+  useEffect(() => {
+    void families
+      .reasonSuggestions(family)
+      .then(setReasons)
+      .catch(() => {
+        setReasons([])
+      })
+  }, [family])
 
   const run = async (action: Promise<unknown>) => {
     try {
@@ -81,7 +92,11 @@ export function LedgerPage() {
       </section>
 
       <section className="card">
-        {ledger.can_modify ? <PointEntryForm onSubmit={record} /> : <p>{t('points.readOnly')}</p>}
+        {ledger.can_modify ? (
+          <PointEntryForm onSubmit={record} reasonSuggestions={reasons} />
+        ) : (
+          <p>{t('points.readOnly')}</p>
+        )}
       </section>
 
       <section className="card">

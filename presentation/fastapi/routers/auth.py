@@ -211,9 +211,14 @@ async def change_password(body: ChangePasswordRequest, principal: PrincipalDep, 
 
 @router.post("/forgot-password", response_model=StatusResponse)
 async def forgot_password(body: ForgotPasswordRequest, db: DbDep) -> StatusResponse:
-    # ユーザーの存在有無に関わらず同じ応答を返す（列挙攻撃対策）
-    PasswordResetService().request_reset(db, body.email)
-    return StatusResponse(status="accepted")
+    """リセットリンクを申し込む。
+
+    メールアドレスを持たないアカウント（子ども）にはリンクを送れないので、
+    ``ask_guardian`` を返して親からの一時パスワード発行へ誘導する（ADR-0011）。
+    存在しないユーザー名は ``accepted`` に丸める。
+    """
+    outcome = PasswordResetService().request_reset(db, body.username)
+    return StatusResponse(status=outcome.value)
 
 
 @router.post("/reset-password", response_model=StatusResponse)

@@ -57,5 +57,13 @@ class IPointTransactionRepository(ABC):
     @abstractmethod
     def count_by_ledger(self, ledger_id: int) -> int: ...
 
+    @abstractmethod
+    def frequent_reasons(self, *, family_id: int, limit: int) -> list[str]:
+        """その家族で使われた理由を、頻度の高い順に返す。
+
+        入力の手間を減らすための候補であり、認可の対象は家族。他家族の理由は
+        含めない（``family_id`` で絞る）。
+        """
+
 
 __all__ = ["IPointTransactionRepository", "NewTransaction"]

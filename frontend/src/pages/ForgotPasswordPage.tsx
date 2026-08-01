@@ -1,17 +1,28 @@
+/**
+ * パスワード再設定の申し込み。
+ *
+ * 申し込みはログイン識別子（ユーザー名）で行う。メールアドレスは任意項目なので、
+ * それを起点にできない（ADR-0011）。メールアドレスを持たないアカウント（子ども）
+ * にはリンクを送れないため、サーバーが `ask_guardian` を返し、親へ頼むよう案内する。
+ */
 import { useState, type FormEvent } from 'react'
 
 import { useI18n } from '../i18n'
 import { api } from '../services/api'
 
+interface Outcome {
+  status: 'accepted' | 'ask_guardian'
+}
+
 export function ForgotPasswordPage() {
   const { t } = useI18n()
-  const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
+  const [username, setUsername] = useState('')
+  const [outcome, setOutcome] = useState<Outcome['status'] | null>(null)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    await api.post('/api/auth/forgot-password', { email })
-    setSent(true)
+    const response = await api.post<Outcome>('/api/auth/forgot-password', { username })
+    setOutcome(response.status)
   }
 
   return (
@@ -23,17 +34,18 @@ export function ForgotPasswordPage() {
         }}
       >
         <h1>{t('forgot.title')}</h1>
-        {sent ? (
-          <p>{t('forgot.sent')}</p>
+        {outcome !== null ? (
+          <p>{outcome === 'ask_guardian' ? t('forgot.askGuardian') : t('forgot.sent')}</p>
         ) : (
           <>
             <label>
-              {t('login.email')}
+              {t('login.username')}
               <input
-                type="email"
-                value={email}
+                type="text"
+                autoComplete="username"
+                value={username}
                 onChange={(e) => {
-                  setEmail(e.target.value)
+                  setUsername(e.target.value)
                 }}
                 required
               />

@@ -1,4 +1,4 @@
-"""招待コードを発行する（owner / parent）。
+"""招待コードを発行する（owner のみ）。
 
 平文のコードはこの応答でだけ返す。保存されるのはハッシュだけなので、失くしたら
 発行し直す。``role = child`` の招待では、親が先に作った参加者を必ず指す
@@ -49,7 +49,7 @@ class IssueInvitationUseCase:
         self._ttl = ttl
 
     def execute(self, command: IssueInvitationCommand) -> InvitationDTO:
-        self._access.require_guardian(family_id=command.family_id, account_id=command.account_id)
+        self._access.require_owner(family_id=command.family_id, account_id=command.account_id)
         target = self._require_target(command)
         issued = self._invitations.issue(
             family_id=command.family_id,

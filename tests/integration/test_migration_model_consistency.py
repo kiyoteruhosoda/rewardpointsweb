@@ -52,6 +52,27 @@ def migrated_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
     engine.dispose()
 
 
+def test_every_migration_can_be_rolled_back(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``downgrade()`` を両方向とも通す。
+
+    片道しか通らないマイグレーションは、適用してから誤りに気付いたときに
+    戻せない（CLAUDE.md「DDL 管理」）。
+    """
+    db_path = tmp_path / "roundtrip.db"
+    monkeypatch.setenv("DATABASE_URI", f"sqlite:///{db_path}")
+    config = Config("alembic.ini")
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "base")
+    command.upgrade(config, "head")
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        assert "families" in _schema_snapshot(engine)
+    finally:
+        engine.dispose()
+
+
 def test_migrations_match_models(migrated_engine: sa.Engine, tmp_path: Path) -> None:
     model_engine = create_engine(f"sqlite:///{tmp_path / 'models.db'}")
     Base.metadata.create_all(model_engine)

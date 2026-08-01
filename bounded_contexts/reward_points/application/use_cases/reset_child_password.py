@@ -58,6 +58,7 @@ class ResetChildPasswordUseCase:
             username=username,
             password=issued.password,
             expires_at=issued.expires_at,
+            issued_by_membership_id=actor.id,
         )
 
 

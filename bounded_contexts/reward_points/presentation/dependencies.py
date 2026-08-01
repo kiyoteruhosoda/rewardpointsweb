@@ -38,6 +38,9 @@ from bounded_contexts.reward_points.application.use_cases.reverse_point_transact
     ReversePointTransactionUseCase,
 )
 from bounded_contexts.reward_points.application.use_cases.revoke_invitation import RevokeInvitationUseCase
+from bounded_contexts.reward_points.application.use_cases.suggest_transaction_reasons import (
+    SuggestTransactionReasonsUseCase,
+)
 from bounded_contexts.reward_points.application.use_cases.view_family import ViewFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.view_point_ledger import ViewPointLedgerUseCase
 from bounded_contexts.reward_points.infrastructure.sql_account_directory import (
@@ -227,6 +230,12 @@ def get_reverse_transaction_use_case(
     return ReversePointTransactionUseCase(access, transactions)
 
 
+def get_suggest_reasons_use_case(
+    access: AccessDep, transactions: TransactionRepoDep
+) -> SuggestTransactionReasonsUseCase:
+    return SuggestTransactionReasonsUseCase(access, transactions)
+
+
 def get_ensure_user_can_be_deleted_use_case(families: FamilyRepoDep) -> EnsureUserCanBeDeletedUseCase:
     return EnsureUserCanBeDeletedUseCase(families)
 
@@ -245,6 +254,7 @@ ResetChildPasswordDep = Annotated[ResetChildPasswordUseCase, Depends(get_reset_c
 ViewLedgerDep = Annotated[ViewPointLedgerUseCase, Depends(get_view_ledger_use_case)]
 RecordTransactionDep = Annotated[RecordPointTransactionUseCase, Depends(get_record_transaction_use_case)]
 ReverseTransactionDep = Annotated[ReversePointTransactionUseCase, Depends(get_reverse_transaction_use_case)]
+SuggestReasonsDep = Annotated[SuggestTransactionReasonsUseCase, Depends(get_suggest_reasons_use_case)]
 
 
 __all__ = [
@@ -261,6 +271,7 @@ __all__ = [
     "ResetChildPasswordDep",
     "ReverseTransactionDep",
     "RevokeInvitationDep",
+    "SuggestReasonsDep",
     "ViewFamilyDep",
     "ViewLedgerDep",
     "get_ensure_user_can_be_deleted_use_case",

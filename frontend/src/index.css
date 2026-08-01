@@ -366,6 +366,12 @@ select:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* どの家族の子か。複数の家族に所属できるため、名前だけでは足りない。 */
+.member-card-family {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
 /* 名前の頭文字を丸に入れた印。写真は持たない方針なので、これで人を見分ける。 */
 .avatar {
   display: inline-flex;

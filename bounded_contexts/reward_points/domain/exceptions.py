@@ -14,10 +14,11 @@ class RewardPointsError(Exception):
 
 
 class FamilyNotFoundError(RewardPointsError):
-    """家族が存在しない、または呼び出し元が所属していない。
+    """家族そのものが存在しない。
 
-    所属していない家族は「無い」ものとして扱う。403 を返すと、その ID の家族が
-    存在することが分かってしまう（ADR-0009 のデータ分離境界）。
+    「所属していない」はこれではなく :class:`FamilyAccessDeniedError`。参加が
+    引けない時点で止まるため、呼び出し元からは実在と未所属を区別できない。
+    こちらは、参加は引けたのに家族の行が無いという壊れた状態のときだけ出る。
     """
 
     code = "family_not_found"

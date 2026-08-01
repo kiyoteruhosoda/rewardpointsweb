@@ -86,15 +86,27 @@ def test_change_password_wrong_current(client: TestClient, admin_headers: dict[s
 
 
 def test_forgot_password_does_not_leak_user_existence(client: TestClient) -> None:
-    known = client.post("/api/auth/forgot-password", json={"email": "admin@example.com"})
-    unknown = client.post("/api/auth/forgot-password", json={"email": "nobody@example.com"})
+    known = client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
+    unknown = client.post("/api/auth/forgot-password", json={"username": "nobody"})
     assert known.status_code == unknown.status_code == 200
     assert known.json() == unknown.json() == {"status": "accepted"}
 
 
+def test_forgot_password_without_email_points_at_the_guardian(client: TestClient, db_session: Session) -> None:
+    """メールアドレスを持たないアカウントには送れない（ADR-0011）。"""
+    db_session.add(User(username="kid", email=None, display_name="こども", password_hash="x", is_active=True))
+    db_session.commit()
+
+    response = client.post("/api/auth/forgot-password", json={"username": "kid"})
+    assert response.status_code == 200
+    assert response.json() == {"status": "ask_guardian"}
+    # 送る先が無いので、トークンも発行しない
+    assert db_session.scalar(select(PasswordResetToken)) is None
+
+
 def test_reset_password_with_valid_token(client: TestClient, db_session: Session) -> None:
     # メール送信は無効のためトークンは DB から直接取り出して検証する
-    client.post("/api/auth/forgot-password", json={"email": "admin@example.com"})
+    client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
     row = db_session.scalar(select(PasswordResetToken))
     assert row is not None
 
