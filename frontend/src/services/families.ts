@@ -194,8 +194,13 @@ export const families = {
     }),
 
   /** 未認証で呼ぶ。招待コードと引き換えにアカウントを作る（ADR-0011）。 */
-  redeemInvitation: (code: string, username: string, password: string) =>
-    api.post<RedeemedInvitation>('/api/families/invitations/redeem', { code, username, password }),
+  redeemInvitation: (code: string, username: string, password: string, displayName: string) =>
+    api.post<RedeemedInvitation>('/api/families/invitations/redeem', {
+      code,
+      username,
+      password,
+      display_name: displayName,
+    }),
 
   /** その家族でよく使われている理由（入力候補）。頻度の高い順。 */
   reasonSuggestions: (familyId: number) =>

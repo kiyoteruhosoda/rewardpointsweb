@@ -16,7 +16,7 @@ export interface UiSettings {
 export const FALLBACK_UI_SETTINGS: UiSettings = {
   languages: ['en', 'ja'],
   default_locale: 'en',
-  default_theme: 'system',
+  default_theme: 'light',
 }
 
 export async function loadUiSettings(): Promise<UiSettings> {

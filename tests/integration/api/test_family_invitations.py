@@ -57,6 +57,42 @@ def test_child_creates_an_account_without_an_email(client: TestClient, parent: A
     assert linked["username"] == "taro"
 
 
+def test_child_can_name_itself_when_creating_the_account(client: TestClient, parent: Account) -> None:
+    """名乗った名前がアカウントの表示名になる（未指定ならログイン識別子）。"""
+    family_id = create_family(client, parent.headers)
+    child = add_child(client, parent.headers, family_id, display_name="たろう")
+    invitation = issue_invitation(
+        client, parent.headers, family_id, role="child", target_membership_id=int(str(child["id"]))
+    )
+
+    response = client.post(
+        "/api/families/invitations/redeem",
+        json={
+            "code": invitation["code"],
+            "username": "Taro",
+            "password": "taro-pass-123",
+            "display_name": "たろう",
+        },
+    )
+    assert response.status_code == 201, response.text
+
+    headers = login(client, username="taro", password="taro-pass-123")
+    assert client.get("/api/auth/me", headers=headers).json()["display_name"] == "たろう"
+
+
+def test_account_display_name_falls_back_to_the_username(client: TestClient, parent: Account) -> None:
+    family_id = create_family(client, parent.headers)
+    child = add_child(client, parent.headers, family_id, display_name="たろう")
+    invitation = issue_invitation(
+        client, parent.headers, family_id, role="child", target_membership_id=int(str(child["id"]))
+    )
+
+    _redeem(client, invitation["code"], username="Taro", password="taro-pass-123")
+
+    headers = login(client, username="taro", password="taro-pass-123")
+    assert client.get("/api/auth/me", headers=headers).json()["display_name"] == "taro"
+
+
 def test_invitation_is_single_use(client: TestClient, parent: Account) -> None:
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")

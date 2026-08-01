@@ -10,9 +10,12 @@
  * owner になる（ADR-0018）。子（guest）は招待コードで加わるので、この画面に
  * 「作る」は出ない。親の招待コードを子が使うとサーバーが断る
  * （guardian_account_required）。
+ *
+ * すでにアカウントを持つ人がコードを使う経路はここだけ。アカウント作成の画面から
+ * ログインを経て来た場合は `?code=` にコードが載っているので、参加の欄へ入れておく。
  */
 import { useState, type FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useToast } from '../components/ToastNotification'
 import { useI18n } from '../i18n'
@@ -27,8 +30,10 @@ export function FamiliesPage() {
   const { notify } = useToast()
   const { family, failed, loading, reload } = useFamily()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const carriedCode = searchParams.get('code')?.trim() ?? ''
   const [name, setName] = useState('')
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(carriedCode)
 
   // 作成は保護者の scope 一式が要る（サーバーの入口と同じ条件 — ADR-0018）
   const canCreate = hasScope('family:view', 'family:manage', 'point:view', 'point:manage')
@@ -55,6 +60,8 @@ export function FamiliesPage() {
     try {
       const joined = await families.acceptInvitation(code, null)
       setCode('')
+      // 使い終えたコードを URL に残さない（再読み込みで案内だけが蘇る）
+      if (carriedCode) setSearchParams({}, { replace: true })
       notify('success', t('families.joined'))
       await enter(joined.family_id)
     } catch (error) {
@@ -101,7 +108,11 @@ export function FamiliesPage() {
 
       <section className="card">
         <h2>{t('families.join')}</h2>
-        <p>{t('families.joinHint')}</p>
+        {carriedCode ? (
+          <p className="notice">{t('families.joinPending')}</p>
+        ) : (
+          <p>{t('families.joinHint')}</p>
+        )}
         <form
           className="inline-form"
           onSubmit={(event) => {

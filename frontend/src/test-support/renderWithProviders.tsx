@@ -7,7 +7,7 @@
  * ないとき」の描き分けをそのまま検証できる。
  */
 import { render, type RenderResult } from '@testing-library/react'
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import { ToastProvider } from '../components/ToastNotification'
@@ -48,6 +48,11 @@ interface Options {
   familyFailed?: boolean
   /** 家族の読み直しの観測（変更の後に読み直すかを検証する画面で使う）。 */
   reloadFamily?: () => Promise<void>
+  /**
+   * 追加の `<Route>`。画面が別の URL へ送るところまで検証したいときに、
+   * 行き先の目印として置く（`path` を絞ったうえで使う）。
+   */
+  extraRoutes?: ReactNode
 }
 
 function authValueOf(scopes: string[], logout: () => void): AuthValue {
@@ -79,6 +84,7 @@ export function renderWithProviders(ui: ReactElement, options: Options = {}): Re
     family = null,
     familyFailed = false,
     reloadFamily = () => Promise.resolve(),
+    extraRoutes = null,
   } = options
   // 言語は en に固定する。利用者の選択（localStorage）が残っていると期待文言が変わる。
   localStorage.setItem('locale', 'en')
@@ -92,6 +98,7 @@ export function renderWithProviders(ui: ReactElement, options: Options = {}): Re
               <MemoryRouter initialEntries={[route]}>
                 <Routes>
                   <Route path={path} element={ui} />
+                  {extraRoutes}
                 </Routes>
               </MemoryRouter>
             </ToastProvider>
