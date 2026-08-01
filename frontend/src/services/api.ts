@@ -34,6 +34,13 @@ const VALIDATION_ERROR_CODE = 'validation_error'
  * `error.invalid_<項目名>` を引く。ここに挙げた名前だけを使うのは、辞書に無い
  * キーが画面へそのまま出るのを防ぐため（未知の項目は `validation_error` の
  * 一般的な文言に落ちる）。名前は API の項目名と同じ綴りにする。
+ *
+ * **文言は「どの欄か」までにし、原因を断定しない。** 同じ項目名を複数のスキーマが
+ * 使っており、決まりもそれぞれ違う。`code` は招待コード（`InvitationRedeemRequest`）
+ * と認証アプリのコード（`TotpCodeRequest`、6〜10 文字）の両方で使われるので、
+ * 「招待コードを入力してください」と書くと二要素認証の画面で嘘になる。`amount` も
+ * 0 と上限の二通りで落ちる。断定できるのは、全てのスキーマで決まりが一致している
+ * 項目（`email` の形式、`password` の 8 文字）だけ。
  */
 const NAMED_VALIDATION_FIELDS = new Set([
   'amount',
