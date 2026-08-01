@@ -54,6 +54,7 @@ export function RedeemInvitationPage() {
             onChange={(event) => {
               setCode(event.target.value)
             }}
+            maxLength={64}
             required
           />
         </label>
@@ -65,14 +66,18 @@ export function RedeemInvitationPage() {
             onChange={(event) => {
               setUsername(event.target.value)
             }}
+            minLength={3}
+            maxLength={255}
             required
           />
         </label>
+        {/* 長さの下限はサーバーと同じ。欠けると打ち込んだ直後に 422 で跳ね返る。 */}
         <PasswordField
           label={t('join.password')}
           autoComplete="new-password"
           value={password}
           onChange={setPassword}
+          minLength={8}
           required
         />
         <button type="submit">{t('join.submit')}</button>

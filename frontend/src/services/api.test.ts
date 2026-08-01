@@ -1,6 +1,8 @@
 /** API クライアントのトークン保持とエラーコード変換。 */
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import en from '../i18n/en.json'
+import ja from '../i18n/ja.json'
 import { ApiError, clearTokens, errorMessageKey, hasTokens, setTokens } from './api'
 
 describe('errorMessageKey', () => {
@@ -15,6 +17,49 @@ describe('errorMessageKey', () => {
   it('例外でない値でも落ちない', () => {
     expect(errorMessageKey(undefined)).toBe('error.unknown_error')
     expect(errorMessageKey('invalid_token')).toBe('error.unknown_error')
+  })
+
+  it('入力検証の失敗は、落ちた項目の文言を指す', () => {
+    expect(errorMessageKey(new ApiError(422, 'validation_error', ['password']))).toBe(
+      'error.invalid_password',
+    )
+  })
+
+  it('文言を用意していない項目は一般的な文言に落ちる（キーがそのまま出ない）', () => {
+    expect(errorMessageKey(new ApiError(422, 'validation_error', ['idempotency_key']))).toBe(
+      'error.validation_error',
+    )
+  })
+
+  it('項目名が無い入力検証の失敗でも一般的な文言になる', () => {
+    expect(errorMessageKey(new ApiError(422, 'validation_error'))).toBe('error.validation_error')
+  })
+})
+
+describe('入力検証の文言', () => {
+  /**
+   * `errorMessageKey` が返し得るキーは辞書に必ずある。無いと `t` がキーをそのまま
+   * 返し、画面に `error.invalid_email` という文字列が出る。
+   *
+   * 同じ項目名を複数のスキーマが使うため、文言で原因を断定してはいけない
+   * （`code` は招待コードと認証アプリのコードの両方で使われる）。断定してよいのは
+   * 全スキーマで決まりが一致している項目だけ。`api.ts` の注記を参照。
+   */
+  const KEYS = [
+    'amount',
+    'code',
+    'display_name',
+    'email',
+    'name',
+    'password',
+    'reason',
+    'username',
+  ].map((field) => `error.invalid_${field}`)
+
+  // キーに `.` を含むため配列で渡す（文字列だと入れ子のパスとして解釈される）。
+  it.each([...KEYS, 'error.validation_error'])('%s が en/ja の双方にある', (key) => {
+    expect(en).toHaveProperty([key])
+    expect(ja).toHaveProperty([key])
   })
 })
 
