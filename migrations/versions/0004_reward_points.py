@@ -77,8 +77,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_point_entries_member_id"), table_name="point_entries")
+    # 索引はテーブルと一緒に消えるので落とさない（MariaDB は外部キー列の索引を
+    # 単独で DROP できない）
     op.drop_table("point_entries")
     op.drop_table("member_shares")
-    op.drop_index(op.f("ix_members_owner_user_id"), table_name="members")
     op.drop_table("members")

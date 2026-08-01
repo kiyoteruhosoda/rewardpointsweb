@@ -2,6 +2,21 @@
 
 新しいものを上に追記する。細かな進捗は書かない（Progress.md 完了時に要約を移す）。
 
+## 2026-08 本番（MariaDB）でマイグレーション `0007_family_point_ledger` が落ちていた
+
+デプロイが `Cannot drop index 'ix_point_entries_member_id': needed in a foreign key
+constraint`（MariaDB エラー 1553）で失敗していた。`point_entries.member_id` は
+`members.id` への外部キーで、InnoDB はその索引を単独で落とさせない。
+
+原因は「テーブルを落とす前に索引を落とす」という不要な手順。`DROP TABLE` は索引も
+一緒に消すため、`drop_index()` は元から要らなかった。開発・テストの SQLite は同じ
+DDL を通してしまうので、既存のマイグレーションのテストでは検出できていない。
+
+`0001` / `0003` / `0004` / `0007` から、直後に `drop_table()` する表への
+`drop_index()` を削除した。再発は `tests/unit/test_migration_index_drops.py` が
+AST で検査する（同じ関数内で同じ表を `drop_index` と `drop_table` の両方に渡して
+いたら落とす）。表を残したまま索引を張り替える `drop_index` は妨げない。
+
 ## 2026-08 家族を共有単位にし、台帳を追記型にし、子どもがログインできるようにした
 
 主用途が「子どもへのポイント付与」に定まったことで、共有・履歴・認証の 3 つを

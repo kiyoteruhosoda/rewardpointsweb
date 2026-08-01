@@ -117,12 +117,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # 索引はテーブルと一緒に消えるので落とさない（MariaDB は外部キー列の索引を
+    # 単独で DROP できない）
     op.drop_table("items")
-    op.drop_index("ix_log_request_id", table_name="log")
-    op.drop_index("ix_log_created_at", table_name="log")
     op.drop_table("log")
     op.drop_table("system_settings")
-    op.drop_index("ix_password_reset_tokens_user_id", table_name="password_reset_tokens")
     op.drop_table("password_reset_tokens")
     op.drop_table("role_permissions")
     op.drop_table("user_roles")

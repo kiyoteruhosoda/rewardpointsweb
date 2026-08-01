@@ -78,8 +78,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_webauthn_challenges_expires_at", table_name="webauthn_challenges")
+    # 索引はテーブルと一緒に消えるので落とさない（MariaDB は外部キー列の索引を
+    # 単独で DROP できない）
     op.drop_table("webauthn_challenges")
-    op.drop_index("ix_passkey_credentials_user_id", table_name="passkey_credentials")
     op.drop_table("passkey_credentials")
     op.drop_table("totp_secrets")
