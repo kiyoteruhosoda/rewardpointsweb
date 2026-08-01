@@ -26,6 +26,7 @@ from bounded_contexts.reward_points.domain.exceptions import (
     FamilyNotFoundError,
     GuardianAccountRequiredError,
     IndependenceNotProposedError,
+    InvalidMemberOrderError,
     InvitationNotFoundError,
     InvitationTargetUnavailableError,
     LastGuardianCannotLeaveError,
@@ -66,6 +67,7 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     ChildInvitationRequiresSignupError: status.HTTP_400_BAD_REQUEST,
     DisplayNameRequiredError: status.HTTP_400_BAD_REQUEST,
     RoleNotInvitableError: status.HTTP_400_BAD_REQUEST,
+    InvalidMemberOrderError: status.HTTP_400_BAD_REQUEST,
 }
 
 

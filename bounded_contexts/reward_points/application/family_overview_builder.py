@@ -6,15 +6,21 @@
 台帳 ID と残高は、その参加者の台帳を **見られる相手にだけ** 載せる。兄弟の
 残高は相互に参照できない（ADR-0009）。名前は伏せない — 同じ家族に誰がいるかは
 参加している時点で分かってよい。
+
+「この人に何ができるか」（一時パスワード・卒業・削除）も、ここで閲覧者の立場と
+台帳の状態から決めて載せる。画面が立場から組み立て直すと、サーバーが断る操作を
+出してしまう。
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from bounded_contexts.reward_points.application.dto.family_dto import MembershipDTO
 from bounded_contexts.reward_points.domain.entities.family_membership import FamilyMembership
 from bounded_contexts.reward_points.domain.entities.point_ledger import PointLedger
+from bounded_contexts.reward_points.domain.entities.point_transaction import PointTransaction
 from bounded_contexts.reward_points.domain.repositories.account_directory import AccountRef, IAccountDirectory
 from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
     IFamilyMembershipRepository,
@@ -25,6 +31,19 @@ from bounded_contexts.reward_points.domain.repositories.point_transaction_reposi
 )
 from bounded_contexts.reward_points.domain.services import family_access_policy
 from bounded_contexts.reward_points.domain.services.ledger_statement import LedgerStatement
+
+
+@dataclass(frozen=True, kw_only=True)
+class _LedgerView:
+    """ある参加者の台帳を、閲覧者から見たところ。
+
+    ``ledger_id`` と ``balance`` は見える相手にだけ入る。``is_empty`` は見え方に
+    依らない事実で、削除できるかの判断に使う（記録の残る台帳は外せない）。
+    """
+
+    ledger_id: int | None
+    balance: int | None
+    is_empty: bool
 
 
 class FamilyOverviewBuilder:
@@ -44,22 +63,34 @@ class FamilyOverviewBuilder:
     def build(self, viewer: FamilyMembership) -> tuple[MembershipDTO, ...]:
         members = self._memberships.list_for_family(viewer.family_id)
         ledgers = {ledger.membership_id: ledger for ledger in self._ledgers.list_for_family(viewer.family_id)}
-        balances = self._balances(list(ledgers.values()))
+        entries = self._transactions.list_by_ledgers([ledger.id for ledger in ledgers.values()])
         names = self._accounts.describe([m.account_id for m in members if m.account_id is not None])
         return tuple(
             _to_dto(
                 member,
                 viewer=viewer,
-                ledger=ledgers.get(member.id),
-                balances=balances,
+                ledger=_ledger_view(viewer, ledgers.get(member.id), entries),
                 username=_username_of(member, names),
             )
             for member in members
         )
 
-    def _balances(self, ledgers: list[PointLedger]) -> dict[int, int]:
-        grouped = self._transactions.list_by_ledgers([ledger.id for ledger in ledgers])
-        return {ledger_id: LedgerStatement(rows).balance.value for ledger_id, rows in grouped.items()}
+
+def _ledger_view(
+    viewer: FamilyMembership,
+    ledger: PointLedger | None,
+    entries: Mapping[int, list[PointTransaction]],
+) -> _LedgerView:
+    if ledger is None:
+        # 台帳を持たない立場（親）。外すのを妨げる記録も無い
+        return _LedgerView(ledger_id=None, balance=None, is_empty=True)
+    rows = entries.get(ledger.id, [])
+    visible = family_access_policy.can_view_ledger(viewer, ledger)
+    return _LedgerView(
+        ledger_id=ledger.id if visible else None,
+        balance=LedgerStatement(rows).balance.value if visible else None,
+        is_empty=not rows,
+    )
 
 
 def _username_of(member: FamilyMembership, names: Mapping[int, AccountRef]) -> str | None:
@@ -73,11 +104,9 @@ def _to_dto(
     member: FamilyMembership,
     *,
     viewer: FamilyMembership,
-    ledger: PointLedger | None,
-    balances: dict[int, int],
+    ledger: _LedgerView,
     username: str | None,
 ) -> MembershipDTO:
-    visible = ledger is not None and family_access_policy.can_view_ledger(viewer, ledger)
     return MembershipDTO(
         id=member.id,
         display_name=member.display_name_value,
@@ -85,9 +114,12 @@ def _to_dto(
         is_linked=member.is_linked,
         is_me=member.id == viewer.id,
         username=username,
-        ledger_id=ledger.id if visible and ledger else None,
-        balance=balances.get(ledger.id, 0) if visible and ledger else None,
+        ledger_id=ledger.ledger_id,
+        balance=ledger.balance,
         independence_proposed=member.independence_proposed,
+        can_reset_password=family_access_policy.can_issue_temporary_password_for(viewer, member),
+        can_graduate=family_access_policy.can_graduate(viewer, member),
+        can_remove=family_access_policy.can_remove_member(viewer, member, ledger_is_empty=ledger.is_empty),
     )
 
 

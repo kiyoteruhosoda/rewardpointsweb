@@ -1,123 +1,106 @@
 /**
- * 家族の詳細。参加者と、見える範囲の残高が並ぶ。
+ * 家族の詳細（家族設定）。参加者と、見える範囲の残高が並ぶ。
  *
- * 子の追加と一時パスワードの発行は `my_role` が親（owner / parent）のとき、
- * 招待と除名は owner のときだけ出す。家族の構成を変えるのは owner の役目
- * （ADR-0009 の認可表）。子が開いた場合は自分の台帳への入り口だけが残る
+ * 参加者ごとの操作は、サーバーが返す可否（`can_*`）だけで出し分ける。子の追加と
+ * 招待は自分の立場から決めるが、これも「サーバーが同じ条件で断る」場所に揃えて
+ * ある（ADR-0009 の認可表）。子が開いた場合は自分の台帳への入り口だけが残る
  * （兄弟の残高は最初から返ってこない）。
  *
- * 独立（ADR-0014）は 2 段階: 親がアカウントの結び付いた子へ指示し、子本人が
- * 承認する。指示は承認まで取り下げられる。承認で参加と記録が家族から消える
- * ので、両方の確認文で「記録が削除される」ことを示す。
+ * 子をこの家族から外す道は 2 つある。
+ *
+ * - **卒業**（ADR-0014 の独立）… アカウントのある子だけ。親が指示し、子本人が
+ *   承認して成立する。指示は承認まで取り下げられる。成立すると参加も記録も
+ *   家族から消え、本人のアカウントは所属なしのメンバーとして残る。
+ * - **削除** … 台帳に記録が無い参加者だけ。記録が 1 件でもあれば履歴が黙って
+ *   消える経路になるので、サーバーが断る（ADR-0010）。画面にも出さない。
  */
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { FamilySettingsPanel } from '../components/FamilySettingsPanel'
 import { InvitationPanel } from '../components/InvitationPanel'
+import { MemberList } from '../components/MemberList'
 import { useToast } from '../components/ToastNotification'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
-import { families, parseUtc, type FamilyDetail, type TemporaryPassword } from '../services/families'
+import { families, parseUtc, type Membership, type TemporaryPassword } from '../services/families'
 import { useAuth } from '../store/AuthContext'
+import { useFamily } from '../store/FamilyContext'
 
 export function FamilyPage() {
   const { familyId } = useParams<{ familyId: string }>()
   const { t, locale } = useI18n()
   const { notify } = useToast()
   const { logout } = useAuth()
-  const [family, setFamily] = useState<FamilyDetail | null>(null)
-  const [failed, setFailed] = useState(false)
+  const { family, loading, reload } = useFamily()
   const [childName, setChildName] = useState('')
   const [issued, setIssued] = useState<TemporaryPassword | null>(null)
 
-  const id = Number(familyId)
-
-  const reload = useCallback(
-    () =>
-      families
-        .view(id)
-        .then(setFamily)
-        .catch((error: unknown) => {
-          setFailed(true)
-          notify('error', t(errorMessageKey(error)))
-        }),
-    [id, notify, t],
-  )
-
-  useEffect(() => {
-    void reload()
-  }, [reload])
-
-  const addChild = async (event: FormEvent) => {
-    event.preventDefault()
+  /** 失敗はどれも「文言を出して読み直す」で終わる。成否で分岐する呼び出し元は無い。 */
+  const run = async (action: () => Promise<unknown>) => {
     try {
+      await action()
+      await reload()
+    } catch (error) {
+      notify('error', t(errorMessageKey(error)))
+    }
+  }
+
+  if (loading) return <p className="loading">{t('common.loading')}</p>
+  // 所属は 1 家族まで（ADR-0013）。URL が今の所属と違えば、もう見られない家族。
+  if (!family || family.id !== Number(familyId)) {
+    return <p className="error">{t('families.unavailable')}</p>
+  }
+
+  const id = family.id
+  const isGuardian = family.my_role === 'owner' || family.my_role === 'parent'
+  const isOwner = family.my_role === 'owner'
+  const unlinkedChildren = family.memberships.filter((m) => m.role === 'child' && !m.is_linked)
+  const me = family.memberships.find((m) => m.is_me)
+  const graduationProposedToMe = family.my_role === 'child' && me?.independence_proposed === true
+
+  const addChild = (event: FormEvent) => {
+    event.preventDefault()
+    void run(async () => {
       await families.addChild(id, childName)
       setChildName('')
-      await reload()
-    } catch (error) {
-      notify('error', t(errorMessageKey(error)))
-    }
+    })
   }
 
-  const remove = async (membershipId: number, name: string) => {
-    if (!window.confirm(t('families.confirmRemove', { name }))) return
-    try {
-      await families.removeMembership(id, membershipId)
-      await reload()
-    } catch (error) {
-      notify('error', t(errorMessageKey(error)))
-    }
+  const remove = (member: Membership) => {
+    if (!window.confirm(t('families.confirmRemove', { name: member.display_name }))) return
+    void run(() => families.removeMembership(id, member.id))
   }
 
-  const resetPassword = async (membershipId: number) => {
-    try {
-      setIssued(await families.resetChildPassword(id, membershipId))
-    } catch (error) {
-      notify('error', t(errorMessageKey(error)))
-    }
+  const resetPassword = (member: Membership) => {
+    void run(async () => {
+      setIssued(await families.resetChildPassword(id, member.id))
+    })
   }
 
-  const proposeIndependence = async (membershipId: number, name: string) => {
-    if (!window.confirm(t('families.independence.confirmPropose', { name }))) return
-    try {
-      await families.proposeIndependence(id, membershipId)
-      await reload()
-    } catch (error) {
-      notify('error', t(errorMessageKey(error)))
+  const graduate = (member: Membership) => {
+    if (!window.confirm(t('families.graduation.confirmPropose', { name: member.display_name }))) {
+      return
     }
+    void run(() => families.proposeIndependence(id, member.id))
   }
 
-  const withdrawIndependence = async (membershipId: number) => {
-    try {
-      await families.revokeIndependenceProposal(id, membershipId)
-      await reload()
-    } catch (error) {
-      notify('error', t(errorMessageKey(error)))
-    }
+  const withdrawGraduation = (member: Membership) => {
+    void run(() => families.revokeIndependenceProposal(id, member.id))
   }
 
-  // 成立すると scope が変わる（member → manager）。scope は JWT に焼き込まれて
+  // 成立すると scope が変わる（guest → member）。scope は JWT に焼き込まれて
   // いるため、ログアウトして再ログインするまで新しい権限は効かない（ADR-0014）。
-  const approveIndependence = async () => {
-    if (!window.confirm(t('families.independence.confirmApprove'))) return
+  const approveGraduation = async () => {
+    if (!window.confirm(t('families.graduation.confirmApprove'))) return
     try {
       await families.approveIndependence(id)
-      notify('success', t('families.independence.approved'))
+      notify('success', t('families.graduation.approved'))
       logout()
     } catch (error) {
       notify('error', t(errorMessageKey(error)))
     }
   }
-
-  if (failed) return <p className="error">{t('families.unavailable')}</p>
-  if (family === null) return <p className="loading">{t('common.loading')}</p>
-
-  const isGuardian = family.my_role === 'owner' || family.my_role === 'parent'
-  const isOwner = family.my_role === 'owner'
-  const unlinkedChildren = family.memberships.filter((m) => m.role === 'child' && !m.is_linked)
-  const me = family.memberships.find((m) => m.is_me)
-  const independenceProposedToMe = family.my_role === 'child' && me?.independence_proposed === true
 
   return (
     <div className="page">
@@ -128,88 +111,14 @@ export function FamilyPage() {
 
       <section className="card">
         <h2>{t('families.members')}</h2>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>{t('families.name')}</th>
-                <th>{t('families.roleColumn')}</th>
-                <th>{t('points.balance')}</th>
-                <th>{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {family.memberships.map((member) => (
-                <tr key={member.id}>
-                  <td>
-                    {member.display_name}
-                    {member.is_me && ` (${t('families.self')})`}
-                    {member.role === 'child' &&
-                      !member.is_linked &&
-                      ` (${t('families.noAccount')})`}
-                    {member.independence_proposed && ` (${t('families.independence.proposed')})`}
-                  </td>
-                  <td>{t(`families.role.${member.role}`)}</td>
-                  <td>
-                    {member.balance === null ? '—' : t('points.value', { points: member.balance })}
-                  </td>
-                  <td>
-                    {member.ledger_id !== null && (
-                      <Link to={`/families/${family.id}/ledgers/${member.ledger_id}`}>
-                        {t('points.history')}
-                      </Link>
-                    )}
-                    {isGuardian && member.role === 'child' && member.is_linked && (
-                      <>
-                        {' '}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void resetPassword(member.id)
-                          }}
-                        >
-                          {t('families.resetPassword')}
-                        </button>{' '}
-                        {member.independence_proposed ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void withdrawIndependence(member.id)
-                            }}
-                          >
-                            {t('families.independence.withdraw')}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void proposeIndependence(member.id, member.display_name)
-                            }}
-                          >
-                            {t('families.independence.propose')}
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {isOwner && !member.is_me && (
-                      <>
-                        {' '}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void remove(member.id, member.display_name)
-                          }}
-                        >
-                          {t('families.remove')}
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {isGuardian && <p>{t('families.membersHint')}</p>}
+        <MemberList
+          family={family}
+          onGraduate={graduate}
+          onWithdrawGraduation={withdrawGraduation}
+          onRemove={remove}
+          onResetPassword={resetPassword}
+        />
 
         {issued && (
           <p className="balance">
@@ -227,12 +136,7 @@ export function FamilyPage() {
         <section className="card">
           <h2>{t('families.addChild')}</h2>
           <p>{t('families.addChildHint')}</p>
-          <form
-            className="inline-form"
-            onSubmit={(event) => {
-              void addChild(event)
-            }}
-          >
+          <form className="inline-form" onSubmit={addChild}>
             <label>
               {t('families.name')}
               <input
@@ -256,25 +160,25 @@ export function FamilyPage() {
         />
       )}
 
-      {independenceProposedToMe && (
+      {graduationProposedToMe && (
         <section className="card">
-          <h2>{t('families.independence.title')}</h2>
-          <p>{t('families.independence.approveHint')}</p>
+          <h2>{t('families.graduation.title')}</h2>
+          <p>{t('families.graduation.approveHint')}</p>
           <button
             type="button"
             onClick={() => {
-              void approveIndependence()
+              void approveGraduation()
             }}
           >
-            {t('families.independence.approve')}
+            {t('families.graduation.approve')}
           </button>
         </section>
       )}
 
-      {isGuardian && <FamilySettingsPanel family={family} onRenamed={reload} />}
+      {isGuardian && <FamilySettingsPanel family={family} onChanged={reload} />}
 
       <p>
-        <Link to="/families">{t('common.back')}</Link>
+        <Link to="/">{t('common.back')}</Link>
       </p>
     </div>
   )

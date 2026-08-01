@@ -15,11 +15,11 @@ from bounded_contexts.reward_points.domain.value_objects.family_role import Fami
 _MOMENT = datetime(2026, 8, 1, 0, 0, 0)
 
 
-def _membership(*, id: int, role: FamilyRole, family_id: int = 1) -> FamilyMembership:
+def _membership(*, id: int, role: FamilyRole, family_id: int = 1, linked: bool = True) -> FamilyMembership:
     return FamilyMembership(
         id=id,
         family_id=family_id,
-        account_id=id * 100,
+        account_id=id * 100 if linked else None,
         role=role,
         display_name=DisplayName("name"),
         created_at=_MOMENT,
@@ -92,3 +92,44 @@ def test_password_reset_targets_children_only() -> None:
     assert not family_access_policy.can_reset_password_of(parent, outsider)
     # 子は誰のパスワードも発行できない
     assert not family_access_policy.can_reset_password_of(child, child)
+
+
+def test_temporary_password_needs_an_account() -> None:
+    """立場が揃っていても、本人のアカウントが無ければ発行しようがない。"""
+    parent = _membership(id=1, role=FamilyRole.PARENT)
+    unlinked = _membership(id=2, role=FamilyRole.CHILD, linked=False)
+
+    assert family_access_policy.can_reset_password_of(parent, unlinked)
+    assert not family_access_policy.can_issue_temporary_password_for(parent, unlinked)
+
+
+def test_graduation_targets_children_with_an_account() -> None:
+    """卒業（独立）は本人の承認で成立する。ログインできない子は対象外（ADR-0014）。"""
+    parent = _membership(id=1, role=FamilyRole.PARENT)
+    child = _membership(id=2, role=FamilyRole.CHILD)
+    unlinked = _membership(id=3, role=FamilyRole.CHILD, linked=False)
+    other_parent = _membership(id=4, role=FamilyRole.OWNER)
+
+    assert family_access_policy.can_graduate(parent, child)
+    assert not family_access_policy.can_graduate(parent, unlinked)
+    assert not family_access_policy.can_graduate(parent, other_parent)
+    assert not family_access_policy.can_graduate(child, child)
+
+
+def test_removal_needs_the_owner_and_an_empty_ledger() -> None:
+    """記録の残る参加者は外せない（ADR-0010）。自分自身も外せない。"""
+    owner = _membership(id=1, role=FamilyRole.OWNER)
+    parent = _membership(id=2, role=FamilyRole.PARENT)
+    child = _membership(id=3, role=FamilyRole.CHILD)
+
+    assert family_access_policy.can_remove_member(owner, child, ledger_is_empty=True)
+    assert not family_access_policy.can_remove_member(owner, child, ledger_is_empty=False)
+    assert not family_access_policy.can_remove_member(owner, owner, ledger_is_empty=True)
+    assert not family_access_policy.can_remove_member(parent, child, ledger_is_empty=True)
+
+
+def test_both_guardians_reorder_members() -> None:
+    """並び順は見え方だけの話なので、親なら変えられる。"""
+    for role in (FamilyRole.OWNER, FamilyRole.PARENT):
+        assert family_access_policy.can_reorder_members(_membership(id=1, role=role))
+    assert not family_access_policy.can_reorder_members(_membership(id=3, role=FamilyRole.CHILD))

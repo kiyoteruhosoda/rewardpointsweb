@@ -58,6 +58,13 @@ class IFamilyMembershipRepository(ABC):
         """独立の指示を取り下げる（ADR-0014）。"""
 
     @abstractmethod
+    def reorder(self, *, family_id: int, membership_ids: Sequence[int]) -> None:
+        """並び順を、渡された順（先頭が 0）に振り直す。
+
+        一覧の並びは実装がまとめて決めるので、呼び出し側は順番の列だけを渡す。
+        """
+
+    @abstractmethod
     def list_by_ids(self, membership_ids: Sequence[int]) -> list[FamilyMembership]: ...
 
 

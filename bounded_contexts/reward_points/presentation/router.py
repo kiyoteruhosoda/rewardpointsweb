@@ -55,6 +55,7 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     RedeemInvitationDep,
     RemoveMembershipDep,
     RenameFamilyDep,
+    ReorderMembersDep,
     ResetChildPasswordDep,
     ReverseTransactionDep,
     RevokeIndependenceDep,
@@ -74,6 +75,7 @@ from bounded_contexts.reward_points.presentation.schemas import (
     InvitationRedeemRequest,
     InvitationResponse,
     LedgerResponse,
+    MemberOrderRequest,
     MembershipResponse,
     RedeemedInvitationResponse,
     ReversalCreateRequest,
@@ -110,6 +112,9 @@ def _to_membership(dto: MembershipDTO) -> MembershipResponse:
         ledger_id=dto.ledger_id,
         balance=dto.balance,
         independence_proposed=dto.independence_proposed,
+        can_reset_password=dto.can_reset_password,
+        can_graduate=dto.can_graduate,
+        can_remove=dto.can_remove,
     )
 
 
@@ -314,6 +319,28 @@ async def remove_membership(
 ) -> None:
     use_case.execute(family_id=family_id, membership_id=membership_id, account_id=principal.user_id)
     logger.info("membership_removed", extra={"family_id": family_id, "membership_id": membership_id})
+
+
+@router.put("/{family_id}/member-order", response_model=FamilyDetailResponse)
+async def reorder_members(
+    *,
+    family_id: int,
+    body: MemberOrderRequest,
+    use_case: ReorderMembersDep,
+    principal: FamilyManager,
+) -> FamilyDetailResponse:
+    """子を並べる順を決める（親メンバー）。
+
+    ナビゲーションもダッシュボードもこの順で並ぶ。並びは家族に 1 つで、誰が
+    見ても同じ順になる。
+    """
+    dto = use_case.execute(
+        family_id=family_id,
+        account_id=principal.user_id,
+        membership_ids=body.membership_ids,
+    )
+    logger.info("family_members_reordered", extra={"family_id": family_id})
+    return _to_family(dto)
 
 
 @router.post(

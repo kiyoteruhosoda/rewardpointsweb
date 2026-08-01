@@ -228,6 +228,13 @@ select:focus-visible {
   font-weight: 500;
 }
 
+/* ダッシュボードの下に並ぶ子の入口（Sidebar.tsx）。画面の切り替えではなく
+ * 「誰を見るか」の選択なので、一段下げて主要な項目と区別する。 */
+.sidebar a.sidebar-child {
+  padding-left: 1.8rem;
+  font-size: 0.9rem;
+}
+
 /* システム管理の節見出し（Sidebar.tsx）。項目との違いが分かる控えめな表示にする */
 .sidebar-heading {
   margin: 0.8rem 0 0;
@@ -377,10 +384,125 @@ select:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-/* どの家族の子か。複数の家族に所属できるため、名前だけでは足りない。 */
-.member-card-family {
+/* 家族の詳細: 参加者を行のカードで積む（MemberList.tsx）。
+ *
+ * 表にすると、狭い画面では操作が右へ流れて画面外に隠れる。名前・立場・残高・操作を
+ * 1 行にまとめ、幅が足りなくなったら操作だけを次の行へ折り返す。 */
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.member-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  background: var(--surface-inset);
+  border-radius: 0.7rem;
+}
+
+/* 名前と立場。残高と操作を押し出せるよう、余った幅はここが受け持つ。 */
+.member-row-identity {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.member-row-identity p {
+  margin: 0;
+}
+
+.member-row-name {
+  font-weight: 600;
+}
+
+.member-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+.member-row-balance {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 操作は行の中で 1 かたまり。折り返すときも操作どうしが離れないようにする。 */
+.member-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* 立場に添える短い目印（自分・ログイン未設定・卒業の予定）。 */
+.tag {
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+/* 進行中の手続きを示す目印。ただの属性より一段強く見せる。 */
+.tag-notice {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 取り消せない操作（削除・解散）。押す前に色で気付けるようにする。 */
+button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* 家族設定: 子の並び順（FamilySettingsPanel.tsx）。 */
+.order-editor {
+  align-self: stretch;
+}
+
+.order-editor p {
+  margin: 0;
+}
+
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.order-list-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 名前の頭文字を丸に入れた印。写真は持たない方針なので、これで人を見分ける。 */

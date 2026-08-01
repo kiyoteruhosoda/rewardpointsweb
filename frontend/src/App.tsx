@@ -22,6 +22,7 @@ import { SecurityPage } from './pages/SecurityPage'
 import { SystemLogsPage } from './pages/SystemLogsPage'
 import { UsersPage } from './pages/UsersPage'
 import { useAuth } from './store/AuthContext'
+import { FamilyProvider } from './store/FamilyContext'
 
 function RequireAuth() {
   const { user, loading } = useAuth()
@@ -44,17 +45,21 @@ function RequireAuth() {
   if (user.must_change_password && location.pathname !== '/change-password') {
     return <Navigate to="/change-password" replace />
   }
+  // 家族はナビゲーション・ダッシュボード・家族設定が同じものを見る。ログイン後の
+  // 画面をまとめて包み、取得を 1 回に保つ（FamilyContext）。
   return (
-    <div className="layout">
-      <Header navOpen={navOpen} onToggleNav={toggleNav} />
-      <div className="layout-body">
-        <Sidebar open={navOpen} onClose={closeNav} />
-        <main className="content">
-          <Outlet />
-        </main>
+    <FamilyProvider>
+      <div className="layout">
+        <Header navOpen={navOpen} onToggleNav={toggleNav} />
+        <div className="layout-body">
+          <Sidebar open={navOpen} onClose={closeNav} />
+          <main className="content">
+            <Outlet />
+          </main>
+        </div>
+        <Footer />
       </div>
-      <Footer />
-    </div>
+    </FamilyProvider>
   )
 }
 

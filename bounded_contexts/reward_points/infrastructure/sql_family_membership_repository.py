@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from bounded_contexts.reward_points.domain.entities.family_membership import FamilyMembership
@@ -17,8 +17,8 @@ from bounded_contexts.reward_points.domain.value_objects.display_name import Dis
 from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
 from bounded_contexts.reward_points.infrastructure.reward_points_models import FamilyMembershipModel
 
-# 一覧の並びは「親が先、次に子、同じ立場なら作られた順」。画面が並べ替えを
-# 持たなくても、家族の見え方がどこでも同じになる。
+# 一覧の並びは「親が先、次に子、同じ立場なら家族が決めた並び順、それも同じなら
+# 作られた順」。並びは 1 か所で決めるので、どの画面でも家族の見え方が揃う。
 _ROLE_ORDER = {FamilyRole.OWNER.value: 0, FamilyRole.PARENT.value: 1, FamilyRole.CHILD.value: 2}
 
 
@@ -40,6 +40,7 @@ class SqlFamilyMembershipRepository(IFamilyMembershipRepository):
             account_id=account_id,
             role=role.value,
             display_name=validated.value,
+            display_order=self._next_display_order(family_id),
         )
         self._session.add(row)
         self._session.flush()
@@ -59,10 +60,7 @@ class SqlFamilyMembershipRepository(IFamilyMembershipRepository):
         return _to_membership(row) if row else None
 
     def list_for_family(self, family_id: int) -> list[FamilyMembership]:
-        rows = self._session.scalars(
-            select(FamilyMembershipModel).where(FamilyMembershipModel.family_id == family_id)
-        ).all()
-        return _sorted([_to_membership(row) for row in rows])
+        return _sorted([_to_membership(row) for row in self._rows_of(family_id)])
 
     def list_for_account(self, account_id: int) -> list[FamilyMembership]:
         rows = self._session.scalars(
@@ -110,8 +108,29 @@ class SqlFamilyMembershipRepository(IFamilyMembershipRepository):
         self._session.flush()
         return _to_membership(row)
 
+    def reorder(self, *, family_id: int, membership_ids: Sequence[int]) -> None:
+        rows = {row.id: row for row in self._rows_of(family_id)}
+        for order, membership_id in enumerate(membership_ids):
+            row = rows.get(membership_id)
+            if row is None:
+                raise MembershipNotFoundError
+            row.display_order = order
+        self._session.flush()
+
     def delete(self, membership_id: int) -> None:
         self._session.execute(delete(FamilyMembershipModel).where(FamilyMembershipModel.id == membership_id))
+
+    def _rows_of(self, family_id: int) -> Sequence[FamilyMembershipModel]:
+        return self._session.scalars(
+            select(FamilyMembershipModel).where(FamilyMembershipModel.family_id == family_id)
+        ).all()
+
+    def _next_display_order(self, family_id: int) -> int:
+        """末尾に置く。新しく加わった人が既存の並びに割り込まないようにする。"""
+        highest = self._session.scalar(
+            select(func.max(FamilyMembershipModel.display_order)).where(FamilyMembershipModel.family_id == family_id)
+        )
+        return 0 if highest is None else highest + 1
 
     def _require(self, membership_id: int) -> FamilyMembershipModel:
         row = self._session.get(FamilyMembershipModel, membership_id)
@@ -121,7 +140,7 @@ class SqlFamilyMembershipRepository(IFamilyMembershipRepository):
 
 
 def _sorted(memberships: list[FamilyMembership]) -> list[FamilyMembership]:
-    return sorted(memberships, key=lambda m: (_ROLE_ORDER.get(m.role.value, 9), m.id))
+    return sorted(memberships, key=lambda m: (_ROLE_ORDER.get(m.role.value, 9), m.display_order, m.id))
 
 
 def _to_membership(row: FamilyMembershipModel) -> FamilyMembership:
@@ -133,6 +152,7 @@ def _to_membership(row: FamilyMembershipModel) -> FamilyMembership:
         display_name=DisplayName(row.display_name),
         created_at=row.created_at,
         independence_proposed_at=row.independence_proposed_at,
+        display_order=row.display_order,
     )
 
 

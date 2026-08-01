@@ -1,18 +1,19 @@
-/** 家族の一覧: 作成の入口の出し分け（親だけ）と、招待コードでの参加。 */
-import { fireEvent, screen } from '@testing-library/react'
+/**
+ * 家族への入口: すでに所属していれば詳細へ送り、していなければ作成・参加だけを出す。
+ */
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { FamilyDetail, FamilySummary, RedeemedInvitation } from '../services/families'
+import type { FamilyDetail, RedeemedInvitation } from '../services/families'
+import { familyOf, member } from '../test-support/familyFixtures'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { FamiliesPage } from './FamiliesPage'
 
-const list = vi.fn<() => Promise<FamilySummary[]>>()
 const create = vi.fn<(name: string) => Promise<FamilyDetail>>()
 const acceptInvitation = vi.fn<(code: string) => Promise<RedeemedInvitation>>()
 
 vi.mock('../services/families', () => ({
   families: {
-    list: () => list(),
     create: (name: string) => create(name),
     acceptInvitation: (code: string) => acceptInvitation(code),
   },
@@ -22,40 +23,49 @@ const PARENT_SCOPES = ['family:view', 'family:manage', 'point:view', 'point:mana
 
 describe('FamiliesPage', () => {
   beforeEach(() => {
-    list.mockReset()
-    create.mockReset()
-    acceptInvitation.mockReset()
-    list.mockResolvedValue([])
+    vi.clearAllMocks()
   })
 
-  it('親（family:manage）には「作る」を出す', async () => {
+  it('親（family:manage）には「作る」を出す', () => {
     renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES })
 
-    expect(await screen.findByRole('button', { name: 'Create a family' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create a family' })).toBeInTheDocument()
   })
 
-  it('子（family:view のみ）には「作る」を出さず、招待コードの入口だけ出す', async () => {
+  it('子（family:view のみ）には「作る」を出さず、招待コードの入口だけ出す', () => {
     renderWithProviders(<FamiliesPage />, { scopes: ['family:view', 'point:view'] })
 
-    expect(await screen.findByRole('button', { name: 'Join with a code' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Join with a code' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Create a family' })).not.toBeInTheDocument()
   })
 
-  it('親が作るとそのまま一覧を更新する', async () => {
-    create.mockResolvedValue({
-      id: 1,
-      name: 'ほその家',
-      my_membership_id: 1,
-      my_role: 'owner',
-      memberships: [],
+  it('すでに家族に参加していれば、作成も参加も出さずに詳細へ送る', () => {
+    renderWithProviders(<FamiliesPage />, {
+      scopes: PARENT_SCOPES,
+      family: familyOf('parent', [member()]),
+      path: '/families',
+      route: '/families',
     })
-    renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES })
 
-    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'ほその家' } })
+    expect(screen.queryByRole('button', { name: 'Create a family' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Join with a code' })).not.toBeInTheDocument()
+  })
+
+  it('作ったらその家族の詳細へ移る', async () => {
+    create.mockResolvedValue(familyOf('owner', []))
+    const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()
+    renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES, reloadFamily })
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'ほその家' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create a family' }))
 
-    expect(await screen.findByText('Saved.')).toBeInTheDocument()
-    expect(create).toHaveBeenCalledWith('ほその家')
+    await waitFor(() => {
+      expect(create).toHaveBeenCalledWith('ほその家')
+    })
+    // 詳細へ送る前に読み直す（左のナビゲーションも同時に新しい家族へ変わる）
+    await waitFor(() => {
+      expect(reloadFamily).toHaveBeenCalled()
+    })
   })
 
   it('招待コードで参加できる', async () => {
@@ -68,9 +78,7 @@ describe('FamiliesPage', () => {
     })
     renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES })
 
-    fireEvent.change(await screen.findByLabelText('Invitation code'), {
-      target: { value: 'CODE1234' },
-    })
+    fireEvent.change(screen.getByLabelText('Invitation code'), { target: { value: 'CODE1234' } })
     fireEvent.click(screen.getByRole('button', { name: 'Join with a code' }))
 
     expect(await screen.findByText('You joined the family.')).toBeInTheDocument()

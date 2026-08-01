@@ -41,6 +41,7 @@ from bounded_contexts.reward_points.application.use_cases.record_point_transacti
 from bounded_contexts.reward_points.application.use_cases.redeem_invitation import RedeemInvitationUseCase
 from bounded_contexts.reward_points.application.use_cases.remove_membership import RemoveMembershipUseCase
 from bounded_contexts.reward_points.application.use_cases.rename_family import RenameFamilyUseCase
+from bounded_contexts.reward_points.application.use_cases.reorder_members import ReorderMembersUseCase
 from bounded_contexts.reward_points.application.use_cases.reset_child_password import (
     ResetChildPasswordUseCase,
 )
@@ -233,6 +234,16 @@ def get_remove_membership_use_case(
     )
 
 
+def get_reorder_members_use_case(
+    *,
+    access: AccessDep,
+    memberships: MembershipRepoDep,
+    families: FamilyRepoDep,
+    overview: OverviewDep,
+) -> ReorderMembersUseCase:
+    return ReorderMembersUseCase(access=access, memberships=memberships, families=families, overview=overview)
+
+
 def get_issue_invitation_use_case(
     access: AccessDep, invitations: InvitationRepoDep, memberships: MembershipRepoDep
 ) -> IssueInvitationUseCase:
@@ -319,6 +330,7 @@ RevokeIndependenceDep = Annotated[RevokeIndependenceProposalUseCase, Depends(get
 ApproveIndependenceDep = Annotated[ApproveIndependenceUseCase, Depends(get_approve_independence_use_case)]
 AddChildDep = Annotated[AddChildMembershipUseCase, Depends(get_add_child_use_case)]
 RemoveMembershipDep = Annotated[RemoveMembershipUseCase, Depends(get_remove_membership_use_case)]
+ReorderMembersDep = Annotated[ReorderMembersUseCase, Depends(get_reorder_members_use_case)]
 IssueInvitationDep = Annotated[IssueInvitationUseCase, Depends(get_issue_invitation_use_case)]
 ListInvitationsDep = Annotated[ListInvitationsUseCase, Depends(get_list_invitations_use_case)]
 RevokeInvitationDep = Annotated[RevokeInvitationUseCase, Depends(get_revoke_invitation_use_case)]
@@ -347,6 +359,7 @@ __all__ = [
     "RedeemInvitationDep",
     "RemoveMembershipDep",
     "RenameFamilyDep",
+    "ReorderMembersDep",
     "ResetChildPasswordDep",
     "ReverseTransactionDep",
     "RevokeIndependenceDep",

@@ -24,6 +24,8 @@ class FamilyMembership:
     created_at: datetime
     # 親メンバーが独立を指示した日時（ADR-0014）。role = child 以外では常に None
     independence_proposed_at: datetime | None = None
+    # 家族の中での並び順。小さいほど先に出す。同じ値なら作られた順（ID）に落ちる
+    display_order: int = 0
 
     @property
     def display_name_value(self) -> str:

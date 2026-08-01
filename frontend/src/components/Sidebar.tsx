@@ -1,7 +1,9 @@
 /**
  * ナビゲーション。表示はロール名ではなく scope で制御する。
  *
- * 上段は家族が日常で使う画面。システム管理（ユーザー・ロール・権限・システム設定・
+ * 上段は家族が日常で使う画面。ダッシュボードのすぐ下に、台帳を持つ子を家族の
+ * 決めた順（家族設定で変えられる）で並べる — 日々開くのはこの入口なので、
+ * 家族の詳細を経由させない。システム管理（ユーザー・ロール・権限・システム設定・
  * ログ）は独立した節として下段に出し、scope を持つ人（admin）にだけ見せる。
  *
  * 広い画面では本文の左に置いたままにし、狭い画面では画面外から滑り出す引き出しに
@@ -12,11 +14,12 @@
  * 覆って本文を操作できなくするので、Tab で背後の（見えない）操作子へ入れてしまうと
  * キーボードや支援技術の利用者だけが迷子になる。
  */
-import { useEffect, useRef } from 'react'
+import { Fragment, useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { useI18n } from '../i18n'
 import { useAuth } from '../store/AuthContext'
+import { useFamily } from '../store/FamilyContext'
 
 interface Item {
   to: string
@@ -26,9 +29,12 @@ interface Item {
 
 const ITEMS: Item[] = [
   { to: '/', labelKey: 'nav.dashboard', scopes: ['dashboard:view'] },
-  { to: '/families', labelKey: 'nav.families', scopes: ['family:view'] },
+  { to: '/families', labelKey: 'nav.familySettings', scopes: ['family:view'] },
   { to: '/profile', labelKey: 'nav.profile', scopes: [] },
 ]
+
+/** 子の入口を差し込む位置。ダッシュボードの直後（この項目の後ろ）。 */
+const CHILDREN_AFTER = '/'
 
 /** システム管理の入口。scope を持つ人にだけ独立した節として出す。 */
 const ADMIN_ITEMS: Item[] = [
@@ -67,8 +73,12 @@ function focusables(nav: HTMLElement | null): HTMLElement[] {
 export function Sidebar({ open, onClose }: Props) {
   const { t } = useI18n()
   const { hasScope } = useAuth()
+  const { family } = useFamily()
   const navRef = useRef<HTMLElement>(null)
   const adminItems = ADMIN_ITEMS.filter((item) => hasScope(...item.scopes))
+  // 台帳を持つ参加者＝子。見えない兄弟の台帳は ledger_id が来ないので、
+  // ここに並ぶのは「自分が開ける入口」だけになる（ADR-0009）。
+  const children = family?.memberships.filter((member) => member.ledger_id !== null) ?? []
 
   // Escape で閉じ、Tab は引き出しの中で巡回させる。開いたときは先頭へ焦点を移し、
   // 閉じたら開いた操作子（ヘッダーの ☰）へ戻す。
@@ -132,9 +142,22 @@ export function Sidebar({ open, onClose }: Props) {
         aria-label={t('nav.primary')}
       >
         {ITEMS.filter((item) => hasScope(...item.scopes)).map((item) => (
-          <NavLink key={item.to} to={item.to} end={item.to === '/'} onClick={onClose}>
-            {t(item.labelKey)}
-          </NavLink>
+          <Fragment key={item.to}>
+            <NavLink to={item.to} end={item.to === '/'} onClick={onClose}>
+              {t(item.labelKey)}
+            </NavLink>
+            {item.to === CHILDREN_AFTER &&
+              children.map((child) => (
+                <NavLink
+                  key={child.id}
+                  to={`/families/${family?.id ?? 0}/ledgers/${child.ledger_id ?? 0}`}
+                  className="sidebar-child"
+                  onClick={onClose}
+                >
+                  {child.display_name}
+                </NavLink>
+              ))}
+          </Fragment>
         ))}
         {adminItems.length > 0 && (
           <>

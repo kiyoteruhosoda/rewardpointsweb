@@ -50,6 +50,8 @@ class FamilyMembershipModel(Base):
     # 親メンバーが独立を指示した日時（ADR-0014）。子本人の承認で独立が成立する。
     # role = child 以外では常に NULL。
     independence_proposed_at = mapped_column(sa.DateTime(), nullable=True)
+    # 家族が決めた並び順（小さいほど先）。同じ立場の中でだけ効く
+    display_order: Mapped[int] = mapped_column(sa.Integer(), nullable=False, default=0, server_default="0")
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 
