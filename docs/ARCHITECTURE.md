@@ -71,11 +71,15 @@ scope は「その操作を行える立場か」を表す。「*その* デー�
 **scope をエンドポイントに宣言したうえで、対象ごとの判定を Domain のポリシーに置く**
 二段構えにする。
 
-`reward_points` がこの形（ADR-0007）。`member:*` / `point:*` の scope で立場を見て、
-`MemberAccessPolicy` が所有・共有・本人の関係から `view` / `manage` を決める。
-`point:manage` を持っていても、共有されていないメンバーは触れない。判定は
-Application 層の `MemberAccessResolver` を通す一点に集約し、ユースケースが
-個別に条件を書かないようにする。
+`reward_points` がこの形（ADR-0009）。`family:*` / `point:*` の scope で立場を見て、
+`family_access_policy` が家族の中での立場（owner / parent / child）から
+「その台帳を見られるか・変えられるか」を決める。`point:manage` を持っていても、
+所属していない家族の台帳は触れない。判定は Application 層の
+`FamilyAccessResolver` を通す一点に集約し、ユースケースが個別に条件を書かない
+ようにする。
+
+家族はデータ分離の明示的な境界でもある。所属していない家族・見えない台帳には
+**404** を返す（403 だと「その ID は存在する」ことが分かってしまう）。
 
 ## 自己再起動の設計
 

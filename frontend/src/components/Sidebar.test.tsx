@@ -11,15 +11,15 @@ const CLOSE_LABEL = 'Close the menu'
 describe('Sidebar', () => {
   it('scope を持つ項目だけを出す', () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
-      scopes: ['member:view'],
+      scopes: ['family:view'],
     })
-    expect(screen.getByRole('link', { name: 'Points' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Family' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
   })
 
   it('システム管理は scope があっても出さない（プロフィール設定から入る）', () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
-      scopes: ['member:view', 'user:manage', 'admin:system-settings', 'log:view'],
+      scopes: ['family:view', 'user:manage', 'admin:system-settings', 'log:view'],
     })
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'System settings' })).not.toBeInTheDocument()
@@ -29,20 +29,20 @@ describe('Sidebar', () => {
 
   it('閉じているあいだは背景を出さない', () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
-      scopes: ['member:view'],
+      scopes: ['family:view'],
     })
     expect(screen.queryByRole('button', { name: CLOSE_LABEL })).not.toBeInTheDocument()
     expect(screen.getByRole('navigation')).not.toHaveClass('sidebar-open')
   })
 
   it('開いているあいだは sidebar-open を付ける', () => {
-    renderWithProviders(<Sidebar open onClose={vi.fn()} />, { scopes: ['member:view'] })
+    renderWithProviders(<Sidebar open onClose={vi.fn()} />, { scopes: ['family:view'] })
     expect(screen.getByRole('navigation')).toHaveClass('sidebar-open')
   })
 
   it('背景に触れると閉じる', () => {
     const onClose = vi.fn()
-    renderWithProviders(<Sidebar open onClose={onClose} />, { scopes: ['member:view'] })
+    renderWithProviders(<Sidebar open onClose={onClose} />, { scopes: ['family:view'] })
 
     fireEvent.click(screen.getByRole('button', { name: CLOSE_LABEL }))
     expect(onClose).toHaveBeenCalledTimes(1)
@@ -50,15 +50,15 @@ describe('Sidebar', () => {
 
   it('項目を選ぶと閉じる（引き出しが本文に被さったままにならない）', () => {
     const onClose = vi.fn()
-    renderWithProviders(<Sidebar open onClose={onClose} />, { scopes: ['member:view'] })
+    renderWithProviders(<Sidebar open onClose={onClose} />, { scopes: ['family:view'] })
 
-    fireEvent.click(screen.getByRole('link', { name: 'Points' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Family' }))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it('Escape で閉じる', () => {
     const onClose = vi.fn()
-    renderWithProviders(<Sidebar open onClose={onClose} />, { scopes: ['member:view'] })
+    renderWithProviders(<Sidebar open onClose={onClose} />, { scopes: ['family:view'] })
 
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
@@ -67,7 +67,7 @@ describe('Sidebar', () => {
   it('閉じているときは Escape を拾わない', () => {
     const onClose = vi.fn()
     renderWithProviders(<Sidebar open={false} onClose={onClose} />, {
-      scopes: ['member:view'],
+      scopes: ['family:view'],
     })
 
     fireEvent.keyDown(window, { key: 'Escape' })
@@ -76,14 +76,14 @@ describe('Sidebar', () => {
 
   it('開くと先頭の項目へ焦点を移す', () => {
     renderWithProviders(<Sidebar open onClose={vi.fn()} />, {
-      scopes: ['dashboard:view', 'member:view'],
+      scopes: ['dashboard:view', 'family:view'],
     })
     expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Dashboard' }))
   })
 
   it('最後の要素から Tab すると先頭へ戻す（背後の操作子へ抜けない）', () => {
     renderWithProviders(<Sidebar open onClose={vi.fn()} />, {
-      scopes: ['dashboard:view', 'member:view'],
+      scopes: ['dashboard:view', 'family:view'],
     })
     // 巡回の最後は背景の「閉じる」ボタン
     screen.getByRole('button', { name: CLOSE_LABEL }).focus()
@@ -94,7 +94,7 @@ describe('Sidebar', () => {
 
   it('先頭から Shift+Tab すると末尾へ回す', () => {
     renderWithProviders(<Sidebar open onClose={vi.fn()} />, {
-      scopes: ['dashboard:view', 'member:view'],
+      scopes: ['dashboard:view', 'family:view'],
     })
 
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
@@ -119,8 +119,8 @@ describe('Sidebar', () => {
       )
     }
 
-    renderWithProviders(<Drawer />, { scopes: ['member:view'] })
-    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Points' }))
+    renderWithProviders(<Drawer />, { scopes: ['family:view'] })
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Family' }))
 
     fireEvent.click(screen.getByRole('button', { name: CLOSE_LABEL }))
     expect(document.activeElement).toBe(opener)

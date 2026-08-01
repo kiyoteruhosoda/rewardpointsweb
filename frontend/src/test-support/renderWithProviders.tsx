@@ -23,9 +23,11 @@ const SETTINGS: UiSettings = {
 
 const USER: Me = {
   user_id: 1,
-  email: 'manager@example.com',
   username: 'manager',
+  display_name: 'manager',
+  email: 'manager@example.com',
   scopes: [],
+  must_change_password: false,
 }
 
 interface Options {

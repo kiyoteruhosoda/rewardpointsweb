@@ -8,6 +8,7 @@
  */
 import { Link } from 'react-router-dom'
 
+import { ProfileForm } from '../components/ProfileForm'
 import { LOCALE_LABELS, useI18n, type Locale } from '../i18n'
 import { useAuth } from '../store/AuthContext'
 import { THEME_PREFERENCES, useTheme, type ThemePreference } from '../theme'
@@ -45,13 +46,14 @@ export function ProfilePage() {
         <h2>{t('profile.account')}</h2>
         <div className="account-row">
           <span className="avatar" aria-hidden="true">
-            {user.username.slice(0, 1)}
+            {user.display_name.slice(0, 1)}
           </span>
           <div className="account-identity">
-            <p className="account-name">{user.username}</p>
-            <p className="account-email">{user.email}</p>
+            <p className="account-name">{user.display_name}</p>
+            <p className="account-email">{t('profile.signInAs', { username: user.username })}</p>
           </div>
         </div>
+        <ProfileForm />
       </section>
 
       <section className="card">

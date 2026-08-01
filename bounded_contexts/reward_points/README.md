@@ -1,93 +1,109 @@
-# reward_points — 人ごとのポイント
+# reward_points — 家族とポイント台帳
 
-メンバー（ポイントを貯める人）と、その加算・消費の履歴を扱うコンテキスト。
+家族（`Family`）を集約ルートとし、そこに属する子どものポイント台帳と、その
+加算・消費の記録を扱うコンテキスト。
 
-ログインアカウント（`users`）とメンバー（`members`）は**別物**。メンバーは
-ログインできなくてもよく（小さな子どもなど）、必要なら 1 つのアカウントを
-「本人」として紐付けられる。
+共有は **家族への参加** によってのみ表現する。メンバー単位の個別共有は持たない
+（ADR-0009）。子ども本人もアカウントを持ち、`role = child` の参加者として家族に
+所属する。
 
 ## 構成
 
 ```
-domain/          メンバー・共有・履歴と、アクセス範囲／残高の決め方
-application/     ユースケース（一覧・登録・記録・共有）とアクセス解決
+domain/          家族・参加・台帳・記録と、立場による認可／残高の決め方
+application/     ユースケース（家族・招待・台帳）とアクセス解決
 infrastructure/  SQLAlchemy モデルとリポジトリ
 presentation/    API ルーター・スキーマ・依存の組み立て
 ```
 
 API 仕様は Swagger UI（`/docs`）・`/openapi.json` を参照（手書きしない）。
 
-## アクセス範囲
+## 認可
 
-認可は二段。詳細と理由は ADR-0007。
+二段。詳細と理由は ADR-0009。
 
-1. **scope** — `member:view` / `member:manage` / `point:view` / `point:manage`。
+1. **scope** — `family:view` / `family:manage` / `point:view` / `point:manage`。
    エンドポイントに `require_permission(...)` で宣言する。
-2. **メンバー単位アクセス** — そのメンバーへ触れるか。`MemberAccessPolicy` が
-   到達経路から決める。
+2. **家族の中での立場** — `owner` / `parent` / `child`。
+   `domain/services/family_access_policy.py` が唯一の判定者。
 
-| 経路 | 範囲 |
-|---|---|
-| 所有者（`owner_user_id`） | `manage` |
-| 共有された人（`member_shares.access_level`） | 共有時に決めた範囲 |
-| 本人（`linked_user_id`） | `view` のみ |
+| role | 家族の管理 | 子の作成・招待 | 加算・消費・訂正 | 閲覧 |
+|---|---|---|---|---|
+| owner | ○ | ○ | 全ての子 | 全ての子 |
+| parent | × | ○ | 全ての子 | 全ての子 |
+| child | × | × | × | 自分の台帳のみ |
 
-複数の経路で到達できるときは強い方を採る。どの経路も無ければ **404**
-（`member_not_found`）。到達はできるが変更権が無ければ **403**
-（`member_access_denied`）。
+兄弟の残高・履歴は相互に参照できない。1 つのアカウントが複数の家族へ所属できるが、
+同一家族では 1 アカウント 1 参加（`UNIQUE (family_id, account_id)`）。
 
-`point:manage` を持っていても、`view` で共有されたメンバーは変更できない。
-すべてのユースケースは `MemberAccessResolver` を通してから対象を触る。
+所属していない家族・見えない台帳には **404**（`family_not_found` /
+`ledger_not_found`）。所属はしているが立場が足りない場合だけ **403**
+（`family_access_denied`）。すべてのユースケースは `FamilyAccessResolver` を
+通してから対象を触る。
 
-## 残高
+## 台帳
 
-残高は `point_entries` の合計として毎回導出する（残高列は持たない）。符号は各履歴
-が知っていて（`PointAddition` は正、`PointConsumption` は負）、`PointLedger` は
-`signed_points` を足すだけ。種別が増えても合計の式は変わらない。
+`point_transactions` は **追記専用**。UPDATE も DELETE も行わない（ADR-0010）。
 
-消費で残高不足は拒まない。先に景品を渡してから記録する運用があり、残高は導出値
-なので負の値もそのまま表せる。
+- 加算と消費は **符号** で区別する（`amount` は 0 以外の符号付き整数）。
+- 残高は保持せず `SUM(amount)` で導出する（`LedgerStatement`）。有効期限・期間
+  リセットが無いため、集計対象は常に台帳の全レコード。
+- **マイナス残高を許容する**（前借りの運用）。消費時の残高検証は行わない。
+- 訂正は元レコードの逆符号の行を追加し、`reversal_of_id` で対応を示す。
+  `reversal_of_id` は UNIQUE なので二重取り消しは DB でも防がれる。打ち消しレコード
+  自体は打ち消せない（`reversal_of_reversal_not_allowed`）。
+- 加算・消費の API は `idempotency_key` を必須とする。`UNIQUE (ledger_id,
+  idempotency_key)` に抵触した場合はエラーとせず既存レコードを返す。
 
-履歴の訂正は行の削除で行う（打ち消しの行は作らない）。`member_id` を条件に含めて
-消すため、閲覧権のある別メンバー経由で他人の履歴は消せない。
+`occurred_at`（出来事の発生日時。遡って入力できる）と `created_at`（レコード作成
+日時）は別物。どちらも UTC。
 
-## 共有
+## 参加の追加
 
-共有先は**メールアドレス**で指定する。アカウント一覧を返す口は用意しない
-（`user:manage` を持たない管理者に全アカウントを見せないため）。無効化された
-アカウント（`is_active` が偽）は共有先に選べない。
+`family_invitations` の招待コード（ハッシュ化して保存。平文は発行時に 1 度だけ
+返す）で行う。入り口は 2 つある。
 
-- 所有者自身を共有先にはできない（`share_with_owner_not_allowed`）。
-- 同じ相手への二重共有はできない（`member_already_shared`）。
-- **共有の管理（一覧・追加・解除）は所有者だけ**（`MemberAccessResolver.require_ownership`）。
-  `manage` で共有された相手はポイントを記録できるが、共有は配り直せない。
+| 経路 | 認証 | 用途 |
+|---|---|---|
+| `POST /api/families/invitations/accept` | 要 | すでにアカウントを持つ人が加わる |
+| `POST /api/families/invitations/redeem` | 不要 | 招待コードでアカウントを作って加わる |
+
+`role = child` の招待では、親が先に作った参加者を `target_membership_id` で指す。
+子が受諾した時点でアカウントと結び付く。子アカウントの作り方はこの経路だけで、
+子ども自身では作れない（ADR-0011）。
+
+## 一時パスワード
+
+メールアドレスを持たないアカウントでは SMTP 経由のリセットが成立しないため、
+親が一時パスワードを発行する（`POST /api/families/{id}/memberships/{id}/password-reset`）。
+
+- 対象は同一家族の `role = child` に限る。親から親へのリセットは許可しない。
+- 発行された一時パスワードには有効期限がある（`TEMPORARY_PASSWORD_TTL_SECONDS`）。
+- 一時パスワードでのログイン後は、パスワードの変更を完了するまで他の操作を許可
+  しない（`users.must_change_password`。関門は `get_active_principal`）。
+- 発行の事実は構造化ログと `log` テーブルに残る。
 
 ## アカウントを削除するとき
 
 | 参照 | 挙動 |
 |---|---|
-| 登録したメンバーが残っている | 削除を拒む（409 `user_still_owns_members`） |
-| 共有されていた | その共有だけ消える |
-| メンバー本人として紐付いていた | メンバーは残り、紐付けが外れる |
-| ポイントを記録していた | 履歴は残る（記録者が分からなくなる） |
+| 家族の owner として残っている | 削除を拒む（409 `user_still_owns_families`） |
+| 家族に参加していた | 参加と台帳は残り、アカウントの紐付けだけが外れる |
+| 台帳へ記録していた | 記録は残る（操作者が分からなくなる） |
 
 無効化したいだけなら `is_active` を偽にする。
 
-## メンバー本人の紐付け
-
-`linked_user_email` を指定して登録すると、そのアカウントが本人になる。1 つの
-アカウントを紐付けられるメンバーは 1 人だけ（`linked_user_id` は一意）。
-
-本人は自分のメンバーだけが一覧に並び、残高と履歴を見られる。変更の API は
-scope（`member` ロールに `point:manage` が無い）と関係（本人は `view` 止まり）の
-両方で塞がれている。
+記録の残っている参加者は家族から外せない（409 `ledger_not_empty`）。台帳は追記
+専用で消す手段を持たないため、外せてしまうと履歴が黙って消える経路になる。
 
 ## テーブル
 
 | テーブル | 用途 |
 |---|---|
-| `members` | メンバー。`owner_user_id` / `linked_user_id`（一意・任意） |
-| `member_shares` | 共有。`member_id` + `user_id` が主キー、`access_level` |
-| `point_entries` | 履歴。`entry_type` と、加算の `reason` / 消費の `application` |
+| `families` | 家族（集約ルート） |
+| `family_memberships` | 参加。`account_id`（任意）・`role`・`display_name` |
+| `point_ledgers` | 台帳。`membership_id` は一意（`role = child` と 1 対 1） |
+| `point_transactions` | 記録（追記専用）。`amount` / `reversal_of_id` / `idempotency_key` |
+| `family_invitations` | 招待。`code_hash`・`role`・`target_membership_id`・有効期限 |
 
 定義の正本は `infrastructure/reward_points_models.py`。DDL の変更は Alembic で行う。

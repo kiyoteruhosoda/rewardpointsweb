@@ -555,6 +555,13 @@ th {
   font-variant-numeric: tabular-nums;
 }
 
+/* 打ち消された記録。台帳は追記専用で行が消えないため、取り消された事実を
+   見た目でも示す（ADR-0010）。 */
+tr.reversed {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
 .error {
   color: var(--danger);
 }
