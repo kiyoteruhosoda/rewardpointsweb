@@ -2,6 +2,30 @@
 
 新しいものを上に追記する。細かな進捗は書かない（Progress.md 完了時に要約を移す）。
 
+## 2026-08 旧アプリ名 `fastapitemplate` でコンテナが作られ続けていたのをやめた
+
+本番のコンテナが `fastapitemplate-web-1` / `fastapitemplate-mariadb` 等の旧名のまま
+だった。`deploy.sh` はアプリ名を「`.env` の `APP_NAME` > 親ディレクトリ名 >
+`BUILD_APP_NAME`」で決めるが、配置ディレクトリが `fastapitemplate/` のままだと
+旧名が正しく解決されてしまい、旧名を採用し続ける。
+
+旧名への移行処理は既にあったのに動いていなかった。`migrate_legacy_env_names` と
+`take_down_legacy_projects` はどちらも「解決されたアプリ名が旧名そのものなら、
+それがこのデプロイの正しい名前」とみなして自分を除外する作りで、まさにこのケースで
+黙って何もしない。移行の入口が塞がっていた。
+
+アプリ名の解決結果が `LEGACY_APP_NAMES` に当たったら、出所によらず `BUILD_APP_NAME`
+へ倒すようにした。旧名は「選べる名前」ではなく「引退した名前」という扱い。これで
+上記 2 つの移行処理も本来の経路として働き、次の `./deploy.sh app` で旧名の
+プロジェクトを畳んでから `rewardpointsweb` で起動し直す。`.env` の
+`DB_CONTAINER_NAME` / `DOCKER_NETWORK_NAME` も旧既定値なら書き換わる。永続データは
+`HOST_DATA_ROOT` にあるため消えない。
+
+「配置場所がデプロイの名前を決める」方針（`188723e`）は変えていない。旧名以外の
+ディレクトリ名は従来どおりそのまま採用する。併せて、アプリ名の解決時に警告を出せる
+よう `log` / `warn` / `err` の定義を `TAG` ごと前へ移した（`TAG` は `ENV_NAME` に
+しか依存しない）。
+
 ## 2026-08 clone 直後に `docker compose up` が通るようにし、名前を `rewardpointsweb` で固定した
 
 README・OPERATIONS には「`docker compose up -d`」と書いてあったが、実際には動かな
