@@ -1,10 +1,9 @@
 /**
- * プロフィール設定。自分のアカウント・表示設定（言語・テーマ）・セキュリティ、
- * そして権限があるときだけシステム管理への入口をここへ集める。
+ * プロフィール設定。自分のアカウント・表示設定（言語・テーマ）・セキュリティを
+ * 集める。システム管理への入口は Sidebar の独立した節にある。
  *
- * 管理者は親（家族）なので、日々のナビゲーションにはシステム関連を出さず、
- * この画面の一番下にだけ置く。言語とテーマの保存先は localStorage で、
- * サーバーへは送らない（i18n/index.tsx・theme/index.tsx）。
+ * 言語とテーマの保存先は localStorage で、サーバーへは送らない
+ * （i18n/index.tsx・theme/index.tsx）。
  */
 import { Link } from 'react-router-dom'
 
@@ -13,28 +12,11 @@ import { LOCALE_LABELS, useI18n, type Locale } from '../i18n'
 import { useAuth } from '../store/AuthContext'
 import { THEME_PREFERENCES, useTheme, type ThemePreference } from '../theme'
 
-interface AdminLink {
-  to: string
-  labelKey: string
-  scopes: string[]
-}
-
-/** システム管理の入口。Sidebar には出さず、scope を持つ人にだけここで見せる。 */
-const ADMIN_LINKS: AdminLink[] = [
-  { to: '/admin/users', labelKey: 'nav.users', scopes: ['user:manage'] },
-  { to: '/admin/roles', labelKey: 'nav.roles', scopes: ['role:manage'] },
-  { to: '/admin/permissions', labelKey: 'nav.permissions', scopes: ['permission:manage'] },
-  { to: '/admin/config', labelKey: 'nav.config', scopes: ['admin:system-settings'] },
-  { to: '/admin/logs', labelKey: 'nav.logs', scopes: ['log:view'] },
-]
-
 export function ProfilePage() {
   const { t, locale, locales, setLocale } = useI18n()
   const { theme, setTheme } = useTheme()
-  const { user, hasScope } = useAuth()
+  const { user } = useAuth()
   if (!user) return null
-
-  const adminLinks = ADMIN_LINKS.filter((link) => hasScope(...link.scopes))
 
   return (
     <div className="page">
@@ -99,19 +81,6 @@ export function ProfilePage() {
           <Link to="/security">{t('profile.securitySettings')}</Link>
         </div>
       </section>
-
-      {adminLinks.length > 0 && (
-        <section className="card">
-          <h2>{t('profile.admin')}</h2>
-          <div className="link-list">
-            {adminLinks.map((link) => (
-              <Link key={link.to} to={link.to}>
-                {t(link.labelKey)}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   )
 }

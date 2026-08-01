@@ -48,6 +48,11 @@ PERMISSION_CODES: Sequence[str] = (
 
 # --- ロールへの権限付与 ------------------------------------------------------
 # ロール名 -> 付与する権限コードの集合。有効 scope は所属ロールの和集合。
+#
+# ロールはアクター（人）に対応する（ADR-0018）。
+#   member  = 親・大人（メンバー）。家族を作り、子を追加し、ポイントを記録できる
+#   guest   = 子（ゲスト）。招待の受諾でのみ生まれ、自分の家族と台帳を見るだけ
+#   manager = 運用者。家族機能とは無関係で、家族のフローでは一切割り当てない
 ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
     "admin": tuple(PERMISSION_CODES),  # 全権限
     "manager": (
@@ -56,23 +61,23 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
         "log:view",
         "dashboard:view",
         "gui:view",
+    ),
+    "member": (
+        "item:view",
+        "dashboard:view",
+        "gui:view",
         # 家族を作り、子を追加し、ポイントを加算・消費できる
         "family:view",
         "family:manage",
         "point:view",
         "point:manage",
     ),
-    "member": (
-        "item:view",
-        "dashboard:view",
-        "gui:view",
-        # 自分のポイントと履歴は見られるが、変更する scope は持たない
-        "family:view",
-        "point:view",
-    ),
     "guest": (
         "dashboard:view",
         "gui:view",
+        # 自分の家族・自分のポイントと履歴は見られるが、変更する scope は持たない
+        "family:view",
+        "point:view",
     ),
 }
 

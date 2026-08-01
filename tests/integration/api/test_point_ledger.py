@@ -18,7 +18,7 @@ from tests.integration.api.family_support import (
 
 @pytest.fixture
 def parent(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    return create_account(client, admin_headers, username="dad", role="manager", display_name="おとうさん")
+    return create_account(client, admin_headers, username="dad", role="member", display_name="おとうさん")
 
 
 @pytest.fixture

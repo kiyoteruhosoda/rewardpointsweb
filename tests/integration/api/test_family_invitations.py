@@ -21,7 +21,7 @@ from tests.integration.api.family_support import (
 
 @pytest.fixture
 def parent(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    return create_account(client, admin_headers, username="dad", role="manager", display_name="おとうさん")
+    return create_account(client, admin_headers, username="dad", role="member", display_name="おとうさん")
 
 
 def _redeem(client: TestClient, code: object, *, username: str, password: str) -> dict[str, object]:
@@ -277,7 +277,7 @@ def test_expired_temporary_password_is_refused(client: TestClient, parent: Accou
 
 
 def test_parent_cannot_reset_another_parent(client: TestClient, admin_headers: dict[str, str], parent: Account) -> None:
-    other = create_account(client, admin_headers, username="mom", role="manager", display_name="おかあさん")
+    other = create_account(client, admin_headers, username="mom", role="member", display_name="おかあさん")
     family_id = create_family(client, parent.headers)
     invitation = issue_invitation(client, parent.headers, family_id, role="parent")
     accepted = client.post(

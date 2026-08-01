@@ -154,6 +154,17 @@ class ChildAccountRequiredError(RewardPointsError):
     code = "child_account_required"
 
 
+class GuardianAccountRequiredError(RewardPointsError):
+    """親（parent）の招待を、保護者になれないアカウント（子）が使おうとした。
+
+    子（guest ロール）が親として加わると、家族の中では親なのに子の追加も
+    ポイントの記録もできない「名ばかりの保護者」になる。子の大人化は独立
+    （ADR-0014）か管理者のロール変更で行う（ADR-0018）。
+    """
+
+    code = "guardian_account_required"
+
+
 class DisplayNameRequiredError(RewardPointsError):
     """呼び名の要る招待（参加者を指していない招待）に、呼び名が渡されなかった。"""
 
@@ -195,6 +206,7 @@ __all__ = [
     "FamilyAccessDeniedError",
     "FamilyNotEmptyError",
     "FamilyNotFoundError",
+    "GuardianAccountRequiredError",
     "IndependenceNotProposedError",
     "InvitationNotFoundError",
     "InvitationTargetUnavailableError",

@@ -228,6 +228,17 @@ select:focus-visible {
   font-weight: 500;
 }
 
+/* システム管理の節見出し（Sidebar.tsx）。項目との違いが分かる控えめな表示にする */
+.sidebar-heading {
+  margin: 0.8rem 0 0;
+  padding: 0 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
 .sidebar a:hover {
   background: var(--surface-inset);
   color: var(--text);

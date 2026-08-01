@@ -183,13 +183,17 @@ async def accept_invitation(
     use_case: AcceptInvitationDep,
     principal: FamilyViewer,
 ) -> RedeemedInvitationResponse:
-    """すでにアカウントを持つ人が、招待コードで家族へ加わる。"""
+    """すでにアカウントを持つ人が、招待コードで家族へ加わる。
+
+    親（parent）の招待を使えるのは保護者になれるアカウントだけ（ADR-0018）。
+    """
     dto = use_case.execute(
         AcceptInvitationCommand(
             code=body.code,
             account_id=principal.user_id,
             username=principal.username,
             display_name=body.display_name or principal.display_name,
+            can_guard=principal.can("family:manage", "point:manage"),
         )
     )
     logger.info("invitation_accepted", extra={"family_id": dto.family_id})
@@ -216,12 +220,12 @@ async def list_families(use_case: ListFamiliesDep, principal: FamilyViewer) -> l
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=FamilyDetailResponse)
 async def create_family(
-    body: FamilyCreateRequest, use_case: CreateFamilyDep, principal: FamilyViewer
+    body: FamilyCreateRequest, use_case: CreateFamilyDep, principal: FamilyManager
 ) -> FamilyDetailResponse:
-    """家族を作る。所属の入口なので、招待の受諾と同じく ``family:view`` で呼べる。
+    """家族を作る。作った人が owner になる。
 
-    作った人が owner になり、保護者のアプリケーションロールへ昇格する
-    （ADR-0017）。昇格後の scope は再ログインで有効になる。
+    親（member ロール）は ``family:manage`` を持つので作れる。子（guest）は
+    scope で止まる（ADR-0018）。
     """
     dto = use_case.execute(
         CreateFamilyCommand(

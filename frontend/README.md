@@ -155,9 +155,9 @@ scope も併せて必要（二段。ADR-0009）。
 出ない（サーバーが `ledger_id` / `balance` を返さない）。
 
 scope が足りなければ、○ の欄でもその操作は通らない（画面に入り口が出ず、API は
-403）。既定のロールでは `manager` が 4 つすべてを持ち、`member` は
-`family:view` + `point:view` だけ、`guest` はどれも持たない。子アカウントには
-`member` が付くので、子が自分の台帳を変更できないのは scope と立場の両方による。
+403）。既定のロールでは `member`（親）が 4 つすべてを持ち、`guest`（子）は
+`family:view` + `point:view` だけ（ADR-0018）。子アカウントには `guest` が
+付くので、子が自分の台帳を変更できないのは scope と立場の両方による。
 
 ### 画面仕様: 家族の一覧（`/families`）
 

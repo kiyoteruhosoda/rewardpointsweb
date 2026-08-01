@@ -25,12 +25,12 @@ from tests.integration.api.family_support import (
 
 @pytest.fixture
 def owner(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    return create_account(client, admin_headers, username="dad", role="manager", display_name="おとうさん")
+    return create_account(client, admin_headers, username="dad", role="member", display_name="おとうさん")
 
 
 @pytest.fixture
 def second_parent(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    return create_account(client, admin_headers, username="mom", role="manager", display_name="おかあさん")
+    return create_account(client, admin_headers, username="mom", role="member", display_name="おかあさん")
 
 
 def _join_as_parent(client: TestClient, owner: Account, family_id: int, *, joiner: Account, name: str) -> int:
@@ -159,7 +159,7 @@ def test_leaving_owner_skips_parents_without_an_account(
     """引き継ぎ先は、古さより先にアカウントの結び付きで絞る。"""
     family_id = create_family(client, owner.headers)
     _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
-    grandma = create_account(client, admin_headers, username="grandma", role="manager")
+    grandma = create_account(client, admin_headers, username="grandma", role="member")
     _join_as_parent(client, owner, family_id, joiner=grandma, name="おばあちゃん")
     assert client.delete(f"/api/admin/users/{second_parent.user_id}", headers=admin_headers).status_code == 204
 

@@ -22,7 +22,7 @@ from tests.integration.api.family_support import (
 
 @pytest.fixture
 def parent(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    return create_account(client, admin_headers, username="dad", role="manager", display_name="おとうさん")
+    return create_account(client, admin_headers, username="dad", role="member", display_name="おとうさん")
 
 
 def _linked_child(
@@ -82,7 +82,7 @@ def test_independence_cannot_be_proposed_for_a_parent(
     client: TestClient, admin_headers: dict[str, str], parent: Account
 ) -> None:
     family_id = create_family(client, parent.headers)
-    other = create_account(client, admin_headers, username="mom", role="manager")
+    other = create_account(client, admin_headers, username="mom", role="member")
     invitation = issue_invitation(client, parent.headers, family_id, role="parent")
     accepted = client.post(
         "/api/families/invitations/accept",
@@ -173,11 +173,14 @@ def test_independent_account_can_rejoin_as_a_member(client: TestClient, parent: 
     _propose(client, parent.headers, family_id, membership_id=membership_id)
     assert client.post(f"/api/families/{family_id}/independence", headers=child_headers).status_code == 204
 
-    # 元の家族から、今度はメンバー（parent）として招待を受け直せる
+    # 元の家族から、今度はメンバー（parent）として招待を受け直せる。
+    # 昇格した scope はトークンに焼き込まれるため、再ログインしてから受ける
+    # （画面も独立の成立後にログアウトさせる — ADR-0014）
+    fresh_headers = login(client, username="taro", password="taro-pass-123")
     invitation = issue_invitation(client, parent.headers, family_id, role="parent")
     rejoined = client.post(
         "/api/families/invitations/accept",
-        headers=child_headers,
+        headers=fresh_headers,
         json={"code": invitation["code"], "display_name": "たろう（おとな）"},
     )
     assert rejoined.status_code == 200, rejoined.text

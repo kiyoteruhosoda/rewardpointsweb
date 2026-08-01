@@ -33,7 +33,7 @@ from tests.integration.api.family_support import (
 
 @pytest.fixture
 def parent(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    return create_account(client, admin_headers, username="dad", role="manager", display_name="おとうさん")
+    return create_account(client, admin_headers, username="dad", role="member", display_name="おとうさん")
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ def test_account_in_a_family_cannot_join_another(
     client: TestClient, admin_headers: dict[str, str], parent: Account
 ) -> None:
     """所属できる家族は 1 アカウント 1 つまで(ADR-0013)。招待では増やせない。"""
-    other_owner = create_account(client, admin_headers, username="grandma", role="manager")
+    other_owner = create_account(client, admin_headers, username="grandma", role="member")
     first = create_family(client, parent.headers, name="ほその家")
     second = create_family(client, other_owner.headers, name="となりの家")
 
@@ -101,7 +101,7 @@ def test_one_ledger_per_child(client: TestClient, parent: Account, db_session: S
 def test_account_outside_any_family_reaches_no_ledger(
     *, client: TestClient, admin_headers: dict[str, str], parent: Account, ledger: Ledger
 ) -> None:
-    outsider = create_account(client, admin_headers, username="outsider", role="manager")
+    outsider = create_account(client, admin_headers, username="outsider", role="member")
 
     assert client.get("/api/families", headers=outsider.headers).json() == []
     assert client.get(ledger.path(), headers=outsider.headers).status_code == 403
@@ -138,7 +138,7 @@ def test_every_ledger_endpoint_blocks_other_families(
     call: LedgerCall,
 ) -> None:
     """他家族の親が台帳 ID を直接指定しても、どの入口も通らない。"""
-    stranger = create_account(client, admin_headers, username="stranger", role="manager")
+    stranger = create_account(client, admin_headers, username="stranger", role="member")
     create_family(client, stranger.headers, name="よその家")
 
     response = call.send(client, ledger, stranger.headers)
@@ -224,7 +224,7 @@ def test_reason_suggestions_are_per_family_and_by_frequency(
     ledger.record(client, parent.headers, amount=10, reason="おてつだい", key="k2")
     ledger.record(client, parent.headers, amount=10, reason="そうじ", key="k3")
 
-    other = create_account(client, admin_headers, username="grandma", role="manager")
+    other = create_account(client, admin_headers, username="grandma", role="member")
     other_family = create_family(client, other.headers, name="となりの家")
     other_child = add_child(client, other.headers, other_family, display_name="はなこ")
     Ledger(family_id=other_family, ledger_id=int(str(other_child["ledger_id"]))).record(
@@ -320,8 +320,8 @@ def test_secrets_never_reach_the_log(
     """
     password = "logging-check-123"
     with caplog.at_level(logging.INFO):
-        create_account(client, admin_headers, username="logcheck", role="manager")
-        parent = create_account(client, admin_headers, username="dad2", role="manager")
+        create_account(client, admin_headers, username="logcheck", role="member")
+        parent = create_account(client, admin_headers, username="dad2", role="member")
         family_id = create_family(client, parent.headers)
         issued = issue_invitation(client, parent.headers, family_id, role="parent")
         signed_in = client.post("/api/auth/login", json={"username": "logcheck", "password": "logcheck-pass-123"})

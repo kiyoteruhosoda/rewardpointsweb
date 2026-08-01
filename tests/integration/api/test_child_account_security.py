@@ -30,7 +30,7 @@ CHILD_PASSWORD = "taro-pass-123"
 @pytest.fixture
 def child_headers(client: TestClient, admin_headers: dict[str, str]) -> dict[str, str]:
     """招待コードで作った、メールアドレスを持たない子アカウント。"""
-    parent: Account = create_account(client, admin_headers, username="dad", role="manager")
+    parent: Account = create_account(client, admin_headers, username="dad", role="member")
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
     invitation = issue_invitation(

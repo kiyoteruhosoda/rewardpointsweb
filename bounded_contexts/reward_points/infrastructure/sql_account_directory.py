@@ -5,9 +5,9 @@
 アカウントを作る」「一時パスワードを発行する」の 3 つだけで、一覧を配る口は
 用意しない（``user:manage`` を持たない親に全アカウントを見せないため）。
 
-家族の中での立場から、付与するアプリケーションロールを決める。親はポイントを
-記録できる必要があるので ``manager``、子は閲覧だけなので ``member``（ADR-0009 の
-認可表と、ロールへの権限付与が対応する）。
+家族の中での立場から、付与するアプリケーションロールを決める。親（メンバー）は
+``member``、子（ゲスト）は ``guest``（ADR-0018。ADR-0009 の認可表と、ロールへの
+権限付与が対応する）。
 """
 
 from __future__ import annotations
@@ -33,9 +33,9 @@ from shared.kernel.settings.settings import settings
 from shared.kernel.timestamps import utcnow
 
 _ROLE_FOR_FAMILY_ROLE = {
-    FamilyRole.OWNER: "manager",
-    FamilyRole.PARENT: "manager",
-    FamilyRole.CHILD: "member",
+    FamilyRole.OWNER: "member",
+    FamilyRole.PARENT: "member",
+    FamilyRole.CHILD: "guest",
 }
 
 # 保護者に必要な scope の全部。これらが全て揃っているアカウントに昇格は不要
@@ -99,6 +99,15 @@ class SqlAccountProvisioning(IAccountProvisioning):
             granted = self._session.scalar(select(Role).where(Role.name == guardian_role))
             if granted is not None:
                 user.roles.append(granted)
+        self._session.flush()
+
+    def delete_account(self, account_id: int) -> None:
+        user = self._session.get(User, account_id)
+        if user is None:  # 呼び出し側が membership から引いた ID なので通常は起きない
+            raise ValueError(f"account not found: {account_id}")
+        # 付随データ（パスキー・一時パスワード等）は外部キーの ON DELETE が追随する
+        user.roles = []
+        self._session.delete(user)
         self._session.flush()
 
     def issue_temporary_password(self, account_id: int) -> TemporaryPassword:
