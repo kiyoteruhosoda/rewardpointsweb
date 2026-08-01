@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -20,6 +21,8 @@ from typing import Any
 
 from shared.kernel.settings.system_settings_defaults import DEFAULT_APPLICATION_SETTINGS
 
+_logger = logging.getLogger(__name__)
+
 
 class _DatabaseOverrides:
     """優先順位「環境変数 > DB > デフォルト値」の DB 層。
@@ -27,8 +30,9 @@ class _DatabaseOverrides:
     管理画面から保存される ``system_settings`` テーブルの ``app.config``
     レコードを供給する。
 
-    - DB 未接続・テーブル未作成（マイグレーション前）の場面では黙って値なしを
-      返し、環境変数とデフォルト値のみで動作を続ける。
+    - DB 未接続・テーブル未作成（マイグレーション前）の場面では値なしを返し、
+      環境変数とデフォルト値のみで動作を続ける。読めない状態に入った／戻った
+      ときだけログへ 1 行残す。
     - リクエスト毎の DB アクセスを避けるため TTL キャッシュを持つ。管理画面の
       保存時は ``SystemSettingService`` が ``invalidate()`` を呼び即時反映する。
     - 読み取りは専用の短命コネクションで行う（共有セッションの
@@ -43,6 +47,7 @@ class _DatabaseOverrides:
         self._loading = threading.local()
         self._payload: dict[str, Any] = {}
         self._expires_at = 0.0
+        self._unreadable = False
 
     def invalidate(self) -> None:
         self._payload = {}
@@ -67,12 +72,31 @@ class _DatabaseOverrides:
             payload = self._load_payload()
             if payload is not None:
                 self._payload = payload
+            self._note_readable()
         except Exception:
             # 直近の正常値を保持したまま、次の TTL まで再試行しない
-            pass
+            self._note_unreadable()
         finally:
             self._loading.active = False
             self._expires_at = time.monotonic() + self._TTL_SECONDS
+
+    def _note_unreadable(self) -> None:
+        """DB から設定を読めなくなったことを知らせる。
+
+        黙って握り潰すと「管理画面で保存した値が効かない」という症状だけが残り、
+        原因（DB 未接続・マイグレーション前）がどこにも出ない。ただし TTL ごとに
+        出すとログが溢れるので、**状態が変わったときだけ** 1 行出す。
+        """
+        if self._unreadable:
+            return
+        self._unreadable = True
+        _logger.warning("system_settings_unreadable", exc_info=True)
+
+    def _note_readable(self) -> None:
+        if not self._unreadable:
+            return
+        self._unreadable = False
+        _logger.info("system_settings_readable")
 
     def _load_payload(self) -> dict[str, Any] | None:
         from shared.kernel.settings.system_setting_records import (

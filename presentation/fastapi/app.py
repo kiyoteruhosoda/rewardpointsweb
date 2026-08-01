@@ -24,7 +24,7 @@ from bounded_contexts.reward_points.presentation.error_handling import (
     register_reward_points_error_handler,
 )
 from bounded_contexts.reward_points.presentation.router import router as families_router
-from presentation.fastapi.error_handling import register_internal_error_handler
+from presentation.fastapi.error_handling import register_error_handling
 from presentation.fastapi.middleware.internal_error import InternalErrorMiddleware
 from presentation.fastapi.middleware.request_logging import RequestLoggingMiddleware
 from presentation.fastapi.routers import spa
@@ -92,8 +92,9 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
-    # ミドルウェアより外側で落ちたとき用の保険。個別のドメイン例外ハンドラが優先される。
-    register_internal_error_handler(app)
+    # 失敗の記録（4xx・入力検証）と、ミドルウェアより外側で落ちたとき用の保険。
+    # 個別のドメイン例外ハンドラが優先される。
+    register_error_handling(app)
     register_account_security_error_handler(app)
     register_reward_points_error_handler(app)
 

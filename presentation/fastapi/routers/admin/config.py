@@ -1,7 +1,13 @@
-"""システム設定 API（要 ``admin:system-settings``）。"""
+"""システム設定 API（要 ``admin:system-settings``）。
+
+保存はアプリログへ残す。挙動が変わる操作で、後から「いつ設定が変わったか」を
+追えないと障害の切り分けができない。**残すのはキー名だけ**——値には秘匿項目
+（``MAIL_PASSWORD`` 等）が含まれる（CLAUDE.md「ログ」）。
+"""
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -16,6 +22,8 @@ from presentation.fastapi.schemas.admin import (
 )
 from presentation.fastapi.services.system_setting_service import SystemSettingService
 from shared.kernel.database.session import get_db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/admin/config",
@@ -39,6 +47,7 @@ async def update_config(body: SystemSettingsUpdateRequest, db: DbDep) -> SystemS
     実際の再起動は ``POST /api/admin/system/restart`` で要求する。
     """
     requirement = SystemSettingService.save(db, body.values)
+    logger.info("system_settings_updated: keys=%s", ",".join(sorted(body.values)))
     return SystemSettingsUpdateResponse(
         status="ok",
         restart_required=(

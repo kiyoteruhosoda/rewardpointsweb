@@ -1,7 +1,15 @@
-"""ユーザー管理 API（要 ``user:manage``）。"""
+"""ユーザー管理 API（要 ``user:manage``）。
+
+アカウントの追加・変更・削除はアプリログへ残す。他人のアカウントに手を入れる
+操作で、後から「いつ誰のアカウントが変わったか」を追えないと困るため。
+**識別子は本文に入れる**——``log`` テーブルへ入るのは列にある項目だけで、
+``extra`` の残りは stdout の JSON にしか出ない。ユーザー名・メールアドレスは
+書かない（CLAUDE.md「ログ」）。
+"""
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -26,6 +34,8 @@ from shared.domain.auth.username import Username
 from shared.infrastructure.models import Role, User
 from shared.kernel.database.session import get_db
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/api/admin/users",
     tags=["admin"],
@@ -46,6 +56,17 @@ def _to_response(user: User) -> UserResponse:
         must_change_password=user.must_change_password,
         roles=sorted(r.name for r in user.roles),
     )
+
+
+def _changed_fields(body: UserUpdateRequest) -> list[str]:
+    """変更した項目の名前だけを並べる（値は残さない）。"""
+    candidates = (
+        ("display_name", body.display_name),
+        ("is_active", body.is_active),
+        ("roles", body.roles),
+        ("password", body.password),
+    )
+    return [name for name, value in candidates if value is not None]
 
 
 def _resolve_roles(db: Session, names: list[str]) -> list[Role]:
@@ -94,6 +115,7 @@ async def create_user(body: UserCreateRequest, db: DbDep) -> UserResponse:
     user.roles = _resolve_roles(db, body.roles)
     db.add(user)
     db.flush()
+    logger.info("admin_user_created: user_id=%s", user.id)
     return _to_response(user)
 
 
@@ -111,6 +133,7 @@ async def update_user(user_id: int, body: UserUpdateRequest, db: DbDep) -> UserR
     if body.password is not None:
         user.password_hash = generate_password_hash(body.password)
     db.flush()
+    logger.info("admin_user_updated: user_id=%s fields=%s", user_id, ",".join(_changed_fields(body)) or "none")
     return _to_response(user)
 
 
@@ -131,3 +154,4 @@ async def delete_user(user_id: int, db: DbDep, deletable: DeletableDep) -> None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error": error.code}) from error
     user.roles = []
     db.delete(user)
+    logger.info("admin_user_deleted: user_id=%s", user_id)

@@ -27,7 +27,12 @@ class DbLogHandler(logging.Handler):
                 return
             self._insert(record)
         except Exception:
-            pass
+            # ログのために本処理は落とさない。ただし**黙らない**——ここを
+            # ``pass`` にすると「管理画面にログが出ない」だけが症状になり、
+            # 原因（DB 未接続・マイグレーション前・列の不一致）が誰にも見えない。
+            # ``handleError`` は traceback を stderr へ出すだけで、ロギングを
+            # 再入させない（DB へ書こうとして再び失敗する経路を作らない）。
+            self.handleError(record)
 
     def _insert(self, record: logging.LogRecord) -> None:
         from shared.infrastructure.models.base import utcnow

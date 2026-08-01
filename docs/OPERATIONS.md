@@ -350,6 +350,18 @@ RP ID にはドメイン名しか指定できない（IP アドレス不可）�
 - DB: `log` テーブル（`requestId` でリクエスト単位に追跡）
 - コンテナ: `docker compose logs web`
 
+エラーだけを見たいときはレベルで絞る（**5xx は ERROR、4xx は WARNING**、401 は
+INFO。ログインの失敗は WARNING）。失敗した行の本文にはエラーコードが入る
+（`request_failed: user_not_found`）。
+
+管理操作は本文の頭で引ける。`admin_user_created` / `admin_user_updated` /
+`admin_user_deleted` / `admin_role_created` / `admin_role_updated` /
+`admin_role_deleted` / `system_settings_updated` / `login_failed`。
+
+`/healthz`・`/readyz`・`/api/health`・`/metrics` の成功したアクセスは記録されない
+（失敗したときは記録される）。死活の確認は `docker compose ps` の healthcheck 状態か
+`/metrics` を見る。
+
 ## 子どもがパスワードを忘れたとき
 
 子アカウントはメールアドレスを持たないため、リセットリンクを送れない。親

@@ -93,3 +93,66 @@ def test_failed_request_is_recorded_in_the_access_log(
 
     statuses = [getattr(record, "status_code", None) for record in caplog.records if record.name == "app.request"]
     assert 500 in statuses
+
+
+_ERROR_LOGGER = "presentation.fastapi.error_handling"
+
+
+def _error_records(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    return [record for record in caplog.records if record.name == _ERROR_LOGGER]
+
+
+def test_unhandled_exception_is_logged_with_a_traceback(
+    client_with_failing_endpoint: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """原因を追えるのは traceback だけ。``log`` テーブルの ``trace`` 列へ入る。"""
+    with caplog.at_level(logging.DEBUG, logger=_ERROR_LOGGER):
+        client_with_failing_endpoint.get("/api/test/boom")
+
+    records = _error_records(caplog)
+    assert [record.levelno for record in records] == [logging.ERROR]
+    assert records[0].message == "unhandled_exception"
+    assert records[0].exc_info is not None
+
+
+def test_client_error_is_logged_with_its_error_code(
+    client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
+) -> None:
+    """404 のような ``HTTPException`` も「何が起きたか」を残す。
+
+    エラーコードは本文にも入れる。``log`` テーブルへ入るのは列にある項目だけで、
+    ``extra`` の残りは stdout の JSON にしか出ないため。
+    """
+    with caplog.at_level(logging.DEBUG, logger=_ERROR_LOGGER):
+        assert client.delete("/api/admin/users/999999", headers=admin_headers).status_code == 404
+
+    records = _error_records(caplog)
+    assert [record.levelno for record in records] == [logging.WARNING]
+    assert records[0].getMessage() == "request_failed: user_not_found"
+    assert records[0].status_code == 404  # type: ignore[attr-defined]
+
+
+def test_domain_error_is_logged(
+    client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
+) -> None:
+    """ドメイン例外のハンドラも同じ受け皿で記録する（レベルと項目が揃う）。"""
+    with caplog.at_level(logging.DEBUG, logger=_ERROR_LOGGER):
+        assert client.get("/api/families/999999", headers=admin_headers).status_code == 403
+
+    records = _error_records(caplog)
+    assert [record.error_code for record in records] == ["family_access_denied"]  # type: ignore[attr-defined]
+
+
+def test_validation_failure_logs_the_fields_but_not_the_values(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """項目名と理由だけを残す。入力値を残すと PII がログへ移る（CLAUDE.md「ログ」）。"""
+    with caplog.at_level(logging.DEBUG, logger=_ERROR_LOGGER):
+        response = client.post("/api/auth/login", json={"username": "leaked-user"})
+
+    assert response.status_code == 422
+    records = _error_records(caplog)
+    assert [record.levelno for record in records] == [logging.WARNING]
+    assert "body.password:missing" in records[0].invalid_fields  # type: ignore[attr-defined]
+    assert "leaked-user" not in records[0].getMessage()

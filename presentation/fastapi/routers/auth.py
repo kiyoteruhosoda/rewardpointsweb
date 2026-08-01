@@ -101,6 +101,10 @@ async def login(
     """
     user = _find_by_username(db, body.username)
     if user is None or not user.is_active or not _password_accepted(user, body.password):
+        # 失敗したログインは WARNING で残す（既定では 401 = INFO）。試行が続いて
+        # いないかは運用で見たい情報で、埋もれさせない。ユーザー名は書かない
+        # （CLAUDE.md「ログ」）——追跡は requestId で行う。
+        logger.warning("login_failed: invalid_credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_credentials"},
@@ -109,6 +113,7 @@ async def login(
     try:
         second_factor.execute(user_id=user.id, code=body.totp_code)
     except (TotpRequiredError, InvalidTotpCodeError) as error:
+        logger.warning("login_failed: %s", error.code)
         # 認証の失敗として 401 に揃える（既定の対応付けでは 400 になる）
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
