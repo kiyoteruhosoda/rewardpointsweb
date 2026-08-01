@@ -20,10 +20,12 @@ from bounded_contexts.reward_points.application.use_cases.add_child_membership i
     AddChildMembershipUseCase,
 )
 from bounded_contexts.reward_points.application.use_cases.create_family import CreateFamilyUseCase
+from bounded_contexts.reward_points.application.use_cases.dissolve_family import DissolveFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.ensure_user_can_be_deleted import (
     EnsureUserCanBeDeletedUseCase,
 )
 from bounded_contexts.reward_points.application.use_cases.issue_invitation import IssueInvitationUseCase
+from bounded_contexts.reward_points.application.use_cases.leave_family import LeaveFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.list_families import ListFamiliesUseCase
 from bounded_contexts.reward_points.application.use_cases.list_invitations import ListInvitationsUseCase
 from bounded_contexts.reward_points.application.use_cases.record_point_transaction import (
@@ -31,6 +33,7 @@ from bounded_contexts.reward_points.application.use_cases.record_point_transacti
 )
 from bounded_contexts.reward_points.application.use_cases.redeem_invitation import RedeemInvitationUseCase
 from bounded_contexts.reward_points.application.use_cases.remove_membership import RemoveMembershipUseCase
+from bounded_contexts.reward_points.application.use_cases.rename_family import RenameFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.reset_child_password import (
     ResetChildPasswordUseCase,
 )
@@ -154,6 +157,22 @@ def get_view_family_use_case(access: AccessDep, families: FamilyRepoDep, overvie
     return ViewFamilyUseCase(access, families, overview)
 
 
+def get_rename_family_use_case(
+    access: AccessDep, families: FamilyRepoDep, overview: OverviewDep
+) -> RenameFamilyUseCase:
+    return RenameFamilyUseCase(access, families, overview)
+
+
+def get_leave_family_use_case(access: AccessDep, memberships: MembershipRepoDep) -> LeaveFamilyUseCase:
+    return LeaveFamilyUseCase(access, memberships)
+
+
+def get_dissolve_family_use_case(
+    access: AccessDep, families: FamilyRepoDep, memberships: MembershipRepoDep
+) -> DissolveFamilyUseCase:
+    return DissolveFamilyUseCase(access, families, memberships)
+
+
 def get_add_child_use_case(
     access: AccessDep, memberships: MembershipRepoDep, ledgers: LedgerRepoDep
 ) -> AddChildMembershipUseCase:
@@ -243,6 +262,9 @@ def get_ensure_user_can_be_deleted_use_case(families: FamilyRepoDep) -> EnsureUs
 ListFamiliesDep = Annotated[ListFamiliesUseCase, Depends(get_list_families_use_case)]
 CreateFamilyDep = Annotated[CreateFamilyUseCase, Depends(get_create_family_use_case)]
 ViewFamilyDep = Annotated[ViewFamilyUseCase, Depends(get_view_family_use_case)]
+RenameFamilyDep = Annotated[RenameFamilyUseCase, Depends(get_rename_family_use_case)]
+LeaveFamilyDep = Annotated[LeaveFamilyUseCase, Depends(get_leave_family_use_case)]
+DissolveFamilyDep = Annotated[DissolveFamilyUseCase, Depends(get_dissolve_family_use_case)]
 AddChildDep = Annotated[AddChildMembershipUseCase, Depends(get_add_child_use_case)]
 RemoveMembershipDep = Annotated[RemoveMembershipUseCase, Depends(get_remove_membership_use_case)]
 IssueInvitationDep = Annotated[IssueInvitationUseCase, Depends(get_issue_invitation_use_case)]
@@ -262,12 +284,15 @@ __all__ = [
     "AccessDep",
     "AddChildDep",
     "CreateFamilyDep",
+    "DissolveFamilyDep",
     "IssueInvitationDep",
+    "LeaveFamilyDep",
     "ListFamiliesDep",
     "ListInvitationsDep",
     "RecordTransactionDep",
     "RedeemInvitationDep",
     "RemoveMembershipDep",
+    "RenameFamilyDep",
     "ResetChildPasswordDep",
     "ReverseTransactionDep",
     "RevokeInvitationDep",

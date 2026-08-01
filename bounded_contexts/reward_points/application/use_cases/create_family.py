@@ -1,10 +1,15 @@
-"""家族を作る。作った人がそのまま ``owner`` として参加する。"""
+"""家族を作る。作った人がそのまま ``owner`` として参加する。
+
+作れるのはどの家族にも所属していないアカウントだけ（ADR-0013）。すでに所属して
+いる場合は、先に抜けて初期状態へ戻る。
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from bounded_contexts.reward_points.application.dto.family_dto import FamilyDetailDTO, MembershipDTO
+from bounded_contexts.reward_points.domain.exceptions import AlreadyBelongsToFamilyError
 from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
     IFamilyMembershipRepository,
 )
@@ -25,6 +30,8 @@ class CreateFamilyUseCase:
         self._memberships = memberships
 
     def execute(self, command: CreateFamilyCommand) -> FamilyDetailDTO:
+        if self._memberships.list_for_account(command.account_id):
+            raise AlreadyBelongsToFamilyError
         family = self._families.add(name=command.name)
         owner = self._memberships.add(
             family_id=family.id,

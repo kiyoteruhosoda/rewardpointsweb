@@ -14,6 +14,7 @@ from __future__ import annotations
 from bounded_contexts.reward_points.domain.entities.family_membership import FamilyMembership
 from bounded_contexts.reward_points.domain.exceptions import (
     AccountAlreadyInFamilyError,
+    AlreadyBelongsToFamilyError,
     DisplayNameRequiredError,
     InvitationNotFoundError,
     InvitationTargetUnavailableError,
@@ -49,8 +50,13 @@ class InvitationBinder:
         invitation = self._invitations.consume(code, now=utcnow())
         if invitation is None:
             raise InvitationNotFoundError
-        if self._memberships.find_in_family(family_id=invitation.family_id, account_id=account_id) is not None:
+        # 所属できる家族は 1 つまで（ADR-0013）。同じ家族への二重参加と、別の
+        # 家族に所属したままの参加を区別して断る（画面の案内が変わるため）。
+        existing = self._memberships.list_for_account(account_id)
+        if any(membership.family_id == invitation.family_id for membership in existing):
             raise AccountAlreadyInFamilyError
+        if existing:
+            raise AlreadyBelongsToFamilyError
 
         return (
             self._link_target(invitation.target_membership_id, family_id=invitation.family_id, account_id=account_id)

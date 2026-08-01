@@ -26,5 +26,13 @@ class IFamilyRepository(ABC):
         アカウントを削除してよいかの判断に使う。
         """
 
+    @abstractmethod
+    def update_name(self, *, family_id: int, name: str) -> Family:
+        """家族名を変える（改名は owner だけができる。ADR-0013）。"""
+
+    @abstractmethod
+    def delete(self, family_id: int) -> None:
+        """家族を消す（解散）。参加・招待は家族と一緒に消える。"""
+
 
 __all__ = ["IFamilyRepository"]

@@ -91,6 +91,12 @@ class SqlFamilyMembershipRepository(IFamilyMembershipRepository):
         self._session.flush()
         return _to_membership(row)
 
+    def update_role(self, *, membership_id: int, role: FamilyRole) -> FamilyMembership:
+        row = self._require(membership_id)
+        row.role = role.value
+        self._session.flush()
+        return _to_membership(row)
+
     def delete(self, membership_id: int) -> None:
         self._session.execute(delete(FamilyMembershipModel).where(FamilyMembershipModel.id == membership_id))
 

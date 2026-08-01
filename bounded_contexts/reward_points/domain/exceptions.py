@@ -90,6 +90,45 @@ class AccountAlreadyInFamilyError(RewardPointsError):
     code = "account_already_in_family"
 
 
+class AlreadyBelongsToFamilyError(RewardPointsError):
+    """すでにどこかの家族に所属しているアカウントが、家族を作る・加わろうとした。
+
+    所属できる家族は 1 アカウント 1 つまで（ADR-0013）。抜けて初期状態に
+    戻ってから、作り直すか招待を受け直す。
+    """
+
+    code = "already_belongs_to_family"
+
+
+class ChildCannotLeaveFamilyError(RewardPointsError):
+    """``role = child``（ゲスト）が自分から家族を抜けようとした。
+
+    子は自分では抜けられない（ADR-0013）。家族の構成を変えるのは owner の役目。
+    """
+
+    code = "child_cannot_leave_family"
+
+
+class LastGuardianCannotLeaveError(RewardPointsError):
+    """最後の親（owner / parent）が家族を抜けようとした。
+
+    抜けられるのは他に親が残る場合だけ（ADR-0013）。親が誰もいなくなると、
+    残された子の台帳を扱える人がいなくなる。1 人だけなら脱退ではなく解散を使う。
+    """
+
+    code = "last_guardian_cannot_leave"
+
+
+class FamilyNotEmptyError(RewardPointsError):
+    """自分以外の参加者が残っている家族を解散しようとした。
+
+    参加者（親も子も）がいるうちは解散できない（ADR-0013）。台帳ごと黙って
+    消える経路を作らない（ADR-0010）。
+    """
+
+    code = "family_not_empty"
+
+
 class UsernameAlreadyTakenError(RewardPointsError):
     """指定されたログイン ID はすでに使われている。"""
 
@@ -139,12 +178,16 @@ class UserStillOwnsFamiliesError(RewardPointsError):
 
 __all__ = [
     "AccountAlreadyInFamilyError",
+    "AlreadyBelongsToFamilyError",
     "ChildAccountRequiredError",
+    "ChildCannotLeaveFamilyError",
     "DisplayNameRequiredError",
     "FamilyAccessDeniedError",
+    "FamilyNotEmptyError",
     "FamilyNotFoundError",
     "InvitationNotFoundError",
     "InvitationTargetUnavailableError",
+    "LastGuardianCannotLeaveError",
     "LedgerNotEmptyError",
     "LedgerNotFoundError",
     "MembershipNotFoundError",

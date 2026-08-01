@@ -87,6 +87,10 @@ class FamilyDetailResponse(BaseModel):
     memberships: list[MembershipResponse]
 
 
+class FamilyRenameRequest(BaseModel):
+    name: Annotated[NonBlankStr, Field(max_length=FAMILY_NAME_MAX_LENGTH)]
+
+
 class ChildCreateRequest(BaseModel):
     display_name: DisplayNameStr
 
@@ -181,6 +185,7 @@ __all__ = [
     "ChildCreateRequest",
     "FamilyCreateRequest",
     "FamilyDetailResponse",
+    "FamilyRenameRequest",
     "FamilySummaryResponse",
     "InvitationAcceptRequest",
     "InvitationCreateRequest",

@@ -32,7 +32,7 @@ class IFamilyMembershipRepository(ABC):
 
     @abstractmethod
     def list_for_account(self, account_id: int) -> list[FamilyMembership]:
-        """*account_id* が所属する全ての家族での参加（複数家族を許す）。"""
+        """*account_id* の参加。所属は 1 家族までなので通常 0 件か 1 件（ADR-0013）。"""
 
     @abstractmethod
     def link_account(self, *, membership_id: int, account_id: int) -> FamilyMembership:
@@ -43,6 +43,10 @@ class IFamilyMembershipRepository(ABC):
 
     @abstractmethod
     def update_display_name(self, *, membership_id: int, display_name: str) -> FamilyMembership: ...
+
+    @abstractmethod
+    def update_role(self, *, membership_id: int, role: FamilyRole) -> FamilyMembership:
+        """立場を変える（owner 脱退時の引き継ぎ。ADR-0013）。"""
 
     @abstractmethod
     def list_by_ids(self, membership_ids: Sequence[int]) -> list[FamilyMembership]: ...

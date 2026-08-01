@@ -44,12 +44,15 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     AcceptInvitationDep,
     AddChildDep,
     CreateFamilyDep,
+    DissolveFamilyDep,
     IssueInvitationDep,
+    LeaveFamilyDep,
     ListFamiliesDep,
     ListInvitationsDep,
     RecordTransactionDep,
     RedeemInvitationDep,
     RemoveMembershipDep,
+    RenameFamilyDep,
     ResetChildPasswordDep,
     ReverseTransactionDep,
     RevokeInvitationDep,
@@ -61,6 +64,7 @@ from bounded_contexts.reward_points.presentation.schemas import (
     ChildCreateRequest,
     FamilyCreateRequest,
     FamilyDetailResponse,
+    FamilyRenameRequest,
     FamilySummaryResponse,
     InvitationAcceptRequest,
     InvitationCreateRequest,
@@ -224,6 +228,36 @@ async def create_family(
 @router.get("/{family_id}", response_model=FamilyDetailResponse)
 async def view_family(family_id: int, use_case: ViewFamilyDep, principal: FamilyViewer) -> FamilyDetailResponse:
     return _to_family(use_case.execute(family_id=family_id, account_id=principal.user_id))
+
+
+@router.patch("/{family_id}", response_model=FamilyDetailResponse)
+async def rename_family(
+    family_id: int,
+    body: FamilyRenameRequest,
+    use_case: RenameFamilyDep,
+    principal: FamilyManager,
+) -> FamilyDetailResponse:
+    """家族名を変える（owner のみ）。"""
+    dto = use_case.execute(family_id=family_id, account_id=principal.user_id, name=body.name)
+    logger.info("family_renamed", extra={"family_id": family_id})
+    return _to_family(dto)
+
+
+@router.delete("/{family_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def dissolve_family(family_id: int, use_case: DissolveFamilyDep, principal: FamilyManager) -> None:
+    """家族を解散する（owner のみ。自分以外の参加者がいないこと）。"""
+    use_case.execute(family_id=family_id, account_id=principal.user_id)
+    logger.info("family_dissolved", extra={"family_id": family_id})
+
+
+@router.post("/{family_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
+async def leave_family(family_id: int, use_case: LeaveFamilyDep, principal: FamilyViewer) -> None:
+    """家族から抜ける（親のみ。他に親が残る場合に限る）。
+
+    抜けた後は初期状態と同じで、家族を作り直すことも招待を受け直すこともできる。
+    """
+    use_case.execute(family_id=family_id, account_id=principal.user_id)
+    logger.info("family_left", extra={"family_id": family_id})
 
 
 @router.post(
