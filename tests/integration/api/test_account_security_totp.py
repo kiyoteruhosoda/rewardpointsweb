@@ -13,7 +13,7 @@ from shared.domain.auth import master_data
 def _login(client: TestClient, **extra: object) -> httpx.Response:
     return client.post(
         "/api/auth/login",
-        json={"email": master_data.DEFAULT_ADMIN_EMAIL, "password": master_data.DEFAULT_ADMIN_PASSWORD, **extra},
+        json={"username": master_data.DEFAULT_ADMIN_USERNAME, "password": master_data.DEFAULT_ADMIN_PASSWORD, **extra},
     )
 
 

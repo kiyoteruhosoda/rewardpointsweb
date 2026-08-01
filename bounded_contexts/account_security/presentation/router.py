@@ -79,7 +79,7 @@ async def start_two_factor_enrollment(
     use_case: Annotated[StartTotpEnrollment, Depends(dependencies.start_totp_enrollment)],
 ) -> TotpEnrollmentResponse:
     """共有鍵を発行する。この時点ではまだ二要素認証は有効にならない。"""
-    enrollment = use_case.execute(user_id=principal.user_id, account_name=principal.email)
+    enrollment = use_case.execute(user_id=principal.user_id, account_name=principal.username)
     return TotpEnrollmentResponse(
         secret=enrollment.secret,
         otpauth_uri=enrollment.otpauth_uri,
@@ -129,8 +129,8 @@ async def start_passkey_registration(
     """登録用のチャレンジを発行する（``navigator.credentials.create`` 用）。"""
     challenge = use_case.execute(
         user_id=principal.user_id,
-        user_name=principal.email,
-        display_name=principal.username,
+        user_name=principal.username,
+        display_name=principal.display_name,
     )
     return PasskeyChallengeResponse(challenge_id=challenge.challenge_id, public_key=challenge.public_key)
 

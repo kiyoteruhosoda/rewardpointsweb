@@ -2,6 +2,10 @@
 
 認可の判定は :meth:`can`（scope ベース）のみで行う。ロール名は保持しない
 （CLAUDE.md「権限管理」参照）。
+
+``username`` はログインの識別子、``display_name`` は画面に出す名前、``email`` は
+任意項目（ADR-0011）。3 つを別々に持つのは、メールアドレスを持たないアカウントが
+あるため。
 """
 
 from __future__ import annotations
@@ -13,9 +17,12 @@ from dataclasses import dataclass, field
 @dataclass(frozen=True)
 class AuthenticatedPrincipal:
     user_id: int
-    email: str
     username: str
+    display_name: str
+    email: str | None = None
     permissions: frozenset[str] = field(default_factory=frozenset)
+    # 一時パスワードでログインした状態。変更を終えるまで他の操作を許可しない
+    must_change_password: bool = False
 
     @property
     def id_hash(self) -> str:

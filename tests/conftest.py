@@ -80,7 +80,7 @@ def client(app: FastAPI) -> Iterator[TestClient]:
 def admin_headers(client: TestClient) -> dict[str, str]:
     response = client.post(
         "/api/auth/login",
-        json={"email": master_data.DEFAULT_ADMIN_EMAIL, "password": master_data.DEFAULT_ADMIN_PASSWORD},
+        json={"username": master_data.DEFAULT_ADMIN_USERNAME, "password": master_data.DEFAULT_ADMIN_PASSWORD},
     )
     assert response.status_code == 200, response.text
     token = response.json()["access_token"]

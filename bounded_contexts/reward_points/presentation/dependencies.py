@@ -6,42 +6,59 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from bounded_contexts.reward_points.application.member_access_resolver import MemberAccessResolver
-from bounded_contexts.reward_points.application.use_cases.delete_member import DeleteMemberUseCase
-from bounded_contexts.reward_points.application.use_cases.delete_point_entry import DeletePointEntryUseCase
+from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
+from bounded_contexts.reward_points.application.family_overview_builder import FamilyOverviewBuilder
+from bounded_contexts.reward_points.application.invitation_binder import InvitationBinder
+from bounded_contexts.reward_points.application.use_cases.accept_invitation import AcceptInvitationUseCase
+from bounded_contexts.reward_points.application.use_cases.add_child_membership import (
+    AddChildMembershipUseCase,
+)
+from bounded_contexts.reward_points.application.use_cases.create_family import CreateFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.ensure_user_can_be_deleted import (
     EnsureUserCanBeDeletedUseCase,
 )
-from bounded_contexts.reward_points.application.use_cases.list_accessible_members import (
-    ListAccessibleMembersUseCase,
+from bounded_contexts.reward_points.application.use_cases.issue_invitation import IssueInvitationUseCase
+from bounded_contexts.reward_points.application.use_cases.list_families import ListFamiliesUseCase
+from bounded_contexts.reward_points.application.use_cases.list_invitations import ListInvitationsUseCase
+from bounded_contexts.reward_points.application.use_cases.record_point_transaction import (
+    RecordPointTransactionUseCase,
 )
-from bounded_contexts.reward_points.application.use_cases.list_member_shares import ListMemberSharesUseCase
-from bounded_contexts.reward_points.application.use_cases.record_point_addition import (
-    RecordPointAdditionUseCase,
+from bounded_contexts.reward_points.application.use_cases.redeem_invitation import RedeemInvitationUseCase
+from bounded_contexts.reward_points.application.use_cases.remove_membership import RemoveMembershipUseCase
+from bounded_contexts.reward_points.application.use_cases.reset_child_password import (
+    ResetChildPasswordUseCase,
 )
-from bounded_contexts.reward_points.application.use_cases.record_point_consumption import (
-    RecordPointConsumptionUseCase,
+from bounded_contexts.reward_points.application.use_cases.reverse_point_transaction import (
+    ReversePointTransactionUseCase,
 )
-from bounded_contexts.reward_points.application.use_cases.register_member import RegisterMemberUseCase
-from bounded_contexts.reward_points.application.use_cases.revoke_member_share import RevokeMemberShareUseCase
-from bounded_contexts.reward_points.application.use_cases.share_member import ShareMemberUseCase
+from bounded_contexts.reward_points.application.use_cases.revoke_invitation import RevokeInvitationUseCase
+from bounded_contexts.reward_points.application.use_cases.view_family import ViewFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.view_point_ledger import ViewPointLedgerUseCase
-from bounded_contexts.reward_points.infrastructure.sql_member_repository import SqlMemberRepository
-from bounded_contexts.reward_points.infrastructure.sql_member_share_repository import (
-    SqlMemberShareRepository,
+from bounded_contexts.reward_points.infrastructure.sql_account_directory import (
+    SqlAccountDirectory,
+    SqlAccountProvisioning,
 )
-from bounded_contexts.reward_points.infrastructure.sql_point_entry_repository import (
-    SqlPointEntryRepository,
+from bounded_contexts.reward_points.infrastructure.sql_family_invitation_repository import (
+    SqlFamilyInvitationRepository,
 )
-from bounded_contexts.reward_points.infrastructure.sql_share_target_directory import (
-    SqlShareTargetDirectory,
+from bounded_contexts.reward_points.infrastructure.sql_family_membership_repository import (
+    SqlFamilyMembershipRepository,
+)
+from bounded_contexts.reward_points.infrastructure.sql_family_repository import SqlFamilyRepository
+from bounded_contexts.reward_points.infrastructure.sql_point_ledger_repository import (
+    SqlPointLedgerRepository,
+)
+from bounded_contexts.reward_points.infrastructure.sql_point_transaction_repository import (
+    SqlPointTransactionRepository,
 )
 from shared.kernel.database.session import get_db
+from shared.kernel.settings.settings import settings
 
 DbDep = Annotated[Session, Depends(get_db)]
 
@@ -49,108 +66,202 @@ DbDep = Annotated[Session, Depends(get_db)]
 # --- リポジトリ --------------------------------------------------------------
 
 
-def get_member_repository(db: DbDep) -> SqlMemberRepository:
-    return SqlMemberRepository(db)
+def get_family_repository(db: DbDep) -> SqlFamilyRepository:
+    return SqlFamilyRepository(db)
 
 
-def get_member_share_repository(db: DbDep) -> SqlMemberShareRepository:
-    return SqlMemberShareRepository(db)
+def get_membership_repository(db: DbDep) -> SqlFamilyMembershipRepository:
+    return SqlFamilyMembershipRepository(db)
 
 
-def get_point_entry_repository(db: DbDep) -> SqlPointEntryRepository:
-    return SqlPointEntryRepository(db)
+def get_ledger_repository(db: DbDep) -> SqlPointLedgerRepository:
+    return SqlPointLedgerRepository(db)
 
 
-def get_share_target_directory(db: DbDep) -> SqlShareTargetDirectory:
-    return SqlShareTargetDirectory(db)
+def get_transaction_repository(db: DbDep) -> SqlPointTransactionRepository:
+    return SqlPointTransactionRepository(db)
 
 
-MemberRepoDep = Annotated[SqlMemberRepository, Depends(get_member_repository)]
-ShareRepoDep = Annotated[SqlMemberShareRepository, Depends(get_member_share_repository)]
-EntryRepoDep = Annotated[SqlPointEntryRepository, Depends(get_point_entry_repository)]
-DirectoryDep = Annotated[SqlShareTargetDirectory, Depends(get_share_target_directory)]
+def get_invitation_repository(db: DbDep) -> SqlFamilyInvitationRepository:
+    return SqlFamilyInvitationRepository(db)
 
 
-def get_member_access_resolver(members: MemberRepoDep, shares: ShareRepoDep) -> MemberAccessResolver:
-    return MemberAccessResolver(members, shares)
+def get_account_directory(db: DbDep) -> SqlAccountDirectory:
+    return SqlAccountDirectory(db)
 
 
-AccessDep = Annotated[MemberAccessResolver, Depends(get_member_access_resolver)]
+def get_account_provisioning(db: DbDep) -> SqlAccountProvisioning:
+    return SqlAccountProvisioning(db)
+
+
+FamilyRepoDep = Annotated[SqlFamilyRepository, Depends(get_family_repository)]
+MembershipRepoDep = Annotated[SqlFamilyMembershipRepository, Depends(get_membership_repository)]
+LedgerRepoDep = Annotated[SqlPointLedgerRepository, Depends(get_ledger_repository)]
+TransactionRepoDep = Annotated[SqlPointTransactionRepository, Depends(get_transaction_repository)]
+InvitationRepoDep = Annotated[SqlFamilyInvitationRepository, Depends(get_invitation_repository)]
+DirectoryDep = Annotated[SqlAccountDirectory, Depends(get_account_directory)]
+ProvisioningDep = Annotated[SqlAccountProvisioning, Depends(get_account_provisioning)]
+
+
+# --- 組み立て済みの協調オブジェクト ------------------------------------------
+
+
+def get_access_resolver(memberships: MembershipRepoDep, ledgers: LedgerRepoDep) -> FamilyAccessResolver:
+    return FamilyAccessResolver(memberships, ledgers)
+
+
+AccessDep = Annotated[FamilyAccessResolver, Depends(get_access_resolver)]
+
+
+def get_overview_builder(
+    memberships: MembershipRepoDep,
+    ledgers: LedgerRepoDep,
+    transactions: TransactionRepoDep,
+    directory: DirectoryDep,
+) -> FamilyOverviewBuilder:
+    return FamilyOverviewBuilder(memberships, ledgers, transactions, directory)
+
+
+OverviewDep = Annotated[FamilyOverviewBuilder, Depends(get_overview_builder)]
+
+
+def get_invitation_binder(
+    invitations: InvitationRepoDep,
+    memberships: MembershipRepoDep,
+    ledgers: LedgerRepoDep,
+) -> InvitationBinder:
+    return InvitationBinder(invitations, memberships, ledgers)
+
+
+BinderDep = Annotated[InvitationBinder, Depends(get_invitation_binder)]
 
 
 # --- ユースケース ------------------------------------------------------------
 
 
-def get_list_members_use_case(
-    members: MemberRepoDep, shares: ShareRepoDep, entries: EntryRepoDep
-) -> ListAccessibleMembersUseCase:
-    return ListAccessibleMembersUseCase(members, shares, entries)
+def get_list_families_use_case(families: FamilyRepoDep, memberships: MembershipRepoDep) -> ListFamiliesUseCase:
+    return ListFamiliesUseCase(families, memberships)
 
 
-def get_register_member_use_case(members: MemberRepoDep, directory: DirectoryDep) -> RegisterMemberUseCase:
-    return RegisterMemberUseCase(members, directory)
+def get_create_family_use_case(families: FamilyRepoDep, memberships: MembershipRepoDep) -> CreateFamilyUseCase:
+    return CreateFamilyUseCase(families, memberships)
 
 
-def get_delete_member_use_case(access: AccessDep, members: MemberRepoDep) -> DeleteMemberUseCase:
-    return DeleteMemberUseCase(access, members)
+def get_view_family_use_case(access: AccessDep, families: FamilyRepoDep, overview: OverviewDep) -> ViewFamilyUseCase:
+    return ViewFamilyUseCase(access, families, overview)
 
 
-def get_ensure_user_can_be_deleted_use_case(members: MemberRepoDep) -> EnsureUserCanBeDeletedUseCase:
-    return EnsureUserCanBeDeletedUseCase(members)
+def get_add_child_use_case(
+    access: AccessDep, memberships: MembershipRepoDep, ledgers: LedgerRepoDep
+) -> AddChildMembershipUseCase:
+    return AddChildMembershipUseCase(access, memberships, ledgers)
 
 
-def get_view_ledger_use_case(access: AccessDep, entries: EntryRepoDep) -> ViewPointLedgerUseCase:
-    return ViewPointLedgerUseCase(access, entries)
+def get_remove_membership_use_case(
+    access: AccessDep,
+    memberships: MembershipRepoDep,
+    ledgers: LedgerRepoDep,
+    transactions: TransactionRepoDep,
+) -> RemoveMembershipUseCase:
+    return RemoveMembershipUseCase(access, memberships, ledgers, transactions)
 
 
-def get_record_addition_use_case(access: AccessDep, entries: EntryRepoDep) -> RecordPointAdditionUseCase:
-    return RecordPointAdditionUseCase(access, entries)
+def get_issue_invitation_use_case(
+    access: AccessDep, invitations: InvitationRepoDep, memberships: MembershipRepoDep
+) -> IssueInvitationUseCase:
+    return IssueInvitationUseCase(
+        access,
+        invitations,
+        memberships,
+        timedelta(seconds=settings.family_invitation_ttl_seconds),
+    )
 
 
-def get_record_consumption_use_case(access: AccessDep, entries: EntryRepoDep) -> RecordPointConsumptionUseCase:
-    return RecordPointConsumptionUseCase(access, entries)
+def get_list_invitations_use_case(
+    access: AccessDep, invitations: InvitationRepoDep, memberships: MembershipRepoDep
+) -> ListInvitationsUseCase:
+    return ListInvitationsUseCase(access, invitations, memberships)
 
 
-def get_delete_entry_use_case(access: AccessDep, entries: EntryRepoDep) -> DeletePointEntryUseCase:
-    return DeletePointEntryUseCase(access, entries)
+def get_revoke_invitation_use_case(access: AccessDep, invitations: InvitationRepoDep) -> RevokeInvitationUseCase:
+    return RevokeInvitationUseCase(access, invitations)
 
 
-def get_list_shares_use_case(
-    access: AccessDep, shares: ShareRepoDep, directory: DirectoryDep
-) -> ListMemberSharesUseCase:
-    return ListMemberSharesUseCase(access, shares, directory)
+def get_accept_invitation_use_case(binder: BinderDep, families: FamilyRepoDep) -> AcceptInvitationUseCase:
+    return AcceptInvitationUseCase(binder, families)
 
 
-def get_share_member_use_case(access: AccessDep, shares: ShareRepoDep, directory: DirectoryDep) -> ShareMemberUseCase:
-    return ShareMemberUseCase(access, shares, directory)
+def get_redeem_invitation_use_case(
+    binder: BinderDep,
+    invitations: InvitationRepoDep,
+    families: FamilyRepoDep,
+    provisioning: ProvisioningDep,
+) -> RedeemInvitationUseCase:
+    return RedeemInvitationUseCase(binder, invitations, families, provisioning)
 
 
-def get_revoke_share_use_case(access: AccessDep, shares: ShareRepoDep) -> RevokeMemberShareUseCase:
-    return RevokeMemberShareUseCase(access, shares)
+def get_reset_child_password_use_case(
+    access: AccessDep,
+    memberships: MembershipRepoDep,
+    provisioning: ProvisioningDep,
+    directory: DirectoryDep,
+) -> ResetChildPasswordUseCase:
+    return ResetChildPasswordUseCase(access, memberships, provisioning, directory)
 
 
-ListMembersDep = Annotated[ListAccessibleMembersUseCase, Depends(get_list_members_use_case)]
-RegisterMemberDep = Annotated[RegisterMemberUseCase, Depends(get_register_member_use_case)]
-DeleteMemberDep = Annotated[DeleteMemberUseCase, Depends(get_delete_member_use_case)]
+def get_view_ledger_use_case(
+    access: AccessDep, transactions: TransactionRepoDep, memberships: MembershipRepoDep
+) -> ViewPointLedgerUseCase:
+    return ViewPointLedgerUseCase(access, transactions, memberships)
+
+
+def get_record_transaction_use_case(
+    access: AccessDep, transactions: TransactionRepoDep
+) -> RecordPointTransactionUseCase:
+    return RecordPointTransactionUseCase(access, transactions)
+
+
+def get_reverse_transaction_use_case(
+    access: AccessDep, transactions: TransactionRepoDep
+) -> ReversePointTransactionUseCase:
+    return ReversePointTransactionUseCase(access, transactions)
+
+
+def get_ensure_user_can_be_deleted_use_case(families: FamilyRepoDep) -> EnsureUserCanBeDeletedUseCase:
+    return EnsureUserCanBeDeletedUseCase(families)
+
+
+ListFamiliesDep = Annotated[ListFamiliesUseCase, Depends(get_list_families_use_case)]
+CreateFamilyDep = Annotated[CreateFamilyUseCase, Depends(get_create_family_use_case)]
+ViewFamilyDep = Annotated[ViewFamilyUseCase, Depends(get_view_family_use_case)]
+AddChildDep = Annotated[AddChildMembershipUseCase, Depends(get_add_child_use_case)]
+RemoveMembershipDep = Annotated[RemoveMembershipUseCase, Depends(get_remove_membership_use_case)]
+IssueInvitationDep = Annotated[IssueInvitationUseCase, Depends(get_issue_invitation_use_case)]
+ListInvitationsDep = Annotated[ListInvitationsUseCase, Depends(get_list_invitations_use_case)]
+RevokeInvitationDep = Annotated[RevokeInvitationUseCase, Depends(get_revoke_invitation_use_case)]
+AcceptInvitationDep = Annotated[AcceptInvitationUseCase, Depends(get_accept_invitation_use_case)]
+RedeemInvitationDep = Annotated[RedeemInvitationUseCase, Depends(get_redeem_invitation_use_case)]
+ResetChildPasswordDep = Annotated[ResetChildPasswordUseCase, Depends(get_reset_child_password_use_case)]
 ViewLedgerDep = Annotated[ViewPointLedgerUseCase, Depends(get_view_ledger_use_case)]
-RecordAdditionDep = Annotated[RecordPointAdditionUseCase, Depends(get_record_addition_use_case)]
-RecordConsumptionDep = Annotated[RecordPointConsumptionUseCase, Depends(get_record_consumption_use_case)]
-DeleteEntryDep = Annotated[DeletePointEntryUseCase, Depends(get_delete_entry_use_case)]
-ListSharesDep = Annotated[ListMemberSharesUseCase, Depends(get_list_shares_use_case)]
-ShareMemberDep = Annotated[ShareMemberUseCase, Depends(get_share_member_use_case)]
-RevokeShareDep = Annotated[RevokeMemberShareUseCase, Depends(get_revoke_share_use_case)]
+RecordTransactionDep = Annotated[RecordPointTransactionUseCase, Depends(get_record_transaction_use_case)]
+ReverseTransactionDep = Annotated[ReversePointTransactionUseCase, Depends(get_reverse_transaction_use_case)]
 
 
 __all__ = [
+    "AcceptInvitationDep",
     "AccessDep",
-    "DeleteEntryDep",
-    "DeleteMemberDep",
-    "ListMembersDep",
-    "ListSharesDep",
-    "RecordAdditionDep",
-    "RecordConsumptionDep",
-    "RegisterMemberDep",
-    "RevokeShareDep",
-    "ShareMemberDep",
+    "AddChildDep",
+    "CreateFamilyDep",
+    "IssueInvitationDep",
+    "ListFamiliesDep",
+    "ListInvitationsDep",
+    "RecordTransactionDep",
+    "RedeemInvitationDep",
+    "RemoveMembershipDep",
+    "ResetChildPasswordDep",
+    "ReverseTransactionDep",
+    "RevokeInvitationDep",
+    "ViewFamilyDep",
     "ViewLedgerDep",
+    "get_ensure_user_can_be_deleted_use_case",
 ]

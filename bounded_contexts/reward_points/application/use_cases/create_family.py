@@ -1,0 +1,55 @@
+"""家族を作る。作った人がそのまま ``owner`` として参加する。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from bounded_contexts.reward_points.application.dto.family_dto import FamilyDetailDTO, MembershipDTO
+from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
+    IFamilyMembershipRepository,
+)
+from bounded_contexts.reward_points.domain.repositories.family_repository import IFamilyRepository
+from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
+
+
+@dataclass(frozen=True, kw_only=True)
+class CreateFamilyCommand:
+    name: str
+    account_id: int
+    display_name: str
+
+
+class CreateFamilyUseCase:
+    def __init__(self, families: IFamilyRepository, memberships: IFamilyMembershipRepository) -> None:
+        self._families = families
+        self._memberships = memberships
+
+    def execute(self, command: CreateFamilyCommand) -> FamilyDetailDTO:
+        family = self._families.add(name=command.name)
+        owner = self._memberships.add(
+            family_id=family.id,
+            account_id=command.account_id,
+            role=FamilyRole.OWNER,
+            display_name=command.display_name,
+        )
+        return FamilyDetailDTO(
+            id=family.id,
+            name=family.name_value,
+            my_membership_id=owner.id,
+            my_role=owner.role,
+            memberships=(
+                MembershipDTO(
+                    id=owner.id,
+                    display_name=owner.display_name_value,
+                    role=owner.role,
+                    is_linked=True,
+                    is_me=True,
+                    username=None,
+                    ledger_id=None,
+                    balance=None,
+                ),
+            ),
+        )
+
+
+__all__ = ["CreateFamilyCommand", "CreateFamilyUseCase"]

@@ -41,7 +41,9 @@ class PasswordResetService:
     def request_reset(self, session: Session, email: str) -> None:
         """リセットトークンを発行しメールを送る。ユーザー不在でも黙って成功する。"""
         user = session.scalar(select(User).where(User.email == email))
-        if user is None or not user.is_active:
+        # メールアドレスを持たないアカウント（子ども）はこの経路に現れない。
+        # 回復は親からの一時パスワード発行で行う（ADR-0011）。
+        if user is None or not user.is_active or user.email is None:
             logger.info("password_reset_requested_unknown_email")
             return
 

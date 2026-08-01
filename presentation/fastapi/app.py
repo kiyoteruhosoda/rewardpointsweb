@@ -23,7 +23,7 @@ from bounded_contexts.example.presentation.router import router as items_router
 from bounded_contexts.reward_points.presentation.error_handling import (
     register_reward_points_error_handler,
 )
-from bounded_contexts.reward_points.presentation.router import router as members_router
+from bounded_contexts.reward_points.presentation.router import router as families_router
 from presentation.fastapi.error_handling import register_internal_error_handler
 from presentation.fastapi.middleware.internal_error import InternalErrorMiddleware
 from presentation.fastapi.middleware.request_logging import RequestLoggingMiddleware
@@ -109,7 +109,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_logs_router)
     app.include_router(admin_system_router)
     app.include_router(items_router)
-    app.include_router(members_router)
+    app.include_router(families_router)
 
     # SPA は最後（catch-all のため）。ビルド済みの場合のみ配信する。
     if spa.dist_available():
