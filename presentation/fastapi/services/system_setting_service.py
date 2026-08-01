@@ -38,6 +38,20 @@ class RestartRequirement:
         return bool(self.keys)
 
 
+@dataclass(frozen=True)
+class SettingsSaveResult:
+    """保存の結果。
+
+    ``accepted_keys`` は**実際に保存に採り込んだ**キー。未知のキーと、秘匿項目の
+    伏せ字がそのまま送り返されたものは含まない（どちらも黙って捨てている）。
+    記録する側が「要求されたキー」を使うと、何も変えていない保存を
+    「設定を変更した」と残してしまうため、こちらを渡す。
+    """
+
+    accepted_keys: tuple[str, ...]
+    restart: RestartRequirement
+
+
 class SystemSettingService:
     @staticmethod
     def stored_payload(session: Session) -> dict[str, Any]:
@@ -67,10 +81,10 @@ class SystemSettingService:
         return result
 
     @classmethod
-    def save(cls, session: Session, values: Mapping[str, Any]) -> RestartRequirement:
+    def save(cls, session: Session, values: Mapping[str, Any]) -> SettingsSaveResult:
         """編集可能なキーのみを保存する。未知のキーは黙って捨てる。
 
-        戻り値は、保存したキーのうち反映に再起動が必要なものの一覧。
+        戻り値には、採り込んだキーと、そのうち反映に再起動が必要なものが入る。
         """
         payload = cls.stored_payload(session)
         changed: list[str] = []
@@ -94,7 +108,10 @@ class SystemSettingService:
             row.setting_json = payload
         session.flush()
         settings.reload_db_overrides()
-        return cls.restart_requirement(changed)
+        return SettingsSaveResult(
+            accepted_keys=tuple(sorted(set(changed))),
+            restart=cls.restart_requirement(changed),
+        )
 
     @staticmethod
     def restart_requirement(keys: Iterable[str]) -> RestartRequirement:
@@ -117,4 +134,4 @@ class SystemSettingService:
         return RestartRequirement(scopes=ordered, keys=tuple(affected))
 
 
-__all__ = ["RestartRequirement", "SystemSettingService"]
+__all__ = ["RestartRequirement", "SettingsSaveResult", "SystemSettingService"]

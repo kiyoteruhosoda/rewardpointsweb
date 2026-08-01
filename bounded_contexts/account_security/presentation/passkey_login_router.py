@@ -2,6 +2,9 @@
 
 パスワードの代わりに認証器の署名で本人確認を行う。検証に成功したら通常の
 ログインと同じトークン対を発行する。
+
+失敗は WARNING で残す。401 の既定は INFO（期限切れトークンの再取得で埋まるため）
+だが、ログインの失敗が続いていないかは運用で見たい（ADR-0012）。
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ from bounded_contexts.account_security.application.use_cases.authenticate_with_p
     CompletePasskeyAuthentication,
     StartPasskeyAuthentication,
 )
+from bounded_contexts.account_security.domain.exceptions import AccountSecurityError
 from bounded_contexts.account_security.presentation import dependencies
 from bounded_contexts.account_security.presentation.schemas import (
     PasskeyAuthenticationRequest,
@@ -57,10 +61,19 @@ async def login_with_passkey(
         Depends(dependencies.complete_passkey_authentication),
     ],
 ) -> TokenResponse:
-    user_id = use_case.execute(challenge_id=body.challenge_id, credential=body.credential)
+    try:
+        user_id = use_case.execute(challenge_id=body.challenge_id, credential=body.credential)
+    except AccountSecurityError as error:
+        # 応答への対応付けはドメイン例外のハンドラに任せ、ここでは記録だけ足す。
+        # 署名の検証失敗・チャレンジ切れも「ログインの失敗」として見たいため。
+        logger.warning("passkey_login_failed: %s", error.code)
+        raise
 
     user = db.get(User, user_id)
     if user is None or not user.is_active:
+        # パスワードのログインと同じく WARNING で残す。401 の既定は INFO だが、
+        # ログインの失敗が続いていないかは運用で見たい（ADR-0012）。
+        logger.warning("passkey_login_failed: invalid_credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_credentials"},

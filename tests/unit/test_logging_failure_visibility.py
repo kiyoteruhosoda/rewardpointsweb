@@ -23,7 +23,10 @@ def test_write_failure_does_not_propagate(monkeypatch: pytest.MonkeyPatch) -> No
     """本処理はログのために落とさない。"""
     handler = DbLogHandler()
     monkeypatch.setattr(handler, "handleError", _ignore)
-    monkeypatch.setattr(DbLogHandler, "_insert", _raise_insert)
+    monkeypatch.setattr(
+        "shared.kernel.logging.db_log_handler.write_log_rows",
+        _raise,
+    )
 
     handler.emit(_record())  # 例外が漏れない
 
@@ -33,7 +36,10 @@ def test_write_failure_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     handler = DbLogHandler()
     reported: list[logging.LogRecord] = []
     monkeypatch.setattr(handler, "handleError", reported.append)
-    monkeypatch.setattr(DbLogHandler, "_insert", _raise_insert)
+    monkeypatch.setattr(
+        "shared.kernel.logging.db_log_handler.write_log_rows",
+        _raise,
+    )
 
     record = _record()
     handler.emit(record)
@@ -41,7 +47,7 @@ def test_write_failure_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     assert reported == [record]
 
 
-def _raise_insert(self: DbLogHandler, record: logging.LogRecord) -> None:
+def _raise(rows: object) -> None:
     raise RuntimeError("database is locked")
 
 

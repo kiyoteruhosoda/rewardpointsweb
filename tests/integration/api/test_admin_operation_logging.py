@@ -116,6 +116,58 @@ def test_saving_system_settings_logs_the_keys_but_not_the_values(
     assert not any("s3cret" in message for message in messages)
 
 
+def test_saving_an_unknown_key_is_not_recorded_as_a_change(
+    client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
+) -> None:
+    """採り込まなかったキーは記録しない。
+
+    ``SystemSettingService.save()`` は未知のキーと、伏せ字のまま送り返された秘匿
+    項目を黙って捨てる。要求されたキーをそのまま残すと、何も変えていない保存が
+    「設定を変更した」として残ってしまう。
+    """
+    with caplog.at_level(logging.DEBUG, logger="presentation.fastapi.routers.admin.config"):
+        saved = client.put(
+            "/api/admin/config",
+            json={"values": {"UNKNOWN_KEY": "x", "LOG_LEVEL": "INFO"}},
+            headers=admin_headers,
+        )
+
+    assert saved.status_code == 200, saved.text
+    messages = _messages(caplog, "presentation.fastapi.routers.admin.config")
+    assert "system_settings_updated: keys=LOG_LEVEL" in messages
+    assert not any("UNKNOWN_KEY" in message for message in messages)
+
+
+def test_saving_only_an_unchanged_secret_records_nothing_changed(
+    client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
+) -> None:
+    """伏せ字のまま送り返された秘匿項目だけの保存は「変更なし」と残る。"""
+    with caplog.at_level(logging.DEBUG, logger="presentation.fastapi.routers.admin.config"):
+        saved = client.put(
+            "/api/admin/config",
+            json={"values": {"MAIL_PASSWORD": "********"}},
+            headers=admin_headers,
+        )
+
+    assert saved.status_code == 200, saved.text
+    assert "system_settings_updated: keys=none" in _messages(caplog, "presentation.fastapi.routers.admin.config")
+
+
+def test_a_failed_passkey_login_is_logged_as_a_warning(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
+    """パスキーのログイン失敗も、パスワードと同じく WARNING で残る。"""
+    logger_name = "bounded_contexts.account_security.presentation.passkey_login_router"
+    with caplog.at_level(logging.DEBUG, logger=logger_name):
+        response = client.post(
+            "/api/auth/passkey/login",
+            json={"challenge_id": "does-not-exist", "credential": {}},
+        )
+
+    assert response.status_code in (400, 401), response.text
+    records = [record for record in caplog.records if record.name == logger_name]
+    assert [record.levelno for record in records] == [logging.WARNING]
+    assert records[0].getMessage().startswith("passkey_login_failed: ")
+
+
 def test_a_failed_login_is_logged_as_a_warning(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
     """試行が続いていないかを運用で見たいので、401 の既定（INFO）より上げる。"""
     with caplog.at_level(logging.DEBUG, logger="presentation.fastapi.routers.auth"):

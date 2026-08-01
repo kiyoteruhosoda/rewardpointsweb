@@ -25,6 +25,9 @@ from bounded_contexts.reward_points.presentation.error_handling import (
 )
 from bounded_contexts.reward_points.presentation.router import router as families_router
 from presentation.fastapi.error_handling import register_error_handling
+from presentation.fastapi.middleware.deferred_log_writes import (
+    DeferredLogWriteMiddleware,
+)
 from presentation.fastapi.middleware.internal_error import InternalErrorMiddleware
 from presentation.fastapi.middleware.request_logging import RequestLoggingMiddleware
 from presentation.fastapi.routers import spa
@@ -81,8 +84,13 @@ def create_app() -> FastAPI:
     # ``add_middleware`` は積み増しなので、**先に足したものほど内側**になる。
     # 例外を応答へ変える層を最も内側に置き、リクエストログ（500 の行を残す）と
     # CORS（応答ヘッダーを付ける）が必ずその外側を通るようにする。
+    #
+    # ログの DB 書き込みは、リクエストの DB セッションが閉じた後に行う（途中で
+    # 書くと SQLite でロックが競合して行が失われる。ADR-0012）。まとめ書きを
+    # リクエストログの外側に置くことで、アクセスログの 1 行も同じ書き込みに載る。
     app.add_middleware(InternalErrorMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(DeferredLogWriteMiddleware)
     if settings.cors_allowed_origins:
         app.add_middleware(
             CORSMiddleware,

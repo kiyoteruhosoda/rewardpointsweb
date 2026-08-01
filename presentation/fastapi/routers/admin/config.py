@@ -46,16 +46,18 @@ async def update_config(body: SystemSettingsUpdateRequest, db: DbDep) -> SystemS
     起動時にしか読まれない設定を変更した場合は ``restart_required`` を返す。
     実際の再起動は ``POST /api/admin/system/restart`` で要求する。
     """
-    requirement = SystemSettingService.save(db, body.values)
-    logger.info("system_settings_updated: keys=%s", ",".join(sorted(body.values)))
+    saved = SystemSettingService.save(db, body.values)
+    # 実際に採り込んだキーだけを残す。要求されたキーを使うと、未知のキーや伏せ字の
+    # ままの秘匿項目（どちらも保存されない）まで「変更した」ことになってしまう。
+    logger.info("system_settings_updated: keys=%s", ",".join(saved.accepted_keys) or "none")
     return SystemSettingsUpdateResponse(
         status="ok",
         restart_required=(
             RestartRequirementResponse(
-                scopes=[scope.value for scope in requirement.scopes],
-                keys=list(requirement.keys),
+                scopes=[scope.value for scope in saved.restart.scopes],
+                keys=list(saved.restart.keys),
             )
-            if requirement
+            if saved.restart
             else None
         ),
     )

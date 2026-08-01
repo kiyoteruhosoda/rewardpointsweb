@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from typing import Annotated
 
 import pytest
 import sqlalchemy as sa
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
+from presentation.fastapi.dependencies.auth import get_current_principal
 from presentation.fastapi.error_handling import INTERNAL_ERROR_CODE
+from shared.application.authenticated_principal import AuthenticatedPrincipal
 
 _ALLOWED_ORIGIN = "https://app.example.com"
 
@@ -23,6 +26,12 @@ _ALLOWED_ORIGIN = "https://app.example.com"
 def _add_failing_endpoint(app: FastAPI) -> None:
     @app.get("/api/test/boom")
     async def _boom() -> None:
+        raise RuntimeError("boom")
+
+    @app.get("/api/test/authenticated-boom")
+    async def _authenticated_boom(
+        _principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    ) -> None:
         raise RuntimeError("boom")
 
 
@@ -156,3 +165,20 @@ def test_validation_failure_logs_the_fields_but_not_the_values(
     assert [record.levelno for record in records] == [logging.WARNING]
     assert "body.password:missing" in records[0].invalid_fields  # type: ignore[attr-defined]
     assert "leaked-user" not in records[0].getMessage()
+
+
+def test_the_500_log_line_knows_whose_request_it_was(
+    client_with_failing_endpoint: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
+) -> None:
+    """認証済みのリクエストで落ちたら、ログ行に ``user_id_hash`` が乗ること。
+
+    ``InternalErrorMiddleware`` を ``BaseHTTPMiddleware`` で書くと、下流が**別の
+    タスク**で走るため認証依存関数が設定した ``contextvars`` が伝わらず、
+    500 の行だけ「誰のリクエストか」が空になる。素の ASGI で書いている理由。
+    """
+    with caplog.at_level(logging.DEBUG, logger=_ERROR_LOGGER):
+        response = client_with_failing_endpoint.get("/api/test/authenticated-boom", headers=admin_headers)
+
+    assert response.status_code == 500
+    records = _error_records(caplog)
+    assert [record.user_id_hash for record in records] != [None]  # type: ignore[attr-defined]

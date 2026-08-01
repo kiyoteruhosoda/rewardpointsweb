@@ -141,6 +141,15 @@ scope は「その操作を行える立場か」を表す。「*その* デー�
 - ログ基盤自身の失敗は黙らせない。`DbLogHandler` は `handleError()`（stderr）で
   知らせ、設定の DB 読み取り不能は状態が変わったときだけ 1 行警告する。
 
+リクエスト中のログ行は**控えに積むだけ**で、実際の INSERT はリクエストの処理が
+完全に終わってから `DeferredLogWriteMiddleware` がまとめて行う。処理の途中で別
+コネクションから書くと、リクエストのセッションが握った書き込みロックと衝突し、
+SQLite では 5 秒待った末に行が失われる（ADR-0012）。
+
+まとめ書きと例外の受け皿（`InternalErrorMiddleware`）は**素の ASGI ミドルウェア**
+として書く。`BaseHTTPMiddleware` は下流を別のタスクで走らせるため、`get_db` の
+commit を待てず、下流で設定された `contextvars`（`user_id_hash`）も戻ってこない。
+
 ## フロントエンド
 
 `frontend/` は React + TypeScript + Vite の SPA スケルトン。
