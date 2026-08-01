@@ -16,6 +16,7 @@
 import { Link } from 'react-router-dom'
 
 import { useI18n } from '../i18n'
+import type { FamilyDetail } from '../services/families'
 import { useAuth } from '../store/AuthContext'
 import { useFamily } from '../store/FamilyContext'
 
@@ -25,11 +26,9 @@ export function DashboardPage() {
   // guest 等、family:view を持たないアカウントもログイン直後にここへ来る。
   // scope が無い人に「家族がない」と案内しても行き先が無いので、空の案内は出さない。
   const canView = hasScope('family:view')
-  const { family, loading } = useFamily()
+  const { family, failed, loading } = useFamily()
 
   if (loading) return <p className="loading">{t('common.loading')}</p>
-
-  const children = (family?.memberships ?? []).filter((member) => member.ledger_id !== null)
 
   return (
     <div className="page">
@@ -40,36 +39,60 @@ export function DashboardPage() {
         </p>
       </div>
 
-      {canView &&
-        (children.length === 0 ? (
-          <div className="card">
-            <p>{t('dashboard.empty')}</p>
-            <p>
-              <Link to="/families">{t('dashboard.goToFamilies')}</Link>
-            </p>
-          </div>
-        ) : (
-          <div className="member-grid">
-            {children.map((member) => (
-              <Link
-                key={member.id}
-                to={`/families/${family?.id ?? 0}/ledgers/${member.ledger_id ?? 0}`}
-                className="member-card"
-              >
-                <span className="avatar" aria-hidden="true">
-                  {member.display_name.slice(0, 1)}
-                </span>
-                <span className="member-card-name">
-                  {member.display_name}
-                  {member.is_me && ` (${t('families.self')})`}
-                </span>
-                <span className="member-card-balance">
-                  {t('points.value', { points: member.balance ?? 0 })}
-                </span>
-              </Link>
-            ))}
-          </div>
-        ))}
+      {canView && <Balances family={family} failed={failed} />}
+    </div>
+  )
+}
+
+interface BalancesProps {
+  family: FamilyDetail | null
+  failed: boolean
+}
+
+function Balances({ family, failed }: BalancesProps) {
+  const { t } = useI18n()
+
+  // 読めなかったときに「子どもがいない」と案内すると嘘になる（家族はあるかもしれない）
+  if (failed) {
+    return (
+      <div className="card">
+        <p>{t('families.unavailable')}</p>
+      </div>
+    )
+  }
+
+  const children = (family?.memberships ?? []).filter((member) => member.ledger_id !== null)
+  if (children.length === 0) {
+    return (
+      <div className="card">
+        <p>{t('dashboard.empty')}</p>
+        <p>
+          <Link to="/families">{t('dashboard.goToFamilies')}</Link>
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="member-grid">
+      {children.map((member) => (
+        <Link
+          key={member.id}
+          to={`/families/${String(family?.id ?? 0)}/ledgers/${String(member.ledger_id ?? 0)}`}
+          className="member-card"
+        >
+          <span className="avatar" aria-hidden="true">
+            {member.display_name.slice(0, 1)}
+          </span>
+          <span className="member-card-name">
+            {member.display_name}
+            {member.is_me && ` (${t('families.self')})`}
+          </span>
+          <span className="member-card-balance">
+            {t('points.value', { points: member.balance ?? 0 })}
+          </span>
+        </Link>
+      ))}
     </div>
   )
 }

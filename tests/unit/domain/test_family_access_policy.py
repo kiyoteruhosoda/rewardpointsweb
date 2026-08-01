@@ -103,17 +103,17 @@ def test_temporary_password_needs_an_account() -> None:
     assert not family_access_policy.can_issue_temporary_password_for(parent, unlinked)
 
 
-def test_graduation_targets_children_with_an_account() -> None:
-    """卒業（独立）は本人の承認で成立する。ログインできない子は対象外（ADR-0014）。"""
+def test_independence_targets_children_with_an_account() -> None:
+    """独立は本人の承認で成立する。ログインできない子は対象外（ADR-0014）。"""
     parent = _membership(id=1, role=FamilyRole.PARENT)
     child = _membership(id=2, role=FamilyRole.CHILD)
     unlinked = _membership(id=3, role=FamilyRole.CHILD, linked=False)
     other_parent = _membership(id=4, role=FamilyRole.OWNER)
 
-    assert family_access_policy.can_graduate(parent, child)
-    assert not family_access_policy.can_graduate(parent, unlinked)
-    assert not family_access_policy.can_graduate(parent, other_parent)
-    assert not family_access_policy.can_graduate(child, child)
+    assert family_access_policy.can_propose_independence_for(parent, child)
+    assert not family_access_policy.can_propose_independence_for(parent, unlinked)
+    assert not family_access_policy.can_propose_independence_for(parent, other_parent)
+    assert not family_access_policy.can_propose_independence_for(child, child)
 
 
 def test_removal_needs_the_owner_and_an_empty_ledger() -> None:

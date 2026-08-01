@@ -19,7 +19,7 @@ export function member(overrides: Partial<Membership> = {}): Membership {
     balance: 70,
     independence_proposed: false,
     can_reset_password: true,
-    can_graduate: true,
+    can_propose_independence: true,
     can_remove: false,
     ...overrides,
   }

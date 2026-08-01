@@ -1,5 +1,5 @@
 /**
- * 家族の詳細: サーバーが返す可否による操作の出し分けと、外す 2 通り（卒業・削除）。
+ * 家族の詳細: サーバーが返す可否による操作の出し分けと、外す 2 通り（独立・削除）。
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -62,14 +62,14 @@ describe('FamilyPage', () => {
   it('見えない台帳は残高も入り口も出さない（兄弟の残高）', () => {
     renderPage(
       familyOf('child', [
-        member({ is_me: true, can_reset_password: false, can_graduate: false }),
+        member({ is_me: true, can_reset_password: false, can_propose_independence: false }),
         member({
           id: 3,
           display_name: 'タロウ',
           ledger_id: null,
           balance: null,
           can_reset_password: false,
-          can_graduate: false,
+          can_propose_independence: false,
         }),
       ]),
     )
@@ -91,7 +91,9 @@ describe('FamilyPage', () => {
 
   it('子には子の追加・招待を出さない', () => {
     renderPage(
-      familyOf('child', [member({ is_me: true, can_reset_password: false, can_graduate: false })]),
+      familyOf('child', [
+        member({ is_me: true, can_reset_password: false, can_propose_independence: false }),
+      ]),
     )
 
     expect(screen.queryByRole('button', { name: 'Add a child' })).not.toBeInTheDocument()
@@ -121,30 +123,35 @@ describe('FamilyPage', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('卒業は can_graduate のときだけ出す（できない相手には出さない）', () => {
+  it('独立の指示は can_propose_independence のときだけ出す（できない相手には出さない）', () => {
     renderPage(
       familyOf('parent', [
         member(),
-        member({ id: 3, display_name: 'タロウ', is_linked: false, can_graduate: false }),
+        member({
+          id: 3,
+          display_name: 'タロウ',
+          is_linked: false,
+          can_propose_independence: false,
+        }),
       ]),
     )
 
-    expect(screen.getAllByRole('button', { name: 'Graduate this child' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Propose independence' })).toHaveLength(1)
   })
 
-  it('卒業を指示すると、確認のうえサーバーへ送る', () => {
+  it('独立を指示すると、確認のうえサーバーへ送る', () => {
     renderPage(familyOf('parent', [member()]))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Graduate this child' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Propose independence' }))
     expect(proposeIndependence).toHaveBeenCalledWith(1, 2)
   })
 
-  it('予定済みの子には取り消しと目印を出す', () => {
+  it('指示済みの子には取り下げと目印を出す', () => {
     renderPage(familyOf('parent', [member({ independence_proposed: true })]))
 
-    expect(screen.getByText('graduating')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Cancel the graduation' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Graduate this child' })).not.toBeInTheDocument()
+    expect(screen.getByText('independence proposed')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Withdraw the proposal' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Propose independence' })).not.toBeInTheDocument()
   })
 
   it('削除は can_remove のときだけ出す（記録の残る子には出さない）', () => {
@@ -162,27 +169,29 @@ describe('FamilyPage', () => {
     expect(removeMembership).toHaveBeenCalledWith(1, 3)
   })
 
-  it('予定を受けた子本人には卒業の承認を出す', () => {
+  it('指示を受けた子本人には独立の承認を出す', () => {
     renderPage(
       familyOf('child', [
         member({
           is_me: true,
           independence_proposed: true,
           can_reset_password: false,
-          can_graduate: false,
+          can_propose_independence: false,
         }),
       ]),
     )
 
-    expect(screen.getByRole('button', { name: 'Graduate' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Approve independence' })).toBeInTheDocument()
   })
 
   it('予定が無ければ子に承認を出さない', () => {
     renderPage(
-      familyOf('child', [member({ is_me: true, can_reset_password: false, can_graduate: false })]),
+      familyOf('child', [
+        member({ is_me: true, can_reset_password: false, can_propose_independence: false }),
+      ]),
     )
 
-    expect(screen.queryByRole('button', { name: 'Graduate' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve independence' })).not.toBeInTheDocument()
   })
 
   it('owner には改名・脱退・解散を出す', () => {
@@ -203,7 +212,9 @@ describe('FamilyPage', () => {
 
   it('子には家族の設定を出さない（子は自分では抜けられない）', () => {
     renderPage(
-      familyOf('child', [member({ is_me: true, can_reset_password: false, can_graduate: false })]),
+      familyOf('child', [
+        member({ is_me: true, can_reset_password: false, can_propose_independence: false }),
+      ]),
     )
 
     expect(screen.queryByText('Family settings')).not.toBeInTheDocument()

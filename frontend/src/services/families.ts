@@ -29,8 +29,8 @@ export interface Membership {
    * 残る子の「削除」など）。出し分けはこの 3 つだけを見て決める。
    */
   can_reset_password: boolean
-  /** 卒業（独立の指示）— アカウントのある子だけ。ADR-0014 */
-  can_graduate: boolean
+  /** 独立の指示 — アカウントのある子だけ。ADR-0014 */
+  can_propose_independence: boolean
   /** 削除 — owner だけ、自分以外、台帳に記録が無いとき */
   can_remove: boolean
 }

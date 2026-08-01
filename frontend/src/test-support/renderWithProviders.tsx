@@ -44,6 +44,8 @@ interface Options {
   logout?: () => void
   /** 所属する家族。既定はどこにも所属していない状態。 */
   family?: FamilyDetail | null
+  /** 家族を読み込めなかった状態（所属の有無は分からない）。 */
+  familyFailed?: boolean
   /** 家族の読み直しの観測（変更の後に読み直すかを検証する画面で使う）。 */
   reloadFamily?: () => Promise<void>
 }
@@ -60,8 +62,12 @@ function authValueOf(scopes: string[], logout: () => void): AuthValue {
   }
 }
 
-function familyValueOf(family: FamilyDetail | null, reload: () => Promise<void>): FamilyValue {
-  return { family, loading: false, reload }
+function familyValueOf(
+  family: FamilyDetail | null,
+  failed: boolean,
+  reload: () => Promise<void>,
+): FamilyValue {
+  return { family, failed, loading: false, reload }
 }
 
 export function renderWithProviders(ui: ReactElement, options: Options = {}): RenderResult {
@@ -71,6 +77,7 @@ export function renderWithProviders(ui: ReactElement, options: Options = {}): Re
     path = '*',
     logout = () => undefined,
     family = null,
+    familyFailed = false,
     reloadFamily = () => Promise.resolve(),
   } = options
   // 言語は en に固定する。利用者の選択（localStorage）が残っていると期待文言が変わる。
@@ -80,7 +87,7 @@ export function renderWithProviders(ui: ReactElement, options: Options = {}): Re
     <I18nProvider settings={SETTINGS}>
       <ThemeProvider settings={SETTINGS}>
         <AuthContext.Provider value={authValueOf(scopes, logout)}>
-          <FamilyContext.Provider value={familyValueOf(family, reloadFamily)}>
+          <FamilyContext.Provider value={familyValueOf(family, familyFailed, reloadFamily)}>
             <ToastProvider>
               <MemoryRouter initialEntries={[route]}>
                 <Routes>

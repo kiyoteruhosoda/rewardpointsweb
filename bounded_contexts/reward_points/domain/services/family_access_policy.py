@@ -58,8 +58,8 @@ def can_reorder_members(membership: FamilyMembership) -> bool:
     return membership.role.is_guardian
 
 
-def can_graduate(actor: FamilyMembership, target: FamilyMembership) -> bool:
-    """卒業（独立の指示）ができるか（ADR-0014 — 画面では「卒業」と呼ぶ）。
+def can_propose_independence_for(actor: FamilyMembership, target: FamilyMembership) -> bool:
+    """独立を指示できるか（ADR-0014）。
 
     対象はアカウントの結び付いた子だけ。未紐付けの子は本人が承認のしようが
     ないので、そちらは :func:`can_remove_member`（削除）が受け持つ。
@@ -105,10 +105,10 @@ def can_issue_temporary_password_for(actor: FamilyMembership, target: FamilyMemb
 __all__ = [
     "can_administer_family",
     "can_create_child",
-    "can_graduate",
     "can_invite",
     "can_issue_temporary_password_for",
     "can_modify_ledger",
+    "can_propose_independence_for",
     "can_remove_member",
     "can_reorder_members",
     "can_reset_password_of",

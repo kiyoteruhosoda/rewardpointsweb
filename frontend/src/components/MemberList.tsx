@@ -14,10 +14,10 @@ import { useI18n } from '../i18n'
 import type { FamilyDetail, Membership } from '../services/families'
 
 export interface MemberActions {
-  /** 卒業を指示する（ADR-0014 の独立。画面では「卒業」と呼ぶ）。 */
-  onGraduate: (member: Membership) => void
-  /** 卒業の指示を取り下げる。 */
-  onWithdrawGraduation: (member: Membership) => void
+  /** 独立を指示する（ADR-0014）。子本人の承認で成立する。 */
+  onProposeIndependence: (member: Membership) => void
+  /** 独立の指示を取り下げる（承認前ならいつでも）。 */
+  onWithdrawIndependence: (member: Membership) => void
   /** 参加ごと削除する（台帳が空のときだけ出る）。 */
   onRemove: (member: Membership) => void
   onResetPassword: (member: Membership) => void
@@ -44,7 +44,7 @@ export function MemberList({ family, ...actions }: Props) {
               {member.is_me && <span className="tag">{t('families.self')}</span>}
               {!member.is_linked && <span className="tag">{t('families.noAccount')}</span>}
               {member.independence_proposed && (
-                <span className="tag tag-notice">{t('families.graduation.proposed')}</span>
+                <span className="tag tag-notice">{t('families.independence.proposed')}</span>
               )}
             </p>
           </div>
@@ -87,24 +87,24 @@ function MemberActionButtons({ member, familyId, ...actions }: ButtonProps) {
           {t('families.resetPassword')}
         </button>
       )}
-      {member.can_graduate &&
+      {member.can_propose_independence &&
         (member.independence_proposed ? (
           <button
             type="button"
             onClick={() => {
-              actions.onWithdrawGraduation(member)
+              actions.onWithdrawIndependence(member)
             }}
           >
-            {t('families.graduation.withdraw')}
+            {t('families.independence.withdraw')}
           </button>
         ) : (
           <button
             type="button"
             onClick={() => {
-              actions.onGraduate(member)
+              actions.onProposeIndependence(member)
             }}
           >
-            {t('families.graduation.propose')}
+            {t('families.independence.propose')}
           </button>
         ))}
       {member.can_remove && (

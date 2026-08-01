@@ -41,7 +41,7 @@ class MembershipDTO:
     # 既定はすべて偽。参加者 1 人を作って返すだけの応答（子の追加・独立の指示）は
     # 家族全体を読み直さないので、可否を答えられる立場にない。
     can_reset_password: bool = False
-    can_graduate: bool = False
+    can_propose_independence: bool = False
     can_remove: bool = False
 
 

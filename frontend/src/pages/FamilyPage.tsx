@@ -8,7 +8,7 @@
  *
  * 子をこの家族から外す道は 2 つある。
  *
- * - **卒業**（ADR-0014 の独立）… アカウントのある子だけ。親が指示し、子本人が
+ * - **独立**（ADR-0014）… アカウントのある子だけ。親が指示し、子本人が
  *   承認して成立する。指示は承認まで取り下げられる。成立すると参加も記録も
  *   家族から消え、本人のアカウントは所属なしのメンバーとして残る。
  * - **削除** … 台帳に記録が無い参加者だけ。記録が 1 件でもあれば履歴が黙って
@@ -57,7 +57,7 @@ export function FamilyPage() {
   const isOwner = family.my_role === 'owner'
   const unlinkedChildren = family.memberships.filter((m) => m.role === 'child' && !m.is_linked)
   const me = family.memberships.find((m) => m.is_me)
-  const graduationProposedToMe = family.my_role === 'child' && me?.independence_proposed === true
+  const independenceProposedToMe = family.my_role === 'child' && me?.independence_proposed === true
 
   const addChild = (event: FormEvent) => {
     event.preventDefault()
@@ -78,24 +78,24 @@ export function FamilyPage() {
     })
   }
 
-  const graduate = (member: Membership) => {
-    if (!window.confirm(t('families.graduation.confirmPropose', { name: member.display_name }))) {
+  const proposeIndependence = (member: Membership) => {
+    if (!window.confirm(t('families.independence.confirmPropose', { name: member.display_name }))) {
       return
     }
     void run(() => families.proposeIndependence(id, member.id))
   }
 
-  const withdrawGraduation = (member: Membership) => {
+  const withdrawIndependence = (member: Membership) => {
     void run(() => families.revokeIndependenceProposal(id, member.id))
   }
 
   // 成立すると scope が変わる（guest → member）。scope は JWT に焼き込まれて
   // いるため、ログアウトして再ログインするまで新しい権限は効かない（ADR-0014）。
-  const approveGraduation = async () => {
-    if (!window.confirm(t('families.graduation.confirmApprove'))) return
+  const approveIndependence = async () => {
+    if (!window.confirm(t('families.independence.confirmApprove'))) return
     try {
       await families.approveIndependence(id)
-      notify('success', t('families.graduation.approved'))
+      notify('success', t('families.independence.approved'))
       logout()
     } catch (error) {
       notify('error', t(errorMessageKey(error)))
@@ -114,8 +114,8 @@ export function FamilyPage() {
         {isGuardian && <p>{t('families.membersHint')}</p>}
         <MemberList
           family={family}
-          onGraduate={graduate}
-          onWithdrawGraduation={withdrawGraduation}
+          onProposeIndependence={proposeIndependence}
+          onWithdrawIndependence={withdrawIndependence}
           onRemove={remove}
           onResetPassword={resetPassword}
         />
@@ -160,17 +160,17 @@ export function FamilyPage() {
         />
       )}
 
-      {graduationProposedToMe && (
+      {independenceProposedToMe && (
         <section className="card">
-          <h2>{t('families.graduation.title')}</h2>
-          <p>{t('families.graduation.approveHint')}</p>
+          <h2>{t('families.independence.title')}</h2>
+          <p>{t('families.independence.approveHint')}</p>
           <button
             type="button"
             onClick={() => {
-              void approveGraduation()
+              void approveIndependence()
             }}
           >
-            {t('families.graduation.approve')}
+            {t('families.independence.approve')}
           </button>
         </section>
       )}

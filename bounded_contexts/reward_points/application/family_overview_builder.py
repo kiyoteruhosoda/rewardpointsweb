@@ -7,9 +7,14 @@
 残高は相互に参照できない（ADR-0009）。名前は伏せない — 同じ家族に誰がいるかは
 参加している時点で分かってよい。
 
-「この人に何ができるか」（一時パスワード・卒業・削除）も、ここで閲覧者の立場と
-台帳の状態から決めて載せる。画面が立場から組み立て直すと、サーバーが断る操作を
-出してしまう。
+「この人に何ができるか」（一時パスワード・独立の指示・削除）も、ここで決めて載せる。
+画面が立場から組み立て直すと、サーバーが断る操作を出してしまう。
+
+判断には 2 段の認可（router のモジュール docstring）が両方要る。家族の中での
+立場・台帳の状態に加えて、**呼び出し元が ``family:manage`` を持っているか**
+（``can_manage``）を受け取る。これらの操作の入口はすべて ``family:manage`` を
+要求するので、立場だけで決めると、運用者がロールの権限を編集した後に
+「owner なのに scope が無い」アカウントへ 403 になる操作を出してしまう。
 """
 
 from __future__ import annotations
@@ -60,7 +65,7 @@ class FamilyOverviewBuilder:
         self._transactions = transactions
         self._accounts = accounts
 
-    def build(self, viewer: FamilyMembership) -> tuple[MembershipDTO, ...]:
+    def build(self, viewer: FamilyMembership, *, can_manage: bool) -> tuple[MembershipDTO, ...]:
         members = self._memberships.list_for_family(viewer.family_id)
         ledgers = {ledger.membership_id: ledger for ledger in self._ledgers.list_for_family(viewer.family_id)}
         entries = self._transactions.list_by_ledgers([ledger.id for ledger in ledgers.values()])
@@ -71,6 +76,7 @@ class FamilyOverviewBuilder:
                 viewer=viewer,
                 ledger=_ledger_view(viewer, ledgers.get(member.id), entries),
                 username=_username_of(member, names),
+                can_manage=can_manage,
             )
             for member in members
         )
@@ -106,6 +112,7 @@ def _to_dto(
     viewer: FamilyMembership,
     ledger: _LedgerView,
     username: str | None,
+    can_manage: bool,
 ) -> MembershipDTO:
     return MembershipDTO(
         id=member.id,
@@ -117,9 +124,10 @@ def _to_dto(
         ledger_id=ledger.ledger_id,
         balance=ledger.balance,
         independence_proposed=member.independence_proposed,
-        can_reset_password=family_access_policy.can_issue_temporary_password_for(viewer, member),
-        can_graduate=family_access_policy.can_graduate(viewer, member),
-        can_remove=family_access_policy.can_remove_member(viewer, member, ledger_is_empty=ledger.is_empty),
+        can_reset_password=can_manage and family_access_policy.can_issue_temporary_password_for(viewer, member),
+        can_propose_independence=can_manage and family_access_policy.can_propose_independence_for(viewer, member),
+        can_remove=can_manage
+        and family_access_policy.can_remove_member(viewer, member, ledger_is_empty=ledger.is_empty),
     )
 
 

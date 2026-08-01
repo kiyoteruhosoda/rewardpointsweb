@@ -445,7 +445,7 @@ select:focus-visible {
   gap: 0.4rem;
 }
 
-/* 立場に添える短い目印（自分・ログイン未設定・卒業の予定）。 */
+/* 立場に添える短い目印（自分・ログイン未設定・独立の指示あり）。 */
 .tag {
   padding: 0.1rem 0.45rem;
   border: 1px solid var(--border);

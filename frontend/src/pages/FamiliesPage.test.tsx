@@ -51,6 +51,14 @@ describe('FamiliesPage', () => {
     expect(screen.queryByRole('button', { name: 'Join with a code' })).not.toBeInTheDocument()
   })
 
+  it('所属を確かめられなかったら作成・参加を出さない（押せば必ず失敗する）', () => {
+    renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES, familyFailed: true })
+
+    expect(screen.getByText('This family could not be loaded.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Create a family' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Join with a code' })).not.toBeInTheDocument()
+  })
+
   it('作ったらその家族の詳細へ移る', async () => {
     create.mockResolvedValue(familyOf('owner', []))
     const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()

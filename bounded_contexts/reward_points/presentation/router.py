@@ -113,7 +113,7 @@ def _to_membership(dto: MembershipDTO) -> MembershipResponse:
         balance=dto.balance,
         independence_proposed=dto.independence_proposed,
         can_reset_password=dto.can_reset_password,
-        can_graduate=dto.can_graduate,
+        can_propose_independence=dto.can_propose_independence,
         can_remove=dto.can_remove,
     )
 
@@ -251,7 +251,19 @@ async def create_family(
 
 @router.get("/{family_id}", response_model=FamilyDetailResponse)
 async def view_family(family_id: int, use_case: ViewFamilyDep, principal: FamilyViewer) -> FamilyDetailResponse:
-    return _to_family(use_case.execute(family_id=family_id, account_id=principal.user_id))
+    """参加者と、見える範囲の台帳・残高。
+
+    参加者ごとの操作の可否（``can_*``）は、家族の中での立場と ``family:manage``
+    の両方から決まる（ADR-0019）。除名・独立の指示・一時パスワードの入口は
+    どれも ``family:manage`` を要求するため、持っていない呼び出し元には
+    出さない。
+    """
+    dto = use_case.execute(
+        family_id=family_id,
+        account_id=principal.user_id,
+        can_manage=principal.can("family:manage"),
+    )
+    return _to_family(dto)
 
 
 @router.patch("/{family_id}", response_model=FamilyDetailResponse)

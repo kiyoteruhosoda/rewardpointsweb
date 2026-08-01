@@ -160,13 +160,13 @@ def test_the_owner_is_never_offered_its_own_removal(client: TestClient, parent: 
     assert _member(client, parent.headers, family_id, name="おとうさん")["can_remove"] is False
 
 
-def test_graduation_and_password_need_an_account(client: TestClient, parent: Account) -> None:
-    """ログインできない子には、卒業も一時パスワードも出さない。"""
+def test_independence_and_password_need_an_account(client: TestClient, parent: Account) -> None:
+    """ログインできない子には、独立の指示も一時パスワードも出さない。"""
     family_id = create_family(client, parent.headers)
     unlinked = add_child(client, parent.headers, family_id, display_name="たろう")
 
     shown = _member(client, parent.headers, family_id, name="たろう")
-    assert shown["can_graduate"] is False
+    assert shown["can_propose_independence"] is False
     assert shown["can_reset_password"] is False
 
     refused = client.post(
@@ -177,12 +177,12 @@ def test_graduation_and_password_need_an_account(client: TestClient, parent: Acc
     assert refused.json()["detail"]["error"] == "membership_not_linked"
 
 
-def test_a_linked_child_is_offered_graduation(client: TestClient, parent: Account) -> None:
+def test_a_linked_child_is_offered_independence(client: TestClient, parent: Account) -> None:
     family_id = create_family(client, parent.headers)
     _linked_child(client, parent, family_id, username="taro")
 
     shown = _member(client, parent.headers, family_id, name="taro")
-    assert shown["can_graduate"] is True
+    assert shown["can_propose_independence"] is True
     assert shown["can_reset_password"] is True
 
 
@@ -194,6 +194,45 @@ def test_a_child_is_offered_nothing_about_siblings(client: TestClient, parent: A
 
     detail = client.get(f"/api/families/{family_id}", headers=child_headers).json()
     for shown in detail["memberships"]:
-        assert shown["can_graduate"] is False
+        assert shown["can_propose_independence"] is False
         assert shown["can_remove"] is False
         assert shown["can_reset_password"] is False
+
+
+def test_actions_follow_the_scope_not_only_the_role(client: TestClient, admin_headers: dict[str, str]) -> None:
+    """`family:manage` を失った owner には、どの操作も出さない（ADR-0019）。
+
+    立場（owner）だけで決めると、運用者がロールの権限を編集した後に「押すと 403」
+    のボタンが並ぶ。可否は 2 段の認可（scope と立場）の両方を見る。
+    """
+    created = client.post(
+        "/api/admin/roles",
+        headers=admin_headers,
+        json={
+            "name": "guardian-lite",
+            "permissions": ["family:view", "family:manage", "point:view", "point:manage"],
+        },
+    )
+    assert created.status_code == 201, created.text
+    role_id = created.json()["id"]
+
+    guardian = create_account(client, admin_headers, username="mom", role="guardian-lite")
+    family_id = create_family(client, guardian.headers)
+    child = add_child(client, guardian.headers, family_id, display_name="たろう")
+
+    demoted = client.put(
+        f"/api/admin/roles/{role_id}",
+        headers=admin_headers,
+        json={"permissions": ["family:view", "point:view", "point:manage"]},
+    )
+    assert demoted.status_code == 200, demoted.text
+    # scope はトークンに焼き込まれているので、権限の変更は次のログインから効く
+    headers = login(client, username=guardian.username, password=guardian.password)
+
+    shown = _member(client, headers, family_id, name="たろう")
+    assert shown["can_remove"] is False
+    assert shown["can_propose_independence"] is False
+    assert shown["can_reset_password"] is False
+
+    refused = client.delete(f"/api/families/{family_id}/memberships/{child['id']}", headers=headers)
+    assert refused.status_code == 403

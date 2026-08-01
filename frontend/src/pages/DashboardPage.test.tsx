@@ -101,6 +101,15 @@ describe('DashboardPage', () => {
     )
   })
 
+  it('読み込めなかったときは「子どもがいない」と案内しない', () => {
+    renderWithProviders(<DashboardPage />, { scopes: ['family:view'], familyFailed: true })
+
+    expect(screen.getByText('This family could not be loaded.')).toBeInTheDocument()
+    expect(
+      screen.queryByText('No children yet. Add them from Family settings.'),
+    ).not.toBeInTheDocument()
+  })
+
   it('family:view が無ければ空の案内も出さない（行き先が無い）', () => {
     renderWithProviders(<DashboardPage />, { scopes: ['dashboard:view'] })
 

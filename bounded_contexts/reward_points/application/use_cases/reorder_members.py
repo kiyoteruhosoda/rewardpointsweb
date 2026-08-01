@@ -57,7 +57,8 @@ class ReorderMembersUseCase:
             name=family.name_value,
             my_membership_id=viewer.id,
             my_role=viewer.role,
-            memberships=self._overview.build(viewer),
+            # この入口は family:manage を要求する（router）ので、可否は立場だけで決まる
+            memberships=self._overview.build(viewer, can_manage=True),
         )
 
     def _require_same_children(self, *, family_id: int, membership_ids: Sequence[int]) -> None:

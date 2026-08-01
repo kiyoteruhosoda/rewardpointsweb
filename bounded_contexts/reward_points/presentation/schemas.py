@@ -73,7 +73,7 @@ class MembershipResponse(BaseModel):
     independence_proposed: bool
     # 見ている人がこの参加者に対して行える操作。画面はこれを見て操作を出す
     can_reset_password: bool
-    can_graduate: bool
+    can_propose_independence: bool
     can_remove: bool
 
 

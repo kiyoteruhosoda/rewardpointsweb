@@ -3,7 +3,8 @@
  *
  * 所属できる家族は 1 つまで（ADR-0013）なので、すでに家族があるなら一覧を見せる
  * 意味がない。その場合はそのまま詳細（家族設定）へ送る。作成・参加を出したままに
- * すると、押した先で必ず `already_belongs_to_family` に落ちる。
+ * すると、押した先で必ず `already_belongs_to_family` に落ちる。所属を確かめられ
+ * なかったとき（読み込み失敗）も同じ理由で出さない。
  *
  * 家族を作れるのは親（member ロール — 保護者の scope 一式）だけで、作った人が
  * owner になる（ADR-0018）。子（guest）は招待コードで加わるので、この画面に
@@ -24,7 +25,7 @@ export function FamiliesPage() {
   const { t } = useI18n()
   const { hasScope } = useAuth()
   const { notify } = useToast()
-  const { family, loading, reload } = useFamily()
+  const { family, failed, loading, reload } = useFamily()
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
@@ -62,6 +63,9 @@ export function FamiliesPage() {
   }
 
   if (loading) return <p className="loading">{t('common.loading')}</p>
+  // 読めなかっただけかもしれない。所属していないと決めつけて作成・参加を出すと、
+  // 押した先で必ず `already_belongs_to_family` になる。
+  if (failed) return <p className="error">{t('families.unavailable')}</p>
   if (family) return <Navigate to={`/families/${String(family.id)}`} replace />
 
   return (
