@@ -1,42 +1,55 @@
 /**
- * ポイントの加算・消費に共通の入力フォーム。
+ * ポイントの加算・消費の入力フォーム。
  *
- * 加算（理由）と消費（用途）で変わるのは呼び名と送信先だけなので、同じ形を 2 つ
- * 書かずに文言と送信処理を差し替える。
+ * 台帳は符号で加算と消費を区別する（ADR-0010）。画面では「加算」「消費」の
+ * 2 つのボタンに分け、送るときに符号を付ける。入力欄で負の数を打たせない。
+ *
+ * 冪等キーは 1 回の記録につき 1 つ発行し、**成功するまで持ち越す**。通信が
+ * 途中で切れたときに利用者がもう一度押しても、サーバー側で同じ 1 行として
+ * 扱われる（キーを毎回作り直すと、その再送が二重登録になる）。
  */
-import { useState, type FormEvent } from 'react'
+import { useRef, useState } from 'react'
 
 import { useI18n } from '../i18n'
+import { newIdempotencyKey } from '../services/families'
 
-interface PointEntryFormProps {
-  title: string
-  descriptionLabel: string
-  submitLabel: string
-  onSubmit: (points: number, description: string) => Promise<void>
+interface Props {
+  onSubmit: (amount: number, reason: string, idempotencyKey: string) => Promise<void>
+  /** その家族でよく使われている理由。同じ言い回しを打ち直さずに済ませる。 */
+  reasonSuggestions: string[]
 }
 
-export function PointEntryForm({
-  title,
-  descriptionLabel,
-  submitLabel,
-  onSubmit,
-}: PointEntryFormProps) {
+const REASON_LIST_ID = 'point-entry-reasons'
+
+export function PointEntryForm({ onSubmit, reasonSuggestions }: Props) {
   const { t } = useI18n()
   const [points, setPoints] = useState('')
-  const [description, setDescription] = useState('')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const pendingKey = useRef<string | null>(null)
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
-    await onSubmit(Number(points), description)
-    setPoints('')
-    setDescription('')
+  const submit = async (sign: 1 | -1) => {
+    const amount = sign * Number(points)
+    if (busy || !Number.isFinite(amount) || amount === 0 || !reason.trim()) return
+    pendingKey.current ??= newIdempotencyKey()
+    setBusy(true)
+    try {
+      await onSubmit(amount, reason, pendingKey.current)
+      pendingKey.current = null
+      setPoints('')
+      setReason('')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <form
       className="inline-form"
       onSubmit={(event) => {
-        void submit(event)
+        // Enter キーでの送信は加算として扱う（消費は明示的に押してもらう）
+        event.preventDefault()
+        void submit(1)
       }}
     >
       <label>
@@ -48,22 +61,38 @@ export function PointEntryForm({
           onChange={(event) => {
             setPoints(event.target.value)
           }}
-          aria-label={`${title} - ${t('points.amount')}`}
           required
         />
       </label>
       <label>
-        {descriptionLabel}
+        {t('points.reason')}
         <input
-          value={description}
+          value={reason}
           onChange={(event) => {
-            setDescription(event.target.value)
+            setReason(event.target.value)
           }}
-          aria-label={`${title} - ${descriptionLabel}`}
+          list={REASON_LIST_ID}
           required
         />
       </label>
-      <button type="submit">{submitLabel}</button>
+      {/* 候補は datalist で出す。自由入力のままにしておきたいので select にしない */}
+      <datalist id={REASON_LIST_ID}>
+        {reasonSuggestions.map((suggestion) => (
+          <option key={suggestion} value={suggestion} />
+        ))}
+      </datalist>
+      <button type="submit" disabled={busy}>
+        {t('points.add')}
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          void submit(-1)
+        }}
+      >
+        {t('points.consume')}
+      </button>
     </form>
   )
 }

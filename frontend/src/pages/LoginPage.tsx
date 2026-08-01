@@ -15,7 +15,7 @@ export function LoginPage() {
   const { login, loginWithPasskey } = useAuth()
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('credentials')
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [totpCode, setTotpCode] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -25,7 +25,7 @@ export function LoginPage() {
     e.preventDefault()
     setError(null)
     try {
-      await login(email, password, step === 'totp' ? totpCode : undefined)
+      await login(username, password, step === 'totp' ? totpCode : undefined)
       navigate('/')
     } catch (err) {
       const code = err instanceof ApiError ? err.code : 'unknown_error'
@@ -78,13 +78,13 @@ export function LoginPage() {
         {step === 'credentials' ? (
           <>
             <label>
-              {t('login.email')}
+              {t('login.username')}
               <input
-                type="email"
+                type="text"
                 autoComplete="username webauthn"
-                value={email}
+                value={username}
                 onChange={(e) => {
-                  setEmail(e.target.value)
+                  setUsername(e.target.value)
                 }}
                 required
               />
@@ -109,6 +109,7 @@ export function LoginPage() {
               </button>
             )}
             <Link to="/forgot-password">{t('login.forgot')}</Link>
+            <Link to="/join">{t('login.withInvitation')}</Link>
           </>
         ) : (
           <>

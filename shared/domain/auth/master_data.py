@@ -38,10 +38,10 @@ PERMISSION_CODES: Sequence[str] = (
     "item:view",
     "item:manage",
     # --- ポイント（reward_points コンテキスト） ---
-    # scope は「その操作を行える立場か」までを決める。「そのメンバーを触れるか」は
-    # 所有・共有・本人の関係で別に判定する（ADR-0007）。
-    "member:view",
-    "member:manage",
+    # scope は「その操作を行える立場か」までを決める。「その家族・その台帳を
+    # 触れるか」は家族の中での立場（role）で別に判定する（ADR-0009）。
+    "family:view",
+    "family:manage",
     "point:view",
     "point:manage",
 )
@@ -56,9 +56,9 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
         "log:view",
         "dashboard:view",
         "gui:view",
-        # メンバーを登録・共有し、ポイントを加算・消費できる
-        "member:view",
-        "member:manage",
+        # 家族を作り、子を追加し、ポイントを加算・消費できる
+        "family:view",
+        "family:manage",
         "point:view",
         "point:manage",
     ),
@@ -67,7 +67,7 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
         "dashboard:view",
         "gui:view",
         # 自分のポイントと履歴は見られるが、変更する scope は持たない
-        "member:view",
+        "family:view",
         "point:view",
     ),
     "guest": (
@@ -77,6 +77,10 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
 }
 
 # --- 初期管理者 --------------------------------------------------------------
+# ログインの識別子は ``username``（ADR-0011）。既定値をメールアドレスと同じ文字列に
+# しているのは、既存アカウントの移行値が ``username = email`` になるためで、
+# 移行前後でログインの手順を変えないための選択。
+#
 # パスワードは環境変数 ``ADMIN_INITIAL_PASSWORD`` で上書きできる（推奨）。
 # 未指定時は既定のパスワード（メールアドレスと同じ文字列）が使われる。誰でも
 # 知り得る値なので、本番では初回ログイン後に必ず変更すること。
@@ -87,7 +91,8 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
 # Infrastructure の関心なので、この層では計算せず定数として持つ。
 DEFAULT_ADMIN_ID: int = 1
 DEFAULT_ADMIN_EMAIL: str = "admin@example.com"
-DEFAULT_ADMIN_USERNAME: str = "admin"
+DEFAULT_ADMIN_USERNAME: str = "admin@example.com"
+DEFAULT_ADMIN_DISPLAY_NAME: str = "admin"
 DEFAULT_ADMIN_ROLE: str = "admin"
 DEFAULT_ADMIN_PASSWORD: str = "admin@example.com"
 DEFAULT_ADMIN_PASSWORD_HASH: str = (
@@ -107,6 +112,7 @@ SUPERSEDED_ADMIN_PASSWORD_HASHES: Sequence[str] = (
 )
 
 __all__ = [
+    "DEFAULT_ADMIN_DISPLAY_NAME",
     "DEFAULT_ADMIN_EMAIL",
     "DEFAULT_ADMIN_ID",
     "DEFAULT_ADMIN_PASSWORD",

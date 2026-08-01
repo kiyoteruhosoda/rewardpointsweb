@@ -1,8 +1,11 @@
 """reward_points コンテキストの SQLAlchemy モデル。
 
 Alembic が認識できるよう ``migrations/env.py`` へ import を追加してある。
-種別・共有範囲は DB ネイティブ ENUM を使わず ``native_enum=False``（CHECK 制約付き
+立場（role）は DB ネイティブ ENUM を使わず ``native_enum=False``（CHECK 制約付き
 VARCHAR）で持つ（CLAUDE.md「DB モデリング」）。
+
+``point_transactions`` は追記専用（ADR-0010）。``updated_at`` を持たないのは、
+更新される想定が無いことをスキーマ自身で示すため。
 """
 
 from __future__ import annotations
@@ -13,61 +16,111 @@ from sqlalchemy.orm import Mapped, mapped_column
 from shared.infrastructure.models.base import BigIntPk, utcnow
 from shared.kernel.database.db import Base
 
-POINT_ENTRY_TYPE = sa.Enum("addition", "consumption", name="point_entry_type", native_enum=False)
-MEMBER_ACCESS_LEVEL = sa.Enum("view", "manage", name="member_access_level", native_enum=False)
+FAMILY_ROLE = sa.Enum("owner", "parent", "child", name="family_role", native_enum=False)
 
 
-class MemberModel(Base):
-    __tablename__ = "members"
+class FamilyModel(Base):
+    __tablename__ = "families"
 
     id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
-    owner_user_id: Mapped[int] = mapped_column(BigIntPk, sa.ForeignKey("users.id"), nullable=False, index=True)
-    # 1 つのアカウントが「自分のポイント」として見られるメンバーは 1 人だけ。
-    # アカウントが消えてもメンバーは残す（本人ログインの紐付けだけが外れる）。
-    linked_user_id: Mapped[int | None] = mapped_column(
-        BigIntPk, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, unique=True
-    )
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 
 
-class MemberShareModel(Base):
-    __tablename__ = "member_shares"
-
-    member_id: Mapped[int] = mapped_column(BigIntPk, sa.ForeignKey("members.id", ondelete="CASCADE"), primary_key=True)
-    # 共有先のアカウントが消えれば、その共有はもう意味を持たない
-    user_id: Mapped[int] = mapped_column(BigIntPk, sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    access_level: Mapped[str] = mapped_column(MEMBER_ACCESS_LEVEL, nullable=False)
-    created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
-
-
-class PointEntryModel(Base):
-    __tablename__ = "point_entries"
+class FamilyMembershipModel(Base):
+    __tablename__ = "family_memberships"
+    __table_args__ = (
+        # 同一 Family 内では 1 アカウント 1 membership（ADR-0009）。
+        # account_id は NULL を取りうる（親が作った直後の子はまだ未紐付け）。
+        # NULL 同士は衝突しないため、未紐付けの参加者は何人でも並べられる。
+        sa.UniqueConstraint("family_id", "account_id", name="uq_family_memberships_family_account"),
+    )
 
     id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
-    member_id: Mapped[int] = mapped_column(
-        BigIntPk, sa.ForeignKey("members.id", ondelete="CASCADE"), nullable=False, index=True
+    family_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    entry_type: Mapped[str] = mapped_column(POINT_ENTRY_TYPE, nullable=False)
-    occurred_at = mapped_column(sa.DateTime(), nullable=False)
-    points: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
-    # 加算なら理由、消費なら用途。種別によって片方だけが埋まる
-    reason: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
-    application: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
-    # 記録した人のアカウントが消えても履歴は残す（履歴はメンバーのもので、
-    # 記録者のものではない）。誰が記録したか分からなくなるだけ。
-    recorded_by_user_id: Mapped[int | None] = mapped_column(
-        BigIntPk, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    # アカウントが消えても参加と台帳は残す（本人ログインの紐付けだけが外れる）
+    account_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    role: Mapped[str] = mapped_column(FAMILY_ROLE, nullable=False)
+    display_name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class PointLedgerModel(Base):
+    __tablename__ = "point_ledgers"
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    family_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # role = child の membership と 1 対 1（ADR-0009）
+    membership_id: Mapped[int] = mapped_column(
+        BigIntPk,
+        sa.ForeignKey("family_memberships.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
+
+
+class PointTransactionModel(Base):
+    __tablename__ = "point_transactions"
+    __table_args__ = (
+        # 送信ボタンの二重タップで二重登録しない（ADR-0010）
+        sa.UniqueConstraint("ledger_id", "idempotency_key", name="uq_point_transactions_idempotency"),
+        # 同一レコードの二重取り消しを DB 制約で防ぐ
+        sa.UniqueConstraint("reversal_of_id", name="uq_point_transactions_reversal_of"),
+        sa.CheckConstraint("amount <> 0", name="ck_point_transactions_amount_nonzero"),
+        sa.Index("ix_point_transactions_ledger_occurred", "ledger_id", "occurred_at", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    ledger_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("point_ledgers.id", ondelete="CASCADE"), nullable=False
+    )
+    # 符号付き。加算は正、消費は負
+    amount: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
+    reason: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    # 操作した参加者が家族を離れても記録は残す（履歴は台帳のもの）
+    granted_by_membership_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("family_memberships.id", ondelete="SET NULL"), nullable=True
+    )
+    # 出来事の発生日時（遡って入力できる）とレコード作成日時は別物
+    occurred_at = mapped_column(sa.DateTime(), nullable=False)
+    created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
+    reversal_of_id: Mapped[int | None] = mapped_column(BigIntPk, sa.ForeignKey("point_transactions.id"), nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+
+
+class FamilyInvitationModel(Base):
+    __tablename__ = "family_invitations"
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    family_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # 平文は保存しない（発行時に 1 度だけ返す）
+    code_hash: Mapped[str] = mapped_column(sa.String(64), unique=True, nullable=False)
+    role: Mapped[str] = mapped_column(FAMILY_ROLE, nullable=False)
+    # role = child の招待では、親が先に作った参加者を指す
+    target_membership_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("family_memberships.id", ondelete="CASCADE"), nullable=True
+    )
+    expires_at = mapped_column(sa.DateTime(), nullable=False)
+    used_at = mapped_column(sa.DateTime(), nullable=True)
+    created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
 
 
 __all__ = [
-    "MEMBER_ACCESS_LEVEL",
-    "POINT_ENTRY_TYPE",
-    "MemberModel",
-    "MemberShareModel",
-    "PointEntryModel",
+    "FAMILY_ROLE",
+    "FamilyInvitationModel",
+    "FamilyMembershipModel",
+    "FamilyModel",
+    "PointLedgerModel",
+    "PointTransactionModel",
 ]

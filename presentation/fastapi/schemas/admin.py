@@ -4,24 +4,30 @@ from __future__ import annotations
 
 from pydantic import BaseModel, EmailStr, Field
 
+from shared.domain.auth.username import MAX_LENGTH as USERNAME_MAX_LENGTH
+
 
 class UserResponse(BaseModel):
     id: int
-    email: str
+    # ログイン識別子。メールアドレスは任意項目（ADR-0011）
     username: str
+    email: str | None
+    display_name: str
     is_active: bool
+    must_change_password: bool
     roles: list[str]
 
 
 class UserCreateRequest(BaseModel):
-    email: EmailStr
-    username: str = Field(min_length=1, max_length=100)
+    username: str = Field(min_length=1, max_length=USERNAME_MAX_LENGTH)
+    email: EmailStr | None = None
+    display_name: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=8)
     roles: list[str] = []
 
 
 class UserUpdateRequest(BaseModel):
-    username: str | None = Field(default=None, min_length=1, max_length=100)
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
     is_active: bool | None = None
     roles: list[str] | None = None
     password: str | None = Field(default=None, min_length=8)

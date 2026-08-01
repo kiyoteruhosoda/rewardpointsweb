@@ -48,6 +48,18 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "label": "Password reset token TTL (seconds)",
         "value_type": "integer",
     },
+    {
+        "key": "TEMPORARY_PASSWORD_TTL_SECONDS",
+        "category": "auth",
+        "label": "Temporary password TTL (seconds)",
+        "value_type": "integer",
+    },
+    {
+        "key": "FAMILY_INVITATION_TTL_SECONDS",
+        "category": "auth",
+        "label": "Family invitation code TTL (seconds)",
+        "value_type": "integer",
+    },
     # --- 二要素認証（TOTP） ---
     {
         "key": "TOTP_ISSUER",

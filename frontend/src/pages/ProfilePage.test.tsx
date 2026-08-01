@@ -10,10 +10,18 @@ describe('ProfilePage', () => {
     localStorage.clear()
   })
 
-  it('自分のアカウント情報を出す', () => {
-    renderWithProviders(<ProfilePage />, { scopes: ['member:view'] })
-    expect(screen.getByText('manager@example.com')).toBeInTheDocument()
-    expect(screen.getByText('manager')).toBeInTheDocument()
+  it('表示名とログイン ID を出す', () => {
+    renderWithProviders(<ProfilePage />, { scopes: ['family:view'] })
+    expect(screen.getByText('Signs in as manager')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument()
+  })
+
+  it('表示名とメールアドレスを変えられる（ログイン ID は編集させない）', () => {
+    renderWithProviders(<ProfilePage />, { scopes: ['family:view'] })
+
+    expect(screen.getByLabelText('Display name')).toHaveValue('manager')
+    expect(screen.getByLabelText('Email (optional)')).toHaveValue('manager@example.com')
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
   })
 
   it('表示設定として言語とテーマを持つ（ヘッダーではなくこの画面に置く）', () => {
@@ -39,7 +47,7 @@ describe('ProfilePage', () => {
   })
 
   it('scope が無ければシステム管理そのものを出さない', () => {
-    renderWithProviders(<ProfilePage />, { scopes: ['member:view'] })
+    renderWithProviders(<ProfilePage />, { scopes: ['family:view'] })
     expect(screen.queryByText('System administration')).not.toBeInTheDocument()
   })
 })

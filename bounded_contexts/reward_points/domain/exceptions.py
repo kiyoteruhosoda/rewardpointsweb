@@ -13,78 +13,147 @@ class RewardPointsError(Exception):
     code = "reward_points_error"
 
 
-class MemberNotFoundError(RewardPointsError):
-    """メンバーが存在しない。"""
+class FamilyNotFoundError(RewardPointsError):
+    """家族そのものが存在しない。
 
-    code = "member_not_found"
-
-
-class MemberAccessDeniedError(RewardPointsError):
-    """そのメンバーへ、要求された操作をする権限が無い。
-
-    「存在しない」と区別せずに済む場面ではこちらを返さない（他人のメンバーの
-    存在を推測させないため、参照権すら無い相手には
-    :class:`MemberNotFoundError` を返す）。
+    「所属していない」はこれではなく :class:`FamilyAccessDeniedError`。参加が
+    引けない時点で止まるため、呼び出し元からは実在と未所属を区別できない。
+    こちらは、参加は引けたのに家族の行が無いという壊れた状態のときだけ出る。
     """
 
-    code = "member_access_denied"
+    code = "family_not_found"
 
 
-class PointEntryNotFoundError(RewardPointsError):
-    """履歴が存在しない（他のメンバーの履歴を指した場合も含む）。"""
+class FamilyAccessDeniedError(RewardPointsError):
+    """家族には所属しているが、その操作を行える立場ではない。"""
 
-    code = "point_entry_not_found"
-
-
-class ShareTargetNotFoundError(RewardPointsError):
-    """共有先として指定されたユーザーが見つからない。"""
-
-    code = "share_target_not_found"
+    code = "family_access_denied"
 
 
-class MemberShareNotFoundError(RewardPointsError):
-    """取り消そうとした共有が存在しない。"""
+class MembershipNotFoundError(RewardPointsError):
+    """参加者が存在しない（他の家族の参加者を指した場合も含む）。"""
 
-    code = "member_share_not_found"
-
-
-class MemberAlreadySharedError(RewardPointsError):
-    """すでに共有済みの相手を、もう一度共有しようとした。"""
-
-    code = "member_already_shared"
+    code = "membership_not_found"
 
 
-class ShareWithOwnerNotAllowedError(RewardPointsError):
-    """所有者自身を共有先に指定した（所有者はもともと変更できる）。"""
+class LedgerNotFoundError(RewardPointsError):
+    """台帳が存在しない、または閲覧できる立場ではない。"""
 
-    code = "share_with_owner_not_allowed"
-
-
-class LinkedUserAlreadyTakenError(RewardPointsError):
-    """そのログインアカウントは、すでに別のメンバーへ紐付いている。"""
-
-    code = "linked_user_already_taken"
+    code = "ledger_not_found"
 
 
-class UserStillOwnsMembersError(RewardPointsError):
-    """登録したメンバーが残っているアカウントは削除できない。
+class TransactionNotFoundError(RewardPointsError):
+    """トランザクションが存在しない（他の台帳のものを指した場合も含む）。"""
 
-    所有者が消えるとそのメンバーを管理できる人がいなくなる。黙って一緒に消すと
-    ポイント履歴まで失われるため、先にメンバーを片付けてもらう。
+    code = "transaction_not_found"
+
+
+class TransactionAlreadyReversedError(RewardPointsError):
+    """すでに打ち消し済みのトランザクションを、もう一度打ち消そうとした。"""
+
+    code = "transaction_already_reversed"
+
+
+class ReversalOfReversalError(RewardPointsError):
+    """打ち消しレコード自体を打ち消そうとした（ADR-0010 で禁じている）。"""
+
+    code = "reversal_of_reversal_not_allowed"
+
+
+class InvitationNotFoundError(RewardPointsError):
+    """招待コードが存在しない、期限切れ、または使用済み。
+
+    3 つを区別しない。区別すると、有効なコードを総当たりで探す手がかりになる。
     """
 
-    code = "user_still_owns_members"
+    code = "invitation_not_found"
+
+
+class RoleNotInvitableError(RewardPointsError):
+    """招待では配れない立場（owner）を指定した。"""
+
+    code = "role_not_invitable"
+
+
+class InvitationTargetUnavailableError(RewardPointsError):
+    """招待が指す参加者に、すでに別のアカウントが結び付いている。"""
+
+    code = "invitation_target_unavailable"
+
+
+class AccountAlreadyInFamilyError(RewardPointsError):
+    """同一家族に、そのアカウントの参加者がすでに存在する。
+
+    ``UNIQUE (family_id, account_id)``（ADR-0009）と同じ不変条件。
+    """
+
+    code = "account_already_in_family"
+
+
+class UsernameAlreadyTakenError(RewardPointsError):
+    """指定されたログイン ID はすでに使われている。"""
+
+    code = "username_already_taken"
+
+
+class ChildAccountRequiredError(RewardPointsError):
+    """親から親へのパスワードリセットを試みた。
+
+    一時パスワードの発行は ``role = child`` の参加者に対してだけ許す（ADR-0011）。
+    """
+
+    code = "child_account_required"
+
+
+class DisplayNameRequiredError(RewardPointsError):
+    """呼び名の要る招待（参加者を指していない招待）に、呼び名が渡されなかった。"""
+
+    code = "display_name_required"
+
+
+class MembershipNotLinkedError(RewardPointsError):
+    """アカウントがまだ結び付いていない参加者に、アカウント側の操作を求めた。"""
+
+    code = "membership_not_linked"
+
+
+class LedgerNotEmptyError(RewardPointsError):
+    """記録の残っている台帳ごと参加者を削除しようとした。
+
+    台帳は追記専用で、消す手段を用意していない（ADR-0010）。参加者を外したい
+    場合も、記録が残っているうちは断る。
+    """
+
+    code = "ledger_not_empty"
+
+
+class UserStillOwnsFamiliesError(RewardPointsError):
+    """家族の owner として残っているアカウントは削除できない。
+
+    owner が消えるとその家族を管理できる人がいなくなる。黙って一緒に消すと
+    台帳まで失われるため、先に家族を片付けてもらう。
+    """
+
+    code = "user_still_owns_families"
 
 
 __all__ = [
-    "LinkedUserAlreadyTakenError",
-    "MemberAccessDeniedError",
-    "MemberAlreadySharedError",
-    "MemberNotFoundError",
-    "MemberShareNotFoundError",
-    "PointEntryNotFoundError",
+    "AccountAlreadyInFamilyError",
+    "ChildAccountRequiredError",
+    "DisplayNameRequiredError",
+    "FamilyAccessDeniedError",
+    "FamilyNotFoundError",
+    "InvitationNotFoundError",
+    "InvitationTargetUnavailableError",
+    "LedgerNotEmptyError",
+    "LedgerNotFoundError",
+    "MembershipNotFoundError",
+    "MembershipNotLinkedError",
+    "ReversalOfReversalError",
     "RewardPointsError",
-    "ShareTargetNotFoundError",
-    "ShareWithOwnerNotAllowedError",
-    "UserStillOwnsMembersError",
+    "RoleNotInvitableError",
+    "TransactionAlreadyReversedError",
+    "TransactionNotFoundError",
+    "UserStillOwnsFamiliesError",
+    "UsernameAlreadyTakenError",
 ]

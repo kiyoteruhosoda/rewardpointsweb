@@ -9,7 +9,7 @@ from shared.infrastructure.models import PasswordResetToken, User
 def test_login_success(client: TestClient) -> None:
     response = client.post(
         "/api/auth/login",
-        json={"email": master_data.DEFAULT_ADMIN_EMAIL, "password": master_data.DEFAULT_ADMIN_PASSWORD},
+        json={"username": master_data.DEFAULT_ADMIN_USERNAME, "password": master_data.DEFAULT_ADMIN_PASSWORD},
     )
     assert response.status_code == 200
     data = response.json()
@@ -19,7 +19,7 @@ def test_login_success(client: TestClient) -> None:
 
 
 def test_login_wrong_password(client: TestClient) -> None:
-    response = client.post("/api/auth/login", json={"email": "admin@example.com", "password": "wrong"})
+    response = client.post("/api/auth/login", json={"username": "admin@example.com", "password": "wrong"})
     assert response.status_code == 401
     assert response.json()["detail"]["error"] == "invalid_credentials"
 
@@ -34,14 +34,17 @@ def test_me_returns_scopes(client: TestClient, admin_headers: dict[str, str]) ->
     response = client.get("/api/auth/me", headers=admin_headers)
     assert response.status_code == 200
     data = response.json()
+    assert data["username"] == master_data.DEFAULT_ADMIN_USERNAME
     assert data["email"] == "admin@example.com"
+    assert data["display_name"] == master_data.DEFAULT_ADMIN_DISPLAY_NAME
+    assert data["must_change_password"] is False
     assert "user:manage" in data["scopes"]
 
 
 def test_refresh_issues_new_pair(client: TestClient) -> None:
     login = client.post(
         "/api/auth/login",
-        json={"email": master_data.DEFAULT_ADMIN_EMAIL, "password": master_data.DEFAULT_ADMIN_PASSWORD},
+        json={"username": master_data.DEFAULT_ADMIN_USERNAME, "password": master_data.DEFAULT_ADMIN_PASSWORD},
     ).json()
     response = client.post("/api/auth/refresh", json={"refresh_token": login["refresh_token"]})
     assert response.status_code == 200
@@ -51,7 +54,7 @@ def test_refresh_issues_new_pair(client: TestClient) -> None:
 def test_refresh_rejects_access_token(client: TestClient) -> None:
     login = client.post(
         "/api/auth/login",
-        json={"email": master_data.DEFAULT_ADMIN_EMAIL, "password": master_data.DEFAULT_ADMIN_PASSWORD},
+        json={"username": master_data.DEFAULT_ADMIN_USERNAME, "password": master_data.DEFAULT_ADMIN_PASSWORD},
     ).json()
     response = client.post("/api/auth/refresh", json={"refresh_token": login["access_token"]})
     assert response.status_code == 401
@@ -67,7 +70,7 @@ def test_change_password_roundtrip(client: TestClient, admin_headers: dict[str, 
     assert (
         client.post(
             "/api/auth/login",
-            json={"email": "admin@example.com", "password": "new-password-1"},
+            json={"username": "admin@example.com", "password": "new-password-1"},
         ).status_code
         == 200
     )
@@ -83,15 +86,27 @@ def test_change_password_wrong_current(client: TestClient, admin_headers: dict[s
 
 
 def test_forgot_password_does_not_leak_user_existence(client: TestClient) -> None:
-    known = client.post("/api/auth/forgot-password", json={"email": "admin@example.com"})
-    unknown = client.post("/api/auth/forgot-password", json={"email": "nobody@example.com"})
+    known = client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
+    unknown = client.post("/api/auth/forgot-password", json={"username": "nobody"})
     assert known.status_code == unknown.status_code == 200
     assert known.json() == unknown.json() == {"status": "accepted"}
 
 
+def test_forgot_password_without_email_points_at_the_guardian(client: TestClient, db_session: Session) -> None:
+    """メールアドレスを持たないアカウントには送れない（ADR-0011）。"""
+    db_session.add(User(username="kid", email=None, display_name="こども", password_hash="x", is_active=True))
+    db_session.commit()
+
+    response = client.post("/api/auth/forgot-password", json={"username": "kid"})
+    assert response.status_code == 200
+    assert response.json() == {"status": "ask_guardian"}
+    # 送る先が無いので、トークンも発行しない
+    assert db_session.scalar(select(PasswordResetToken)) is None
+
+
 def test_reset_password_with_valid_token(client: TestClient, db_session: Session) -> None:
     # メール送信は無効のためトークンは DB から直接取り出して検証する
-    client.post("/api/auth/forgot-password", json={"email": "admin@example.com"})
+    client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
     row = db_session.scalar(select(PasswordResetToken))
     assert row is not None
 
@@ -111,7 +126,7 @@ def test_reset_password_with_valid_token(client: TestClient, db_session: Session
     assert (
         client.post(
             "/api/auth/login",
-            json={"email": "admin@example.com", "password": "reset-password-1"},
+            json={"username": "admin@example.com", "password": "reset-password-1"},
         ).status_code
         == 200
     )
@@ -121,6 +136,42 @@ def test_reset_password_with_valid_token(client: TestClient, db_session: Session
         json={"token": token, "new_password": "another-password-1"},
     )
     assert again.status_code == 400
+
+
+def test_reset_password_clears_a_pending_temporary_password(client: TestClient, db_session: Session) -> None:
+    """一時パスワードの途中でも、本人がメールから取り戻せる。
+
+    期限を残すと、再設定した新しいパスワードまで期限切れ扱いになってしまう。
+    """
+    import hashlib
+    import secrets
+    from datetime import timedelta
+
+    from shared.kernel.timestamps import utcnow
+
+    user = db_session.scalar(select(User).where(User.email == "admin@example.com"))
+    assert user is not None
+    user.must_change_password = True
+    user.temporary_password_expires_at = utcnow() - timedelta(seconds=1)
+    token = secrets.token_urlsafe(32)
+    db_session.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=hashlib.sha256(token.encode()).hexdigest(),
+            expires_at=utcnow() + timedelta(hours=1),
+        )
+    )
+    db_session.commit()
+
+    reset = client.post("/api/auth/reset-password", json={"token": token, "new_password": "recovered-pass-1"})
+    assert reset.status_code == 200
+
+    signed_in = client.post(
+        "/api/auth/login",
+        json={"username": master_data.DEFAULT_ADMIN_USERNAME, "password": "recovered-pass-1"},
+    )
+    assert signed_in.status_code == 200, signed_in.text
+    assert signed_in.json()["must_change_password"] is False
 
 
 def test_reset_password_with_invalid_token(client: TestClient) -> None:
@@ -138,6 +189,56 @@ def test_inactive_user_cannot_login(client: TestClient, db_session: Session) -> 
     db_session.commit()
     response = client.post(
         "/api/auth/login",
-        json={"email": master_data.DEFAULT_ADMIN_EMAIL, "password": master_data.DEFAULT_ADMIN_PASSWORD},
+        json={"username": master_data.DEFAULT_ADMIN_USERNAME, "password": master_data.DEFAULT_ADMIN_PASSWORD},
     )
     assert response.status_code == 401
+
+
+def test_profile_update_changes_display_name_and_email(client: TestClient, admin_headers: dict[str, str]) -> None:
+    response = client.put(
+        "/api/auth/me",
+        headers=admin_headers,
+        json={"display_name": "  おとうさん  ", "email": "Dad@Example.com"},
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["display_name"] == "おとうさん"
+    # メールアドレスは小文字へ正規化する（同じアドレスが 2 つ並ばないように）
+    assert data["email"] == "dad@example.com"
+    # ログイン識別子はプロフィールでは変わらない
+    assert data["username"] == master_data.DEFAULT_ADMIN_USERNAME
+
+    again = client.get("/api/auth/me", headers=admin_headers)
+    assert again.json()["display_name"] == "おとうさん"
+
+
+def test_profile_update_can_clear_email(client: TestClient, admin_headers: dict[str, str]) -> None:
+    response = client.put("/api/auth/me", headers=admin_headers, json={"email": None})
+    assert response.status_code == 200
+    assert response.json()["email"] is None
+    # 表示名は送っていないので変わらない
+    assert response.json()["display_name"] == master_data.DEFAULT_ADMIN_DISPLAY_NAME
+
+
+def test_profile_update_rejects_email_used_by_another_account(
+    client: TestClient, admin_headers: dict[str, str], db_session: Session
+) -> None:
+    db_session.add(
+        User(
+            username="mom",
+            email="mom@example.com",
+            display_name="mom",
+            password_hash="x",
+            is_active=True,
+        )
+    )
+    db_session.commit()
+    response = client.put("/api/auth/me", headers=admin_headers, json={"email": "mom@example.com"})
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "email_already_exists"
+
+
+def test_login_rejects_unknown_username(client: TestClient) -> None:
+    response = client.post("/api/auth/login", json={"username": "nobody", "password": "whatever"})
+    assert response.status_code == 401
+    assert response.json()["detail"]["error"] == "invalid_credentials"

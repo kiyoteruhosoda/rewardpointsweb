@@ -87,6 +87,25 @@ async def get_current_principal(
     return principal
 
 
+async def get_active_principal(
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> AuthenticatedPrincipal:
+    """一時パスワードでのログイン中は通さない（ADR-0011）。
+
+    **認証が要る経路は原則ここを通す。** :func:`get_current_principal` を直接
+    使ってよいのは、パスワードを変える経路（``POST /api/auth/change-password``）
+    と、自分が誰かを知る経路（``GET /api/auth/me`` / ``POST /api/auth/logout``）
+    の 3 つだけ。二要素・パスキーの登録や解除まで開けてしまうと、一時パスワード
+    を握った人が本人より先に第二の要素を差し替えられる。
+    """
+    if principal.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "password_change_required"},
+        )
+    return principal
+
+
 def require_permission(*codes: str) -> Callable[..., Awaitable[AuthenticatedPrincipal]]:
     """指定された権限を全て保持している場合のみアクセスを許可する依存関数ファクトリ。
 
@@ -100,7 +119,7 @@ def require_permission(*codes: str) -> Callable[..., Awaitable[AuthenticatedPrin
     """
 
     async def _check(
-        principal: AuthenticatedPrincipal = Depends(get_current_principal),
+        principal: AuthenticatedPrincipal = Depends(get_active_principal),
     ) -> AuthenticatedPrincipal:
         if not principal.can(*codes):
             raise HTTPException(
@@ -118,6 +137,7 @@ def require_permission(*codes: str) -> Callable[..., Awaitable[AuthenticatedPrin
 __all__ = [
     "ACCESS_TOKEN_COOKIE",
     "clear_access_token_cookie",
+    "get_active_principal",
     "get_current_principal",
     "require_permission",
     "set_access_token_cookie",

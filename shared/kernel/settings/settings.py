@@ -192,6 +192,16 @@ class ApplicationSettings:
     def password_reset_token_ttl_seconds(self) -> int:
         return self.get_int("PASSWORD_RESET_TOKEN_TTL_SECONDS", 3600)
 
+    @property
+    def temporary_password_ttl_seconds(self) -> int:
+        """親が発行した一時パスワードの有効期限（ADR-0011）。"""
+        return self.get_int("TEMPORARY_PASSWORD_TTL_SECONDS", 24 * 3600)
+
+    @property
+    def family_invitation_ttl_seconds(self) -> int:
+        """招待コードの有効期限（ADR-0009）。"""
+        return self.get_int("FAMILY_INVITATION_TTL_SECONDS", 7 * 24 * 3600)
+
     # ------------------------------------------------------------------
     # 二要素認証（TOTP）
     # ------------------------------------------------------------------

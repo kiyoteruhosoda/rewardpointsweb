@@ -58,7 +58,7 @@ def reconcile_default_admin(
 
     *admin_password* を渡すとその平文が、渡さなければ既定のハッシュが使われる。
     """
-    admin = session.scalar(select(User).where(User.email == master_data.DEFAULT_ADMIN_EMAIL))
+    admin = session.scalar(select(User).where(User.username == master_data.DEFAULT_ADMIN_USERNAME))
     password_hash = (
         generate_password_hash(admin_password) if admin_password else master_data.DEFAULT_ADMIN_PASSWORD_HASH
     )
@@ -76,8 +76,9 @@ def reconcile_default_admin(
 def _build_default_admin(session: Session, *, password_hash: str, roles: dict[str, Role] | None) -> User:
     admin = User(
         id=master_data.DEFAULT_ADMIN_ID,
-        email=master_data.DEFAULT_ADMIN_EMAIL,
         username=master_data.DEFAULT_ADMIN_USERNAME,
+        email=master_data.DEFAULT_ADMIN_EMAIL,
+        display_name=master_data.DEFAULT_ADMIN_DISPLAY_NAME,
         password_hash=password_hash,
         is_active=True,
     )

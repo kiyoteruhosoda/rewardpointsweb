@@ -6,9 +6,13 @@ import { assertPasskey, type PasskeyChallenge } from '../services/webauthn'
 
 export interface Me {
   user_id: number
-  email: string
+  /** ログイン識別子。メールアドレスは任意項目（ADR-0011）。 */
   username: string
+  display_name: string
+  email: string | null
   scopes: string[]
+  /** 一時パスワードでのログイン中。変更を終えるまで他の操作は通らない。 */
+  must_change_password: boolean
 }
 
 interface TokenPair {
@@ -20,7 +24,7 @@ export interface AuthValue {
   user: Me | null
   loading: boolean
   /** 二要素認証が有効なアカウントでは totpCode が必要（未指定なら totp_required）。 */
-  login: (email: string, password: string, totpCode?: string) => Promise<void>
+  login: (username: string, password: string, totpCode?: string) => Promise<void>
   loginWithPasskey: () => Promise<void>
   logout: () => void
   refreshMe: () => Promise<void>
@@ -53,9 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [refreshMe])
 
-  const login = async (email: string, password: string, totpCode?: string) => {
+  const login = async (username: string, password: string, totpCode?: string) => {
     const pair = await api.post<TokenPair>('/api/auth/login', {
-      email,
+      username,
       password,
       totp_code: totpCode || null,
     })

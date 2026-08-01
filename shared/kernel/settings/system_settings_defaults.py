@@ -17,6 +17,10 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     "REFRESH_TOKEN_EXPIRES_SECONDS": 14 * 24 * 3600,
     "SESSION_COOKIE_SECURE": False,
     "PASSWORD_RESET_TOKEN_TTL_SECONDS": 3600,
+    # 親が発行した一時パスワードの有効期限（ADR-0011）
+    "TEMPORARY_PASSWORD_TTL_SECONDS": 24 * 3600,
+    # --- 家族（reward_points コンテキスト） ---
+    "FAMILY_INVITATION_TTL_SECONDS": 7 * 24 * 3600,
     # --- 二要素認証（TOTP） ---
     "TOTP_ISSUER": "rewardpointsweb",  # 認証アプリに表示される発行者名
     "TOTP_VALID_WINDOW": 1,  # 前後いくつの時間枠を許容するか（時刻ずれ吸収）

@@ -12,7 +12,7 @@ from werkzeug.security import generate_password_hash
 from bounded_contexts.reward_points.application.use_cases.ensure_user_can_be_deleted import (
     EnsureUserCanBeDeletedUseCase,
 )
-from bounded_contexts.reward_points.domain.exceptions import UserStillOwnsMembersError
+from bounded_contexts.reward_points.domain.exceptions import UserStillOwnsFamiliesError
 from bounded_contexts.reward_points.presentation.dependencies import (
     get_ensure_user_can_be_deleted_use_case,
 )
@@ -22,6 +22,7 @@ from presentation.fastapi.schemas.admin import (
     UserResponse,
     UserUpdateRequest,
 )
+from shared.domain.auth.username import Username
 from shared.infrastructure.models import Role, User
 from shared.kernel.database.session import get_db
 
@@ -38,9 +39,11 @@ DeletableDep = Annotated[EnsureUserCanBeDeletedUseCase, Depends(get_ensure_user_
 def _to_response(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
-        email=user.email,
         username=user.username,
+        email=user.email,
+        display_name=user.display_name,
         is_active=user.is_active,
+        must_change_password=user.must_change_password,
         roles=sorted(r.name for r in user.roles),
     )
 
@@ -64,14 +67,27 @@ async def list_users(db: DbDep) -> list[UserResponse]:
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=UserResponse)
 async def create_user(body: UserCreateRequest, db: DbDep) -> UserResponse:
-    if db.scalar(select(User).where(User.email == body.email)):
+    try:
+        username = Username(body.username).value
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "invalid_username"},
+        ) from error
+    if db.scalar(select(User).where(User.username == username)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "username_already_taken"},
+        )
+    if body.email and db.scalar(select(User).where(User.email == body.email)):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": "email_already_exists"},
         )
     user = User(
+        username=username,
         email=body.email,
-        username=body.username,
+        display_name=body.display_name,
         password_hash=generate_password_hash(body.password),
         is_active=True,
     )
@@ -86,8 +102,8 @@ async def update_user(user_id: int, body: UserUpdateRequest, db: DbDep) -> UserR
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "user_not_found"})
-    if body.username is not None:
-        user.username = body.username
+    if body.display_name is not None:
+        user.display_name = body.display_name
     if body.is_active is not None:
         user.is_active = body.is_active
     if body.roles is not None:
@@ -102,16 +118,16 @@ async def update_user(user_id: int, body: UserUpdateRequest, db: DbDep) -> UserR
 async def delete_user(user_id: int, db: DbDep, deletable: DeletableDep) -> None:
     """アカウントを削除する。
 
-    メンバーを登録したままのアカウントは削除できない（409）。無効化したいだけなら
-    `is_active` を偽にする。共有・本人の紐付け・ポイント履歴の記録者は、
-    アカウントが消えても外部キーの `ON DELETE` が追随する（ADR-0007）。
+    家族の owner として残っているアカウントは削除できない（409）。無効化したい
+    だけなら `is_active` を偽にする。家族への参加と台帳の操作者は、アカウントが
+    消えても外部キーの `ON DELETE` が追随する（ADR-0009）。
     """
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "user_not_found"})
     try:
         deletable.execute(user_id=user_id)
-    except UserStillOwnsMembersError as error:
+    except UserStillOwnsFamiliesError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error": error.code}) from error
     user.roles = []
     db.delete(user)
