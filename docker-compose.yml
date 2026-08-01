@@ -39,11 +39,12 @@ services:
     # （手順は docs/OPERATIONS.md「DB に直接つなぎたいとき」）。
     expose:
       - "3306"
-    # .env が無くても起動できるようにする（各値は上の ${VAR:-default} が供給する）。
-    # 外部公開する環境では .env を置いて資格情報を必ず上書きすること。
+    # ここは短い書式のまま置く。`required:` を使う長い書式は Compose 2.24.0 以降で、
+    # 古い Compose（Synology の Container Manager 等）では読み込み前に弾かれる。
+    # deploy.sh はこのファイルを単体で使うため、配置先の Compose 版を選ばない形にする。
+    # .env を任意にするのは docker-compose.override.yml（手元だけ）。
     env_file:
-      - path: .env
-        required: false
+      - .env
     volumes:
       - ${HOST_DATA_ROOT:-./mnt}/db_data:/var/lib/mysql
     command:
@@ -75,9 +76,9 @@ services:
     environment:
       - TZ=UTC
       - DATABASE_URI=mysql+pymysql://${MARIADB_USER:-web_user}:${MARIADB_PASSWORD:-template123}@db:3306/${MARIADB_DATABASE:-appdb}?charset=utf8mb4
+    # 短い書式で置く理由は db と同じ（配置先の Compose 版を選ばない）。
     env_file:
-      - path: .env
-        required: false
+      - .env
     depends_on:
       db:
         condition: service_healthy

@@ -145,9 +145,12 @@ docker compose down              # 停止（データは mnt/ に残る）
   DB 資格情報・`JWT_SECRET_KEY` などを必ず上書きすること。
 - 永続データはホストの `mnt/`（`HOST_DATA_ROOT`）。消すと DB は初期化される。
 
-ビルドを担うのは `docker-compose.override.yml`（`-f` を付けずに実行したときだけ
-自動で読まれる）。配置先の `deploy.sh` は `-f docker-compose.yml` を明示するため、
-そちらはロード済みイメージをそのまま使う。
+ビルドと「`.env` を任意にする」を担うのは `docker-compose.override.yml`（`-f` を
+付けずに実行したときだけ自動で読まれる）。配置先の `deploy.sh` は
+`-f docker-compose.yml` を明示するため、そちらはロード済みイメージをそのまま使い、
+`.env`（`deploy.sh` が自動生成する）も従来どおり必須のまま。この分け方は
+`env_file` の `required:` が Compose 2.24.0 以降の機能で、配置先の Compose が
+それより古いことがあるため。
 
 ## DB に直接つなぎたいとき
 

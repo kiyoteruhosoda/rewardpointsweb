@@ -14,7 +14,13 @@ build を本体へ足さなかったのは、配置先にはソースが無く�
 で入るため。代わりに `docker-compose.override.yml` に `build:` を置いた。この
 ファイルは `-f` を付けずに実行したときだけ自動で読まれ、`deploy.sh` は
 `-f docker-compose.yml` を明示するので配置先の挙動は変わらない（dist / イメージ
-にも入らない）。併せて `env_file` を `required: false` にし、`.env` を任意にした。
+にも入らない）。
+
+`.env` を任意にするのも同じ override で行う。本体の `env_file: [.env]` と同じパスを
+長い書式（`path:` + `required: false`）で上書きすると後者が勝ち、`.env` が無くても
+起動する。本体を長い書式にしなかったのは、`required:` が Compose 2.24.0 以降の機能
+で、それより古い Compose（Synology の Container Manager 等）はファイルを読み込む前に
+弾くため。配置先が使うのは本体だけなので、Compose の版を選ばない短い書式のまま残した。
 
 compose プロジェクト名は無指定だと配置ディレクトリ名になり、リポジトリを別名の
 ディレクトリへ clone しただけでコンテナ・ネットワークの名前が変わっていた。
