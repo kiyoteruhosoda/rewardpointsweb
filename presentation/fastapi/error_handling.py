@@ -22,6 +22,19 @@
 を行う。ドメイン例外の対応付けは各コンテキストの ``error_handling`` が担うので、
 ここへ個別の例外を足さない（記録には :func:`log_failed_request` を使う）。
 
+入力検証の失敗（422）もここで応答を組み立てる。FastAPI の既定は
+``{"detail": [{"type": ..., "loc": ..., "input": ...}]}`` という**配列**で、
+
+- 画面が原因を出せない。SPA は ``{"detail": {"error": "..."}}`` からコードを
+  取り出す（``frontend/src/services/api.ts``）。配列は当てはまらないため、
+  入力のどこが悪くても一律 ``unknown_error`` の文言にしかならない。
+- 送った値がそのまま返る。``input`` には落ちた項目の値——短すぎたパスワードや
+  メールアドレス——が平文で入る。ログでは項目名と理由だけに絞っているのに
+  （:func:`_validation_failures`）、応答で外へ出てしまう。
+
+そこで他の失敗と同じ形へ揃え、**項目名だけ**を載せる（``fields``）。値も
+Pydantic の内部的な理由（``string_too_short`` 等）も応答には出さない。
+
 受け皿は**二重**に置く。
 
 1. :class:`~presentation.fastapi.middleware.internal_error.InternalErrorMiddleware`
@@ -38,10 +51,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI, Request, status
-from fastapi.exception_handlers import (
-    http_exception_handler,
-    request_validation_exception_handler,
-)
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -52,6 +62,10 @@ from shared.kernel.logging.request_context import current_request_id
 logger = logging.getLogger(__name__)
 
 INTERNAL_ERROR_CODE = "internal_error"
+VALIDATION_ERROR_CODE = "validation_error"
+
+# ``loc`` の先頭に入るリクエスト上の位置。項目名を作るときは取り除く。
+_LOCATIONS = frozenset({"body", "query", "path", "header", "cookie"})
 
 # 401 は運用上ふつうに起きる（トークンの期限切れ・未ログインでの API 呼び出し）。
 # ここだけ INFO へ落とす。残りの 4xx は「利用者か呼び出し側の想定違い」として
@@ -157,6 +171,42 @@ def _validation_failures(error: RequestValidationError) -> str:
     )
 
 
+def _field_name(location: tuple[object, ...]) -> str:
+    """``("body", "display_name")`` → ``"display_name"``。
+
+    先頭のリクエスト上の位置は落とし、残りを ``.`` でつなぐ。配列の添字は
+    項目名にならないので落とす（``("body", 0, "name")`` → ``"name"``）。本文
+    そのものが読めなかった場合は残りが無くなるため、位置をそのまま名前にする。
+    """
+    parts = [str(part) for part in location if not isinstance(part, int)]
+    if parts and parts[0] in _LOCATIONS:
+        head, *rest = parts
+        return ".".join(rest) if rest else head
+    return ".".join(parts) or "body"
+
+
+def invalid_field_names(error: RequestValidationError) -> list[str]:
+    """検証に落ちた項目の名前を、重複を除いて出現順に並べる。
+
+    **名前だけを返す**。値（``input``）も Pydantic の理由（``type``）も応答へ
+    出さない——値には打ち込んだパスワードやメールアドレスが入る。
+    """
+    names: list[str] = []
+    for item in error.errors():
+        name = _field_name(tuple(item.get("loc", ())))
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def validation_error_response(error: RequestValidationError) -> JSONResponse:
+    """入力検証の失敗を、他の失敗と同じ ``{"error": ...}`` の形で返す。"""
+    return JSONResponse(
+        status_code=_VALIDATION_ERROR_STATUS,
+        content={"detail": {"error": VALIDATION_ERROR_CODE, "fields": invalid_field_names(error)}},
+    )
+
+
 def register_error_handling(app: FastAPI) -> None:
     """失敗の記録と、ミドルウェアより外側で起きた例外のための保険を登録する。"""
 
@@ -178,7 +228,7 @@ def register_error_handling(app: FastAPI) -> None:
                 "invalid_fields": invalid_fields,
             },
         )
-        return await request_validation_exception_handler(request, error)
+        return validation_error_response(error)
 
     @app.exception_handler(Exception)
     async def _handle_unexpected(request: Request, error: Exception) -> JSONResponse:
@@ -187,10 +237,13 @@ def register_error_handling(app: FastAPI) -> None:
 
 __all__ = [
     "INTERNAL_ERROR_CODE",
+    "VALIDATION_ERROR_CODE",
     "error_code_of",
     "internal_error_response",
+    "invalid_field_names",
     "log_failed_request",
     "log_level_for_status",
     "log_unhandled_exception",
     "register_error_handling",
+    "validation_error_response",
 ]

@@ -96,6 +96,8 @@ export function UsersPage() {
           placeholder={t('common.username')}
           aria-label={t('common.username')}
           autoComplete="off"
+          minLength={3}
+          maxLength={255}
           required
         />
         <input
