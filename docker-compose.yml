@@ -1,3 +1,9 @@
+# compose プロジェクト名。無指定だと配置ディレクトリ名になり、リポジトリを
+# 別名のディレクトリへ clone しただけでコンテナ・ネットワークの名前が変わる。
+# deploy.sh は `docker compose -p <アプリ名>-<環境>` を渡すので、そちらが優先される
+# （-p > COMPOSE_PROJECT_NAME > この name > ディレクトリ名）。
+name: rewardpointsweb
+
 services:
   init-paths:
     image: alpine
@@ -33,8 +39,11 @@ services:
     # （手順は docs/OPERATIONS.md「DB に直接つなぎたいとき」）。
     expose:
       - "3306"
+    # .env が無くても起動できるようにする（各値は上の ${VAR:-default} が供給する）。
+    # 外部公開する環境では .env を置いて資格情報を必ず上書きすること。
     env_file:
-      - .env
+      - path: .env
+        required: false
     volumes:
       - ${HOST_DATA_ROOT:-./mnt}/db_data:/var/lib/mysql
     command:
@@ -67,7 +76,8 @@ services:
       - TZ=UTC
       - DATABASE_URI=mysql+pymysql://${MARIADB_USER:-web_user}:${MARIADB_PASSWORD:-template123}@db:3306/${MARIADB_DATABASE:-appdb}?charset=utf8mb4
     env_file:
-      - .env
+      - path: .env
+        required: false
     depends_on:
       db:
         condition: service_healthy

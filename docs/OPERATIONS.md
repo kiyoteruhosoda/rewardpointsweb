@@ -126,12 +126,28 @@ uv run alembic revision --autogenerate -m "<description>"
 
 ## docker compose でローカル起動したいとき
 
+リポジトリのルートで実行する。`.env` は必須ではなく、無ければ
+`docker-compose.yml` の既定値（開発向け）で起動する。
+
 ```bash
-cp .env.example .env             # 必要に応じて編集
-docker compose up -d             # db / web / nginx が起動
+docker compose up -d --build     # db / web / nginx が起動（初回はイメージをビルド）
+docker compose logs -f web       # 起動の様子を見る
+docker compose down              # 停止（データは mnt/ に残る）
 ```
 
 - アプリ: http://127.0.0.1:8080 （nginx 経由）
+- 初回は web / db のイメージをビルドするため数分かかる。2 回目以降は `--build` を
+  外せば既存のイメージを使う。
+- コンテナ・ネットワーク・イメージの名前は `rewardpointsweb` で固定される
+  （compose プロジェクト名は `docker-compose.yml` の `name:`）。clone 先の
+  ディレクトリ名には依存しない。
+- 設定を変えたいときは `cp .env.example .env` して編集する。公開する環境では
+  DB 資格情報・`JWT_SECRET_KEY` などを必ず上書きすること。
+- 永続データはホストの `mnt/`（`HOST_DATA_ROOT`）。消すと DB は初期化される。
+
+ビルドを担うのは `docker-compose.override.yml`（`-f` を付けずに実行したときだけ
+自動で読まれる）。配置先の `deploy.sh` は `-f docker-compose.yml` を明示するため、
+そちらはロード済みイメージをそのまま使う。
 
 ## DB に直接つなぎたいとき
 

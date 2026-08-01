@@ -217,3 +217,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# docker compose のホストマウント（HOST_DATA_ROOT の既定値）
+mnt/
