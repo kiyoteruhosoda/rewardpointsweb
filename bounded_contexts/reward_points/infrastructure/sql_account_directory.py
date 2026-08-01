@@ -38,6 +38,9 @@ _ROLE_FOR_FAMILY_ROLE = {
     FamilyRole.CHILD: "member",
 }
 
+# 保護者に必要な scope の全部。これらが全て揃っているアカウントに昇格は不要
+_GUARDIAN_SCOPES = frozenset({"family:view", "family:manage", "point:view", "point:manage"})
+
 # 一時パスワードは親が口頭で伝える前提。読み間違えにくい英数字だけを使う。
 _TEMPORARY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 _TEMPORARY_LENGTH = 10
@@ -83,6 +86,12 @@ class SqlAccountProvisioning(IAccountProvisioning):
         user = self._session.get(User, account_id)
         if user is None:  # 呼び出し側が membership から引いた ID なので通常は起きない
             raise ValueError(f"account not found: {account_id}")
+        # admin のように保護者の scope を全て持つアカウントには何もしない。
+        # ロールの構成へ触れる前に判定する — 判定より先に member を外すと、
+        # 保護者側のロールが持たない scope（閲覧等）を黙って失い得る
+        held = {permission.code for role in user.roles for permission in role.permissions}
+        if held >= _GUARDIAN_SCOPES:
+            return
         child_role = _ROLE_FOR_FAMILY_ROLE[FamilyRole.CHILD]
         guardian_role = _ROLE_FOR_FAMILY_ROLE[FamilyRole.PARENT]
         user.roles = [role for role in user.roles if role.name != child_role]

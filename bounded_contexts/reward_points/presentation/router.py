@@ -216,8 +216,13 @@ async def list_families(use_case: ListFamiliesDep, principal: FamilyViewer) -> l
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=FamilyDetailResponse)
 async def create_family(
-    body: FamilyCreateRequest, use_case: CreateFamilyDep, principal: FamilyManager
+    body: FamilyCreateRequest, use_case: CreateFamilyDep, principal: FamilyViewer
 ) -> FamilyDetailResponse:
+    """家族を作る。所属の入口なので、招待の受諾と同じく ``family:view`` で呼べる。
+
+    作った人が owner になり、保護者のアプリケーションロールへ昇格する
+    （ADR-0017）。昇格後の scope は再ログインで有効になる。
+    """
     dto = use_case.execute(
         CreateFamilyCommand(
             name=body.name,

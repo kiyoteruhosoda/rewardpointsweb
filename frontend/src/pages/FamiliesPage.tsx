@@ -1,8 +1,9 @@
 /**
  * 家族の一覧。1 つのアカウントが複数の家族に所属できる（ADR-0009）。
  *
- * 家族を作れるのは `family:manage` を持つ人だけ。作った人がその家族の owner に
- * なる。子どもは招待コードで加わるので、この画面には「作る」しか無い。
+ * 家族は所属していない人なら誰でも作れる（`family:view` — ADR-0017）。作った人が
+ * その家族の owner になり、保護者の権限へ昇格する。scope はトークンに焼き込まれて
+ * いるため、昇格が起きたときは再ログインを促す（ADR-0014 の独立と同じ扱い）。
  */
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
@@ -15,13 +16,16 @@ import { useAuth } from '../store/AuthContext'
 
 export function FamiliesPage() {
   const { t } = useI18n()
-  const { hasScope } = useAuth()
+  const { hasScope, logout } = useAuth()
   const { notify } = useToast()
   const [list, setList] = useState<FamilySummary[] | null>(null)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
 
-  const canCreate = hasScope('family:manage')
+  const canCreate = hasScope('family:view')
+  // 保護者に必要な scope の全部（バックエンドの昇格スキップ条件と対）。
+  // どれかが欠けていれば、作成・親としての参加でロールが昇格している
+  const isGuardian = hasScope('family:view', 'family:manage', 'point:view', 'point:manage')
 
   const reload = () => families.list().then(setList)
 
@@ -36,6 +40,12 @@ export function FamiliesPage() {
     try {
       await families.create(name)
       setName('')
+      if (!isGuardian) {
+        // owner へ昇格したが、いまのトークンには古い scope しか無い
+        notify('success', t('families.createdRelogin'))
+        logout()
+        return
+      }
       await reload()
       notify('success', t('common.saved'))
     } catch (error) {
@@ -46,8 +56,14 @@ export function FamiliesPage() {
   const join = async (event: FormEvent) => {
     event.preventDefault()
     try {
-      await families.acceptInvitation(code, null)
+      const joined = await families.acceptInvitation(code, null)
       setCode('')
+      if (joined.role !== 'child' && !isGuardian) {
+        // 親として加わり保護者へ昇格した。新しい scope は再ログインで有効になる
+        notify('success', t('families.joinedRelogin'))
+        logout()
+        return
+      }
       await reload()
       notify('success', t('families.joined'))
     } catch (error) {
