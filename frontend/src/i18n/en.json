@@ -9,6 +9,7 @@
   "common.active": "Active",
   "common.back": "Back",
   "common.delete": "Delete",
+  "common.displayName": "Display name",
   "common.email": "Email",
   "common.hidePassword": "Hide password",
   "common.language": "Language",
@@ -237,5 +238,7 @@
   "theme.light": "Light",
   "theme.system": "Follow the OS",
   "users.add": "Add user",
+  "users.emailOptional": "Email (optional)",
+  "users.role": "Role",
   "users.title": "Users"
 }
