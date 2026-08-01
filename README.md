@@ -74,9 +74,13 @@ make format             # 整形の指摘を自動修正
 ## Docker / デプロイ
 
 ```bash
+docker compose up -d --build    # ローカルで db / web / nginx を起動 → http://127.0.0.1:8080
 ./scripts/build.sh              # dist/ に image.tar / image-db.tar / deploy.sh / manifest
-docker compose up -d            # ローカルで db / web / nginx を起動（要 .env）
 ```
+
+`docker compose up` は clone 直後にそのまま動きます（`.env` は任意。無ければ
+開発向けの既定値が使われる）。compose プロジェクト名は `rewardpointsweb` で固定
+なので、clone 先のディレクトリ名を変えてもコンテナ・ネットワーク名は変わりません。
 
 配置先サーバーでは `dist/` の中身を `<app>/<stg|prod>/` に置き、
 `./deploy.sh <app|migrate|reset>` を実行します。git の無いデプロイ先では

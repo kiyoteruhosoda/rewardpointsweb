@@ -1,3 +1,9 @@
+# compose プロジェクト名。無指定だと配置ディレクトリ名になり、リポジトリを
+# 別名のディレクトリへ clone しただけでコンテナ・ネットワークの名前が変わる。
+# deploy.sh は `docker compose -p <アプリ名>-<環境>` を渡すので、そちらが優先される
+# （-p > COMPOSE_PROJECT_NAME > この name > ディレクトリ名）。
+name: rewardpointsweb
+
 services:
   init-paths:
     image: alpine
@@ -33,6 +39,10 @@ services:
     # （手順は docs/OPERATIONS.md「DB に直接つなぎたいとき」）。
     expose:
       - "3306"
+    # ここは短い書式のまま置く。`required:` を使う長い書式は Compose 2.24.0 以降で、
+    # 古い Compose（Synology の Container Manager 等）では読み込み前に弾かれる。
+    # deploy.sh はこのファイルを単体で使うため、配置先の Compose 版を選ばない形にする。
+    # .env を任意にするのは docker-compose.override.yml（手元だけ）。
     env_file:
       - .env
     volumes:
@@ -66,6 +76,7 @@ services:
     environment:
       - TZ=UTC
       - DATABASE_URI=mysql+pymysql://${MARIADB_USER:-web_user}:${MARIADB_PASSWORD:-template123}@db:3306/${MARIADB_DATABASE:-appdb}?charset=utf8mb4
+    # 短い書式で置く理由は db と同じ（配置先の Compose 版を選ばない）。
     env_file:
       - .env
     depends_on:

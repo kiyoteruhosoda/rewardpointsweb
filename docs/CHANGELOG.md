@@ -2,6 +2,36 @@
 
 新しいものを上に追記する。細かな進捗は書かない（Progress.md 完了時に要約を移す）。
 
+## 2026-08 clone 直後に `docker compose up` が通るようにし、名前を `rewardpointsweb` で固定した
+
+README・OPERATIONS には「`docker compose up -d`」と書いてあったが、実際には動かな
+かった。`docker-compose.yml` は `image:` を参照するだけで `build:` を持たないため、
+compose は `rewardpointsweb:latest` を registry へ探しに行って失敗する。手元で先に
+`scripts/build.sh` を回すか、`.env` を作っておく（`env_file` が必須だった）必要が
+あった。
+
+build を本体へ足さなかったのは、配置先にはソースが無く、イメージは `docker load`
+で入るため。代わりに `docker-compose.override.yml` に `build:` を置いた。この
+ファイルは `-f` を付けずに実行したときだけ自動で読まれ、`deploy.sh` は
+`-f docker-compose.yml` を明示するので配置先の挙動は変わらない（dist / イメージ
+にも入らない）。
+
+`.env` を任意にするのも同じ override で行う。本体の `env_file: [.env]` と同じパスを
+長い書式（`path:` + `required: false`）で上書きすると後者が勝ち、`.env` が無くても
+起動する。本体を長い書式にしなかったのは、`required:` が Compose 2.24.0 以降の機能
+で、それより古い Compose（Synology の Container Manager 等）はファイルを読み込む前に
+弾くため。配置先が使うのは本体だけなので、Compose の版を選ばない短い書式のまま残した。
+
+compose プロジェクト名は無指定だと配置ディレクトリ名になり、リポジトリを別名の
+ディレクトリへ clone しただけでコンテナ・ネットワークの名前が変わっていた。
+`name: rewardpointsweb` を明示して固定した。`deploy.sh` が渡す
+`-p <アプリ名>-<環境>` の方が優先されるため、「配置場所がデプロイの名前を決める」
+方針（stg / prod の同居）はそのまま。
+
+`mnt/`（`HOST_DATA_ROOT` の既定値。DB のデータ実体）を `.gitignore` と
+`.dockerignore` へ追加した。手元で起動すると作られるため、そのままではビルド文脈
+へ数 GB が入る。
+
 ## 2026-08 本番（MariaDB）でマイグレーション `0007_family_point_ledger` が落ちていた
 
 デプロイが `Cannot drop index 'ix_point_entries_member_id': needed in a foreign key
