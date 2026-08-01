@@ -1,9 +1,9 @@
 /** API クライアントのトークン保持とエラーコード変換。 */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import en from '../i18n/en.json'
 import ja from '../i18n/ja.json'
-import { ApiError, clearTokens, errorMessageKey, hasTokens, setTokens } from './api'
+import { api, ApiError, clearTokens, errorMessageKey, hasTokens, setTokens } from './api'
 
 describe('errorMessageKey', () => {
   it('ApiError のコードを i18n キーへ変換する', () => {
@@ -81,5 +81,49 @@ describe('トークンの保持', () => {
     setTokens('access', 'refresh')
     clearTokens()
     expect(hasTokens()).toBe(false)
+  })
+
+  it('トークンと一緒にオフライン閲覧キャッシュも消す（ADR-0015）', () => {
+    const deleteCache = vi.fn<(name: string) => Promise<boolean>>().mockResolvedValue(true)
+    vi.stubGlobal('caches', { delete: deleteCache })
+    try {
+      clearTokens()
+      expect(deleteCache).toHaveBeenCalledWith('offline-views')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+describe('取得時刻付きの GET（オフライン閲覧用。ADR-0015）', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function stubFetch(headers: Record<string, string>): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(new Response(JSON.stringify({ balance: 100 }), { status: 200, headers })),
+      ),
+    )
+  }
+
+  it('Date ヘッダーを取得時刻として返す', async () => {
+    stubFetch({ Date: 'Sat, 01 Aug 2026 10:00:00 GMT' })
+
+    const result = await api.getFetched<{ balance: number }>('/api/families/1/ledgers/2')
+
+    expect(result.data).toEqual({ balance: 100 })
+    expect(result.fetchedAt).toEqual(new Date('2026-08-01T10:00:00Z'))
+  })
+
+  it('Date ヘッダーが無ければ取得時刻は null', async () => {
+    stubFetch({})
+
+    const result = await api.getFetched<{ balance: number }>('/api/families/1/ledgers/2')
+
+    expect(result.data).toEqual({ balance: 100 })
+    expect(result.fetchedAt).toBeNull()
   })
 })

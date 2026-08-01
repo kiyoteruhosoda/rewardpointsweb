@@ -214,6 +214,7 @@
   "points.change": "Change",
   "points.confirmReverse": "Add a matching entry that cancels this one? The original stays in the history.",
   "points.consume": "Use points",
+  "points.fetchedAt": "As of {time}",
   "points.history": "History",
   "points.historyEmpty": "Nothing recorded yet.",
   "points.isReversal": "undo",

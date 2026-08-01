@@ -561,6 +561,14 @@ th {
   font-variant-numeric: tabular-nums;
 }
 
+/* 残高をいつ取得したか。オフラインでは古いキャッシュが出得るため常に示す
+   （ADR-0015）。 */
+.fetched-at {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 /* 打ち消された記録。台帳は追記専用で行が消えないため、取り消された事実を
    見た目でも示す（ADR-0010）。 */
 tr.reversed {

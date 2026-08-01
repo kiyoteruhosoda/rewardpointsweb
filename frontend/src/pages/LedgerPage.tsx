@@ -26,6 +26,7 @@ export function LedgerPage() {
   const { t, locale } = useI18n()
   const { notify } = useToast()
   const [ledger, setLedger] = useState<Ledger | null>(null)
+  const [fetchedAt, setFetchedAt] = useState<Date | null>(null)
   const [reasons, setReasons] = useState<string[]>([])
   const [failed, setFailed] = useState(false)
 
@@ -36,7 +37,10 @@ export function LedgerPage() {
     () =>
       families
         .viewLedger(family, id)
-        .then(setLedger)
+        .then((result) => {
+          setLedger(result.data)
+          setFetchedAt(result.fetchedAt)
+        })
         .catch((error: unknown) => {
           setFailed(true)
           notify('error', t(errorMessageKey(error)))
@@ -89,6 +93,12 @@ export function LedgerPage() {
           {t('points.balance')}: <strong>{t('points.value', { points: ledger.balance })}</strong>
         </p>
         {ledger.balance < 0 && <p>{t('points.negative', { points: -ledger.balance })}</p>}
+        {/* オフラインでは古いキャッシュが出得るので、いつの情報かを常に示す（ADR-0015） */}
+        {fetchedAt !== null && (
+          <p className="fetched-at">
+            {t('points.fetchedAt', { time: fetchedAt.toLocaleString(locale) })}
+          </p>
+        )}
       </section>
 
       <section className="card">
