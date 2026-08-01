@@ -2,6 +2,35 @@
 
 新しいものを上に追記する。細かな進捗は書かない（Progress.md 完了時に要約を移す）。
 
+## 2026-08 家族の改名・脱退・解散・独立を画面から行えるようにした（Progress T6）
+
+API（ADR-0013 / ADR-0014）は実装済みだったが、FamilyPage からの操作 UI が無かった。
+
+- **家族の設定パネル**（`frontend/src/components/FamilySettingsPanel.tsx`）を追加。
+  改名と解散は owner、脱退は親（owner / parent）に出す。「他に親が残っているか」
+  「自分以外の参加者がいないか」といった成立条件はサーバーが検証し、画面は
+  エラーコードの文言を出すだけ。脱退・解散の成立後は家族一覧へ戻る。
+- **独立の指示・取り下げ**（親メンバー）を参加者の表に追加。アカウントの結び付いた
+  子にだけ出し、指示済みは名前の横に目印を付けて取り下げに切り替える。
+- **独立の承認**（指示を受けた子本人）のカードを追加。記録がすべて削除されることを
+  説明と確認ダイアログの両方で示し（ADR-0014）、成立後はログアウトして再ログインを
+  促す（昇格した scope は JWT に焼き込まれるため再ログインまで効かない）。
+- API クライアントに `PATCH` を追加し、`families` に rename / leave / dissolve /
+  独立 3 操作を追加。`Membership` に `independence_proposed` を追加。
+
+## 2026-08 `password_reset_tokens` を残したアカウントの削除が本番で失敗するのを直した（Progress T3）
+
+`password_reset_tokens.user_id` → `users.id` の外部キーに `ON DELETE` が無く、
+パスワード再設定を一度でも申請したアカウントを削除すると、本番（MariaDB）では
+外部キーに阻まれて 500 になっていた。削除時に消してよいトークンなので、拒否では
+なく追随させる（`ON DELETE CASCADE`。`0009_password_reset_token_cascade`）。
+
+ベースラインはこの外部キーを無名で作っているため、SQLite では
+`naming_convention` を渡した batch モードで決め打ちの名前を与えて落とし、
+MariaDB では実際に付いた名前をリフレクションで拾う。開発用 SQLite は既定で
+外部キーを検査しないので、追随の検証は PRAGMA を有効にした
+`tests/integration/test_password_reset_token_cascade.py` が行う。
+
 ## 2026-08 ゲスト（子）の独立を実装
 
 親メンバーが指示し、子本人が承認する 2 段階で成立する（ADR-0014）。
