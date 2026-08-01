@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { PasswordField } from '../components/PasswordField'
 import { useI18n } from '../i18n'
@@ -14,6 +14,13 @@ export function LoginPage() {
   const { t } = useI18n()
   const { login, loginWithPasskey } = useAuth()
   const navigate = useNavigate()
+  // 招待コードを持ったままここへ来ることがある（アカウント作成の画面から回された
+  // 場合）。ログイン後は既定の行き先ではなく、そのコードで参加できる家族の画面へ送る。
+  const [searchParams] = useSearchParams()
+  const pendingCode = searchParams.get('code')?.trim() ?? ''
+  const destination = pendingCode ? `/families?code=${encodeURIComponent(pendingCode)}` : '/'
+  // 行き来してもコードを落とさない（ここで落とすと打ち直しになる）
+  const joinPath = pendingCode ? `/join?code=${encodeURIComponent(pendingCode)}` : '/join'
   const [step, setStep] = useState<Step>('credentials')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -26,7 +33,7 @@ export function LoginPage() {
     setError(null)
     try {
       await login(username, password, step === 'totp' ? totpCode : undefined)
-      navigate('/')
+      navigate(destination)
     } catch (err) {
       const code = err instanceof ApiError ? err.code : 'unknown_error'
       if (code === 'totp_required') {
@@ -46,7 +53,7 @@ export function LoginPage() {
     setPasskeyBusy(true)
     try {
       await loginWithPasskey()
-      navigate('/')
+      navigate(destination)
     } catch (err) {
       if (isPasskeyCancellation(err)) {
         setError('error.passkey_cancelled')
@@ -73,6 +80,7 @@ export function LoginPage() {
         }}
       >
         <h1>{step === 'totp' ? t('login.totpTitle') : t('login.title')}</h1>
+        {pendingCode && <p className="notice">{t('login.invitationPending')}</p>}
         {error && <p className="error">{t(error)}</p>}
 
         {step === 'credentials' ? (
@@ -109,7 +117,7 @@ export function LoginPage() {
               </button>
             )}
             <Link to="/forgot-password">{t('login.forgot')}</Link>
-            <Link to="/join">{t('login.withInvitation')}</Link>
+            <Link to={joinPath}>{t('login.withInvitation')}</Link>
           </>
         ) : (
           <>

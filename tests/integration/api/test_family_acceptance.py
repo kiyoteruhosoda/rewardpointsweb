@@ -46,6 +46,31 @@ def ledger(client: TestClient, parent: Account) -> Ledger:
 # --- 家族 --------------------------------------------------------------------
 
 
+def test_accepting_without_a_name_falls_back_to_the_account_display_name(
+    client: TestClient, admin_headers: dict[str, str], parent: Account
+) -> None:
+    """呼び名を省いた受諾はアカウントの表示名で通る（画面はこの形で送る）。
+
+    親の招待は参加を指していないので `_join_as_new` に入り、呼び名が無いと
+    `display_name_required` で断られる。画面（家族の一覧）は呼び名を尋ねないため、
+    ここが埋まらないと「コードで参加する」が必ず失敗する。
+    """
+    mother = create_account(client, admin_headers, username="mom", role="member", display_name="おかあさん")
+    family_id = create_family(client, parent.headers)
+    invitation = issue_invitation(client, parent.headers, family_id, role="parent")
+
+    response = client.post(
+        "/api/families/invitations/accept",
+        headers=mother.headers,
+        json={"code": invitation["code"]},
+    )
+    assert response.status_code == 200, response.text
+
+    detail = client.get(f"/api/families/{family_id}", headers=parent.headers).json()
+    joined = next(m for m in detail["memberships"] if m["username"] == "mom")
+    assert joined["display_name"] == "おかあさん"
+
+
 def test_account_cannot_join_the_same_family_twice(client: TestClient, parent: Account) -> None:
     """DB の UNIQUE 制約に頼らず、アプリケーション層でも断る。"""
     family_id = create_family(client, parent.headers)

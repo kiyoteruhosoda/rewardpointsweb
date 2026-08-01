@@ -36,7 +36,7 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     "APP_BASE_URL": "",  # パスワードリセットリンク等の生成元（例: https://app.example.com）
     "LANGUAGES": ["en", "ja"],
     "DEFAULT_LOCALE": "en",
-    "DEFAULT_THEME": "system",  # system / light / dark
+    "DEFAULT_THEME": "light",  # system / light / dark
     "CORS_ALLOWED_ORIGINS": [],
     # --- メール ---
     "MAIL_ENABLED": False,

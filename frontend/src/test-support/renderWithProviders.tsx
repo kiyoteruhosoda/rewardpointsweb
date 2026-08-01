@@ -6,7 +6,7 @@
  * ので、「権限があるとき／ないとき」の描き分けをそのまま検証できる。
  */
 import { render, type RenderResult } from '@testing-library/react'
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import { ToastProvider } from '../components/ToastNotification'
@@ -39,6 +39,11 @@ interface Options {
   path?: string
   /** ログアウトの観測（再ログイン誘導を検証する画面で使う）。 */
   logout?: () => void
+  /**
+   * 追加の `<Route>`。画面が別の URL へ送るところまで検証したいときに、
+   * 行き先の目印として置く（`path` を絞ったうえで使う）。
+   */
+  extraRoutes?: ReactNode
 }
 
 function authValueOf(scopes: string[], logout: () => void): AuthValue {
@@ -54,7 +59,13 @@ function authValueOf(scopes: string[], logout: () => void): AuthValue {
 }
 
 export function renderWithProviders(ui: ReactElement, options: Options = {}): RenderResult {
-  const { scopes = [], route = '/', path = '*', logout = () => undefined } = options
+  const {
+    scopes = [],
+    route = '/',
+    path = '*',
+    logout = () => undefined,
+    extraRoutes = null,
+  } = options
   // 言語は en に固定する。利用者の選択（localStorage）が残っていると期待文言が変わる。
   localStorage.setItem('locale', 'en')
 
@@ -66,6 +77,7 @@ export function renderWithProviders(ui: ReactElement, options: Options = {}): Re
             <MemoryRouter initialEntries={[route]}>
               <Routes>
                 <Route path={path} element={ui} />
+                {extraRoutes}
               </Routes>
             </MemoryRouter>
           </ToastProvider>

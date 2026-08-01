@@ -65,13 +65,17 @@ class SqlAccountProvisioning(IAccountProvisioning):
         normalized = normalize_username(username)
         return self._session.scalar(select(User.id).where(User.username == normalized)) is not None
 
-    def create_account(self, *, username: str, password: str, role: FamilyRole) -> AccountRef:
+    def create_account(
+        self, *, username: str, password: str, role: FamilyRole, display_name: str | None = None
+    ) -> AccountRef:
         normalized = normalize_username(username)
+        chosen_name = display_name.strip() if display_name else ""
         user = User(
             username=normalized,
             # 子アカウントはメールアドレスを収集しない（ADR-0011）
             email=None,
-            display_name=normalized,
+            # 名乗りたい名前が無ければログイン識別子をそのまま出す
+            display_name=chosen_name or normalized,
             password_hash=generate_password_hash(password),
             is_active=True,
         )
