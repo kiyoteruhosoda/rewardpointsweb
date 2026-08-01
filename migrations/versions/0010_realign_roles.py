@@ -57,8 +57,17 @@ _user_roles = sa.table("user_roles", sa.column("user_id"), sa.column("role_id"))
 _memberships = sa.table("family_memberships", sa.column("account_id"), sa.column("role"))
 
 
+# 組み込みロールの id。``ROLES``（正本）が「id は外部参照の安定キー」と定めている
+# とおり、名前ではなく id で引く。名前は ``PUT /api/admin/roles/{role_id}`` で
+# 運用者が変えられる可変の値で、改名された環境では名前での検索が空振りする。
+# 空振りすると付与の増減も割り当ての引き直しも黙って飛ばされ、権限を変えたつもりで
+# 変わっていない状態のまま移行が通ってしまう。
+_BUILTIN_ROLE_IDS: dict[str, int] = {"admin": 1, "manager": 2, "member": 3, "guest": 4}
+
+
 def _role_id(bind: Connection, name: str) -> int | None:
-    found = bind.scalar(sa.select(_roles.c.id).where(_roles.c.name == name))
+    """組み込みロールの id。そのロールが消されている環境では ``None``。"""
+    found = bind.scalar(sa.select(_roles.c.id).where(_roles.c.id == _BUILTIN_ROLE_IDS[name]))
     return None if found is None else int(str(found))
 
 
