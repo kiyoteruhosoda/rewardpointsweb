@@ -7,6 +7,8 @@
 # 別のアプリを別のディレクトリへ置けば、名前は構造的に衝突しない（スクリプトに
 # アプリ名を焼き込むと、同じ名前を使う別アプリと container_name やホストポートを
 # 奪い合う）。ディレクトリ名を使えないときだけ .env の APP_NAME で上書きする。
+# ただし LEGACY_APP_NAMES の旧名だけは、どの出所から来ても採用しない（引退した名前を
+# 名乗り続けないため。旧名の配置ディレクトリのままでも新しい名前へ移行する）。
 #
 # 配置想定（環境ごとに自己完結したディレクトリ。<app>/ 配下に stg/ と prod/ を置き、
 # scripts/build.sh が出力した dist/ の中身をそのまま展開する）:
@@ -49,6 +51,14 @@ BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_NAME="$(basename "$BASE_DIR")"
 ENV_FILE="$BASE_DIR/.env"
 
+# ===== ログ =====
+# TAG は ENV_NAME にしか依存しない。アプリ名の解決でも警告を出すため、
+# それより前に定義しておく。
+TAG="[deploy:$ENV_NAME]"
+log()  { echo -e "\033[36m${TAG}\033[0m $*"; }
+warn() { echo -e "\033[33m${TAG}[warn]\033[0m $*" >&2; }
+err()  { echo -e "\033[31m${TAG}[error]\033[0m $*" >&2; }
+
 # ===== .env の値を読む（compose interpolation と同じく「最後の定義」を採用） =====
 # CR と前後の空白は必ず除去する（CR が残るとバインドマウント失敗の原因になる）。
 # APP_NAME の解決で使うため、他のパス定義より先に置く。
@@ -60,6 +70,7 @@ env_file_value() {
 }
 
 # ===== アプリ名の決定（.env の APP_NAME > 親ディレクトリ名 > ビルド時の名前） =====
+# ただし LEGACY_APP_NAMES に挙げた旧名は、どの出所から来ても採用しない（後述）。
 # docker の識別子として使うため、小文字英数と `-` `_` に正規化する。正規化しても
 # 空になる（記号だけ等）場合は、名前を人に決めてもらう。
 normalize_app_name() {
@@ -76,6 +87,21 @@ if [ -z "$APP_NAME" ]; then
   APP_NAME="$BUILD_APP_NAME"
   APP_NAME_SOURCE="ビルド時の既定値"
 fi
+
+# 旧アプリ名は「引退した名前」であって、選べる名前ではない。配置ディレクトリが
+# 旧名のままだったり、旧名の頃に自動生成された .env の APP_NAME が残っていたりすると、
+# 名前の出所としては正しく解決できてしまい、いつまでも旧名でコンテナが作られ続ける。
+# 解決結果が旧名に当たったらビルド時の名前へ倒す。ここで倒しておくことで、この後の
+# migrate_legacy_env_names（.env の焼き付き）と take_down_legacy_projects（旧名で
+# 動いているコンテナ）も本来の移行経路として働く。
+for legacy_name in $LEGACY_APP_NAMES; do
+  [ "$APP_NAME" = "$legacy_name" ] || continue
+  warn "${APP_NAME_SOURCE}から旧アプリ名 '$legacy_name' が解決されました。引退した名前のため '$BUILD_APP_NAME' を使います。"
+  warn "この警告を消すには、配置ディレクトリを '$BUILD_APP_NAME' へ改名し（.env の HOST_DATA_ROOT も新しいパスへ直す）、.env の APP_NAME 指定を外してください。"
+  APP_NAME="$BUILD_APP_NAME"
+  APP_NAME_SOURCE="ビルド時の既定値（旧アプリ名 '$legacy_name' からの移行）"
+  break
+done
 
 # ===== 環境判定（配置ディレクトリ名で stg / prod を切り替える） =====
 # ENV_KIND（stg / prod）が分類の正。以降の分岐は ENV_NAME の字面ではなく ENV_KIND で行う
@@ -97,11 +123,6 @@ case "$ENV_NAME" in
     exit 1
     ;;
 esac
-
-TAG="[deploy:$ENV_NAME]"
-log()  { echo -e "\033[36m${TAG}\033[0m $*"; }
-warn() { echo -e "\033[33m${TAG}[warn]\033[0m $*" >&2; }
-err()  { echo -e "\033[31m${TAG}[error]\033[0m $*" >&2; }
 
 APP_IMAGE="${APP_NAME}:$ENV_NAME"
 DB_IMAGE="${APP_NAME}-db:$ENV_NAME"
@@ -348,7 +369,7 @@ migrate_legacy_env_names() {
   [ -f "$ENV_FILE" ] || return 0
   local legacy key current expected
   for legacy in $LEGACY_APP_NAMES; do
-    # 配置ディレクトリが旧名そのものなら、それがこのデプロイの正しい名前。移行しない。
+    # 念のための番人。アプリ名の解決時に旧名は弾いてあるので、通常ここは成立しない。
     [ "$legacy" = "$APP_NAME" ] && continue
     for key in DB_CONTAINER_NAME DOCKER_NETWORK_NAME; do
       current="$(env_file_value "$key")"
@@ -511,8 +532,8 @@ take_down_legacy_projects() {
   local legacy project cids foreign
   for legacy in $LEGACY_APP_NAMES; do
     [ "$ENV_KIND" = "stg" ] && project="${legacy}-stg" || project="${legacy}"
-    # 配置ディレクトリが旧名そのものなら、それが今回のプロジェクト。直後の
-    # compose_down が畳むので、ここで先回りしない。
+    # 念のための番人。アプリ名の解決時に旧名は弾いてあるので、通常ここは成立しない。
+    # （成立するなら旧名が今回のプロジェクト自身なので、直後の compose_down が畳む。）
     [ "$project" = "$PROJECT" ] && continue
     cids="$(docker ps -aq --filter "label=com.docker.compose.project=$project" 2>/dev/null || true)"
     [ -n "$cids" ] || continue
