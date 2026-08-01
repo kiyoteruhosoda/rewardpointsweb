@@ -2,6 +2,11 @@
 
 作れるのはどの家族にも所属していないアカウントだけ（ADR-0013）。すでに所属して
 いる場合は、先に抜けて初期状態へ戻る。
+
+所属の経路は「招待を受ける」か「自分で作る」の 2 つだけなので、作成は閲覧の
+scope（``family:view``）で呼べる入口とし、成立した時点で作成者を親（メンバー）と
+同じアプリケーションロールへ昇格する（ADR-0017）。昇格しないと、owner なのに
+子の追加もポイントの記録もできない。
 """
 
 from __future__ import annotations
@@ -10,6 +15,7 @@ from dataclasses import dataclass
 
 from bounded_contexts.reward_points.application.dto.family_dto import FamilyDetailDTO, MembershipDTO
 from bounded_contexts.reward_points.domain.exceptions import AlreadyBelongsToFamilyError
+from bounded_contexts.reward_points.domain.repositories.account_directory import IAccountProvisioning
 from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
     IFamilyMembershipRepository,
 )
@@ -25,9 +31,15 @@ class CreateFamilyCommand:
 
 
 class CreateFamilyUseCase:
-    def __init__(self, families: IFamilyRepository, memberships: IFamilyMembershipRepository) -> None:
+    def __init__(
+        self,
+        families: IFamilyRepository,
+        memberships: IFamilyMembershipRepository,
+        provisioning: IAccountProvisioning,
+    ) -> None:
         self._families = families
         self._memberships = memberships
+        self._provisioning = provisioning
 
     def execute(self, command: CreateFamilyCommand) -> FamilyDetailDTO:
         if self._memberships.list_for_account(command.account_id):
@@ -39,6 +51,7 @@ class CreateFamilyUseCase:
             role=FamilyRole.OWNER,
             display_name=command.display_name,
         )
+        self._provisioning.grant_guardian_permissions(command.account_id)
         return FamilyDetailDTO(
             id=family.id,
             name=family.name_value,

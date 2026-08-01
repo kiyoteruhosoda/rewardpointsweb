@@ -37,29 +37,31 @@ interface Options {
   route?: string
   /** ルート定義のパス。既定は何にでも一致する。 */
   path?: string
+  /** ログアウトの観測（再ログイン誘導を検証する画面で使う）。 */
+  logout?: () => void
 }
 
-function authValueOf(scopes: string[]): AuthValue {
+function authValueOf(scopes: string[], logout: () => void): AuthValue {
   return {
     user: { ...USER, scopes },
     loading: false,
     login: () => Promise.resolve(),
     loginWithPasskey: () => Promise.resolve(),
-    logout: () => undefined,
+    logout,
     refreshMe: () => Promise.resolve(),
     hasScope: (...codes: string[]) => codes.every((code) => scopes.includes(code)),
   }
 }
 
 export function renderWithProviders(ui: ReactElement, options: Options = {}): RenderResult {
-  const { scopes = [], route = '/', path = '*' } = options
+  const { scopes = [], route = '/', path = '*', logout = () => undefined } = options
   // 言語は en に固定する。利用者の選択（localStorage）が残っていると期待文言が変わる。
   localStorage.setItem('locale', 'en')
 
   return render(
     <I18nProvider settings={SETTINGS}>
       <ThemeProvider settings={SETTINGS}>
-        <AuthContext.Provider value={authValueOf(scopes)}>
+        <AuthContext.Provider value={authValueOf(scopes, logout)}>
           <ToastProvider>
             <MemoryRouter initialEntries={[route]}>
               <Routes>

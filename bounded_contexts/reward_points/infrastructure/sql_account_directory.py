@@ -38,6 +38,9 @@ _ROLE_FOR_FAMILY_ROLE = {
     FamilyRole.CHILD: "member",
 }
 
+# 保護者に必要な scope の代表。これを持つロールが既にあれば昇格は不要
+_GUARDIAN_SCOPE = "family:manage"
+
 # 一時パスワードは親が口頭で伝える前提。読み間違えにくい英数字だけを使う。
 _TEMPORARY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 _TEMPORARY_LENGTH = 10
@@ -86,7 +89,11 @@ class SqlAccountProvisioning(IAccountProvisioning):
         child_role = _ROLE_FOR_FAMILY_ROLE[FamilyRole.CHILD]
         guardian_role = _ROLE_FOR_FAMILY_ROLE[FamilyRole.PARENT]
         user.roles = [role for role in user.roles if role.name != child_role]
-        if all(role.name != guardian_role for role in user.roles):
+        # admin のように保護者の scope を既に持つロールがあれば、重ねて付与しない
+        already_guardian = any(
+            permission.code == _GUARDIAN_SCOPE for role in user.roles for permission in role.permissions
+        )
+        if not already_guardian:
             granted = self._session.scalar(select(Role).where(Role.name == guardian_role))
             if granted is not None:
                 user.roles.append(granted)

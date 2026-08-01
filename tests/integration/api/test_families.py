@@ -12,6 +12,7 @@ from tests.integration.api.family_support import (
     create_account,
     create_family,
     issue_invitation,
+    login,
 )
 
 
@@ -116,6 +117,87 @@ def test_child_cannot_modify_own_ledger(client: TestClient, parent: Account) -> 
         json={"amount": 10, "reason": "self service", "idempotency_key": "k1"},
     )
     assert denied.status_code == 403
+
+
+# --- 家族の作成と保護者への昇格（ADR-0017） ----------------------------------
+
+
+@pytest.fixture
+def newcomer(client: TestClient, admin_headers: dict[str, str]) -> Account:
+    """どの家族にも所属していない、閲覧専用ロール（member）のアカウント。"""
+    return create_account(client, admin_headers, username="newcomer", role="member", display_name="しんじん")
+
+
+def test_member_can_create_a_family_and_becomes_a_guardian(client: TestClient, newcomer: Account) -> None:
+    created = client.post("/api/families", headers=newcomer.headers, json={"name": "しんじんの家"})
+    assert created.status_code == 201, created.text
+    assert created.json()["my_role"] == "owner"
+
+    # scope はトークンに焼き込まれているため、昇格した権限は再ログインで有効になる
+    family_id = int(str(created.json()["id"]))
+    fresh_headers = login(client, username=newcomer.username, password=newcomer.password)
+    child = add_child(client, fresh_headers, family_id, display_name="こども")
+    ledger = Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"])))
+    ledger.record(client, fresh_headers, amount=5, reason="おてつだい", key="k1")
+
+
+def test_guest_cannot_create_a_family(client: TestClient, admin_headers: dict[str, str]) -> None:
+    """guest ロールは family:view を持たないので、入口の scope で止まる。"""
+    guest = create_account(client, admin_headers, username="visitor", role="guest")
+
+    denied = client.post("/api/families", headers=guest.headers, json={"name": "つくれない"})
+    assert denied.status_code == 403
+
+
+def test_child_in_a_family_cannot_create_another(client: TestClient, parent: Account) -> None:
+    """子も member ロール（family:view）を持つが、所属がある限り作れない（ADR-0013）。"""
+    family_id = create_family(client, parent.headers)
+    child = add_child(client, parent.headers, family_id, display_name="たろう")
+    invitation = issue_invitation(
+        client, parent.headers, family_id, role="child", target_membership_id=int(str(child["id"]))
+    )
+    redeemed = client.post(
+        "/api/families/invitations/redeem",
+        json={"code": invitation["code"], "username": "taro", "password": "taro-pass-123"},
+    )
+    assert redeemed.status_code == 201, redeemed.text
+    child_headers = login(client, username="taro", password="taro-pass-123")
+
+    denied = client.post("/api/families", headers=child_headers, json={"name": "こどもの家"})
+    assert denied.status_code == 409
+    assert denied.json()["detail"]["error"] == "already_belongs_to_family"
+
+
+def test_member_who_accepts_a_parent_invitation_becomes_a_guardian(
+    client: TestClient, admin_headers: dict[str, str], parent: Account
+) -> None:
+    family_id = create_family(client, parent.headers)
+    aunt = create_account(client, admin_headers, username="aunt", role="member", display_name="おばさん")
+    invitation = issue_invitation(client, parent.headers, family_id, role="parent")
+
+    accepted = client.post(
+        "/api/families/invitations/accept",
+        headers=aunt.headers,
+        json={"code": invitation["code"], "display_name": "おばさん"},
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["role"] == "parent"
+
+    # 再ログイン後は保護者としてポイントを記録できる
+    fresh_headers = login(client, username=aunt.username, password=aunt.password)
+    child = add_child(client, fresh_headers, family_id, display_name="めい")
+    ledger = Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"])))
+    ledger.record(client, fresh_headers, amount=3, reason="おてつだい", key="k1")
+
+
+def test_admin_who_creates_a_family_keeps_a_single_role(client: TestClient, admin_headers: dict[str, str]) -> None:
+    """保護者相当の scope を既に持つアカウントには、manager ロールを重ねて付与しない。"""
+    created = client.post("/api/families", headers=admin_headers, json={"name": "かんりしゃの家"})
+    assert created.status_code == 201, created.text
+
+    users = client.get("/api/admin/users", headers=admin_headers).json()
+    admin = next(user for user in users if user["username"] == "admin@example.com")
+    assert admin["roles"] == ["admin"]
 
 
 def test_invited_parent_can_manage_every_child(client: TestClient, parent: Account, other_parent: Account) -> None:
