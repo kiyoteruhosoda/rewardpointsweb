@@ -40,13 +40,15 @@ from bounded_contexts.account_security.presentation.schemas import (
     TotpEnrollmentResponse,
     TwoFactorStatusResponse,
 )
-from presentation.fastapi.dependencies.auth import get_current_principal
+from presentation.fastapi.dependencies.auth import get_active_principal
 from presentation.fastapi.schemas.auth import StatusResponse
 from shared.application.authenticated_principal import AuthenticatedPrincipal
 
 router = APIRouter(prefix="/api/account/security", tags=["account-security"])
 
-PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
+# 一時パスワードでのログイン中は通さない。第二の要素を本人より先に
+# 差し替えられないようにする（ADR-0011）。
+PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_active_principal)]
 
 
 def _to_passkey_response(summary: PasskeySummaryDto) -> PasskeyResponse:

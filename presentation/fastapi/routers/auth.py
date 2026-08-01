@@ -26,6 +26,7 @@ from bounded_contexts.account_security.domain.exceptions import (
 from bounded_contexts.account_security.presentation import dependencies as security
 from presentation.fastapi.dependencies.auth import (
     clear_access_token_cookie,
+    get_active_principal,
     get_current_principal,
     set_access_token_cookie,
 )
@@ -52,7 +53,9 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 
 DbDep = Annotated[Session, Depends(get_db)]
+# 一時パスワードでのログイン中でも通す経路（自分を知る・ログアウト・変更）に限って使う
 PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
+ActivePrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_active_principal)]
 SecondFactorDep = Annotated[VerifySecondFactor, Depends(security.verify_second_factor)]
 
 
@@ -164,11 +167,14 @@ def _resolved_email(db: Session, email: str | None, *, user_id: int) -> str | No
 
 
 @router.put("/me", response_model=MeResponse)
-async def update_profile(body: ProfileUpdateRequest, principal: PrincipalDep, db: DbDep) -> MeResponse:
+async def update_profile(body: ProfileUpdateRequest, principal: ActivePrincipalDep, db: DbDep) -> MeResponse:
     """自分の表示名とメールアドレスを変える。
 
     ログイン識別子（``username``）はここでは変えない。変えるとログインの手順が
     変わり、家族から本人へ伝えた ID とも食い違う。
+
+    一時パスワードでのログイン中は通さない。メールアドレスを差し替えられると、
+    本人が取り戻す前にリセットの宛先を奪える（ADR-0011）。
     """
     user = db.get(User, principal.user_id)
     if user is None:

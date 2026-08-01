@@ -37,5 +37,15 @@ class FamilyRole(Enum):
         """ポイント台帳を 1 対 1 で持つ立場か。"""
         return self is FamilyRole.CHILD
 
+    @property
+    def is_invitable(self) -> bool:
+        """招待コードで配ってよい立場か。
+
+        owner は配れない。配れると、受け取った人が元の owner を除名して家族を
+        乗っ取れてしまう（招待の受諾は未認証の経路からも来る）。owner を移す
+        必要が生じたら、専用の引き継ぎ操作として設計する。
+        """
+        return self is not FamilyRole.OWNER
+
 
 __all__ = ["FamilyRole"]

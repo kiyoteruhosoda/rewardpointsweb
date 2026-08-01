@@ -97,6 +97,7 @@
   "error.restart_request_failed": "再起動を要求できませんでした。",
   "error.reversal_of_reversal_not_allowed": "打ち消しの記録は取り消せません。",
   "error.role_already_exists": "このロールは既に存在します。",
+  "error.role_not_invitable": "招待で配れるのは親と子どもだけです。",
   "error.totp_already_enabled": "二要素認証は既に有効です。",
   "error.totp_not_enrolled": "先に二要素認証を設定してください。",
   "error.totp_required": "認証アプリのコードを入力してください。",

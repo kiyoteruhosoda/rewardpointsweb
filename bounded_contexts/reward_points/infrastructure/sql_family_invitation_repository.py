@@ -10,8 +10,10 @@ from __future__ import annotations
 import hashlib
 import secrets
 from datetime import datetime
+from typing import Any, cast
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from bounded_contexts.reward_points.domain.entities.family_invitation import FamilyInvitation
@@ -86,11 +88,33 @@ class SqlFamilyInvitationRepository(IFamilyInvitationRepository):
         )
         return _to_invitation(row) if row else None
 
-    def mark_used(self, *, invitation_id: int, used_at: datetime) -> None:
-        row = self._session.get(FamilyInvitationModel, invitation_id)
-        if row is not None:
-            row.used_at = used_at
-            self._session.flush()
+    def consume(self, code: str, *, now: datetime) -> FamilyInvitation | None:
+        """条件付き UPDATE で「まだ使えるなら使用済みにする」を 1 手で行う。
+
+        ``used_at IS NULL`` を条件に含めるので、同時に届いた 2 つ目は 0 行に
+        なる（先の更新が行ロックを持ち、解放後に条件を評価し直すため）。
+        更新できた場合だけ招待を返す。
+        """
+        code_hash = _hash_code(code)
+        # 何行更新できたかが「勝ったか」の答え。``Session.execute`` の戻り値は
+        # 型の上では ``Result`` だが、UPDATE では ``CursorResult`` が返る。
+        updated = cast(
+            "CursorResult[Any]",
+            self._session.execute(
+                update(FamilyInvitationModel)
+                .where(
+                    FamilyInvitationModel.code_hash == code_hash,
+                    FamilyInvitationModel.used_at.is_(None),
+                    FamilyInvitationModel.expires_at > now,
+                )
+                .values(used_at=now)
+                .execution_options(synchronize_session=False)
+            ),
+        )
+        if updated.rowcount != 1:
+            return None
+        row = self._session.scalar(select(FamilyInvitationModel).where(FamilyInvitationModel.code_hash == code_hash))
+        return _to_invitation(row) if row else None
 
     def delete(self, invitation_id: int) -> None:
         self._session.execute(delete(FamilyInvitationModel).where(FamilyInvitationModel.id == invitation_id))

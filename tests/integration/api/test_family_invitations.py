@@ -127,6 +127,73 @@ def test_pending_invitations_never_expose_the_code(client: TestClient, parent: A
     assert listed[0]["target_display_name"] == "たろう"
 
 
+def test_owner_role_cannot_be_handed_out_by_invitation(client: TestClient, parent: Account) -> None:
+    """配れると、受け取った人が元の owner を除名して家族を乗っ取れる。"""
+    family_id = create_family(client, parent.headers)
+
+    response = client.post(
+        f"/api/families/{family_id}/invitations",
+        headers=parent.headers,
+        json={"role": "owner", "target_membership_id": None},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "role_not_invitable"
+    assert client.get(f"/api/families/{family_id}/invitations", headers=parent.headers).json() == []
+
+
+def test_a_code_admits_exactly_one_account(client: TestClient, parent: Account) -> None:
+    """1 回きりであることを、参加を作る前の消費で担保する。"""
+    family_id = create_family(client, parent.headers)
+    invitation = issue_invitation(client, parent.headers, family_id, role="parent")
+
+    first = client.post(
+        "/api/families/invitations/redeem",
+        json={
+            "code": invitation["code"],
+            "username": "first",
+            "password": "first-pass-123",
+            "display_name": "さきに",
+        },
+    )
+    second = client.post(
+        "/api/families/invitations/redeem",
+        json={
+            "code": invitation["code"],
+            "username": "second",
+            "password": "second-pass-123",
+            "display_name": "あとから",
+        },
+    )
+    assert first.status_code == 201, first.text
+    assert second.status_code == 404
+
+    detail = client.get(f"/api/families/{family_id}", headers=parent.headers).json()
+    assert [m["display_name"] for m in detail["memberships"]] == ["おとうさん", "さきに"]
+
+
+def test_a_rejected_redemption_does_not_burn_the_code(client: TestClient, parent: Account) -> None:
+    """弾かれた試行はトランザクションごと巻き戻る（コードは使えるまま）。"""
+    family_id = create_family(client, parent.headers)
+    invitation = issue_invitation(client, parent.headers, family_id, role="parent")
+
+    taken = client.post(
+        "/api/families/invitations/redeem",
+        json={"code": invitation["code"], "username": parent.username, "password": "whatever-123"},
+    )
+    assert taken.status_code == 409
+
+    retried = client.post(
+        "/api/families/invitations/redeem",
+        json={
+            "code": invitation["code"],
+            "username": "kid",
+            "password": "kid-pass-123",
+            "display_name": "こども",
+        },
+    )
+    assert retried.status_code == 201, retried.text
+
+
 def test_revoked_invitation_cannot_be_redeemed(client: TestClient, parent: Account) -> None:
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
@@ -226,6 +293,35 @@ def test_parent_cannot_reset_another_parent(client: TestClient, admin_headers: d
     )
     assert response.status_code == 403
     assert response.json()["detail"]["error"] == "child_account_required"
+
+
+def test_temporary_password_blocks_profile_and_security_changes(client: TestClient, parent: Account) -> None:
+    """第二の要素や連絡先を、本人より先に差し替えられないようにする（ADR-0011）。"""
+    family_id, membership_id = _linked_child(client, parent)
+    issued = client.post(
+        f"/api/families/{family_id}/memberships/{membership_id}/password-reset",
+        headers=parent.headers,
+    ).json()
+    signed_in = client.post("/api/auth/login", json={"username": "taro", "password": issued["password"]})
+    headers = {"Authorization": f"Bearer {signed_in.json()['access_token']}"}
+
+    blocked = [
+        client.put("/api/auth/me", headers=headers, json={"email": "attacker@example.com"}),
+        client.post("/api/account/security/two-factor/enrollment", headers=headers),
+        client.get("/api/account/security/passkeys", headers=headers),
+        client.post("/api/account/security/passkeys/registration", headers=headers),
+    ]
+    for response in blocked:
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"]["error"] == "password_change_required"
+
+    # 変更を終えれば通る
+    client.post(
+        "/api/auth/change-password",
+        headers=headers,
+        json={"current_password": issued["password"], "new_password": "taro-new-pass-1"},
+    )
+    assert client.get("/api/account/security/passkeys", headers=headers).status_code == 200
 
 
 def test_reset_needs_a_linked_account(client: TestClient, parent: Account) -> None:

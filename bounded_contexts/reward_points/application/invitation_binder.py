@@ -41,21 +41,22 @@ class InvitationBinder:
         self._ledgers = ledgers
 
     def bind(self, *, code: str, account_id: int, display_name: str | None) -> FamilyMembership:
-        now = utcnow()
-        invitation = self._invitations.find_by_code(code)
+        # 参加を作る前に使用済みにする。同じコードで同時に 2 つ届いても、
+        # ここを通れるのは 1 つだけ。以降で弾かれた場合はトランザクションごと
+        # 巻き戻るので、使えるはずのコードが無駄に消えることもない。
+        #
         # 「存在しない」「期限切れ」「使用済み」を区別しない（総当たりの手がかりを残さない）
-        if invitation is None or not invitation.is_usable_at(now):
+        invitation = self._invitations.consume(code, now=utcnow())
+        if invitation is None:
             raise InvitationNotFoundError
         if self._memberships.find_in_family(family_id=invitation.family_id, account_id=account_id) is not None:
             raise AccountAlreadyInFamilyError
 
-        membership = (
+        return (
             self._link_target(invitation.target_membership_id, family_id=invitation.family_id, account_id=account_id)
             if invitation.target_membership_id is not None
             else self._join_as_new(invitation.family_id, invitation.role, account_id, display_name)
         )
-        self._invitations.mark_used(invitation_id=invitation.id, used_at=now)
-        return membership
 
     def _link_target(self, membership_id: int, *, family_id: int, account_id: int) -> FamilyMembership:
         target = self._memberships.find_by_id(membership_id)

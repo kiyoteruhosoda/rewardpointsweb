@@ -97,6 +97,7 @@
   "error.restart_request_failed": "Could not request a restart.",
   "error.reversal_of_reversal_not_allowed": "An undo cannot itself be undone.",
   "error.role_already_exists": "This role already exists.",
+  "error.role_not_invitable": "Only a parent or child invitation can be issued.",
   "error.totp_already_enabled": "Two-factor authentication is already on.",
   "error.totp_not_enrolled": "Set up two-factor authentication first.",
   "error.totp_required": "Enter the code from your authenticator app.",

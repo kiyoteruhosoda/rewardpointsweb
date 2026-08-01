@@ -69,6 +69,12 @@ class InvitationNotFoundError(RewardPointsError):
     code = "invitation_not_found"
 
 
+class RoleNotInvitableError(RewardPointsError):
+    """招待では配れない立場（owner）を指定した。"""
+
+    code = "role_not_invitable"
+
+
 class InvitationTargetUnavailableError(RewardPointsError):
     """招待が指す参加者に、すでに別のアカウントが結び付いている。"""
 
@@ -145,6 +151,7 @@ __all__ = [
     "MembershipNotLinkedError",
     "ReversalOfReversalError",
     "RewardPointsError",
+    "RoleNotInvitableError",
     "TransactionAlreadyReversedError",
     "TransactionNotFoundError",
     "UserStillOwnsFamiliesError",

@@ -119,6 +119,10 @@ class PasswordResetService:
         if user is None or not user.is_active:
             return False
         user.password_hash = generate_password_hash(new_password)
+        # 親が発行した一時パスワードの途中でも、本人がメールから再設定できる。
+        # 期限を残すと、そのまま新しいパスワードまで期限切れ扱いになってしまう。
+        user.must_change_password = False
+        user.temporary_password_expires_at = None
         row.used_at = utcnow()
         session.flush()
         return True

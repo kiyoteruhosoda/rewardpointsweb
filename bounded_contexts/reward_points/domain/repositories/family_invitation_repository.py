@@ -44,7 +44,13 @@ class IFamilyInvitationRepository(ABC):
     def find_in_family(self, *, family_id: int, invitation_id: int) -> FamilyInvitation | None: ...
 
     @abstractmethod
-    def mark_used(self, *, invitation_id: int, used_at: datetime) -> None: ...
+    def consume(self, code: str, *, now: datetime) -> FamilyInvitation | None:
+        """招待を **使用済みにしてから** 返す。使えなければ ``None``。
+
+        「引いてから使用済みにする」を 2 手に分けると、同じコードで同時に届いた
+        2 つの要求がどちらも「まだ使える」と判断してしまう。1 回きりであることは
+        この 1 手で担保する（実装は条件付き UPDATE の行ロックに委ねる）。
+        """
 
     @abstractmethod
     def delete(self, invitation_id: int) -> None: ...

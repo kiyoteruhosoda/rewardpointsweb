@@ -92,10 +92,11 @@ async def get_active_principal(
 ) -> AuthenticatedPrincipal:
     """一時パスワードでのログイン中は通さない（ADR-0011）。
 
-    親が発行した一時パスワードでログインした後は、パスワードの変更を完了する
-    まで他の操作を許可しない。変更の経路（``/api/auth/change-password``）と、
-    自分が誰かを知る経路（``/api/auth/me`` / ``logout``）だけが
-    :func:`get_current_principal` を直接使い、この関門を通らない。
+    **認証が要る経路は原則ここを通す。** :func:`get_current_principal` を直接
+    使ってよいのは、パスワードを変える経路（``POST /api/auth/change-password``）
+    と、自分が誰かを知る経路（``GET /api/auth/me`` / ``POST /api/auth/logout``）
+    の 3 つだけ。二要素・パスキーの登録や解除まで開けてしまうと、一時パスワード
+    を握った人が本人より先に第二の要素を差し替えられる。
     """
     if principal.must_change_password:
         raise HTTPException(

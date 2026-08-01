@@ -3,6 +3,9 @@
 平文のコードはこの応答でだけ返す。保存されるのはハッシュだけなので、失くしたら
 発行し直す。``role = child`` の招待では、親が先に作った参加者を必ず指す
 （ADR-0009 / ADR-0011）。
+
+配れるのは ``parent`` と ``child`` だけ。``owner`` を配ると、受け取った人が元の
+owner を除名して家族を乗っ取れる。
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ from bounded_contexts.reward_points.domain.entities.family_membership import Fam
 from bounded_contexts.reward_points.domain.exceptions import (
     InvitationTargetUnavailableError,
     MembershipNotFoundError,
+    RoleNotInvitableError,
 )
 from bounded_contexts.reward_points.domain.repositories.family_invitation_repository import (
     IFamilyInvitationRepository,
@@ -50,6 +54,8 @@ class IssueInvitationUseCase:
 
     def execute(self, command: IssueInvitationCommand) -> InvitationDTO:
         self._access.require_owner(family_id=command.family_id, account_id=command.account_id)
+        if not command.role.is_invitable:
+            raise RoleNotInvitableError
         target = self._require_target(command)
         issued = self._invitations.issue(
             family_id=command.family_id,

@@ -138,6 +138,42 @@ def test_reset_password_with_valid_token(client: TestClient, db_session: Session
     assert again.status_code == 400
 
 
+def test_reset_password_clears_a_pending_temporary_password(client: TestClient, db_session: Session) -> None:
+    """一時パスワードの途中でも、本人がメールから取り戻せる。
+
+    期限を残すと、再設定した新しいパスワードまで期限切れ扱いになってしまう。
+    """
+    import hashlib
+    import secrets
+    from datetime import timedelta
+
+    from shared.kernel.timestamps import utcnow
+
+    user = db_session.scalar(select(User).where(User.email == "admin@example.com"))
+    assert user is not None
+    user.must_change_password = True
+    user.temporary_password_expires_at = utcnow() - timedelta(seconds=1)
+    token = secrets.token_urlsafe(32)
+    db_session.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=hashlib.sha256(token.encode()).hexdigest(),
+            expires_at=utcnow() + timedelta(hours=1),
+        )
+    )
+    db_session.commit()
+
+    reset = client.post("/api/auth/reset-password", json={"token": token, "new_password": "recovered-pass-1"})
+    assert reset.status_code == 200
+
+    signed_in = client.post(
+        "/api/auth/login",
+        json={"username": master_data.DEFAULT_ADMIN_USERNAME, "password": "recovered-pass-1"},
+    )
+    assert signed_in.status_code == 200, signed_in.text
+    assert signed_in.json()["must_change_password"] is False
+
+
 def test_reset_password_with_invalid_token(client: TestClient) -> None:
     response = client.post(
         "/api/auth/reset-password",
