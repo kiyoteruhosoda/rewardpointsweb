@@ -102,7 +102,8 @@ scope は「その操作を行える立場か」を表す。「*その* デー�
 
 - DB 層は TTL キャッシュ付き。管理画面からの保存時は
   `SystemSettingService` が `invalidate()` を呼び即時反映する。
-- DB 未接続（マイグレーション前等）では黙って環境変数とデフォルト値のみで動く。
+- DB 未接続（マイグレーション前等）では環境変数とデフォルト値のみで動く。読めない
+  状態に入った／戻ったときだけログへ 1 行残す（TTL ごとに出すと溢れるため）。
 - `DATABASE_URI` などブートストラップに必要なキーは DB 上書きの対象外
   （解決に DB 接続が必要なキーを DB から読むと再帰するため）。
 
@@ -113,6 +114,41 @@ scope は「その操作を行える立場か」を表す。「*その* デー�
 - `shared/kernel/logging/db_log_handler.py` が JSON 構造化ログを `log` テーブルへ
   書き込む。stdout への JSON 出力と併用する。
 - PII 禁止。ユーザー識別子はハッシュ（`user.id_hash`）のみ。
+
+**失敗の記録は `presentation/fastapi/error_handling.py` に集約する**（ADR-0012）。
+`HTTPException`・入力検証エラー・ドメイン例外は、送出された時点でルーターを抜けて
+例外ハンドラが応答へ変えるため、ルーターに `logger` を足しても記録されない。
+
+| 経路 | 記録するもの | ロガー |
+|---|---|---|
+| アクセスログ（ミドルウェア） | `http_request`（method / path / status / duration） | `app.request` |
+| `HTTPException`・ドメイン例外 | `request_failed: <エラーコード>` | `presentation.fastapi.error_handling` |
+| 入力検証エラー | `request_validation_failed: <項目名:理由>`（値は入れない） | 同上 |
+| 想定外の例外 | `unhandled_exception`（+ traceback） | 同上 |
+| 管理操作・ログイン失敗 | `<操作>: <識別子>`（下記） | 各ルーター |
+
+- レベルはステータスコードから決める（`log_level_for_status()`）。5xx → ERROR、
+  4xx → WARNING、401 と成功 → INFO。アクセスログと失敗の記録が同じ関数を使う。
+  ログインの失敗だけは例外的に WARNING（このアプリに監査ログは無い）。
+- 死活監視・メトリクスのパス（`/healthz` `/readyz` `/api/health` `/metrics`）は
+  **成功したらアクセスログに残さない**（失敗は残す）。
+- **識別子は `extra` ではなく本文（message）に入れる。** `log` テーブルへ入るのは
+  列にある項目（`message` / `path` / `method` / `status_code` / `duration_ms` /
+  `trace`）だけで、`extra` の残りは stdout の JSON にしか出ない。
+- 管理操作（ユーザー・ロールの変更、システム設定の保存）はルーターから記録する。
+  残すのは識別子と項目名だけで、表示名・メールアドレス・設定値は残さない。
+- 新しいドメイン例外ハンドラを足すときは `log_failed_request()` を呼ぶ。
+- ログ基盤自身の失敗は黙らせない。`DbLogHandler` は `handleError()`（stderr）で
+  知らせ、設定の DB 読み取り不能は状態が変わったときだけ 1 行警告する。
+
+リクエスト中のログ行は**控えに積むだけ**で、実際の INSERT はリクエストの処理が
+完全に終わってから `DeferredLogWriteMiddleware` がまとめて行う。処理の途中で別
+コネクションから書くと、リクエストのセッションが握った書き込みロックと衝突し、
+SQLite では 5 秒待った末に行が失われる（ADR-0012）。
+
+まとめ書きと例外の受け皿（`InternalErrorMiddleware`）は**素の ASGI ミドルウェア**
+として書く。`BaseHTTPMiddleware` は下流を別のタスクで走らせるため、`get_db` の
+commit を待てず、下流で設定された `contextvars`（`user_id_hash`）も戻ってこない。
 
 ## フロントエンド
 

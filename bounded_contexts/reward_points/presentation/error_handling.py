@@ -3,6 +3,10 @@
 ルーターに ``try/except`` を散らさないよう、アプリ全体の例外ハンドラとして一度
 だけ登録する。応答本文はエラーコードのみで、表示文言はフロントエンドが決める
 （CLAUDE.md「国際化」）。
+
+失敗の記録は横断的な受け皿（:func:`~presentation.fastapi.error_handling.log_failed_request`）
+へ委ねる。ここで独自に記録すると、``HTTPException`` 由来の失敗とレベルや
+フィールドの揃わない行が混ざり、ログを絞り込めなくなる。
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ from bounded_contexts.reward_points.domain.exceptions import (
     TransactionNotFoundError,
     UsernameAlreadyTakenError,
 )
+from presentation.fastapi.error_handling import log_failed_request
 
 _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     FamilyNotFoundError: status.HTTP_404_NOT_FOUND,
@@ -56,8 +61,10 @@ def status_for(error: RewardPointsError) -> int:
 
 def register_reward_points_error_handler(app: FastAPI) -> None:
     @app.exception_handler(RewardPointsError)
-    async def _handle(_: Request, error: RewardPointsError) -> JSONResponse:
-        return JSONResponse(status_code=status_for(error), content={"detail": {"error": error.code}})
+    async def _handle(request: Request, error: RewardPointsError) -> JSONResponse:
+        status_code = status_for(error)
+        log_failed_request(request, status_code, error.code)
+        return JSONResponse(status_code=status_code, content={"detail": {"error": error.code}})
 
 
 __all__ = ["register_reward_points_error_handler", "status_for"]

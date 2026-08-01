@@ -1,7 +1,13 @@
-"""ロール管理 API（要 ``role:manage``）。"""
+"""ロール管理 API（要 ``role:manage``）。
+
+権限の割り当ての変更はアプリログへ残す（誰が何を触れるようになったかは、後から
+必ず問われる）。識別子と権限コードは本文に入れる——``log`` テーブルへ入るのは
+列にある項目だけで、``extra`` の残りは stdout の JSON にしか出ない。
+"""
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,6 +22,8 @@ from presentation.fastapi.schemas.admin import (
 )
 from shared.infrastructure.models import Permission, Role
 from shared.kernel.database.session import get_db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/admin/roles",
@@ -58,6 +66,7 @@ async def create_role(body: RoleCreateRequest, db: DbDep) -> RoleResponse:
     role.permissions = _resolve_permissions(db, body.permissions)
     db.add(role)
     db.flush()
+    logger.info("admin_role_created: role_id=%s name=%s", role.id, role.name)
     return _to_response(role)
 
 
@@ -71,6 +80,14 @@ async def update_role(role_id: int, body: RoleUpdateRequest, db: DbDep) -> RoleR
     if body.permissions is not None:
         role.permissions = _resolve_permissions(db, body.permissions)
     db.flush()
+    # 権限は「変わった後の姿」を残す。差分だけでは、後から見たときにその時点で
+    # 何が許可されていたかを組み立て直せない。
+    logger.info(
+        "admin_role_updated: role_id=%s name=%s permissions=%s",
+        role_id,
+        role.name,
+        ",".join(sorted(p.code for p in role.permissions)),
+    )
     return _to_response(role)
 
 
@@ -81,3 +98,4 @@ async def delete_role(role_id: int, db: DbDep) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "role_not_found"})
     role.permissions = []
     db.delete(role)
+    logger.info("admin_role_deleted: role_id=%s", role_id)

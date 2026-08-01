@@ -1,19 +1,44 @@
 """``log`` テーブルへの書き込みハンドラ。
 
 - ``requestId`` はレコード（``RequestContextFilter`` 付与）から取得する。
-- DB 未接続・マイグレーション前・書き込み失敗時は黙って諦める
-  （ログのために本処理を落とさない）。
+- DB 未接続・マイグレーション前・書き込み失敗時は本処理を落とさない（ただし
+  黙りもしない。``handleError`` で stderr へ知らせる）。
 - SQLAlchemy 自身のログを書き込むと再帰するため除外する。
+- **リクエスト中は行を控えに積むだけ**にし、実際の INSERT はリクエストの処理が
+  終わってから :class:`~presentation.fastapi.middleware.deferred_log_writes.DeferredLogWriteMiddleware`
+  がまとめて行う。処理の途中で別コネクションから書くと、リクエストのセッションが
+  握った書き込みロックと衝突するため（:mod:`shared.kernel.logging.pending_records`）。
 """
 
 from __future__ import annotations
 
 import logging
 import traceback as tb_module
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 
+from shared.kernel.logging.pending_records import (
+    LogRow,
+    current_pending_log_records,
+)
+
 _EXCLUDED_LOGGER_PREFIXES = ("sqlalchemy", "alembic", "shared.kernel.logging")
+
+
+def write_log_rows(rows: Sequence[LogRow]) -> None:
+    """控えた行を 1 トランザクションで書き込む。
+
+    呼び出すのはリクエストの処理が終わってから（ミドルウェア）。例外はそのまま
+    投げる（握りつぶすかどうかは呼び出し側の判断）。
+    """
+    if not rows:
+        return
+    from shared.infrastructure.models.log import Log
+    from shared.kernel.database.db import get_engine
+
+    with get_engine().begin() as connection:
+        connection.execute(sa.insert(Log), list(rows))
 
 
 class DbLogHandler(logging.Handler):
@@ -25,40 +50,49 @@ class DbLogHandler(logging.Handler):
 
             if not settings.log_to_database:
                 return
-            self._insert(record)
+
+            row = _to_row(record)
+            pending = current_pending_log_records()
+            if pending is None:
+                # リクエストの外（起動時処理・スクリプト）。競合する相手がいない
+                write_log_rows([row])
+            else:
+                pending.add(row)
         except Exception:
-            pass
-
-    def _insert(self, record: logging.LogRecord) -> None:
-        from shared.infrastructure.models.base import utcnow
-        from shared.infrastructure.models.log import Log
-        from shared.kernel.database.db import get_engine
-
-        trace = None
-        if record.exc_info and record.exc_info[0] is not None:
-            trace = "".join(tb_module.format_exception(*record.exc_info))
-
-        # duration_ms 列は Integer。SQLite は型アフィニティで float をそのまま
-        # 保持してしまうため、書き込み前に丸めて両バックエンドの挙動を揃える。
-        duration_ms = getattr(record, "duration_ms", None)
-        if duration_ms is not None:
-            duration_ms = round(float(duration_ms))
-
-        row = {
-            "created_at": utcnow(),
-            "level": record.levelname,
-            "logger": record.name[:120],
-            "message": record.getMessage(),
-            "request_id": getattr(record, "request_id", None),
-            "user_id_hash": getattr(record, "user_id_hash", None),
-            "path": getattr(record, "path", None),
-            "method": getattr(record, "method", None),
-            "status_code": getattr(record, "status_code", None),
-            "duration_ms": duration_ms,
-            "trace": trace,
-        }
-        with get_engine().begin() as connection:
-            connection.execute(sa.insert(Log).values(**row))
+            # ログのために本処理は落とさない。ただし**黙らない**——ここを
+            # ``pass`` にすると「管理画面にログが出ない」だけが症状になり、
+            # 原因（DB 未接続・マイグレーション前・列の不一致）が誰にも見えない。
+            # ``handleError`` は traceback を stderr へ出すだけで、ロギングを
+            # 再入させない（DB へ書こうとして再び失敗する経路を作らない）。
+            self.handleError(record)
 
 
-__all__ = ["DbLogHandler"]
+def _to_row(record: logging.LogRecord) -> LogRow:
+    from shared.infrastructure.models.base import utcnow
+
+    trace = None
+    if record.exc_info and record.exc_info[0] is not None:
+        trace = "".join(tb_module.format_exception(*record.exc_info))
+
+    # duration_ms 列は Integer。SQLite は型アフィニティで float をそのまま
+    # 保持してしまうため、書き込み前に丸めて両バックエンドの挙動を揃える。
+    duration_ms = getattr(record, "duration_ms", None)
+    if duration_ms is not None:
+        duration_ms = round(float(duration_ms))
+
+    return {
+        "created_at": utcnow(),
+        "level": record.levelname,
+        "logger": record.name[:120],
+        "message": record.getMessage(),
+        "request_id": getattr(record, "request_id", None),
+        "user_id_hash": getattr(record, "user_id_hash", None),
+        "path": getattr(record, "path", None),
+        "method": getattr(record, "method", None),
+        "status_code": getattr(record, "status_code", None),
+        "duration_ms": duration_ms,
+        "trace": trace,
+    }
+
+
+__all__ = ["DbLogHandler", "write_log_rows"]
