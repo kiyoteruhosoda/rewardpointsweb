@@ -78,21 +78,35 @@ def test_access_policy_exposes_exactly_two_ledger_decisions() -> None:
 
 
 def test_point_transactions_are_never_updated_or_deleted() -> None:
-    """追記専用（ADR-0010）。訂正は打ち消しの行で表し、行は消さない。"""
+    """追記専用（ADR-0010）。訂正は打ち消しの行で表し、行単位では消さない。
+
+    唯一の例外は、独立の成立時に台帳ごと消す ``delete_by_ledger``（ADR-0014）。
+    削除の呼び出しがその関数の外に現れないことを見る。
+    """
     repository = _CONTEXT_ROOT / "infrastructure" / "sql_point_transaction_repository.py"
     tree = ast.parse(repository.read_text(encoding="utf-8"))
 
-    called = {node.func.id for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
-    assert "delete" not in called
-    assert "update" not in called
+    functions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+    for function in functions:
+        if function.name == "delete_by_ledger":
+            continue
+        called = {
+            node.func.id
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        assert "delete" not in called, f"delete_by_ledger の外で削除している: {function.name}"
+        assert "update" not in called, f"更新している: {function.name}"
 
-    methods = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    methods = {function.name for function in functions}
     assert not {"delete", "update", "remove"} & methods
 
 
 def test_transaction_repository_port_offers_no_way_to_change_a_row() -> None:
+    """行単位の更新・削除の口を持たない。台帳ごと消す独立の例外だけ（ADR-0014）。"""
     port = _CONTEXT_ROOT / "domain" / "repositories" / "point_transaction_repository.py"
     tree = ast.parse(port.read_text(encoding="utf-8"))
     methods = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
 
     assert not {"delete", "update", "remove"} & methods
+    assert "delete_by_ledger" in methods

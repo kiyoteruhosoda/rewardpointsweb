@@ -43,18 +43,21 @@ from bounded_contexts.reward_points.application.use_cases.reverse_point_transact
 from bounded_contexts.reward_points.presentation.dependencies import (
     AcceptInvitationDep,
     AddChildDep,
+    ApproveIndependenceDep,
     CreateFamilyDep,
     DissolveFamilyDep,
     IssueInvitationDep,
     LeaveFamilyDep,
     ListFamiliesDep,
     ListInvitationsDep,
+    ProposeIndependenceDep,
     RecordTransactionDep,
     RedeemInvitationDep,
     RemoveMembershipDep,
     RenameFamilyDep,
     ResetChildPasswordDep,
     ReverseTransactionDep,
+    RevokeIndependenceDep,
     RevokeInvitationDep,
     SuggestReasonsDep,
     ViewFamilyDep,
@@ -100,6 +103,7 @@ def _to_membership(dto: MembershipDTO) -> MembershipResponse:
         username=dto.username,
         ledger_id=dto.ledger_id,
         balance=dto.balance,
+        independence_proposed=dto.independence_proposed,
     )
 
 
@@ -325,6 +329,67 @@ async def reset_child_password(
         password=dto.password,
         expires_at=dto.expires_at,
     )
+
+
+# --- 独立（ADR-0014） --------------------------------------------------------
+
+
+@router.post(
+    "/{family_id}/memberships/{membership_id}/independence-proposal",
+    response_model=MembershipResponse,
+)
+async def propose_independence(
+    family_id: int,
+    membership_id: int,
+    use_case: ProposeIndependenceDep,
+    principal: FamilyManager,
+) -> MembershipResponse:
+    """子の独立を指示する（親メンバー）。子本人が承認した時点で独立が成立する。"""
+    membership = use_case.execute(family_id=family_id, membership_id=membership_id, account_id=principal.user_id)
+    logger.info("independence_proposed", extra={"family_id": family_id, "membership_id": membership_id})
+    return _to_membership(
+        MembershipDTO(
+            id=membership.id,
+            display_name=membership.display_name_value,
+            role=membership.role,
+            is_linked=membership.is_linked,
+            is_me=False,
+            username=None,
+            ledger_id=None,
+            balance=None,
+            independence_proposed=membership.independence_proposed,
+        )
+    )
+
+
+@router.delete(
+    "/{family_id}/memberships/{membership_id}/independence-proposal",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def revoke_independence_proposal(
+    family_id: int,
+    membership_id: int,
+    use_case: RevokeIndependenceDep,
+    principal: FamilyManager,
+) -> None:
+    """独立の指示を取り下げる（承認前ならいつでも）。"""
+    use_case.execute(family_id=family_id, membership_id=membership_id, account_id=principal.user_id)
+    logger.info("independence_proposal_revoked", extra={"family_id": family_id, "membership_id": membership_id})
+
+
+@router.post("/{family_id}/independence", status_code=status.HTTP_204_NO_CONTENT)
+async def approve_independence(
+    family_id: int,
+    use_case: ApproveIndependenceDep,
+    principal: FamilyViewer,
+) -> None:
+    """独立を承認する（指示を受けた子本人）。
+
+    成立すると参加・台帳・記録は家族から消え、所属なしのメンバーとなる
+    （家族を作ることも、招待を受け直すこともできる）。
+    """
+    use_case.execute(family_id=family_id, account_id=principal.user_id)
+    logger.info("independence_approved", extra={"family_id": family_id})
 
 
 # --- 招待の発行 --------------------------------------------------------------

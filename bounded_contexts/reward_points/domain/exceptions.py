@@ -129,6 +129,15 @@ class FamilyNotEmptyError(RewardPointsError):
     code = "family_not_empty"
 
 
+class IndependenceNotProposedError(RewardPointsError):
+    """独立の指示が無いのに、子が独立を承認しようとした。
+
+    独立は親メンバーの指示と子本人の承認の 2 段階で成立する（ADR-0014）。
+    """
+
+    code = "independence_not_proposed"
+
+
 class UsernameAlreadyTakenError(RewardPointsError):
     """指定されたログイン ID はすでに使われている。"""
 
@@ -136,9 +145,10 @@ class UsernameAlreadyTakenError(RewardPointsError):
 
 
 class ChildAccountRequiredError(RewardPointsError):
-    """親から親へのパスワードリセットを試みた。
+    """``role = child`` にしか行えない操作を、親に対して試みた。
 
-    一時パスワードの発行は ``role = child`` の参加者に対してだけ許す（ADR-0011）。
+    一時パスワードの発行（ADR-0011）と独立の指示（ADR-0014）は、子の参加者に
+    対してだけ許す。
     """
 
     code = "child_account_required"
@@ -185,6 +195,7 @@ __all__ = [
     "FamilyAccessDeniedError",
     "FamilyNotEmptyError",
     "FamilyNotFoundError",
+    "IndependenceNotProposedError",
     "InvitationNotFoundError",
     "InvitationTargetUnavailableError",
     "LastGuardianCannotLeaveError",

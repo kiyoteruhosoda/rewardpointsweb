@@ -69,6 +69,8 @@ class MembershipResponse(BaseModel):
     username: str | None
     ledger_id: int | None
     balance: int | None
+    # 独立が指示され、子本人の承認待ちか（ADR-0014）
+    independence_proposed: bool
 
 
 class FamilySummaryResponse(BaseModel):

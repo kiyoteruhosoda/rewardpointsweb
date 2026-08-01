@@ -86,6 +86,7 @@ def _to_dto(
         username=username,
         ledger_id=ledger.id if visible and ledger else None,
         balance=balances.get(ledger.id, 0) if visible and ledger else None,
+        independence_proposed=member.independence_proposed,
     )
 
 

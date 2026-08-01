@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from datetime import datetime
 
 from bounded_contexts.reward_points.domain.entities.family_membership import FamilyMembership
 from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
@@ -47,6 +48,14 @@ class IFamilyMembershipRepository(ABC):
     @abstractmethod
     def update_role(self, *, membership_id: int, role: FamilyRole) -> FamilyMembership:
         """立場を変える（owner 脱退時の引き継ぎ。ADR-0013）。"""
+
+    @abstractmethod
+    def propose_independence(self, *, membership_id: int, proposed_at: datetime) -> FamilyMembership:
+        """独立の指示を記録する（ADR-0014）。子本人の承認までは所属のまま。"""
+
+    @abstractmethod
+    def clear_independence_proposal(self, membership_id: int) -> FamilyMembership:
+        """独立の指示を取り下げる（ADR-0014）。"""
 
     @abstractmethod
     def list_by_ids(self, membership_ids: Sequence[int]) -> list[FamilyMembership]: ...

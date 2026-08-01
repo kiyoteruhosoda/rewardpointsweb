@@ -1,6 +1,7 @@
 """``IPointTransactionRepository`` の SQLAlchemy 実装。
 
-追記専用のため更新・削除は実装しない（ADR-0010）。冪等キーの衝突は
+追記専用のため更新・行単位の削除は実装しない（ADR-0010。台帳ごと消す
+``delete_by_ledger`` だけが独立時の例外 — ADR-0014）。冪等キーの衝突は
 「先に引いて、無ければ書く」で扱い、同時実行で UNIQUE 制約に当たった場合も
 既存行を返す（並行して同じキーが届いたのなら、望まれているのは 1 行だけ）。
 """
@@ -9,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -102,6 +103,17 @@ class SqlPointTransactionRepository(IPointTransactionRepository):
             select(func.count()).select_from(PointTransactionModel).where(PointTransactionModel.ledger_id == ledger_id)
         )
         return total or 0
+
+    def delete_by_ledger(self, ledger_id: int) -> None:
+        # 打ち消し行から先に消す。reversal_of_id の自己参照外部キーに ON DELETE が
+        # 無いため、元の行を先に消すと参照が残って拒まれる。
+        self._session.execute(
+            delete(PointTransactionModel).where(
+                PointTransactionModel.ledger_id == ledger_id,
+                PointTransactionModel.reversal_of_id.is_not(None),
+            )
+        )
+        self._session.execute(delete(PointTransactionModel).where(PointTransactionModel.ledger_id == ledger_id))
 
     def frequent_reasons(self, *, family_id: int, limit: int) -> list[str]:
         occurrences = func.count().label("occurrences")

@@ -47,6 +47,9 @@ class FamilyMembershipModel(Base):
     )
     role: Mapped[str] = mapped_column(FAMILY_ROLE, nullable=False)
     display_name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
+    # 親メンバーが独立を指示した日時（ADR-0014）。子本人の承認で独立が成立する。
+    # role = child 以外では常に NULL。
+    independence_proposed_at = mapped_column(sa.DateTime(), nullable=True)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 

@@ -58,5 +58,13 @@ class IAccountProvisioning(ABC):
     def issue_temporary_password(self, account_id: int) -> TemporaryPassword:
         """一時パスワードを発行し、次回ログイン後の変更を必須にする。"""
 
+    @abstractmethod
+    def grant_guardian_permissions(self, account_id: int) -> None:
+        """独立したアカウントへ、親（メンバー）と同じアプリケーションロールを与える。
+
+        独立後は自分の家族を作れる必要がある（ADR-0014）。子の閲覧専用ロールの
+        ままだと家族の作成もポイントの記録もできない。
+        """
+
 
 __all__ = ["AccountRef", "IAccountDirectory", "IAccountProvisioning", "TemporaryPassword"]

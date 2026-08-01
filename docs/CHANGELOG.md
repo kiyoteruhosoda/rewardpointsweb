@@ -2,6 +2,21 @@
 
 新しいものを上に追記する。細かな進捗は書かない（Progress.md 完了時に要約を移す）。
 
+## 2026-08 ゲスト（子）の独立を実装
+
+親メンバーが指示し、子本人が承認する 2 段階で成立する（ADR-0014）。
+
+- **指示・取り下げ**（`POST` / `DELETE
+  /api/families/{id}/memberships/{mid}/independence-proposal`）。親メンバーが、
+  アカウントの結び付いた子に対して行う。承認待ちは家族の詳細応答の
+  `independence_proposed` に現れる。
+- **承認**（`POST /api/families/{id}/independence`）。指示を受けた子本人のみ。
+  成立すると参加・台帳・記録を家族から削除し（追記専用 — ADR-0010 — の明示的な
+  例外）、アカウントは所属なしの初期状態となり、ロールが `member` から
+  `manager` へ昇格する。家族を作ることも招待をメンバーとして受け直すこともできる。
+- `family_memberships.independence_proposed_at` を追加するマイグレーション
+  （`0008_membership_independence`）。
+
 ## 2026-08 家族の所属を 1 つまでにし、脱退・解散・改名を実装
 
 家族の運用ルール（ADR-0013）と実装が食い違っていたのを揃えた。
