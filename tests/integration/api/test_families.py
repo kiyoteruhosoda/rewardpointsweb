@@ -200,6 +200,71 @@ def test_admin_who_creates_a_family_keeps_a_single_role(client: TestClient, admi
     assert admin["roles"] == ["admin"]
 
 
+def _create_custom_role(client: TestClient, admin_headers: dict[str, str], *, name: str, scopes: list[str]) -> None:
+    response = client.post(
+        "/api/admin/roles",
+        headers=admin_headers,
+        json={"name": name, "permissions": scopes},
+    )
+    assert response.status_code == 201, response.text
+
+
+def _roles_of(client: TestClient, admin_headers: dict[str, str], username: str) -> list[str]:
+    users = client.get("/api/admin/users", headers=admin_headers).json()
+    roles: list[str] = next(user for user in users if user["username"] == username)["roles"]
+    return roles
+
+
+def test_partial_guardian_scopes_still_get_promoted(client: TestClient, admin_headers: dict[str, str]) -> None:
+    """保護者の scope が一部欠けるカスタムロールでも、作成時に manager が付く。
+
+    family:manage だけで判定すると、point:manage の無い owner が生まれてしまう。
+    """
+    _create_custom_role(client, admin_headers, name="clerk", scopes=["gui:view", "family:view", "family:manage"])
+    creator = create_account(client, admin_headers, username="clerk1", role="clerk")
+
+    created = client.post("/api/families", headers=creator.headers, json={"name": "しょきの家"})
+    assert created.status_code == 201, created.text
+    assert sorted(_roles_of(client, admin_headers, creator.username)) == ["clerk", "manager"]
+
+    # 再ログイン後はポイントも記録できる
+    family_id = int(str(created.json()["id"]))
+    fresh_headers = login(client, username=creator.username, password=creator.password)
+    child = add_child(client, fresh_headers, family_id, display_name="こども")
+    ledger = Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"])))
+    ledger.record(client, fresh_headers, amount=1, reason="おてつだい", key="k1")
+
+
+def test_full_guardian_scopes_keep_roles_untouched(client: TestClient, admin_headers: dict[str, str]) -> None:
+    """保護者の scope が全て揃っているなら、member を含めロール構成へ触れない。
+
+    判定より先に member を外すと、保護者側のロールが持たない scope（閲覧等）を
+    黙って失い得る。
+    """
+    _create_custom_role(
+        client,
+        admin_headers,
+        name="head",
+        scopes=["family:view", "family:manage", "point:view", "point:manage"],
+    )
+    response = client.post(
+        "/api/admin/users",
+        headers=admin_headers,
+        json={
+            "username": "head1",
+            "display_name": "head1",
+            "password": "head1-pass-123",
+            "roles": ["head", "member"],
+        },
+    )
+    assert response.status_code == 201, response.text
+    headers = login(client, username="head1", password="head1-pass-123")
+
+    created = client.post("/api/families", headers=headers, json={"name": "とうしゅの家"})
+    assert created.status_code == 201, created.text
+    assert sorted(_roles_of(client, admin_headers, "head1")) == ["head", "member"]
+
+
 def test_invited_parent_can_manage_every_child(client: TestClient, parent: Account, other_parent: Account) -> None:
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")

@@ -23,6 +23,9 @@ export function FamiliesPage() {
   const [code, setCode] = useState('')
 
   const canCreate = hasScope('family:view')
+  // 保護者に必要な scope の全部（バックエンドの昇格スキップ条件と対）。
+  // どれかが欠けていれば、作成・親としての参加でロールが昇格している
+  const isGuardian = hasScope('family:view', 'family:manage', 'point:view', 'point:manage')
 
   const reload = () => families.list().then(setList)
 
@@ -37,7 +40,7 @@ export function FamiliesPage() {
     try {
       await families.create(name)
       setName('')
-      if (!hasScope('family:manage')) {
+      if (!isGuardian) {
         // owner へ昇格したが、いまのトークンには古い scope しか無い
         notify('success', t('families.createdRelogin'))
         logout()
@@ -55,7 +58,7 @@ export function FamiliesPage() {
     try {
       const joined = await families.acceptInvitation(code, null)
       setCode('')
-      if (joined.role !== 'child' && !hasScope('family:manage')) {
+      if (joined.role !== 'child' && !isGuardian) {
         // 親として加わり保護者へ昇格した。新しい scope は再ログインで有効になる
         notify('success', t('families.joinedRelogin'))
         logout()

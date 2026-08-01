@@ -30,9 +30,14 @@
    - 家族の作成（作った人が owner になる）— 本 ADR
    - 親（parent）としての招待受諾 — 本 ADR
    - 独立の成立 — ADR-0014（従来どおり）
-3. `grant_guardian_permissions` は、保護者相当の scope（`family:manage`）を既に
-   持つロールがあるアカウントには何もしない。admin が家族を作っても manager
-   ロールが重なって付かない。
+3. `grant_guardian_permissions` は、保護者に必要な scope（`family:view` /
+   `family:manage` / `point:view` / `point:manage`）を**全て**持つアカウントには
+   何もしない（ロールの構成へ一切触れない）。admin が家族を作っても manager
+   ロールが重なって付かない。判定は一部の scope ではなく全部で行う —
+   `family:manage` だけで判定すると、`point:manage` の無いカスタムロールの
+   owner が永久にポイントを記録できなくなる。また、判定より先に member を
+   外すと、保護者側のロールが持たない scope（閲覧等）を黙って失い得るため、
+   判定はロールへ触れる前に行う。
 
 scope は JWT に焼き込まれているため、昇格した権限は**再ログイン後**に有効になる
 （ADR-0014 と同じ）。画面は昇格が起きた操作の成立後に再ログインを促す。

@@ -13,8 +13,8 @@
   （`already_belongs_to_family`）に任せた。
 - 保護者の立場（owner / parent）を得た時点で `manager` へ昇格する
   （`grant_guardian_permissions`）。家族の作成・親としての招待受諾・独立の成立
-  （ADR-0014）の 3 箇所が同じ口を通る。既に `family:manage` を持つアカウント
-  （admin 等）には何もしない。
+  （ADR-0014）の 3 箇所が同じ口を通る。保護者に必要な scope を全て持つ
+  アカウント（admin 等）にはロール構成ごと何もしない。
 - scope はトークンに焼き込まれているため、画面は昇格が起きたら再ログインを促す。
 
 ## 2026-08 残高・履歴をオフラインでも見られるようにした（Progress T2 / ADR-0015）

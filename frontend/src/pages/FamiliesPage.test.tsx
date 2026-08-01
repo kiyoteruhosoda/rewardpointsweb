@@ -48,10 +48,13 @@ describe('FamiliesPage', () => {
     expect(logout).toHaveBeenCalled()
   })
 
-  it('family:manage を持つ人が作っても、そのまま使い続けられる', async () => {
+  it('保護者の scope が揃っている人が作っても、そのまま使い続けられる', async () => {
     create.mockResolvedValue(created())
     const logout = vi.fn()
-    renderWithProviders(<FamiliesPage />, { scopes: ['family:view', 'family:manage'], logout })
+    renderWithProviders(<FamiliesPage />, {
+      scopes: ['family:view', 'family:manage', 'point:view', 'point:manage'],
+      logout,
+    })
 
     fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'ほその家' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create a family' }))
