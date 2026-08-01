@@ -94,12 +94,20 @@ fi
 # 解決結果が旧名に当たったらビルド時の名前へ倒す。ここで倒しておくことで、この後の
 # migrate_legacy_env_names（.env の焼き付き）と take_down_legacy_projects（旧名で
 # 動いているコンテナ）も本来の移行経路として働く。
+#
+# 倒したときは移行元を LEGACY_NAME_MIGRATED_FROM に控える。この配置は「旧名で動いて
+# いるコンテナが自分のものである」場所なので、それを畳めないまま up へ進むと、旧名の
+# MariaDB と新しい名前の MariaDB が同じ HOST_DATA_ROOT/db_data を同時に掴む
+# （container_name もネットワーク名も新旧で異なるため、衝突で止まってくれない）。
+# take_down_legacy_projects はこの印を見て、畳めないときに続行せず落とす。
+LEGACY_NAME_MIGRATED_FROM=""
 for legacy_name in $LEGACY_APP_NAMES; do
   [ "$APP_NAME" = "$legacy_name" ] || continue
   warn "${APP_NAME_SOURCE}から旧アプリ名 '$legacy_name' が解決されました。引退した名前のため '$BUILD_APP_NAME' を使います。"
   warn "この警告を消すには、配置ディレクトリを '$BUILD_APP_NAME' へ改名し（.env の HOST_DATA_ROOT も新しいパスへ直す）、.env の APP_NAME 指定を外してください。"
   APP_NAME="$BUILD_APP_NAME"
   APP_NAME_SOURCE="ビルド時の既定値（旧アプリ名 '$legacy_name' からの移行）"
+  LEGACY_NAME_MIGRATED_FROM="$legacy_name"
   break
 done
 
@@ -540,6 +548,18 @@ take_down_legacy_projects() {
 
     foreign="$(legacy_container_names_outside_this_deployment "$cids" | sort -u | tr '\n' ' ')"
     if [ -n "${foreign// /}" ]; then
+      # この配置自身が旧名から移行してきた場合、旧名のコンテナは「同じ HOST_DATA_ROOT
+      # を使っていた自分の前身」である可能性が高い。畳めないまま up へ進むと、新旧 2 つの
+      # MariaDB が同じ db_data を同時に開く（container_name もネットワーク名も新旧で
+      # 異なるので衝突は起きず、compose は db を healthy まで持っていってしまう。止まるのは
+      # 後段の nginx がホストポートを取れないときで、そのときには既に手遅れ）。
+      # データを壊すより止める。畳めない理由（ラベルが読めない = compose v1 期の残骸等）は
+      # 人が見て判断する。
+      if [ "$legacy" = "$LEGACY_NAME_MIGRATED_FROM" ]; then
+        err "旧アプリ名の compose プロジェクト '$project' を畳めません。この配置（$BASE_DIR）のものと確認できないコンテナが含まれます: ${foreign% }"
+        err "この配置は '$legacy' から '$APP_NAME' へ移行した直後のため、そのまま起動すると新旧 2 つの MariaDB が同じ $HOST_DATA_ROOT/db_data を同時に開き、DB を壊します。"
+        fail "上記コンテナを確認し、この配置の前身なら 'docker rm -f' で消してから再実行してください（別アプリなら配置ディレクトリ名を変えて名前を分けてください）。"
+      fi
       warn "旧アプリ名の compose プロジェクト '$project' が動いていますが、この配置（$BASE_DIR）以外のコンテナを含むため触りません: ${foreign% }"
       warn "同じ名前を使う別のアプリだと思われます。'$PROJECT' の起動が container_name やポートの衝突で失敗する場合は、どちらの名前を変えるか決めてください。"
       continue
