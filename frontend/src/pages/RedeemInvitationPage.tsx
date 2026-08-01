@@ -71,6 +71,9 @@ export function RedeemInvitationPage() {
             required
           />
         </label>
+        {/* ここで名乗る名前はアカウントの表示名（プロフィール）。家族の中での呼び名は
+            別に持つ（ADR-0010）ので、親が参加を用意していた場合は親が付けた呼び名の
+            ままになる。案内でも「家族に出る名前」とは言い切らない。 */}
         <label>
           {t('join.displayName')}
           <input
