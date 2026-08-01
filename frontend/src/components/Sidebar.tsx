@@ -1,9 +1,8 @@
 /**
  * ナビゲーション。表示はロール名ではなく scope で制御する。
  *
- * 並べるのは家族が日常で使う画面だけ。管理者は親（家族）なので、システム管理
- * （ユーザー・ロール・権限・システム設定・ログ）はここに出さず、プロフィール設定
- * （ProfilePage）の中から入る。
+ * 上段は家族が日常で使う画面。システム管理（ユーザー・ロール・権限・システム設定・
+ * ログ）は独立した節として下段に出し、scope を持つ人（admin）にだけ見せる。
  *
  * 広い画面では本文の左に置いたままにし、狭い画面では画面外から滑り出す引き出しに
  * なる（切り替えは index.css のメディアクエリ。DOM は 1 つで、開いているかどうかだけを
@@ -29,6 +28,15 @@ const ITEMS: Item[] = [
   { to: '/', labelKey: 'nav.dashboard', scopes: ['dashboard:view'] },
   { to: '/families', labelKey: 'nav.families', scopes: ['family:view'] },
   { to: '/profile', labelKey: 'nav.profile', scopes: [] },
+]
+
+/** システム管理の入口。scope を持つ人にだけ独立した節として出す。 */
+const ADMIN_ITEMS: Item[] = [
+  { to: '/admin/users', labelKey: 'nav.users', scopes: ['user:manage'] },
+  { to: '/admin/roles', labelKey: 'nav.roles', scopes: ['role:manage'] },
+  { to: '/admin/permissions', labelKey: 'nav.permissions', scopes: ['permission:manage'] },
+  { to: '/admin/config', labelKey: 'nav.config', scopes: ['admin:system-settings'] },
+  { to: '/admin/logs', labelKey: 'nav.logs', scopes: ['log:view'] },
 ]
 
 /** 引き出しの id。ヘッダーの開閉ボタンが `aria-controls` で指す。 */
@@ -60,6 +68,7 @@ export function Sidebar({ open, onClose }: Props) {
   const { t } = useI18n()
   const { hasScope } = useAuth()
   const navRef = useRef<HTMLElement>(null)
+  const adminItems = ADMIN_ITEMS.filter((item) => hasScope(...item.scopes))
 
   // Escape で閉じ、Tab は引き出しの中で巡回させる。開いたときは先頭へ焦点を移し、
   // 閉じたら開いた操作子（ヘッダーの ☰）へ戻す。
@@ -127,6 +136,16 @@ export function Sidebar({ open, onClose }: Props) {
             {t(item.labelKey)}
           </NavLink>
         ))}
+        {adminItems.length > 0 && (
+          <>
+            <p className="sidebar-heading">{t('nav.admin')}</p>
+            {adminItems.map((item) => (
+              <NavLink key={item.to} to={item.to} onClick={onClose}>
+                {t(item.labelKey)}
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
     </>
   )

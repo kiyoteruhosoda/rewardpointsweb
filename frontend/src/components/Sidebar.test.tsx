@@ -17,14 +17,24 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
   })
 
-  it('システム管理は scope があっても出さない（プロフィール設定から入る）', () => {
+  it('システム管理は scope を持つ人にだけ独立した節として出す', () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
       scopes: ['family:view', 'user:manage', 'admin:system-settings', 'log:view'],
     })
+    expect(screen.getByText('System administration')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('href', '/admin/users')
+    expect(screen.getByRole('link', { name: 'System settings' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'System logs' })).toBeInTheDocument()
+    // scope の無い項目（ロール・権限）は出さない
+    expect(screen.queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument()
+  })
+
+  it('システム管理の scope が無ければ節そのものを出さない', () => {
+    renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
+      scopes: ['family:view'],
+    })
+    expect(screen.queryByText('System administration')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'System settings' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'System logs' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Profile & settings' })).toBeInTheDocument()
   })
 
   it('閉じているあいだは背景を出さない', () => {

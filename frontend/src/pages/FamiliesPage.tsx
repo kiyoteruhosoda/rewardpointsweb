@@ -1,9 +1,10 @@
 /**
- * 家族の一覧。1 つのアカウントが複数の家族に所属できる（ADR-0009）。
+ * 家族の一覧。
  *
- * 家族は所属していない人なら誰でも作れる（`family:view` — ADR-0017）。作った人が
- * その家族の owner になり、保護者の権限へ昇格する。scope はトークンに焼き込まれて
- * いるため、昇格が起きたときは再ログインを促す（ADR-0014 の独立と同じ扱い）。
+ * 家族を作れるのは親（member ロール — 保護者の scope 一式）だけで、作った人が
+ * owner になる（ADR-0018）。子（guest）は招待コードで加わるので、この画面に
+ * 「作る」は出ない。親の招待コードを子が使うとサーバーが断る
+ * （guardian_account_required）。
  */
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
@@ -16,16 +17,14 @@ import { useAuth } from '../store/AuthContext'
 
 export function FamiliesPage() {
   const { t } = useI18n()
-  const { hasScope, logout } = useAuth()
+  const { hasScope } = useAuth()
   const { notify } = useToast()
   const [list, setList] = useState<FamilySummary[] | null>(null)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
 
-  const canCreate = hasScope('family:view')
-  // 保護者に必要な scope の全部（バックエンドの昇格スキップ条件と対）。
-  // どれかが欠けていれば、作成・親としての参加でロールが昇格している
-  const isGuardian = hasScope('family:view', 'family:manage', 'point:view', 'point:manage')
+  // 作成は保護者の scope 一式が要る（サーバーの入口と同じ条件 — ADR-0018）
+  const canCreate = hasScope('family:view', 'family:manage', 'point:view', 'point:manage')
 
   const reload = () => families.list().then(setList)
 
@@ -40,12 +39,6 @@ export function FamiliesPage() {
     try {
       await families.create(name)
       setName('')
-      if (!isGuardian) {
-        // owner へ昇格したが、いまのトークンには古い scope しか無い
-        notify('success', t('families.createdRelogin'))
-        logout()
-        return
-      }
       await reload()
       notify('success', t('common.saved'))
     } catch (error) {
@@ -56,14 +49,8 @@ export function FamiliesPage() {
   const join = async (event: FormEvent) => {
     event.preventDefault()
     try {
-      const joined = await families.acceptInvitation(code, null)
+      await families.acceptInvitation(code, null)
       setCode('')
-      if (joined.role !== 'child' && !isGuardian) {
-        // 親として加わり保護者へ昇格した。新しい scope は再ログインで有効になる
-        notify('success', t('families.joinedRelogin'))
-        logout()
-        return
-      }
       await reload()
       notify('success', t('families.joined'))
     } catch (error) {

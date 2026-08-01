@@ -1,4 +1,4 @@
-/** 家族の一覧: 作成の入口の出し分けと、保護者へ昇格したときの再ログイン誘導。 */
+/** 家族の一覧: 作成の入口の出し分け（親だけ）と、招待コードでの参加。 */
 import { fireEvent, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -18,9 +18,7 @@ vi.mock('../services/families', () => ({
   },
 }))
 
-function created(): FamilyDetail {
-  return { id: 1, name: 'しんじんの家', my_membership_id: 1, my_role: 'owner', memberships: [] }
-}
+const PARENT_SCOPES = ['family:view', 'family:manage', 'point:view', 'point:manage']
 
 describe('FamiliesPage', () => {
   beforeEach(() => {
@@ -30,56 +28,51 @@ describe('FamiliesPage', () => {
     list.mockResolvedValue([])
   })
 
-  it('family:view しか持たない member にも「作る」を出す', async () => {
-    renderWithProviders(<FamiliesPage />, { scopes: ['family:view'] })
+  it('親（family:manage）には「作る」を出す', async () => {
+    renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES })
 
     expect(await screen.findByRole('button', { name: 'Create a family' })).toBeInTheDocument()
   })
 
-  it('member が作ると owner へ昇格するので、再ログインを促す', async () => {
-    create.mockResolvedValue(created())
-    const logout = vi.fn()
-    renderWithProviders(<FamiliesPage />, { scopes: ['family:view'], logout })
+  it('子（family:view のみ）には「作る」を出さず、招待コードの入口だけ出す', async () => {
+    renderWithProviders(<FamiliesPage />, { scopes: ['family:view', 'point:view'] })
 
-    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'しんじんの家' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create a family' }))
-
-    expect(await screen.findByText(/sign in again/)).toBeInTheDocument()
-    expect(logout).toHaveBeenCalled()
+    expect(await screen.findByRole('button', { name: 'Join with a code' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Create a family' })).not.toBeInTheDocument()
   })
 
-  it('保護者の scope が揃っている人が作っても、そのまま使い続けられる', async () => {
-    create.mockResolvedValue(created())
-    const logout = vi.fn()
-    renderWithProviders(<FamiliesPage />, {
-      scopes: ['family:view', 'family:manage', 'point:view', 'point:manage'],
-      logout,
+  it('親が作るとそのまま一覧を更新する', async () => {
+    create.mockResolvedValue({
+      id: 1,
+      name: 'ほその家',
+      my_membership_id: 1,
+      my_role: 'owner',
+      memberships: [],
     })
+    renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES })
 
     fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'ほその家' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create a family' }))
 
     expect(await screen.findByText('Saved.')).toBeInTheDocument()
-    expect(logout).not.toHaveBeenCalled()
+    expect(create).toHaveBeenCalledWith('ほその家')
   })
 
-  it('親として招待を受けたときも再ログインを促す', async () => {
+  it('招待コードで参加できる', async () => {
     acceptInvitation.mockResolvedValue({
       family_id: 1,
       family_name: 'ほその家',
       membership_id: 2,
       role: 'parent',
-      username: 'aunt',
+      username: 'mom',
     })
-    const logout = vi.fn()
-    renderWithProviders(<FamiliesPage />, { scopes: ['family:view'], logout })
+    renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES })
 
     fireEvent.change(await screen.findByLabelText('Invitation code'), {
       target: { value: 'CODE1234' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Join with a code' }))
 
-    expect(await screen.findByText(/sign in again/)).toBeInTheDocument()
-    expect(logout).toHaveBeenCalled()
+    expect(await screen.findByText('You joined the family.')).toBeInTheDocument()
   })
 })

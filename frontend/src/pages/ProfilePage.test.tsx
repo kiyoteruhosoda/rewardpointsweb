@@ -1,4 +1,4 @@
-/** プロフィール設定: 自分の情報・表示設定（言語・テーマ）・システム管理の入口。 */
+/** プロフィール設定: 自分の情報・表示設定（言語・テーマ）・セキュリティ。 */
 import { fireEvent, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -38,16 +38,9 @@ describe('ProfilePage', () => {
     expect(document.documentElement.dataset.theme).toBe('dark')
   })
 
-  it('scope を持つ人にだけシステム管理の入口を出す', () => {
+  it('システム管理の入口は置かない（Sidebar の独立した節にある）', () => {
     renderWithProviders(<ProfilePage />, { scopes: ['user:manage', 'log:view'] })
-    expect(screen.getByText('System administration')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('href', '/admin/users')
-    expect(screen.getByRole('link', { name: 'System logs' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument()
-  })
-
-  it('scope が無ければシステム管理そのものを出さない', () => {
-    renderWithProviders(<ProfilePage />, { scopes: ['family:view'] })
     expect(screen.queryByText('System administration')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
   })
 })

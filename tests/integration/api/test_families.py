@@ -18,12 +18,12 @@ from tests.integration.api.family_support import (
 
 @pytest.fixture
 def parent(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    return create_account(client, admin_headers, username="dad", role="manager", display_name="おとうさん")
+    return create_account(client, admin_headers, username="dad", role="member", display_name="おとうさん")
 
 
 @pytest.fixture
 def other_parent(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    return create_account(client, admin_headers, username="stranger", role="manager")
+    return create_account(client, admin_headers, username="stranger", role="member")
 
 
 def test_family_creator_becomes_owner(client: TestClient, parent: Account) -> None:
@@ -110,7 +110,7 @@ def test_child_cannot_modify_own_ledger(client: TestClient, parent: Account) -> 
     assert ledger.status_code == 200
     assert ledger.json()["can_modify"] is False
 
-    # scope（member ロールに point:manage が無い）で止まる
+    # scope（guest ロールに point:manage が無い）で止まる
     denied = client.post(
         f"/api/families/{family_id}/ledgers/{ledger_id}/transactions",
         headers=child_headers,
@@ -119,62 +119,65 @@ def test_child_cannot_modify_own_ledger(client: TestClient, parent: Account) -> 
     assert denied.status_code == 403
 
 
-# --- 家族の作成と保護者への昇格（ADR-0017） ----------------------------------
+# --- 家族を作れるのは親（member）だけ（ADR-0018） ----------------------------
 
 
-@pytest.fixture
-def newcomer(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    """どの家族にも所属していない、閲覧専用ロール（member）のアカウント。"""
-    return create_account(client, admin_headers, username="newcomer", role="member", display_name="しんじん")
-
-
-def test_member_can_create_a_family_and_becomes_a_guardian(client: TestClient, newcomer: Account) -> None:
-    created = client.post("/api/families", headers=newcomer.headers, json={"name": "しんじんの家"})
-    assert created.status_code == 201, created.text
-    assert created.json()["my_role"] == "owner"
-
-    # scope はトークンに焼き込まれているため、昇格した権限は再ログインで有効になる
-    family_id = int(str(created.json()["id"]))
-    fresh_headers = login(client, username=newcomer.username, password=newcomer.password)
-    child = add_child(client, fresh_headers, family_id, display_name="こども")
-    ledger = Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"])))
-    ledger.record(client, fresh_headers, amount=5, reason="おてつだい", key="k1")
-
-
-def test_guest_cannot_create_a_family(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """guest ロールは family:view を持たないので、入口の scope で止まる。"""
-    guest = create_account(client, admin_headers, username="visitor", role="guest")
-
-    denied = client.post("/api/families", headers=guest.headers, json={"name": "つくれない"})
-    assert denied.status_code == 403
-
-
-def test_child_in_a_family_cannot_create_another(client: TestClient, parent: Account) -> None:
-    """子も member ロール（family:view）を持つが、所属がある限り作れない（ADR-0013）。"""
-    family_id = create_family(client, parent.headers)
-    child = add_child(client, parent.headers, family_id, display_name="たろう")
+def _linked_child_headers(client: TestClient, parent: Account, family_id: int, *, username: str) -> dict[str, str]:
+    """アカウントの結び付いた子（guest ロール）を用意してログインする。"""
+    child = add_child(client, parent.headers, family_id, display_name=username)
     invitation = issue_invitation(
         client, parent.headers, family_id, role="child", target_membership_id=int(str(child["id"]))
     )
     redeemed = client.post(
         "/api/families/invitations/redeem",
-        json={"code": invitation["code"], "username": "taro", "password": "taro-pass-123"},
+        json={"code": invitation["code"], "username": username, "password": f"{username}-pass-123"},
     )
     assert redeemed.status_code == 201, redeemed.text
-    child_headers = login(client, username="taro", password="taro-pass-123")
+    return login(client, username=username, password=f"{username}-pass-123")
+
+
+def test_member_creates_and_manages_without_relogin(client: TestClient, parent: Account) -> None:
+    """親（member）は最初から family:manage / point:manage を持つ。
+
+    作成した直後、同じトークンのまま子の追加もポイントの記録もできる。
+    """
+    family_id = create_family(client, parent.headers)
+    child = add_child(client, parent.headers, family_id, display_name="こども")
+    ledger = Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"])))
+    ledger.record(client, parent.headers, amount=5, reason="おてつだい", key="k1")
+
+
+def test_child_cannot_create_a_family(client: TestClient, parent: Account) -> None:
+    """子（guest ロール）は family:manage を持たないので、入口の scope で止まる。"""
+    family_id = create_family(client, parent.headers)
+    child_headers = _linked_child_headers(client, parent, family_id, username="taro")
 
     denied = client.post("/api/families", headers=child_headers, json={"name": "こどもの家"})
-    assert denied.status_code == 409
-    assert denied.json()["detail"]["error"] == "already_belongs_to_family"
+    assert denied.status_code == 403
 
 
-def test_member_who_accepts_a_parent_invitation_becomes_a_guardian(
+def test_guest_cannot_accept_a_parent_invitation(
     client: TestClient, admin_headers: dict[str, str], parent: Account
 ) -> None:
+    """親（parent）の招待を使えるのは保護者になれるアカウントだけ。
+
+    未所属の guest は運用上は生まれない（ADR-0018）が、管理者が手動で作った
+    場合でも「名ばかりの保護者」にはなれない。断られた招待コードは消費されず、
+    正しい相手（member）が改めて使える。
+    """
     family_id = create_family(client, parent.headers)
-    aunt = create_account(client, admin_headers, username="aunt", role="member", display_name="おばさん")
+    outsider = create_account(client, admin_headers, username="visitor", role="guest")
     invitation = issue_invitation(client, parent.headers, family_id, role="parent")
 
+    denied = client.post(
+        "/api/families/invitations/accept",
+        headers=outsider.headers,
+        json={"code": invitation["code"], "display_name": "なぞの人"},
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["error"] == "guardian_account_required"
+
+    aunt = create_account(client, admin_headers, username="aunt", role="member", display_name="おばさん")
     accepted = client.post(
         "/api/families/invitations/accept",
         headers=aunt.headers,
@@ -183,86 +186,88 @@ def test_member_who_accepts_a_parent_invitation_becomes_a_guardian(
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["role"] == "parent"
 
-    # 再ログイン後は保護者としてポイントを記録できる
-    fresh_headers = login(client, username=aunt.username, password=aunt.password)
-    child = add_child(client, fresh_headers, family_id, display_name="めい")
-    ledger = Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"])))
-    ledger.record(client, fresh_headers, amount=3, reason="おてつだい", key="k1")
+
+def test_removing_a_linked_child_deletes_the_account(client: TestClient, parent: Account) -> None:
+    """除名は縁切り。子アカウントは家族の参加としてだけ存在するので、一緒に消す。"""
+    family_id = create_family(client, parent.headers)
+    child_headers = _linked_child_headers(client, parent, family_id, username="taro")
+    detail = client.get(f"/api/families/{family_id}", headers=parent.headers).json()
+    membership_id = next(m["id"] for m in detail["memberships"] if m["display_name"] == "taro")
+
+    removed = client.delete(f"/api/families/{family_id}/memberships/{membership_id}", headers=parent.headers)
+    assert removed.status_code == 204, removed.text
+
+    # アカウントごと消えている: 古いトークンは無効、再ログインもできない
+    assert client.get("/api/families", headers=child_headers).status_code == 401
+    failed = client.post("/api/auth/login", json={"username": "taro", "password": "taro-pass-123"})
+    assert failed.status_code == 401
 
 
-def test_admin_who_creates_a_family_keeps_a_single_role(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """保護者相当の scope を既に持つアカウントには、manager ロールを重ねて付与しない。"""
-    created = client.post("/api/families", headers=admin_headers, json={"name": "かんりしゃの家"})
-    assert created.status_code == 201, created.text
+def test_removing_an_unlinked_child_keeps_other_accounts(client: TestClient, parent: Account) -> None:
+    """アカウントの無い子の除名は従来どおり参加と空の台帳だけを消す。"""
+    family_id = create_family(client, parent.headers)
+    child = add_child(client, parent.headers, family_id, display_name="たろう")
 
-    users = client.get("/api/admin/users", headers=admin_headers).json()
-    admin = next(user for user in users if user["username"] == "admin@example.com")
-    assert admin["roles"] == ["admin"]
+    removed = client.delete(f"/api/families/{family_id}/memberships/{child['id']}", headers=parent.headers)
+    assert removed.status_code == 204, removed.text
+
+    # 親のアカウントは無事
+    assert client.get("/api/families", headers=parent.headers).status_code == 200
 
 
-def _create_custom_role(client: TestClient, admin_headers: dict[str, str], *, name: str, scopes: list[str]) -> None:
-    response = client.post(
+def test_admin_has_no_family_access(client: TestClient, admin_headers: dict[str, str]) -> None:
+    """システム管理者は家族・ポイントに関与しない（ADR-0018）。"""
+    assert client.get("/api/families", headers=admin_headers).status_code == 403
+    denied = client.post("/api/families", headers=admin_headers, json={"name": "かんりしゃの家"})
+    assert denied.status_code == 403
+
+
+def test_partial_guardian_scope_cannot_create_a_family(client: TestClient, admin_headers: dict[str, str]) -> None:
+    """保護者の scope が一部欠けるカスタムロールでは家族を作れない。
+
+    family:manage だけで通すと、閲覧も記録もできない owner が生まれてしまう。
+    """
+    created_role = client.post(
         "/api/admin/roles",
         headers=admin_headers,
-        json={"name": name, "permissions": scopes},
+        json={"name": "clerk", "permissions": ["gui:view", "family:view", "family:manage"]},
     )
-    assert response.status_code == 201, response.text
+    assert created_role.status_code == 201, created_role.text
+    clerk = create_account(client, admin_headers, username="clerk1", role="clerk")
+
+    denied = client.post("/api/families", headers=clerk.headers, json={"name": "しょきの家"})
+    assert denied.status_code == 403
 
 
-def _roles_of(client: TestClient, admin_headers: dict[str, str], username: str) -> list[str]:
-    users = client.get("/api/admin/users", headers=admin_headers).json()
-    roles: list[str] = next(user for user in users if user["username"] == username)["roles"]
-    return roles
+def test_existing_account_cannot_accept_a_child_invitation(
+    client: TestClient, admin_headers: dict[str, str], parent: Account
+) -> None:
+    """子の招待コードは redeem（アカウント新規作成）専用。
 
-
-def test_partial_guardian_scopes_still_get_promoted(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """保護者の scope が一部欠けるカスタムロールでも、作成時に manager が付く。
-
-    family:manage だけで判定すると、point:manage の無い owner が生まれてしまう。
+    既存アカウントを子として結び付けられると、除名の後始末（アカウント削除）が
+    独立に存在するアカウントを巻き込んでしまう。断られたコードは消費されず、
+    本来の使い方（redeem）でそのまま使える。
     """
-    _create_custom_role(client, admin_headers, name="clerk", scopes=["gui:view", "family:view", "family:manage"])
-    creator = create_account(client, admin_headers, username="clerk1", role="clerk")
-
-    created = client.post("/api/families", headers=creator.headers, json={"name": "しょきの家"})
-    assert created.status_code == 201, created.text
-    assert sorted(_roles_of(client, admin_headers, creator.username)) == ["clerk", "manager"]
-
-    # 再ログイン後はポイントも記録できる
-    family_id = int(str(created.json()["id"]))
-    fresh_headers = login(client, username=creator.username, password=creator.password)
-    child = add_child(client, fresh_headers, family_id, display_name="こども")
-    ledger = Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"])))
-    ledger.record(client, fresh_headers, amount=1, reason="おてつだい", key="k1")
-
-
-def test_full_guardian_scopes_keep_roles_untouched(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """保護者の scope が全て揃っているなら、member を含めロール構成へ触れない。
-
-    判定より先に member を外すと、保護者側のロールが持たない scope（閲覧等）を
-    黙って失い得る。
-    """
-    _create_custom_role(
-        client,
-        admin_headers,
-        name="head",
-        scopes=["family:view", "family:manage", "point:view", "point:manage"],
+    family_id = create_family(client, parent.headers)
+    child = add_child(client, parent.headers, family_id, display_name="たろう")
+    invitation = issue_invitation(
+        client, parent.headers, family_id, role="child", target_membership_id=int(str(child["id"]))
     )
-    response = client.post(
-        "/api/admin/users",
-        headers=admin_headers,
-        json={
-            "username": "head1",
-            "display_name": "head1",
-            "password": "head1-pass-123",
-            "roles": ["head", "member"],
-        },
-    )
-    assert response.status_code == 201, response.text
-    headers = login(client, username="head1", password="head1-pass-123")
+    outsider = create_account(client, admin_headers, username="aunt", role="member")
 
-    created = client.post("/api/families", headers=headers, json={"name": "とうしゅの家"})
-    assert created.status_code == 201, created.text
-    assert sorted(_roles_of(client, admin_headers, "head1")) == ["head", "member"]
+    denied = client.post(
+        "/api/families/invitations/accept",
+        headers=outsider.headers,
+        json={"code": invitation["code"], "display_name": "たろう？"},
+    )
+    assert denied.status_code == 400
+    assert denied.json()["detail"]["error"] == "child_invitation_requires_signup"
+
+    redeemed = client.post(
+        "/api/families/invitations/redeem",
+        json={"code": invitation["code"], "username": "taro", "password": "taro-pass-123"},
+    )
+    assert redeemed.status_code == 201, redeemed.text
 
 
 def test_invited_parent_can_manage_every_child(client: TestClient, parent: Account, other_parent: Account) -> None:

@@ -79,5 +79,7 @@ def test_seeding_twice_does_not_duplicate_roles_or_permissions(engine: sa.Engine
 
     admin = _admin(session)
     assert [role.name for role in admin.roles] == [master_data.DEFAULT_ADMIN_ROLE]
-    assert admin.permission_codes == frozenset(master_data.PERMISSION_CODES)
+    # admin は家族・ポイントに関与しない（ADR-0018）
+    assert admin.permission_codes == frozenset(master_data.ROLE_PERMISSIONS["admin"])
+    assert not admin.permission_codes & {"family:view", "family:manage", "point:view", "point:manage"}
     session.close()

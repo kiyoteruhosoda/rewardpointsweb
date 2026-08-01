@@ -91,6 +91,12 @@ FamilyViewer = Annotated[AuthenticatedPrincipal, Depends(require_permission("fam
 FamilyManager = Annotated[AuthenticatedPrincipal, Depends(require_permission("family:manage"))]
 PointViewer = Annotated[AuthenticatedPrincipal, Depends(require_permission("point:view"))]
 PointManager = Annotated[AuthenticatedPrincipal, Depends(require_permission("point:manage"))]
+# 家族の作成は「一人前の保護者」になる操作なので、保護者の scope 一式を要求する。
+# 一部しか持たないカスタムロールが、閲覧も記録もできない owner を生まないため
+FamilyGuardian = Annotated[
+    AuthenticatedPrincipal,
+    Depends(require_permission("family:view", "family:manage", "point:view", "point:manage")),
+]
 
 
 def _to_membership(dto: MembershipDTO) -> MembershipResponse:
@@ -183,13 +189,17 @@ async def accept_invitation(
     use_case: AcceptInvitationDep,
     principal: FamilyViewer,
 ) -> RedeemedInvitationResponse:
-    """すでにアカウントを持つ人が、招待コードで家族へ加わる。"""
+    """すでにアカウントを持つ人が、招待コードで家族へ加わる。
+
+    親（parent）の招待を使えるのは保護者になれるアカウントだけ（ADR-0018）。
+    """
     dto = use_case.execute(
         AcceptInvitationCommand(
             code=body.code,
             account_id=principal.user_id,
             username=principal.username,
             display_name=body.display_name or principal.display_name,
+            can_guard=principal.can("family:manage", "point:manage"),
         )
     )
     logger.info("invitation_accepted", extra={"family_id": dto.family_id})
@@ -216,12 +226,12 @@ async def list_families(use_case: ListFamiliesDep, principal: FamilyViewer) -> l
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=FamilyDetailResponse)
 async def create_family(
-    body: FamilyCreateRequest, use_case: CreateFamilyDep, principal: FamilyViewer
+    body: FamilyCreateRequest, use_case: CreateFamilyDep, principal: FamilyGuardian
 ) -> FamilyDetailResponse:
-    """家族を作る。所属の入口なので、招待の受諾と同じく ``family:view`` で呼べる。
+    """家族を作る。作った人が owner になる。
 
-    作った人が owner になり、保護者のアプリケーションロールへ昇格する
-    （ADR-0017）。昇格後の scope は再ログインで有効になる。
+    親（member ロール）は保護者の scope 一式を持つので作れる。子（guest）と
+    システム管理者（admin）は scope で止まる（ADR-0018）。
     """
     dto = use_case.execute(
         CreateFamilyCommand(

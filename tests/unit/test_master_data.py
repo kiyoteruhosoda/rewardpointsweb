@@ -15,8 +15,12 @@ def test_every_role_has_permission_assignment() -> None:
     assert role_names == set(master_data.ROLE_PERMISSIONS)
 
 
-def test_admin_role_has_all_permissions() -> None:
-    assert set(master_data.ROLE_PERMISSIONS["admin"]) == set(master_data.PERMISSION_CODES)
+def test_admin_role_has_everything_except_family_and_points() -> None:
+    """システム管理者は家族・ポイントに関与しない（ADR-0018）。"""
+    family_point = {"family:view", "family:manage", "point:view", "point:manage"}
+    granted = set(master_data.ROLE_PERMISSIONS["admin"])
+    assert granted == set(master_data.PERMISSION_CODES) - family_point
+    assert not granted & family_point
 
 
 def test_default_admin_role_exists() -> None:

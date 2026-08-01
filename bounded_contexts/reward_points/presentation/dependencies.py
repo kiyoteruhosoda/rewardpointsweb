@@ -159,10 +159,8 @@ def get_list_families_use_case(families: FamilyRepoDep, memberships: MembershipR
     return ListFamiliesUseCase(families, memberships)
 
 
-def get_create_family_use_case(
-    families: FamilyRepoDep, memberships: MembershipRepoDep, provisioning: ProvisioningDep
-) -> CreateFamilyUseCase:
-    return CreateFamilyUseCase(families, memberships, provisioning)
+def get_create_family_use_case(families: FamilyRepoDep, memberships: MembershipRepoDep) -> CreateFamilyUseCase:
+    return CreateFamilyUseCase(families, memberships)
 
 
 def get_view_family_use_case(access: AccessDep, families: FamilyRepoDep, overview: OverviewDep) -> ViewFamilyUseCase:
@@ -224,8 +222,15 @@ def get_remove_membership_use_case(
     memberships: MembershipRepoDep,
     ledgers: LedgerRepoDep,
     transactions: TransactionRepoDep,
+    provisioning: ProvisioningDep,
 ) -> RemoveMembershipUseCase:
-    return RemoveMembershipUseCase(access=access, memberships=memberships, ledgers=ledgers, transactions=transactions)
+    return RemoveMembershipUseCase(
+        access=access,
+        memberships=memberships,
+        ledgers=ledgers,
+        transactions=transactions,
+        provisioning=provisioning,
+    )
 
 
 def get_issue_invitation_use_case(
@@ -249,10 +254,8 @@ def get_revoke_invitation_use_case(access: AccessDep, invitations: InvitationRep
     return RevokeInvitationUseCase(access, invitations)
 
 
-def get_accept_invitation_use_case(
-    binder: BinderDep, families: FamilyRepoDep, provisioning: ProvisioningDep
-) -> AcceptInvitationUseCase:
-    return AcceptInvitationUseCase(binder, families, provisioning)
+def get_accept_invitation_use_case(binder: BinderDep, families: FamilyRepoDep) -> AcceptInvitationUseCase:
+    return AcceptInvitationUseCase(binder, families)
 
 
 def get_redeem_invitation_use_case(

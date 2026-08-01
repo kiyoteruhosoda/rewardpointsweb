@@ -78,11 +78,11 @@ manifest の `icons` が指す URL には、`vite.config.ts` がビルド時に�
 | パス                                    | 実装                           | 必要な scope            | 何をする画面か                                                                          |
 | --------------------------------------- | ------------------------------ | ----------------------- | --------------------------------------------------------------------------------------- |
 | `/`                                     | `pages/AdminDashboardPage.tsx` | —                       | ログイン中のユーザーと API ドキュメントへのリンク。Sidebar には `dashboard:view` で出る |
-| `/families`                             | `pages/FamiliesPage.tsx`       | `family:view`           | **家族の一覧。** 所属する家族。作成は `family:manage`、参加は招待コード                 |
+| `/families`                             | `pages/FamiliesPage.tsx`       | `family:view`           | **家族の一覧。** 所属する家族。作成は保護者の scope 一式、参加は招待コード              |
 | `/families/:familyId`                   | `pages/FamilyPage.tsx`         | `family:view`           | **家族の詳細。** 参加者と残高、子の追加・招待・一時パスワードの発行                     |
 | `/families/:familyId/ledgers/:ledgerId` | `pages/LedgerPage.tsx`         | `point:view`            | **ポイント台帳。** 残高・履歴・加算・消費・訂正                                         |
 | `/items`                                | `pages/ItemsPage.tsx`          | `item:view`             | 見本のアイテム CRUD（`bounded_contexts/example`）                                       |
-| `/profile`                              | `pages/ProfilePage.tsx`        | —                       | 表示名とメールアドレスの変更・表示設定（言語 / テーマ）・システム管理への入口           |
+| `/profile`                              | `pages/ProfilePage.tsx`        | —                       | 表示名とメールアドレスの変更・表示設定（言語 / テーマ）・セキュリティ設定               |
 | `/change-password`                      | `pages/ChangePasswordPage.tsx` | —                       | パスワード変更                                                                          |
 | `/security`                             | `pages/SecurityPage.tsx`       | —                       | 二要素認証とパスキーの登録・解除                                                        |
 | `/admin/users`                          | `pages/UsersPage.tsx`          | `user:manage`           | ユーザー管理                                                                            |
@@ -123,7 +123,7 @@ flowchart TD
   family -->|"履歴"| ledger
   ledger -->|"戻る"| family
   dash -->|"Header: ユーザー名"| own
-  own --> admin
+  dash -->|"Sidebar: システム管理"| admin
 
   dash -.->|"一時パスワードでのログイン中は<br/>すべての画面がここへ寄る"| change
 ```
@@ -155,18 +155,18 @@ scope も併せて必要（二段。ADR-0009）。
 出ない（サーバーが `ledger_id` / `balance` を返さない）。
 
 scope が足りなければ、○ の欄でもその操作は通らない（画面に入り口が出ず、API は
-403）。既定のロールでは `manager` が 4 つすべてを持ち、`member` は
-`family:view` + `point:view` だけ、`guest` はどれも持たない。子アカウントには
-`member` が付くので、子が自分の台帳を変更できないのは scope と立場の両方による。
+403）。既定のロールでは `member`（親）が 4 つすべてを持ち、`guest`（子）は
+`family:view` + `point:view` だけ（ADR-0018）。子アカウントには `guest` が
+付くので、子が自分の台帳を変更できないのは scope と立場の両方による。
 
 ### 画面仕様: 家族の一覧（`/families`）
 
-| 要素                                   | 出る条件        | 中身・操作                                                 |
-| -------------------------------------- | --------------- | ---------------------------------------------------------- |
-| 家族のリンク                           | 常時            | 家族名・自分の立場・参加人数                               |
-| 作成フォーム                           | `family:manage` | 名前（必須）。作った人がその家族の `owner` になる          |
-| 参加フォーム                           | 常時            | 招待コードを入力して加わる（すでにアカウントを持つ人向け） |
-| 「まだどの家族にも参加していません。」 | 一覧が空        | —                                                          |
+| 要素                                   | 出る条件            | 中身・操作                                                 |
+| -------------------------------------- | ------------------- | ---------------------------------------------------------- |
+| 家族のリンク                           | 常時                | 家族名・自分の立場・参加人数                               |
+| 作成フォーム                           | 保護者の scope 一式 | 名前（必須）。作った人がその家族の `owner` になる          |
+| 参加フォーム                           | 常時                | 招待コードを入力して加わる（すでにアカウントを持つ人向け） |
+| 「まだどの家族にも参加していません。」 | 一覧が空            | —                                                          |
 
 ### 画面仕様: 家族の詳細（`/families/:familyId`）
 
