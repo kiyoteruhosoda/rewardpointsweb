@@ -5,20 +5,27 @@
  * 招待と除名は owner のときだけ出す。家族の構成を変えるのは owner の役目
  * （ADR-0009 の認可表）。子が開いた場合は自分の台帳への入り口だけが残る
  * （兄弟の残高は最初から返ってこない）。
+ *
+ * 独立（ADR-0014）は 2 段階: 親がアカウントの結び付いた子へ指示し、子本人が
+ * 承認する。指示は承認まで取り下げられる。承認で参加と記録が家族から消える
+ * ので、両方の確認文で「記録が削除される」ことを示す。
  */
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { FamilySettingsPanel } from '../components/FamilySettingsPanel'
 import { InvitationPanel } from '../components/InvitationPanel'
 import { useToast } from '../components/ToastNotification'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families, parseUtc, type FamilyDetail, type TemporaryPassword } from '../services/families'
+import { useAuth } from '../store/AuthContext'
 
 export function FamilyPage() {
   const { familyId } = useParams<{ familyId: string }>()
   const { t, locale } = useI18n()
   const { notify } = useToast()
+  const { logout } = useAuth()
   const [family, setFamily] = useState<FamilyDetail | null>(null)
   const [failed, setFailed] = useState(false)
   const [childName, setChildName] = useState('')
@@ -71,12 +78,46 @@ export function FamilyPage() {
     }
   }
 
+  const proposeIndependence = async (membershipId: number, name: string) => {
+    if (!window.confirm(t('families.independence.confirmPropose', { name }))) return
+    try {
+      await families.proposeIndependence(id, membershipId)
+      await reload()
+    } catch (error) {
+      notify('error', t(errorMessageKey(error)))
+    }
+  }
+
+  const withdrawIndependence = async (membershipId: number) => {
+    try {
+      await families.revokeIndependenceProposal(id, membershipId)
+      await reload()
+    } catch (error) {
+      notify('error', t(errorMessageKey(error)))
+    }
+  }
+
+  // 成立すると scope が変わる（member → manager）。scope は JWT に焼き込まれて
+  // いるため、ログアウトして再ログインするまで新しい権限は効かない（ADR-0014）。
+  const approveIndependence = async () => {
+    if (!window.confirm(t('families.independence.confirmApprove'))) return
+    try {
+      await families.approveIndependence(id)
+      notify('success', t('families.independence.approved'))
+      logout()
+    } catch (error) {
+      notify('error', t(errorMessageKey(error)))
+    }
+  }
+
   if (failed) return <p className="error">{t('families.unavailable')}</p>
   if (family === null) return <p className="loading">{t('common.loading')}</p>
 
   const isGuardian = family.my_role === 'owner' || family.my_role === 'parent'
   const isOwner = family.my_role === 'owner'
   const unlinkedChildren = family.memberships.filter((m) => m.role === 'child' && !m.is_linked)
+  const me = family.memberships.find((m) => m.is_me)
+  const independenceProposedToMe = family.my_role === 'child' && me?.independence_proposed === true
 
   return (
     <div className="page">
@@ -106,6 +147,7 @@ export function FamilyPage() {
                     {member.role === 'child' &&
                       !member.is_linked &&
                       ` (${t('families.noAccount')})`}
+                    {member.independence_proposed && ` (${t('families.independence.proposed')})`}
                   </td>
                   <td>{t(`families.role.${member.role}`)}</td>
                   <td>
@@ -127,7 +169,26 @@ export function FamilyPage() {
                           }}
                         >
                           {t('families.resetPassword')}
-                        </button>
+                        </button>{' '}
+                        {member.independence_proposed ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void withdrawIndependence(member.id)
+                            }}
+                          >
+                            {t('families.independence.withdraw')}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void proposeIndependence(member.id, member.display_name)
+                            }}
+                          >
+                            {t('families.independence.propose')}
+                          </button>
+                        )}
                       </>
                     )}
                     {isOwner && !member.is_me && (
@@ -194,6 +255,23 @@ export function FamilyPage() {
           onChanged={reload}
         />
       )}
+
+      {independenceProposedToMe && (
+        <section className="card">
+          <h2>{t('families.independence.title')}</h2>
+          <p>{t('families.independence.approveHint')}</p>
+          <button
+            type="button"
+            onClick={() => {
+              void approveIndependence()
+            }}
+          >
+            {t('families.independence.approve')}
+          </button>
+        </section>
+      )}
+
+      {isGuardian && <FamilySettingsPanel family={family} onRenamed={reload} />}
 
       <p>
         <Link to="/families">{t('common.back')}</Link>

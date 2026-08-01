@@ -26,6 +26,7 @@ function child(overrides: Partial<Membership> = {}): Membership {
     username: null,
     ledger_id: 20,
     balance: 70,
+    independence_proposed: false,
     ...overrides,
   }
 }
