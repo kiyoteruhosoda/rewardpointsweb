@@ -136,6 +136,40 @@ def test_leaving_owner_hands_the_family_to_the_oldest_parent(
     assert [m["display_name"] for m in detail["memberships"]] == ["おかあさん"]
 
 
+def test_owner_cannot_leave_when_the_other_parent_lost_their_account(
+    client: TestClient, admin_headers: dict[str, str], owner: Account, second_parent: Account
+) -> None:
+    """アカウントの消えた親（未紐付けの参加）は「残る親」に数えない。
+
+    数えてしまうと、owner の脱退が誰もログインできない owner を生み、家族を
+    管理も解散もできなくしてしまう。
+    """
+    family_id = create_family(client, owner.headers)
+    _join_as_parent(client, owner, family_id, second_parent, name="おかあさん")
+    assert client.delete(f"/api/admin/users/{second_parent.user_id}", headers=admin_headers).status_code == 204
+
+    response = client.post(f"/api/families/{family_id}/leave", headers=owner.headers)
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "last_guardian_cannot_leave"
+
+
+def test_leaving_owner_skips_parents_without_an_account(
+    client: TestClient, admin_headers: dict[str, str], owner: Account, second_parent: Account
+) -> None:
+    """引き継ぎ先は、古さより先にアカウントの結び付きで絞る。"""
+    family_id = create_family(client, owner.headers)
+    _join_as_parent(client, owner, family_id, second_parent, name="おかあさん")
+    grandma = create_account(client, admin_headers, username="grandma", role="manager")
+    _join_as_parent(client, owner, family_id, grandma, name="おばあちゃん")
+    assert client.delete(f"/api/admin/users/{second_parent.user_id}", headers=admin_headers).status_code == 204
+
+    assert client.post(f"/api/families/{family_id}/leave", headers=owner.headers).status_code == 204
+
+    # より古い「おかあさん」はアカウントが無いので飛ばし、おばあちゃんが owner になる
+    detail = client.get(f"/api/families/{family_id}", headers=grandma.headers).json()
+    assert detail["my_role"] == "owner"
+
+
 def test_the_last_parent_cannot_leave(client: TestClient, owner: Account) -> None:
     family_id = create_family(client, owner.headers)
     add_child(client, owner.headers, family_id, display_name="たろう")
