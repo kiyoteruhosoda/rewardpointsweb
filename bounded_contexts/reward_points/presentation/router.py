@@ -236,6 +236,7 @@ async def view_family(family_id: int, use_case: ViewFamilyDep, principal: Family
 
 @router.patch("/{family_id}", response_model=FamilyDetailResponse)
 async def rename_family(
+    *,
     family_id: int,
     body: FamilyRenameRequest,
     use_case: RenameFamilyDep,
@@ -270,6 +271,7 @@ async def leave_family(family_id: int, use_case: LeaveFamilyDep, principal: Fami
     response_model=MembershipResponse,
 )
 async def add_child(
+    *,
     family_id: int,
     body: ChildCreateRequest,
     use_case: AddChildDep,
@@ -289,6 +291,7 @@ async def add_child(
 
 @router.delete("/{family_id}/memberships/{membership_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_membership(
+    *,
     family_id: int,
     membership_id: int,
     use_case: RemoveMembershipDep,
@@ -303,6 +306,7 @@ async def remove_membership(
     response_model=TemporaryPasswordResponse,
 )
 async def reset_child_password(
+    *,
     family_id: int,
     membership_id: int,
     use_case: ResetChildPasswordDep,
@@ -339,6 +343,7 @@ async def reset_child_password(
     response_model=MembershipResponse,
 )
 async def propose_independence(
+    *,
     family_id: int,
     membership_id: int,
     use_case: ProposeIndependenceDep,
@@ -367,6 +372,7 @@ async def propose_independence(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def revoke_independence_proposal(
+    *,
     family_id: int,
     membership_id: int,
     use_case: RevokeIndependenceDep,
@@ -408,6 +414,7 @@ async def list_invitations(
     response_model=InvitationResponse,
 )
 async def issue_invitation(
+    *,
     family_id: int,
     body: InvitationCreateRequest,
     use_case: IssueInvitationDep,
@@ -427,6 +434,7 @@ async def issue_invitation(
 
 @router.delete("/{family_id}/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_invitation(
+    *,
     family_id: int,
     invitation_id: int,
     use_case: RevokeInvitationDep,
@@ -466,6 +474,7 @@ async def view_ledger(ledger_id: int, use_case: ViewLedgerDep, principal: PointV
     response_model=TransactionResponse,
 )
 async def record_transaction(
+    *,
     ledger_id: int,
     body: TransactionCreateRequest,
     use_case: RecordTransactionDep,
@@ -495,6 +504,7 @@ async def record_transaction(
     response_model=TransactionResponse,
 )
 async def reverse_transaction(
+    *,
     ledger_id: int,
     transaction_id: int,
     body: ReversalCreateRequest,

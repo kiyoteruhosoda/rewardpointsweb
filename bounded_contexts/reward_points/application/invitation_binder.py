@@ -61,7 +61,12 @@ class InvitationBinder:
         return (
             self._link_target(invitation.target_membership_id, family_id=invitation.family_id, account_id=account_id)
             if invitation.target_membership_id is not None
-            else self._join_as_new(invitation.family_id, invitation.role, account_id, display_name)
+            else self._join_as_new(
+                family_id=invitation.family_id,
+                role=invitation.role,
+                account_id=account_id,
+                display_name=display_name,
+            )
         )
 
     def _link_target(self, membership_id: int, *, family_id: int, account_id: int) -> FamilyMembership:
@@ -74,6 +79,7 @@ class InvitationBinder:
 
     def _join_as_new(
         self,
+        *,
         family_id: int,
         role: FamilyRole,
         account_id: int,

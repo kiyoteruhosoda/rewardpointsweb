@@ -88,6 +88,7 @@ def _token_response(pair: dict[str, object], user: User) -> TokenResponse:
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
+    *,
     body: LoginRequest,
     response: Response,
     db: DbDep,

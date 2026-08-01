@@ -127,9 +127,14 @@ max-branches = 8
 max-statements = 30
 # 引数は開発標準の 3 ではなく 5。PLR0913 はキーワード専用引数と FastAPI の
 # Depends() も 1 個として数えるため、3 にすると呼び出し側の読みやすさを
-# 損なっていない箇所まで落ちる。位置引数 3 個までは引き続きレビュー観点
-# （理由と計測結果は ADR-0008）。
+# 損なっていない箇所まで落ちる（理由と計測結果は ADR-0008）。
 max-args = 5
+# ネスト深度と位置引数は開発標準どおり 3。対応する PLR1702 / PLR0917 は
+# preview のため `ruff check` 本体の select には入れず、この 2 ルールだけを
+# 明示 select した別コマンド（Makefile check-backend / CI 参照）で検証する
+# （ADR-0016）。
+max-nested-blocks = 3
+max-positional-args = 3
 
 [tool.ruff.lint.per-file-ignores]
 # ARG001: pytest フィクスチャは引数として受け取るだけで参照しないことがある

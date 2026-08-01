@@ -114,6 +114,15 @@ def _layer_of(module: str) -> str | None:
     return None
 
 
+def _modules_of_import_from(node: ast.ImportFrom, package: str) -> Iterator[str]:
+    """``from ... import`` の import 先を絶対名で返す（解決不能なら何も返さない）。"""
+    if node.level == 0:
+        if node.module:
+            yield node.module
+    elif (resolved := _resolve_relative_import(package, node.level, node.module)) is not None:
+        yield resolved
+
+
 def _imported_modules(tree: ast.Module, package: str) -> Iterator[str]:
     """*tree* が import しているモジュールを、すべて絶対名で返す。
 
@@ -125,11 +134,7 @@ def _imported_modules(tree: ast.Module, package: str) -> Iterator[str]:
             for alias in node.names:
                 yield alias.name
         elif isinstance(node, ast.ImportFrom):
-            if node.level == 0:
-                if node.module:
-                    yield node.module
-            elif (resolved := _resolve_relative_import(package, node.level, node.module)) is not None:
-                yield resolved
+            yield from _modules_of_import_from(node, package)
 
 
 def _files_with_restricted_imports() -> list[Path]:
@@ -211,7 +216,7 @@ def test_domain_does_not_depend_on_frameworks(path: Path) -> None:
     ],
 )
 def test_relative_imports_resolve_to_absolute_names(
-    package: str, level: int, module: str | None, expected: str | None
+    *, package: str, level: int, module: str | None, expected: str | None
 ) -> None:
     assert _resolve_relative_import(package, level, module) == expected
 

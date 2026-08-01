@@ -53,6 +53,7 @@ async def create_login_challenge(
 
 @router.post("/login", response_model=TokenResponse)
 async def login_with_passkey(
+    *,
     body: PasskeyAuthenticationRequest,
     response: Response,
     db: DbDep,

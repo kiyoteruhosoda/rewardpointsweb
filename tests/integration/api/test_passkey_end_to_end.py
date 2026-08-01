@@ -28,6 +28,7 @@ def _register(
     client: TestClient,
     headers: dict[str, str],
     authenticator: SoftwareAuthenticator,
+    *,
     name: str | None,
 ) -> httpx.Response:
     challenge = client.post("/api/account/security/passkeys/registration", headers=headers)
@@ -47,7 +48,7 @@ def _register(
 def test_register_then_sign_in_with_a_real_signature(
     client: TestClient, admin_headers: dict[str, str], authenticator: SoftwareAuthenticator
 ) -> None:
-    registration = _register(client, admin_headers, authenticator, "Test key")
+    registration = _register(client, admin_headers, authenticator, name="Test key")
     assert registration.status_code == 201, registration.text
     assert registration.json()["transports"] == ["internal"]
 
@@ -77,7 +78,7 @@ def test_signing_in_records_the_usage(
         PasskeyCredentialRecord,
     )
 
-    assert _register(client, admin_headers, authenticator, None).status_code == 201
+    assert _register(client, admin_headers, authenticator, name=None).status_code == 201
     before = client.get("/api/account/security/passkeys", headers=admin_headers).json()
     assert before[0]["last_used_at"] is None
 
@@ -107,7 +108,7 @@ def test_signing_in_records_the_usage(
 def test_a_signature_for_another_origin_is_rejected(client: TestClient, admin_headers: dict[str, str]) -> None:
     """フィッシングサイトからの署名は通らない（オリジンが検証される）。"""
     attacker = SoftwareAuthenticator(rp_id=RP_ID, origin="https://phishing.example")
-    response = _register(client, admin_headers, attacker, None)
+    response = _register(client, admin_headers, attacker, name=None)
     assert response.status_code == 401
     assert response.json()["detail"]["error"] == "passkey_verification_failed"
 
@@ -116,7 +117,7 @@ def test_a_replayed_challenge_is_rejected(
     client: TestClient, admin_headers: dict[str, str], authenticator: SoftwareAuthenticator
 ) -> None:
     """同じチャレンジで 2 度ログインできない。"""
-    assert _register(client, admin_headers, authenticator, None).status_code == 201
+    assert _register(client, admin_headers, authenticator, name=None).status_code == 201
 
     client.cookies.clear()
     challenge = client.post("/api/auth/passkey/challenge").json()
@@ -134,7 +135,7 @@ def test_a_replayed_challenge_is_rejected(
 def test_a_signature_for_a_different_challenge_is_rejected(
     client: TestClient, admin_headers: dict[str, str], authenticator: SoftwareAuthenticator
 ) -> None:
-    assert _register(client, admin_headers, authenticator, None).status_code == 201
+    assert _register(client, admin_headers, authenticator, name=None).status_code == 201
 
     client.cookies.clear()
     stale = client.post("/api/auth/passkey/challenge").json()

@@ -37,6 +37,7 @@ class RedeemInvitationCommand:
 class RedeemInvitationUseCase:
     def __init__(
         self,
+        *,
         binder: InvitationBinder,
         invitations: IFamilyInvitationRepository,
         families: IFamilyRepository,

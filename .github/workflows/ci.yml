@@ -39,6 +39,12 @@ jobs:
         if: always()
         run: uv run ruff check .
 
+      # ネスト深度・位置引数（ADR-0016）。preview ルールのため本体の select に
+      # 入れず、この 2 ルールだけを明示 select して別ステップで検証する。
+      - name: Ruff Check (ネスト深度・位置引数)
+        if: always()
+        run: uv run ruff check --preview --select PLR1702,PLR0917 .
+
       - name: MyPy (型チェック)
         if: always()
         run: uv run mypy

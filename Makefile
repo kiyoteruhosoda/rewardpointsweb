@@ -27,6 +27,7 @@ check: check-backend check-frontend
 check-backend:
 	uv run ruff format --check .
 	uv run ruff check .
+	uv run ruff check --preview --select PLR1702,PLR0917 .
 	uv run mypy
 	uv run pytest
 
@@ -39,6 +40,7 @@ check-frontend:
 # 個別に回したいとき
 lint:
 	uv run ruff check .
+	uv run ruff check --preview --select PLR1702,PLR0917 .
 
 typecheck:
 	uv run mypy
