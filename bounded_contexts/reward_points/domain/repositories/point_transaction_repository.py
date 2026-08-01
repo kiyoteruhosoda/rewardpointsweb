@@ -1,6 +1,8 @@
 """台帳トランザクションの永続化インターフェース。
 
-追記専用のため、更新・削除の口は用意しない（ADR-0010）。
+追記専用のため、更新・行単位の削除の口は用意しない（ADR-0010）。唯一の例外は
+独立の成立時に台帳ごと消す :meth:`IPointTransactionRepository.delete_by_ledger`
+（ADR-0014）。
 """
 
 from __future__ import annotations
@@ -56,6 +58,14 @@ class IPointTransactionRepository(ABC):
 
     @abstractmethod
     def count_by_ledger(self, ledger_id: int) -> int: ...
+
+    @abstractmethod
+    def delete_by_ledger(self, ledger_id: int) -> None:
+        """台帳の全レコードを消す。
+
+        追記専用（ADR-0010）の唯一の例外で、独立の成立時にだけ呼ぶ（ADR-0014）。
+        行単位の削除は今後も用意しない。
+        """
 
     @abstractmethod
     def frequent_reasons(self, *, family_id: int, limit: int) -> list[str]:

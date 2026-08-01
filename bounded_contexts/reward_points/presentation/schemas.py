@@ -69,6 +69,8 @@ class MembershipResponse(BaseModel):
     username: str | None
     ledger_id: int | None
     balance: int | None
+    # 独立が指示され、子本人の承認待ちか（ADR-0014）
+    independence_proposed: bool
 
 
 class FamilySummaryResponse(BaseModel):
@@ -85,6 +87,10 @@ class FamilyDetailResponse(BaseModel):
     my_membership_id: int
     my_role: FamilyRole
     memberships: list[MembershipResponse]
+
+
+class FamilyRenameRequest(BaseModel):
+    name: Annotated[NonBlankStr, Field(max_length=FAMILY_NAME_MAX_LENGTH)]
 
 
 class ChildCreateRequest(BaseModel):
@@ -181,6 +187,7 @@ __all__ = [
     "ChildCreateRequest",
     "FamilyCreateRequest",
     "FamilyDetailResponse",
+    "FamilyRenameRequest",
     "FamilySummaryResponse",
     "InvitationAcceptRequest",
     "InvitationCreateRequest",

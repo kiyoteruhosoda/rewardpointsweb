@@ -79,6 +79,19 @@ class SqlAccountProvisioning(IAccountProvisioning):
         self._session.flush()
         return _to_ref(user)
 
+    def grant_guardian_permissions(self, account_id: int) -> None:
+        user = self._session.get(User, account_id)
+        if user is None:  # 呼び出し側が membership から引いた ID なので通常は起きない
+            raise ValueError(f"account not found: {account_id}")
+        child_role = _ROLE_FOR_FAMILY_ROLE[FamilyRole.CHILD]
+        guardian_role = _ROLE_FOR_FAMILY_ROLE[FamilyRole.PARENT]
+        user.roles = [role for role in user.roles if role.name != child_role]
+        if all(role.name != guardian_role for role in user.roles):
+            granted = self._session.scalar(select(Role).where(Role.name == guardian_role))
+            if granted is not None:
+                user.roles.append(granted)
+        self._session.flush()
+
     def issue_temporary_password(self, account_id: int) -> TemporaryPassword:
         user = self._session.get(User, account_id)
         if user is None:  # 呼び出し側が membership から引いた ID なので通常は起きない

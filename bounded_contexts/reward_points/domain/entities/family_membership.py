@@ -22,6 +22,8 @@ class FamilyMembership:
     role: FamilyRole
     display_name: DisplayName
     created_at: datetime
+    # 親メンバーが独立を指示した日時（ADR-0014）。role = child 以外では常に None
+    independence_proposed_at: datetime | None = None
 
     @property
     def display_name_value(self) -> str:
@@ -31,6 +33,11 @@ class FamilyMembership:
     def is_linked(self) -> bool:
         """アカウントと結び付いているか（結び付くまで本人はログインできない）。"""
         return self.account_id is not None
+
+    @property
+    def independence_proposed(self) -> bool:
+        """独立が指示され、子本人の承認を待っているか（ADR-0014）。"""
+        return self.independence_proposed_at is not None
 
     def is_held_by(self, account_id: int) -> bool:
         return self.account_id is not None and self.account_id == account_id

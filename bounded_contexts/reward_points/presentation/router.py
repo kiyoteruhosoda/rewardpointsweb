@@ -43,15 +43,21 @@ from bounded_contexts.reward_points.application.use_cases.reverse_point_transact
 from bounded_contexts.reward_points.presentation.dependencies import (
     AcceptInvitationDep,
     AddChildDep,
+    ApproveIndependenceDep,
     CreateFamilyDep,
+    DissolveFamilyDep,
     IssueInvitationDep,
+    LeaveFamilyDep,
     ListFamiliesDep,
     ListInvitationsDep,
+    ProposeIndependenceDep,
     RecordTransactionDep,
     RedeemInvitationDep,
     RemoveMembershipDep,
+    RenameFamilyDep,
     ResetChildPasswordDep,
     ReverseTransactionDep,
+    RevokeIndependenceDep,
     RevokeInvitationDep,
     SuggestReasonsDep,
     ViewFamilyDep,
@@ -61,6 +67,7 @@ from bounded_contexts.reward_points.presentation.schemas import (
     ChildCreateRequest,
     FamilyCreateRequest,
     FamilyDetailResponse,
+    FamilyRenameRequest,
     FamilySummaryResponse,
     InvitationAcceptRequest,
     InvitationCreateRequest,
@@ -96,6 +103,7 @@ def _to_membership(dto: MembershipDTO) -> MembershipResponse:
         username=dto.username,
         ledger_id=dto.ledger_id,
         balance=dto.balance,
+        independence_proposed=dto.independence_proposed,
     )
 
 
@@ -226,6 +234,36 @@ async def view_family(family_id: int, use_case: ViewFamilyDep, principal: Family
     return _to_family(use_case.execute(family_id=family_id, account_id=principal.user_id))
 
 
+@router.patch("/{family_id}", response_model=FamilyDetailResponse)
+async def rename_family(
+    family_id: int,
+    body: FamilyRenameRequest,
+    use_case: RenameFamilyDep,
+    principal: FamilyManager,
+) -> FamilyDetailResponse:
+    """家族名を変える（owner のみ）。"""
+    dto = use_case.execute(family_id=family_id, account_id=principal.user_id, name=body.name)
+    logger.info("family_renamed", extra={"family_id": family_id})
+    return _to_family(dto)
+
+
+@router.delete("/{family_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def dissolve_family(family_id: int, use_case: DissolveFamilyDep, principal: FamilyManager) -> None:
+    """家族を解散する（owner のみ。自分以外の参加者がいないこと）。"""
+    use_case.execute(family_id=family_id, account_id=principal.user_id)
+    logger.info("family_dissolved", extra={"family_id": family_id})
+
+
+@router.post("/{family_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
+async def leave_family(family_id: int, use_case: LeaveFamilyDep, principal: FamilyViewer) -> None:
+    """家族から抜ける（親のみ。他に親が残る場合に限る）。
+
+    抜けた後は初期状態と同じで、家族を作り直すことも招待を受け直すこともできる。
+    """
+    use_case.execute(family_id=family_id, account_id=principal.user_id)
+    logger.info("family_left", extra={"family_id": family_id})
+
+
 @router.post(
     "/{family_id}/memberships",
     status_code=status.HTTP_201_CREATED,
@@ -291,6 +329,67 @@ async def reset_child_password(
         password=dto.password,
         expires_at=dto.expires_at,
     )
+
+
+# --- 独立（ADR-0014） --------------------------------------------------------
+
+
+@router.post(
+    "/{family_id}/memberships/{membership_id}/independence-proposal",
+    response_model=MembershipResponse,
+)
+async def propose_independence(
+    family_id: int,
+    membership_id: int,
+    use_case: ProposeIndependenceDep,
+    principal: FamilyManager,
+) -> MembershipResponse:
+    """子の独立を指示する（親メンバー）。子本人が承認した時点で独立が成立する。"""
+    membership = use_case.execute(family_id=family_id, membership_id=membership_id, account_id=principal.user_id)
+    logger.info("independence_proposed", extra={"family_id": family_id, "membership_id": membership_id})
+    return _to_membership(
+        MembershipDTO(
+            id=membership.id,
+            display_name=membership.display_name_value,
+            role=membership.role,
+            is_linked=membership.is_linked,
+            is_me=False,
+            username=None,
+            ledger_id=None,
+            balance=None,
+            independence_proposed=membership.independence_proposed,
+        )
+    )
+
+
+@router.delete(
+    "/{family_id}/memberships/{membership_id}/independence-proposal",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def revoke_independence_proposal(
+    family_id: int,
+    membership_id: int,
+    use_case: RevokeIndependenceDep,
+    principal: FamilyManager,
+) -> None:
+    """独立の指示を取り下げる（承認前ならいつでも）。"""
+    use_case.execute(family_id=family_id, membership_id=membership_id, account_id=principal.user_id)
+    logger.info("independence_proposal_revoked", extra={"family_id": family_id, "membership_id": membership_id})
+
+
+@router.post("/{family_id}/independence", status_code=status.HTTP_204_NO_CONTENT)
+async def approve_independence(
+    family_id: int,
+    use_case: ApproveIndependenceDep,
+    principal: FamilyViewer,
+) -> None:
+    """独立を承認する（指示を受けた子本人）。
+
+    成立すると参加・台帳・記録は家族から消え、所属なしのメンバーとなる
+    （家族を作ることも、招待を受け直すこともできる）。
+    """
+    use_case.execute(family_id=family_id, account_id=principal.user_id)
+    logger.info("independence_approved", extra={"family_id": family_id})
 
 
 # --- 招待の発行 --------------------------------------------------------------

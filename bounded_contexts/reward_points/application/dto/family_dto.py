@@ -34,6 +34,8 @@ class MembershipDTO:
     # 台帳を持つのは role = child だけ
     ledger_id: int | None
     balance: int | None
+    # 独立が指示され、子本人の承認待ちか（ADR-0014）
+    independence_proposed: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)

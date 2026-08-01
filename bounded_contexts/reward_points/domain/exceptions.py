@@ -90,6 +90,54 @@ class AccountAlreadyInFamilyError(RewardPointsError):
     code = "account_already_in_family"
 
 
+class AlreadyBelongsToFamilyError(RewardPointsError):
+    """すでにどこかの家族に所属しているアカウントが、家族を作る・加わろうとした。
+
+    所属できる家族は 1 アカウント 1 つまで（ADR-0013）。抜けて初期状態に
+    戻ってから、作り直すか招待を受け直す。
+    """
+
+    code = "already_belongs_to_family"
+
+
+class ChildCannotLeaveFamilyError(RewardPointsError):
+    """``role = child``（ゲスト）が自分から家族を抜けようとした。
+
+    子は自分では抜けられない（ADR-0013）。家族の構成を変えるのは owner の役目。
+    """
+
+    code = "child_cannot_leave_family"
+
+
+class LastGuardianCannotLeaveError(RewardPointsError):
+    """最後の親（owner / parent）が家族を抜けようとした。
+
+    抜けられるのは他に親が残る場合だけ（ADR-0013）。親が誰もいなくなると、
+    残された子の台帳を扱える人がいなくなる。1 人だけなら脱退ではなく解散を使う。
+    """
+
+    code = "last_guardian_cannot_leave"
+
+
+class FamilyNotEmptyError(RewardPointsError):
+    """自分以外の参加者が残っている家族を解散しようとした。
+
+    参加者（親も子も）がいるうちは解散できない（ADR-0013）。台帳ごと黙って
+    消える経路を作らない（ADR-0010）。
+    """
+
+    code = "family_not_empty"
+
+
+class IndependenceNotProposedError(RewardPointsError):
+    """独立の指示が無いのに、子が独立を承認しようとした。
+
+    独立は親メンバーの指示と子本人の承認の 2 段階で成立する（ADR-0014）。
+    """
+
+    code = "independence_not_proposed"
+
+
 class UsernameAlreadyTakenError(RewardPointsError):
     """指定されたログイン ID はすでに使われている。"""
 
@@ -97,9 +145,10 @@ class UsernameAlreadyTakenError(RewardPointsError):
 
 
 class ChildAccountRequiredError(RewardPointsError):
-    """親から親へのパスワードリセットを試みた。
+    """``role = child`` にしか行えない操作を、親に対して試みた。
 
-    一時パスワードの発行は ``role = child`` の参加者に対してだけ許す（ADR-0011）。
+    一時パスワードの発行（ADR-0011）と独立の指示（ADR-0014）は、子の参加者に
+    対してだけ許す。
     """
 
     code = "child_account_required"
@@ -139,12 +188,17 @@ class UserStillOwnsFamiliesError(RewardPointsError):
 
 __all__ = [
     "AccountAlreadyInFamilyError",
+    "AlreadyBelongsToFamilyError",
     "ChildAccountRequiredError",
+    "ChildCannotLeaveFamilyError",
     "DisplayNameRequiredError",
     "FamilyAccessDeniedError",
+    "FamilyNotEmptyError",
     "FamilyNotFoundError",
+    "IndependenceNotProposedError",
     "InvitationNotFoundError",
     "InvitationTargetUnavailableError",
+    "LastGuardianCannotLeaveError",
     "LedgerNotEmptyError",
     "LedgerNotFoundError",
     "MembershipNotFoundError",

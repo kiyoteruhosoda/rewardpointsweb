@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from bounded_contexts.reward_points.domain.entities.family import Family
+from bounded_contexts.reward_points.domain.exceptions import FamilyNotFoundError
 from bounded_contexts.reward_points.domain.repositories.family_repository import IFamilyRepository
 from bounded_contexts.reward_points.domain.value_objects.family_name import FamilyName
 from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
@@ -39,6 +40,19 @@ class SqlFamilyRepository(IFamilyRepository):
             select(FamilyModel).where(FamilyModel.id.in_(family_ids)).order_by(FamilyModel.name, FamilyModel.id)
         ).all()
         return [_to_family(row) for row in rows]
+
+    def update_name(self, *, family_id: int, name: str) -> Family:
+        validated = FamilyName(name)  # ドメイン不変条件を書き込み前に強制する
+        row = self._session.get(FamilyModel, family_id)
+        if row is None:
+            raise FamilyNotFoundError
+        row.name = validated.value
+        self._session.flush()
+        return _to_family(row)
+
+    def delete(self, family_id: int) -> None:
+        # 参加・招待・台帳は外部キーの ON DELETE CASCADE で家族と一緒に消える
+        self._session.execute(delete(FamilyModel).where(FamilyModel.id == family_id))
 
     def count_owned_by(self, account_id: int) -> int:
         total = self._session.scalar(

@@ -1,7 +1,7 @@
 """受け入れ基準のうち、他のファイルの主題から外れるもの。
 
-家族・台帳・子アカウントの「境界」を確かめる（複数家族・冪等キーの必須化・
-理由の候補・ログに秘密が出ないこと・OpenAPI への反映）。
+家族・台帳・子アカウントの「境界」を確かめる（所属は 1 家族まで・冪等キーの
+必須化・理由の候補・ログに秘密が出ないこと・OpenAPI への反映）。
 """
 
 from __future__ import annotations
@@ -60,14 +60,13 @@ def test_account_cannot_join_the_same_family_twice(client: TestClient, parent: A
     assert response.json()["detail"]["error"] == "account_already_in_family"
 
 
-def test_account_can_belong_to_several_families(
+def test_account_in_a_family_cannot_join_another(
     client: TestClient, admin_headers: dict[str, str], parent: Account
 ) -> None:
+    """所属できる家族は 1 アカウント 1 つまで(ADR-0013)。招待では増やせない。"""
     other_owner = create_account(client, admin_headers, username="grandma", role="manager")
     first = create_family(client, parent.headers, name="ほその家")
     second = create_family(client, other_owner.headers, name="となりの家")
-    add_child(client, parent.headers, first, display_name="たろう")
-    add_child(client, other_owner.headers, second, display_name="はなこ")
 
     invitation = issue_invitation(client, other_owner.headers, second, role="parent")
     joined = client.post(
@@ -75,12 +74,20 @@ def test_account_can_belong_to_several_families(
         headers=parent.headers,
         json={"code": invitation["code"], "display_name": "おとうさん"},
     )
-    assert joined.status_code == 200
+    assert joined.status_code == 409
+    assert joined.json()["detail"]["error"] == "already_belongs_to_family"
 
     listed = client.get("/api/families", headers=parent.headers).json()
-    # 先の家族の参加はそのまま残り、家族ごとに区別して並ぶ
-    assert {family["id"]: family["name"] for family in listed} == {first: "ほその家", second: "となりの家"}
-    assert {family["id"]: family["my_role"] for family in listed} == {first: "owner", second: "parent"}
+    assert [family["id"] for family in listed] == [first]
+
+
+def test_account_in_a_family_cannot_create_another(client: TestClient, parent: Account) -> None:
+    """家族を作れるのは、どの家族にも所属していないアカウントだけ(ADR-0013)。"""
+    create_family(client, parent.headers, name="ほその家")
+
+    response = client.post("/api/families", headers=parent.headers, json={"name": "ふたつめの家"})
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "already_belongs_to_family"
 
 
 def test_one_ledger_per_child(client: TestClient, parent: Account, db_session: Session) -> None:
@@ -346,8 +353,11 @@ def test_new_endpoints_appear_in_the_openapi_document(client: TestClient) -> Non
     expected = {
         "/api/families",
         "/api/families/{family_id}",
+        "/api/families/{family_id}/leave",
+        "/api/families/{family_id}/independence",
         "/api/families/{family_id}/memberships",
         "/api/families/{family_id}/memberships/{membership_id}",
+        "/api/families/{family_id}/memberships/{membership_id}/independence-proposal",
         "/api/families/{family_id}/memberships/{membership_id}/password-reset",
         "/api/families/{family_id}/invitations",
         "/api/families/{family_id}/invitations/{invitation_id}",

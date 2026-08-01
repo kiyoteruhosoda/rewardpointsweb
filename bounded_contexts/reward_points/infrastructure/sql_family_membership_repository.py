@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -91,6 +92,24 @@ class SqlFamilyMembershipRepository(IFamilyMembershipRepository):
         self._session.flush()
         return _to_membership(row)
 
+    def update_role(self, *, membership_id: int, role: FamilyRole) -> FamilyMembership:
+        row = self._require(membership_id)
+        row.role = role.value
+        self._session.flush()
+        return _to_membership(row)
+
+    def propose_independence(self, *, membership_id: int, proposed_at: datetime) -> FamilyMembership:
+        row = self._require(membership_id)
+        row.independence_proposed_at = proposed_at
+        self._session.flush()
+        return _to_membership(row)
+
+    def clear_independence_proposal(self, membership_id: int) -> FamilyMembership:
+        row = self._require(membership_id)
+        row.independence_proposed_at = None
+        self._session.flush()
+        return _to_membership(row)
+
     def delete(self, membership_id: int) -> None:
         self._session.execute(delete(FamilyMembershipModel).where(FamilyMembershipModel.id == membership_id))
 
@@ -113,6 +132,7 @@ def _to_membership(row: FamilyMembershipModel) -> FamilyMembership:
         role=FamilyRole(row.role),
         display_name=DisplayName(row.display_name),
         created_at=row.created_at,
+        independence_proposed_at=row.independence_proposed_at,
     )
 
 
