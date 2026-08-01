@@ -40,10 +40,11 @@ _ADDED_PERMISSION_CODES = ("family:view", "family:manage")
 
 
 def _drop_legacy_member_tables() -> None:
-    op.drop_index(op.f("ix_point_entries_member_id"), table_name="point_entries")
+    # 索引は落とさない（テーブルと一緒に消える）。外部キー列の索引を単独で DROP
+    # すると MariaDB が拒む: ``Cannot drop index ...: needed in a foreign key
+    # constraint``（エラー 1553）。
     op.drop_table("point_entries")
     op.drop_table("member_shares")
-    op.drop_index(op.f("ix_members_owner_user_id"), table_name="members")
     op.drop_table("members")
 
 
@@ -189,14 +190,9 @@ def downgrade() -> None:
         batch.alter_column("display_name", new_column_name="username", existing_type=sa.String(length=100))
         batch.alter_column("email", existing_type=sa.String(length=255), nullable=False)
 
-    op.drop_index(op.f("ix_family_invitations_family_id"), table_name="family_invitations")
     op.drop_table("family_invitations")
-    op.drop_index("ix_point_transactions_ledger_occurred", table_name="point_transactions")
     op.drop_table("point_transactions")
-    op.drop_index(op.f("ix_point_ledgers_family_id"), table_name="point_ledgers")
     op.drop_table("point_ledgers")
-    op.drop_index(op.f("ix_family_memberships_account_id"), table_name="family_memberships")
-    op.drop_index(op.f("ix_family_memberships_family_id"), table_name="family_memberships")
     op.drop_table("family_memberships")
     op.drop_table("families")
 

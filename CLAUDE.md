@@ -134,6 +134,7 @@ frontend/           # React + TypeScript + Vite（SPA スケルトン）
 - マイグレーションファイルは `migrations/versions/<revision_id>_<description>.py`。
 - 各ファイルの先頭に `from __future__ import annotations` を必ず記述。
 - `upgrade()` / `downgrade()` の両方を実装する。
+- **`drop_table()` する表の索引を `drop_index()` で先に落とさない。** 索引はテーブルと一緒に消える。外部キーが使う索引を単独で落とそうとすると MariaDB が拒む（エラー 1553）。SQLite は通してしまうため `tests/unit/test_migration_index_drops.py` で検査する。
 - ベースラインは `migrations/versions/0001_init_master.py`（全テーブルを現行モデルから生成）。
 - マスタデータ（ロール・権限・初期管理者）は `shared/domain/auth/master_data.py` を唯一の出所とし、`versions/*_seed_master_data.py` と `scripts/seed_master_data.py` の双方が参照する。値をどちらかに直書きしない。
 
