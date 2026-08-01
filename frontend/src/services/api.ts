@@ -10,6 +10,13 @@
 const ACCESS_KEY = 'access_token'
 const REFRESH_KEY = 'refresh_token'
 
+/**
+ * オフライン閲覧用に Service Worker が閲覧系 GET を保存するキャッシュ名
+ * （ADR-0015）。`frontend/vite.config.ts` の `runtimeCaching.cacheName` と対。
+ * 応答には個人のポイント記録が入るため、トークンを消すときに一緒に消す。
+ */
+const OFFLINE_VIEW_CACHE = 'offline-views'
+
 export class ApiError extends Error {
   status: number
   code: string
@@ -74,9 +81,23 @@ export function setTokens(access: string, refresh: string): void {
   localStorage.setItem(REFRESH_KEY, refresh)
 }
 
+/**
+ * オフライン閲覧キャッシュを消す（ADR-0015）。
+ *
+ * キャッシュは URL だけで引かれ、Authorization ヘッダーを見ない。誰の応答かを
+ * 区別できないので、ユーザーが替わり得る節目（ログアウト・セッション失効・
+ * ログイン成功）で丸ごと消す。
+ */
+export async function clearOfflineViewCache(): Promise<void> {
+  if (typeof caches !== 'undefined') await caches.delete(OFFLINE_VIEW_CACHE)
+}
+
 export function clearTokens(): void {
   localStorage.removeItem(ACCESS_KEY)
   localStorage.removeItem(REFRESH_KEY)
+  // ログアウト・セッション失効の後、同じブラウザの別ユーザーに前のユーザーの
+  // 残高・履歴が見えないようにする（ADR-0015）。
+  void clearOfflineViewCache()
 }
 
 export function hasTokens(): boolean {
@@ -130,7 +151,12 @@ async function tryRefresh(): Promise<boolean> {
   return true
 }
 
-async function request<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {
+async function requestResponse(
+  method: string,
+  path: string,
+  body?: unknown,
+  retry = true,
+): Promise<Response> {
   const headers: Record<string, string> = {}
   const access = localStorage.getItem(ACCESS_KEY)
   if (access) headers['Authorization'] = `Bearer ${access}`
@@ -142,7 +168,7 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
   const response = await fetch(path, init)
 
   if (response.status === 401 && retry && (await tryRefresh())) {
-    return request<T>(method, path, body, false)
+    return requestResponse(method, path, body, false)
   }
   if (!response.ok) {
     let payload: unknown = null
@@ -153,12 +179,42 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
     }
     throw new ApiError(response.status, extractErrorCode(payload), extractErrorFields(payload))
   }
+  return response
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const response = await requestResponse(method, path, body)
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
+/** 応答本体と、その応答が作られた時刻。 */
+export interface Fetched<T> {
+  data: T
+  /**
+   * 応答の ``Date`` ヘッダー。オフラインでは Service Worker が保存時のヘッダー
+   * ごと応答を返すため、この時刻だけが「いつの情報か」を示せる（ADR-0015）。
+   * ヘッダーが無い・読めない応答では null。
+   */
+  fetchedAt: Date | null
+}
+
+function fetchedAtOf(response: Response): Date | null {
+  const value = response.headers.get('date')
+  if (!value) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+async function requestFetched<T>(path: string): Promise<Fetched<T>> {
+  const response = await requestResponse('GET', path)
+  return { data: (await response.json()) as T, fetchedAt: fetchedAtOf(response) }
+}
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
+  /** オフライン閲覧に対応する画面向け。取得時刻（Date ヘッダー）を添えて返す。 */
+  getFetched: <T>(path: string) => requestFetched<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),

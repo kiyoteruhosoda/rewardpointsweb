@@ -42,6 +42,7 @@ class IssueInvitationCommand:
 class IssueInvitationUseCase:
     def __init__(
         self,
+        *,
         access: FamilyAccessResolver,
         invitations: IFamilyInvitationRepository,
         memberships: IFamilyMembershipRepository,

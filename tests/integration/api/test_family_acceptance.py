@@ -99,7 +99,7 @@ def test_one_ledger_per_child(client: TestClient, parent: Account, db_session: S
 
 
 def test_account_outside_any_family_reaches_no_ledger(
-    client: TestClient, admin_headers: dict[str, str], parent: Account, ledger: Ledger
+    *, client: TestClient, admin_headers: dict[str, str], parent: Account, ledger: Ledger
 ) -> None:
     outsider = create_account(client, admin_headers, username="outsider", role="manager")
 
@@ -131,6 +131,7 @@ class LedgerCall:
     ids=["view", "record", "reverse"],
 )
 def test_every_ledger_endpoint_blocks_other_families(
+    *,
     client: TestClient,
     admin_headers: dict[str, str],
     ledger: Ledger,
@@ -217,7 +218,7 @@ def test_backdated_record_keeps_its_creation_time(client: TestClient, parent: Ac
 
 
 def test_reason_suggestions_are_per_family_and_by_frequency(
-    client: TestClient, admin_headers: dict[str, str], parent: Account, ledger: Ledger
+    *, client: TestClient, admin_headers: dict[str, str], parent: Account, ledger: Ledger
 ) -> None:
     ledger.record(client, parent.headers, amount=10, reason="おてつだい", key="k1")
     ledger.record(client, parent.headers, amount=10, reason="おてつだい", key="k2")
@@ -334,7 +335,7 @@ def test_secrets_never_reach_the_log(
 
 
 def test_ledger_changes_are_traceable_by_request_id(
-    client: TestClient, parent: Account, ledger: Ledger, caplog: pytest.LogCaptureFixture
+    *, client: TestClient, parent: Account, ledger: Ledger, caplog: pytest.LogCaptureFixture
 ) -> None:
     with caplog.at_level(logging.INFO):
         ledger.record(client, parent.headers, amount=10, reason="おてつだい", key="k1")

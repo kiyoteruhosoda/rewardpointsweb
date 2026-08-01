@@ -30,6 +30,7 @@ from bounded_contexts.reward_points.domain.services.ledger_statement import Ledg
 class FamilyOverviewBuilder:
     def __init__(
         self,
+        *,
         memberships: IFamilyMembershipRepository,
         ledgers: IPointLedgerRepository,
         transactions: IPointTransactionRepository,

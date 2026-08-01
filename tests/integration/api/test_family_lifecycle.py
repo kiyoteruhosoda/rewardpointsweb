@@ -33,7 +33,7 @@ def second_parent(client: TestClient, admin_headers: dict[str, str]) -> Account:
     return create_account(client, admin_headers, username="mom", role="manager", display_name="おかあさん")
 
 
-def _join_as_parent(client: TestClient, owner: Account, family_id: int, joiner: Account, *, name: str) -> int:
+def _join_as_parent(client: TestClient, owner: Account, family_id: int, *, joiner: Account, name: str) -> int:
     invitation = issue_invitation(client, owner.headers, family_id, role="parent")
     response = client.post(
         "/api/families/invitations/accept",
@@ -74,7 +74,7 @@ def test_owner_renames_the_family(client: TestClient, owner: Account) -> None:
 
 def test_parent_cannot_rename_the_family(client: TestClient, owner: Account, second_parent: Account) -> None:
     family_id = create_family(client, owner.headers)
-    _join_as_parent(client, owner, family_id, second_parent, name="おかあさん")
+    _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
 
     response = client.patch(f"/api/families/{family_id}", headers=second_parent.headers, json={"name": "のっとり"})
     assert response.status_code == 403
@@ -94,7 +94,7 @@ def test_parent_leaves_and_returns_to_the_initial_state(
     client: TestClient, owner: Account, second_parent: Account
 ) -> None:
     family_id = create_family(client, owner.headers)
-    _join_as_parent(client, owner, family_id, second_parent, name="おかあさん")
+    _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
 
     left = client.post(f"/api/families/{family_id}/leave", headers=second_parent.headers)
     assert left.status_code == 204
@@ -110,7 +110,7 @@ def test_leaving_parent_disappears_from_history_but_records_remain(
     client: TestClient, owner: Account, second_parent: Account
 ) -> None:
     family_id = create_family(client, owner.headers)
-    _join_as_parent(client, owner, family_id, second_parent, name="おかあさん")
+    _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
     child = add_child(client, owner.headers, family_id, display_name="たろう")
     ledger = Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"])))
     ledger.record(client, second_parent.headers, amount=10, reason="おてつだい", key="k1")
@@ -127,7 +127,7 @@ def test_leaving_owner_hands_the_family_to_the_oldest_parent(
     client: TestClient, owner: Account, second_parent: Account
 ) -> None:
     family_id = create_family(client, owner.headers)
-    _join_as_parent(client, owner, family_id, second_parent, name="おかあさん")
+    _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
 
     assert client.post(f"/api/families/{family_id}/leave", headers=owner.headers).status_code == 204
 
@@ -137,7 +137,7 @@ def test_leaving_owner_hands_the_family_to_the_oldest_parent(
 
 
 def test_owner_cannot_leave_when_the_other_parent_lost_their_account(
-    client: TestClient, admin_headers: dict[str, str], owner: Account, second_parent: Account
+    *, client: TestClient, admin_headers: dict[str, str], owner: Account, second_parent: Account
 ) -> None:
     """アカウントの消えた親（未紐付けの参加）は「残る親」に数えない。
 
@@ -145,7 +145,7 @@ def test_owner_cannot_leave_when_the_other_parent_lost_their_account(
     管理も解散もできなくしてしまう。
     """
     family_id = create_family(client, owner.headers)
-    _join_as_parent(client, owner, family_id, second_parent, name="おかあさん")
+    _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
     assert client.delete(f"/api/admin/users/{second_parent.user_id}", headers=admin_headers).status_code == 204
 
     response = client.post(f"/api/families/{family_id}/leave", headers=owner.headers)
@@ -154,13 +154,13 @@ def test_owner_cannot_leave_when_the_other_parent_lost_their_account(
 
 
 def test_leaving_owner_skips_parents_without_an_account(
-    client: TestClient, admin_headers: dict[str, str], owner: Account, second_parent: Account
+    *, client: TestClient, admin_headers: dict[str, str], owner: Account, second_parent: Account
 ) -> None:
     """引き継ぎ先は、古さより先にアカウントの結び付きで絞る。"""
     family_id = create_family(client, owner.headers)
-    _join_as_parent(client, owner, family_id, second_parent, name="おかあさん")
+    _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
     grandma = create_account(client, admin_headers, username="grandma", role="manager")
-    _join_as_parent(client, owner, family_id, grandma, name="おばあちゃん")
+    _join_as_parent(client, owner, family_id, joiner=grandma, name="おばあちゃん")
     assert client.delete(f"/api/admin/users/{second_parent.user_id}", headers=admin_headers).status_code == 204
 
     assert client.post(f"/api/families/{family_id}/leave", headers=owner.headers).status_code == 204
@@ -204,7 +204,7 @@ def test_owner_alone_dissolves_the_family(client: TestClient, owner: Account) ->
 
 def test_family_with_a_member_cannot_be_dissolved(client: TestClient, owner: Account, second_parent: Account) -> None:
     family_id = create_family(client, owner.headers)
-    _join_as_parent(client, owner, family_id, second_parent, name="おかあさん")
+    _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
 
     response = client.delete(f"/api/families/{family_id}", headers=owner.headers)
     assert response.status_code == 409
@@ -223,7 +223,7 @@ def test_family_with_a_guest_cannot_be_dissolved(client: TestClient, owner: Acco
 
 def test_parent_cannot_dissolve_the_family(client: TestClient, owner: Account, second_parent: Account) -> None:
     family_id = create_family(client, owner.headers)
-    _join_as_parent(client, owner, family_id, second_parent, name="おかあさん")
+    _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
 
     response = client.delete(f"/api/families/{family_id}", headers=second_parent.headers)
     assert response.status_code == 403

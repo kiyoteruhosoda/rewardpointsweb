@@ -83,9 +83,24 @@ export default defineConfig({
           /^\/readyz/,
           /^\/info/,
         ],
-        // API 応答は SW でキャッシュしない（常にネットワークへ）。オフライン時は
-        // フロント側のエラーハンドリング（i18n エラーコード変換）に委ねる。
-        runtimeCaching: [],
+        // 閲覧系の GET だけオフライン閲覧用にキャッシュする（ADR-0015）。
+        // network-first なのでオンラインの表示は常に最新で、キャッシュが出るのは
+        // オフラインのときだけ。画面は応答の Date ヘッダーで取得時刻を示す。
+        // 書き込み・招待・管理系はキャッシュしない（オフラインでは従来通り失敗）。
+        // キャッシュ名は frontend/src/services/api.ts の OFFLINE_VIEW_CACHE と対
+        // （ログアウト時にそちらから削除する）。
+        runtimeCaching: [
+          {
+            urlPattern: /\/api\/(?:auth\/me|families(?:\/\d+(?:\/ledgers\/\d+)?)?)$/,
+            method: 'GET',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'offline-views',
+              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
       },
     }),
   ],

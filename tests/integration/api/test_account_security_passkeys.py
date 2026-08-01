@@ -172,7 +172,7 @@ def test_registration_excludes_already_registered_credentials(
 
 
 def test_registration_rejects_another_users_challenge(
-    client: TestClient, admin_headers: dict[str, str], relying_party: FakeRelyingParty, db_session: Session
+    *, client: TestClient, admin_headers: dict[str, str], relying_party: FakeRelyingParty, db_session: Session
 ) -> None:
     """他人宛に発行されたチャレンジでは登録できない。
 

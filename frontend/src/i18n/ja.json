@@ -214,6 +214,7 @@
   "points.change": "増減",
   "points.confirmReverse": "この記録を打ち消す行を追加しますか？ 元の記録は履歴に残ります。",
   "points.consume": "消費する",
+  "points.fetchedAt": "{time} 時点の情報です。",
   "points.history": "履歴",
   "points.historyEmpty": "まだ記録がありません。",
   "points.isReversal": "打ち消し",

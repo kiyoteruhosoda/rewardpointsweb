@@ -5,7 +5,7 @@
  * 「変更 UI を出すか」はサーバーが返す `can_modify` で決める（立場の名前では
  * 判断しない）。
  */
-import { api } from './api'
+import { api, type Fetched } from './api'
 
 export type FamilyRole = 'owner' | 'parent' | 'child'
 
@@ -184,8 +184,9 @@ export const families = {
   reasonSuggestions: (familyId: number) =>
     api.get<string[]>(`/api/families/${familyId}/reason-suggestions`),
 
-  viewLedger: (familyId: number, ledgerId: number) =>
-    api.get<Ledger>(ledgerPath(familyId, ledgerId)),
+  /** 取得時刻付き。オフラインではキャッシュが返り、時刻がその古さを示す（ADR-0015）。 */
+  viewLedger: (familyId: number, ledgerId: number): Promise<Fetched<Ledger>> =>
+    api.getFetched<Ledger>(ledgerPath(familyId, ledgerId)),
 
   record: (familyId: number, ledgerId: number, entry: NewTransaction) =>
     api.post<Transaction>(`${ledgerPath(familyId, ledgerId)}/transactions`, {

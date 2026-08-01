@@ -2,11 +2,12 @@
 import { screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { Fetched } from '../services/api'
 import type { Ledger, Transaction } from '../services/families'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { LedgerPage } from './LedgerPage'
 
-const viewLedger = vi.fn<() => Promise<Ledger>>()
+const viewLedger = vi.fn<() => Promise<Fetched<Ledger>>>()
 const reasonSuggestions = vi.fn<() => Promise<string[]>>()
 
 vi.mock('../services/families', () => ({
@@ -32,16 +33,19 @@ function transaction(overrides: Partial<Transaction> = {}): Transaction {
   }
 }
 
-function ledger(overrides: Partial<Ledger> = {}): Ledger {
+function ledger(overrides: Partial<Ledger> = {}): Fetched<Ledger> {
   return {
-    ledger_id: 20,
-    family_id: 1,
-    membership_id: 2,
-    display_name: 'ハナ',
-    balance: 100,
-    can_modify: true,
-    transactions: [transaction()],
-    ...overrides,
+    data: {
+      ledger_id: 20,
+      family_id: 1,
+      membership_id: 2,
+      display_name: 'ハナ',
+      balance: 100,
+      can_modify: true,
+      transactions: [transaction()],
+      ...overrides,
+    },
+    fetchedAt: null,
   }
 }
 
@@ -142,5 +146,24 @@ describe('LedgerPage', () => {
     renderPage()
 
     expect(await screen.findByText('Nothing recorded yet.')).toBeInTheDocument()
+  })
+
+  it('最後に取得した時刻を出す（オフラインでは古いキャッシュが出得るため）', async () => {
+    viewLedger.mockResolvedValue({
+      ...ledger(),
+      fetchedAt: new Date('2026-08-01T10:00:00Z'),
+    })
+    renderPage()
+
+    await screen.findByText('100 pt')
+    expect(screen.getByText(/As of /)).toBeInTheDocument()
+  })
+
+  it('取得時刻が読めない応答では時刻の行を出さない', async () => {
+    viewLedger.mockResolvedValue(ledger())
+    renderPage()
+
+    await screen.findByText('100 pt')
+    expect(screen.queryByText(/As of /)).not.toBeInTheDocument()
   })
 })

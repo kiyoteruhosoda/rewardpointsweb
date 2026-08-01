@@ -41,7 +41,7 @@ def _linked_child(
     return int(str(child["id"])), login(client, username=username, password=f"{username}-pass-123")
 
 
-def _propose(client: TestClient, headers: dict[str, str], family_id: int, membership_id: int) -> None:
+def _propose(client: TestClient, headers: dict[str, str], family_id: int, *, membership_id: int) -> None:
     response = client.post(
         f"/api/families/{family_id}/memberships/{membership_id}/independence-proposal",
         headers=headers,
@@ -57,7 +57,7 @@ def test_parent_proposes_and_the_family_sees_it(client: TestClient, parent: Acco
     family_id = create_family(client, parent.headers)
     membership_id, child_headers = _linked_child(client, parent, family_id)
 
-    _propose(client, parent.headers, family_id, membership_id)
+    _propose(client, parent.headers, family_id, membership_id=membership_id)
 
     # 子本人にも承認待ちであることが見える
     detail = client.get(f"/api/families/{family_id}", headers=child_headers).json()
@@ -125,7 +125,7 @@ def test_approval_without_a_proposal_is_refused(client: TestClient, parent: Acco
 def test_revoked_proposal_cannot_be_approved(client: TestClient, parent: Account) -> None:
     family_id = create_family(client, parent.headers)
     membership_id, child_headers = _linked_child(client, parent, family_id)
-    _propose(client, parent.headers, family_id, membership_id)
+    _propose(client, parent.headers, family_id, membership_id=membership_id)
 
     revoked = client.delete(
         f"/api/families/{family_id}/memberships/{membership_id}/independence-proposal",
@@ -144,7 +144,7 @@ def test_approved_independence_removes_the_guest_and_frees_the_account(client: T
     ledger_id = next(m for m in detail["memberships"] if m["id"] == membership_id)["ledger_id"]
     ledger = Ledger(family_id=family_id, ledger_id=int(str(ledger_id)))
     ledger.record(client, parent.headers, amount=10, reason="おてつだい", key="k1")
-    _propose(client, parent.headers, family_id, membership_id)
+    _propose(client, parent.headers, family_id, membership_id=membership_id)
 
     approved = client.post(f"/api/families/{family_id}/independence", headers=child_headers)
     assert approved.status_code == 204
@@ -170,7 +170,7 @@ def test_approved_independence_removes_the_guest_and_frees_the_account(client: T
 def test_independent_account_can_rejoin_as_a_member(client: TestClient, parent: Account) -> None:
     family_id = create_family(client, parent.headers)
     membership_id, child_headers = _linked_child(client, parent, family_id)
-    _propose(client, parent.headers, family_id, membership_id)
+    _propose(client, parent.headers, family_id, membership_id=membership_id)
     assert client.post(f"/api/families/{family_id}/independence", headers=child_headers).status_code == 204
 
     # 元の家族から、今度はメンバー（parent）として招待を受け直せる

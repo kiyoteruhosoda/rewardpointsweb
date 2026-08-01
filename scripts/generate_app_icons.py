@@ -71,7 +71,7 @@ def star_points(cx: float, cy: float, radius: float) -> list[tuple[float, float]
     return points
 
 
-def dome_points(x: float, half_width: float, arc_y: float, bottom: float) -> list[tuple[float, float]]:
+def dome_points(x: float, half_width: float, arc_y: float, *, bottom: float) -> list[tuple[float, float]]:
     """体の輪郭（上半分が半円、下は下端の先まで伸びる柱）。"""
     points = [(x - half_width, bottom)]
     for i in range(ARC_STEPS + 1):
@@ -106,7 +106,7 @@ class Canvas:
         else:
             self._draw.rectangle(box, fill=BLUE)
 
-    def circle(self, cx: float, cy: float, r: float, color: str) -> None:
+    def circle(self, cx: float, cy: float, r: float, *, color: str) -> None:
         x, y = self._at(cx, cy)
         size = r * self._scale * self._px
         self._draw.ellipse((x - size, y - size, x + size, y + size), fill=color)
@@ -118,7 +118,7 @@ class Canvas:
         px_width = width * self._scale * self._px
         self._draw.line((self._at(*start), self._at(*end)), fill=STAR, width=round(px_width))
         for point in (start, end):  # 丸い端
-            self.circle(point[0], point[1], width / 2, STAR)
+            self.circle(point[0], point[1], width / 2, color=STAR)
 
     def finish(self, size: int, corner: float) -> Image.Image:
         """角丸の外へはみ出した体を切り落としてから縮小する。"""
@@ -136,12 +136,12 @@ def paint(canvas: Canvas, corner: float) -> None:
     canvas.background(corner)
     for index, person in enumerate(FAMILY):
         if index > 0:  # 奥の人と重なるところに背景色の隙間を作る
-            canvas.circle(person.head_x, person.head_y, person.head_r + GAP, BLUE)
-            gap_body = dome_points(person.body_x, person.body_hw + GAP, person.body_arc_y, canvas.bottom)
+            canvas.circle(person.head_x, person.head_y, person.head_r + GAP, color=BLUE)
+            gap_body = dome_points(person.body_x, person.body_hw + GAP, person.body_arc_y, bottom=canvas.bottom)
             canvas.polygon(gap_body, BLUE)
-        canvas.polygon(dome_points(person.body_x, person.body_hw, person.body_arc_y, canvas.bottom), WHITE)
-        canvas.circle(person.head_x, person.head_y, person.head_r + GAP, BLUE)
-        canvas.circle(person.head_x, person.head_y, person.head_r, WHITE)
+        canvas.polygon(dome_points(person.body_x, person.body_hw, person.body_arc_y, bottom=canvas.bottom), WHITE)
+        canvas.circle(person.head_x, person.head_y, person.head_r + GAP, color=BLUE)
+        canvas.circle(person.head_x, person.head_y, person.head_r, color=WHITE)
 
     canvas.polygon(star_points(STAR_X, STAR_Y, STAR_R), STAR)
     for start, end in SPARKS:

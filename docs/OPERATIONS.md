@@ -62,6 +62,7 @@ make check-frontend              # Frontend だけ
 # Backend
 uv run ruff format --check .     # 整形
 uv run ruff check .              # 静的解析
+uv run ruff check --preview --select PLR1702,PLR0917 .  # ネスト深度・位置引数（ADR-0016）
 uv run mypy                      # 型チェック（対象は pyproject.toml の files）
 uv run pytest                    # テスト
 

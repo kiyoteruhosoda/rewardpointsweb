@@ -29,6 +29,7 @@ from bounded_contexts.reward_points.domain.repositories.point_transaction_reposi
 class ApproveIndependenceUseCase:
     def __init__(
         self,
+        *,
         access: FamilyAccessResolver,
         memberships: IFamilyMembershipRepository,
         ledgers: IPointLedgerRepository,

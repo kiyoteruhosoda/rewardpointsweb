@@ -30,6 +30,7 @@ from bounded_contexts.reward_points.domain.services import family_access_policy
 class ResetChildPasswordUseCase:
     def __init__(
         self,
+        *,
         access: FamilyAccessResolver,
         memberships: IFamilyMembershipRepository,
         provisioning: IAccountProvisioning,
