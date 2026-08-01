@@ -152,10 +152,11 @@ export function FamilyPage() {
         </section>
       )}
 
-      {isOwner && (
+      {isGuardian && (
         <InvitationPanel
           familyId={family.id}
           unlinkedChildren={unlinkedChildren}
+          canInviteParent={isOwner}
           onChanged={reload}
         />
       )}

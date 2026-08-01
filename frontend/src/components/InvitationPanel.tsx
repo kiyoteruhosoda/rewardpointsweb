@@ -1,5 +1,9 @@
 /**
- * 招待コードの発行と取り消し（owner / parent）。
+ * 招待コードの発行と取り消し（親メンバー）。
+ *
+ * 出せる招待は立場で分かれる（ADR-0020）。子ども宛のコードは親（owner / parent）
+ * なら配れるが、もう 1 人の親を招くのは owner だけ — 誰をこの家族へ入れるかは
+ * owner が決める。
  *
  * 平文のコードは発行の応答にしか現れないので、受け取った直後だけ画面に出す。
  * 一覧へ戻ると二度と読めない（保存されているのはハッシュだけ。ADR-0009）。
@@ -13,12 +17,14 @@ import { useToast } from './ToastNotification'
 
 interface Props {
   familyId: number
-  /** アカウント未紐付けの子。招待は必ずこのどれかを指す。 */
+  /** アカウント未紐付けの子。子ども宛の招待は必ずこのどれかを指す。 */
   unlinkedChildren: Membership[]
+  /** もう 1 人の親を招けるか（owner のみ）。 */
+  canInviteParent: boolean
   onChanged: () => Promise<void>
 }
 
-export function InvitationPanel({ familyId, unlinkedChildren, onChanged }: Props) {
+export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, onChanged }: Props) {
   const { t, locale } = useI18n()
   const { notify } = useToast()
   const [pending, setPending] = useState<Invitation[]>([])
@@ -72,14 +78,16 @@ export function InvitationPanel({ familyId, unlinkedChildren, onChanged }: Props
       )}
 
       <div className="inline-form">
-        <button
-          type="button"
-          onClick={() => {
-            void issue(null)
-          }}
-        >
-          {t('invitations.inviteParent')}
-        </button>
+        {canInviteParent && (
+          <button
+            type="button"
+            onClick={() => {
+              void issue(null)
+            }}
+          >
+            {t('invitations.inviteParent')}
+          </button>
+        )}
         {unlinkedChildren.map((child) => (
           <button
             key={child.id}

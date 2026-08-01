@@ -73,11 +73,18 @@ def test_both_guardians_create_children() -> None:
     assert not family_access_policy.can_create_child(_membership(id=3, role=FamilyRole.CHILD))
 
 
-def test_only_the_owner_invites() -> None:
-    """招待は「家族の構成を変える」操作なので、除名と同じく owner のみ。"""
-    assert family_access_policy.can_invite(_membership(id=1, role=FamilyRole.OWNER))
-    assert not family_access_policy.can_invite(_membership(id=2, role=FamilyRole.PARENT))
-    assert not family_access_policy.can_invite(_membership(id=3, role=FamilyRole.CHILD))
+def test_only_the_owner_invites_another_parent() -> None:
+    """新しい大人を入れるのは「家族の構成を変える」操作。除名と同じく owner のみ。"""
+    assert family_access_policy.can_invite(_membership(id=1, role=FamilyRole.OWNER), FamilyRole.PARENT)
+    assert not family_access_policy.can_invite(_membership(id=2, role=FamilyRole.PARENT), FamilyRole.PARENT)
+    assert not family_access_policy.can_invite(_membership(id=3, role=FamilyRole.CHILD), FamilyRole.PARENT)
+
+
+def test_both_guardians_hand_a_child_its_code() -> None:
+    """子ども宛の招待は顔ぶれを変えない（ADR-0020）。追加した親が渡せる。"""
+    for role in (FamilyRole.OWNER, FamilyRole.PARENT):
+        assert family_access_policy.can_invite(_membership(id=1, role=role), FamilyRole.CHILD)
+    assert not family_access_policy.can_invite(_membership(id=3, role=FamilyRole.CHILD), FamilyRole.CHILD)
 
 
 def test_password_reset_targets_children_only() -> None:

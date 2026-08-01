@@ -1,4 +1,8 @@
-"""招待コードを発行する（owner のみ）。
+"""招待コードを発行する。
+
+配れる立場は招く相手で分かれる（ADR-0020）。新しい大人を入れる親の招待は owner
+だけ、すでにいる子ども宛の招待は親（owner / parent）も配れる。判定は
+``family_access_policy.can_invite`` が持つ。
 
 平文のコードはこの応答でだけ返す。保存されるのはハッシュだけなので、失くしたら
 発行し直す。``role = child`` の招待では、親が先に作った参加者を必ず指す
@@ -17,6 +21,7 @@ from bounded_contexts.reward_points.application.dto.family_dto import Invitation
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
 from bounded_contexts.reward_points.domain.entities.family_membership import FamilyMembership
 from bounded_contexts.reward_points.domain.exceptions import (
+    FamilyAccessDeniedError,
     InvitationTargetUnavailableError,
     MembershipNotFoundError,
     RoleNotInvitableError,
@@ -27,6 +32,7 @@ from bounded_contexts.reward_points.domain.repositories.family_invitation_reposi
 from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
     IFamilyMembershipRepository,
 )
+from bounded_contexts.reward_points.domain.services import family_access_policy
 from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
 from shared.kernel.timestamps import utcnow
 
@@ -54,7 +60,9 @@ class IssueInvitationUseCase:
         self._ttl = ttl
 
     def execute(self, command: IssueInvitationCommand) -> InvitationDTO:
-        self._access.require_owner(family_id=command.family_id, account_id=command.account_id)
+        actor = self._access.membership_in(family_id=command.family_id, account_id=command.account_id)
+        if not family_access_policy.can_invite(actor, command.role):
+            raise FamilyAccessDeniedError
         if not command.role.is_invitable:
             raise RoleNotInvitableError
         target = self._require_target(command)

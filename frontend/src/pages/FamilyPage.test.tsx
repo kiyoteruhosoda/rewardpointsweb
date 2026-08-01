@@ -106,12 +106,18 @@ describe('FamilyPage', () => {
     expect(screen.getByRole('button', { name: 'Add a child' })).toBeInTheDocument()
   })
 
-  it('owner には招待を出し、parent には出さない', () => {
-    renderPage(familyOf('parent', [member()]))
-    expect(screen.queryByText('Invitations')).not.toBeInTheDocument()
-
-    renderPage(familyOf('owner', [member()]))
+  it('親を招けるのは owner だけ（parent には子ども宛の招待だけ出す）', () => {
+    renderPage(familyOf('parent', [member({ is_linked: false })]))
     expect(screen.getByText('Invitations')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ハナ/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Invite another parent' })).not.toBeInTheDocument()
+  })
+
+  it('owner には親の招待も出す', () => {
+    renderPage(familyOf('owner', [member()]))
+
+    expect(screen.getByText('Invitations')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Invite another parent' })).toBeInTheDocument()
   })
 
   it('一時パスワードは can_reset_password のときだけ出す', () => {
