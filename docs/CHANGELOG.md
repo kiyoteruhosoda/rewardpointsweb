@@ -2,6 +2,27 @@
 
 新しいものを上に追記する。細かな進捗は書かない（Progress.md 完了時に要約を移す）。
 
+## 2026-08 ユーザー管理画面からアカウントを作れなくなっていた（422）
+
+`POST /api/admin/users` が常に 422 を返し、管理画面からアカウントを追加できなかった。
+
+ADR-0011 でログイン識別子を `username` へ分け、画面に出す名前を `display_name` として
+別に持たせたとき、`UserCreateRequest` には必須項目として `display_name` が入ったが、
+`frontend/src/pages/UsersPage.tsx` は分割前のまま `email` / `username` / `password` /
+`roles` だけを送り続けていた。FastAPI はハンドラへ入る前に弾くため、ルーター側の
+409・400 の分岐には一切届いていない。
+
+画面が原因を出せなかったのも同じ経路による。バリデーション誤りの応答は `detail` が
+配列で、`{"error": "..."}` を期待する `extractErrorCode`（`frontend/src/services/api.ts`）
+に合わないため、トーストは `error.unknown_error` にしかならない。
+
+併せて、この画面ではメールアドレスが `required` のままだった。ADR-0011 で任意項目に
+なっており、メールアドレスを持たない子アカウントは元から作れない状態だった。空欄なら
+`null` を送るようにし、一覧にも表示名の列と、メールアドレスを持たない行の表記を足した。
+
+`frontend/src/pages/UsersPage.test.tsx` で送信内容を検証し、スキーマとの乖離が再発
+した場合に落ちるようにした。
+
 ## 2026-08 clone 直後に `docker compose up` が通るようにし、名前を `rewardpointsweb` で固定した
 
 README・OPERATIONS には「`docker compose up -d`」と書いてあったが、実際には動かな

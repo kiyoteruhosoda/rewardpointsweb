@@ -9,6 +9,7 @@
   "common.active": "有効",
   "common.back": "戻る",
   "common.delete": "削除",
+  "common.displayName": "表示名",
   "common.email": "メールアドレス",
   "common.hidePassword": "パスワードを隠す",
   "common.language": "言語",
@@ -237,5 +238,7 @@
   "theme.light": "ライト",
   "theme.system": "OS の設定に従う",
   "users.add": "ユーザーを追加",
+  "users.emailOptional": "メールアドレス（任意）",
+  "users.role": "ロール",
   "users.title": "ユーザー管理"
 }
