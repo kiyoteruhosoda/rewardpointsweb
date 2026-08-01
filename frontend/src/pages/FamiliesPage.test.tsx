@@ -75,4 +75,18 @@ describe('FamiliesPage', () => {
 
     expect(await screen.findByText('You joined the family.')).toBeInTheDocument()
   })
+
+  it('ログイン前に入力したコードを引き継いで入れておく', async () => {
+    renderWithProviders(<FamiliesPage />, {
+      scopes: PARENT_SCOPES,
+      route: '/families?code=CODE1234',
+    })
+
+    expect(await screen.findByLabelText('Invitation code')).toHaveValue('CODE1234')
+    expect(
+      screen.getByText(
+        'The invitation code you entered before signing in was carried over. Choose “Join with a code” to join the family.',
+      ),
+    ).toBeInTheDocument()
+  })
 })

@@ -295,6 +295,13 @@ select:focus-visible {
   color: var(--text-muted);
 }
 
+/* 入力欄に添える補足。直前の欄に属して見えるよう、余白を詰めて弱く出す。 */
+.field-hint {
+  margin: -0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
 .card {
   max-width: 60rem;
   padding: 1.2rem;

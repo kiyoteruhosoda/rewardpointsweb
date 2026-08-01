@@ -61,6 +61,10 @@ class RedeemInvitationUseCase:
             username=command.username,
             password=command.password,
             role=invitation.role,
+            # 本人が名乗った名前をアカウントの表示名にもする。参加が用意済みの
+            # 招待では家族の中での呼び名は親が決めた値のままなので、ここで使わないと
+            # 入力した名前がどこにも残らない
+            display_name=command.display_name,
         )
         membership = self._binder.bind(
             code=command.code,

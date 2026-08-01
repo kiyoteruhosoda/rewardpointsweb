@@ -46,12 +46,18 @@ class IAccountProvisioning(ABC):
     def is_username_taken(self, username: str) -> bool: ...
 
     @abstractmethod
-    def create_account(self, *, username: str, password: str, role: FamilyRole) -> AccountRef:
+    def create_account(
+        self, *, username: str, password: str, role: FamilyRole, display_name: str | None = None
+    ) -> AccountRef:
         """招待の受諾でアカウントを作る。
 
         メールアドレスは受け取らない。子アカウントはメールアドレスを持たない
         ことを前提とする（ADR-0011）。付与するアプリケーションロールは
         *role* から実装側が決める。
+
+        *display_name* は本人が名乗る名前。省略・空文字ならログイン識別子を
+        表示名にする。家族の中での呼び名（membership の display_name）とは
+        別物で、こちらはアカウントそのものの表示名（ADR-0010）。
         """
 
     @abstractmethod

@@ -86,11 +86,11 @@ describe('ThemeProvider', () => {
     expect(screen.getByTestId('theme').textContent).toBe('light')
   })
 
-  it('既定値が不正なら system に落ちる', () => {
+  it('既定値が不正ならライトに落ちる（OS がダークでも従わない）', () => {
     stubMatchMedia(true)
     renderWith(settingsOf({ default_theme: 'solarized' }))
-    expect(screen.getByTestId('theme').textContent).toBe('system')
-    expect(screen.getByTestId('resolved').textContent).toBe('dark')
+    expect(screen.getByTestId('theme').textContent).toBe('light')
+    expect(screen.getByTestId('resolved').textContent).toBe('light')
   })
 
   it('system のときは OS の配色を解決結果にする', () => {

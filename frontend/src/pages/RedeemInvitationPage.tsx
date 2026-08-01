@@ -3,9 +3,14 @@
  *
  * 子アカウントの入り口はここだけ。子ども自身では作れず、親が参加を用意して
  * 招待コードを渡した場合にのみ成立する（ADR-0011）。メールアドレスは尋ねない。
+ *
+ * すでにアカウントを持つ人はここでは作れない（所属できる家族は 1 つまで —
+ * ADR-0013）。その場合はログインしてから家族の画面で参加する経路になるため、
+ * 入力済みの招待コードを `?code=` で持たせてログインへ送る。行き先で拾えないと
+ * 「コードを持っているのに元の画面へ戻される」動線になる。
  */
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { PasswordField } from '../components/PasswordField'
 import { useI18n } from '../i18n'
@@ -13,20 +18,28 @@ import { errorMessageKey } from '../services/api'
 import { families } from '../services/families'
 import { useAuth } from '../store/AuthContext'
 
+/** 家族の中での呼び名の上限（DisplayName の MAX_LENGTH と同じ）。 */
+const DISPLAY_NAME_MAX_LENGTH = 100
+
 export function RedeemInvitationPage() {
   const { t } = useI18n()
   const { login } = useAuth()
   const navigate = useNavigate()
-  const [code, setCode] = useState('')
+  const [searchParams] = useSearchParams()
+  const [code, setCode] = useState(() => searchParams.get('code') ?? '')
+  const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  // 打ち込んだコードはログインの先まで運ぶ。空のまま送っても意味がないので付けない。
+  const signInPath = code.trim() ? `/login?code=${encodeURIComponent(code.trim())}` : '/login'
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
     try {
-      const joined = await families.redeemInvitation(code, username, password)
+      const joined = await families.redeemInvitation(code, username, password, displayName)
       // 作った直後はまだログインしていない。設定したばかりの資格情報でそのまま入る
       await login(joined.username, password)
       navigate('/')
@@ -59,6 +72,19 @@ export function RedeemInvitationPage() {
           />
         </label>
         <label>
+          {t('join.displayName')}
+          <input
+            autoComplete="nickname"
+            value={displayName}
+            onChange={(event) => {
+              setDisplayName(event.target.value)
+            }}
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
+            required
+          />
+        </label>
+        <p className="field-hint">{t('join.displayNameHint')}</p>
+        <label>
           {t('join.username')}
           <input
             autoComplete="username"
@@ -81,7 +107,12 @@ export function RedeemInvitationPage() {
           required
         />
         <button type="submit">{t('join.submit')}</button>
-        <Link to="/login">{t('join.haveAccount')}</Link>
+
+        <div className="card-inset">
+          <h2>{t('join.haveAccountTitle')}</h2>
+          <p>{t('join.haveAccountHint')}</p>
+          <Link to={signInPath}>{t('join.haveAccount')}</Link>
+        </div>
       </form>
     </div>
   )

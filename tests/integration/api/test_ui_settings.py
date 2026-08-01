@@ -12,7 +12,7 @@ def test_ui_settings_are_public(client: TestClient) -> None:
     assert response.json() == {
         "languages": ["en", "ja"],
         "default_locale": "en",
-        "default_theme": "system",
+        "default_theme": "light",
     }
 
 

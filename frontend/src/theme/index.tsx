@@ -6,6 +6,7 @@
  *
  * 優先順位は「利用者の選択（localStorage）> サーバーの既定値（DEFAULT_THEME）」。
  * `system` を選んだ場合は OS の設定に追従し、OS 側の切り替えにも即座に反応する。
+ * どちらも決まらないときはライトにする（サーバーの既定値と揃える）。
  */
 import {
   createContext,
@@ -27,6 +28,8 @@ export const THEME_PREFERENCES: ThemePreference[] = ['system', 'light', 'dark']
 
 const STORAGE_KEY = 'theme'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
+/** 何も決まらないときの配色。サーバー側の DEFAULT_THEME と同じ既定。 */
+const FALLBACK_PREFERENCE: ThemePreference = 'light'
 
 interface ThemeValue {
   theme: ThemePreference
@@ -43,7 +46,7 @@ function isThemePreference(value: unknown): value is ThemePreference {
 function initialTheme(settings: UiSettings): ThemePreference {
   const stored = localStorage.getItem(STORAGE_KEY)
   if (isThemePreference(stored)) return stored
-  return isThemePreference(settings.default_theme) ? settings.default_theme : 'system'
+  return isThemePreference(settings.default_theme) ? settings.default_theme : FALLBACK_PREFERENCE
 }
 
 function prefersDark(): boolean {
