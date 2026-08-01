@@ -145,9 +145,23 @@ def test_client_error_is_logged_with_its_error_code(
 def test_domain_error_is_logged(
     client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """ドメイン例外のハンドラも同じ受け皿で記録する（レベルと項目が揃う）。"""
+    """ドメイン例外のハンドラも同じ受け皿で記録する（レベルと項目が揃う）。
+
+    admin は家族の scope を持たない（ADR-0018）ため、家族の当事者（member）で
+    ドメイン例外まで到達させる。
+    """
+    password = "dad-pass-123"
+    created = client.post(
+        "/api/admin/users",
+        headers=admin_headers,
+        json={"username": "dad", "display_name": "dad", "password": password, "roles": ["member"]},
+    )
+    assert created.status_code == 201, created.text
+    login = client.post("/api/auth/login", json={"username": "dad", "password": password})
+    member_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
     with caplog.at_level(logging.DEBUG, logger=_ERROR_LOGGER):
-        assert client.get("/api/families/999999", headers=admin_headers).status_code == 403
+        assert client.get("/api/families/999999", headers=member_headers).status_code == 403
 
     records = _error_records(caplog)
     assert [record.error_code for record in records] == ["family_access_denied"]  # type: ignore[attr-defined]

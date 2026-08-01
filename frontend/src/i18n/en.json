@@ -73,6 +73,7 @@
   "error.challenge_not_found": "The request expired. Please try again.",
   "error.child_account_required": "This action only applies to a child's account.",
   "error.child_cannot_leave_family": "A child cannot leave the family on their own.",
+  "error.child_invitation_requires_signup": "A child invitation code can only be used to create the child's new account, not from an existing account.",
   "error.display_name_required": "Please give a name.",
   "error.email_already_exists": "This email is already registered.",
   "error.family_access_denied": "You do not have that role in this family.",

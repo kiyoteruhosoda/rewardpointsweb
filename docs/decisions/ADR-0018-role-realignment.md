@@ -25,25 +25,35 @@
 
 | ロール | アクター | scope |
 |---|---|---|
-| `admin` | システム管理者 | 全部 |
+| `admin` | システム管理者 | **家族・ポイント以外の全部**（ユーザー・ロール・権限・設定・ログ） |
 | `member` | 親（メンバー） | `family:view/manage`・`point:view/manage` + 画面系 |
 | `guest` | 子（ゲスト） | `family:view`・`point:view` + 画面系（閲覧のみ） |
 | `manager` | 運用者 | `item:*`・`log:view` + 画面系。**家族機能とは無関係** |
+
+家族・ポイントは家庭の当事者（member / guest）の領分で、システム管理者は
+関与しない。admin の仕事はアカウントとシステムの管理であって、他人の家庭の
+台帳を見ることではない。
 
 家族内ロールとの対応（`sql_account_directory.py`）: owner / parent → `member`、
 child → `guest`。`manager` は家族のフローでは一切割り当てない。
 管理画面のユーザー作成のデフォルトは `member`。
 
-### 家族の作成は `family:manage`
+### 家族の作成は保護者の scope 一式
 
-親（member）は最初から作れる。子（guest）は scope で止まる。ADR-0017 の
-「`family:view` で入れて作成時に昇格」は不要になったため廃止する。
+作成は「一人前の保護者になる」操作なので、`family:view` / `family:manage` /
+`point:view` / `point:manage` の全部を要求する。親（member）は最初から作れる。
+子（guest）・admin・一部の scope しか持たないカスタムロールは scope で止まる —
+閲覧も記録もできない owner を生まないため。ADR-0017 の「`family:view` で入れて
+作成時に昇格」は不要になったため廃止する。
 
 ### 子のライフサイクル
 
 子アカウントは家族の参加としてだけ存在する。**未所属の guest は運用上存在しない**。
 
-- **誕生**: 招待の受諾（redeem）で guest として生まれる
+- **誕生**: 招待の受諾（redeem）で guest として生まれる。子の招待コードは
+  redeem 専用で、既存アカウントの受諾（accept）では使えない
+  （`child_invitation_requires_signup`）— 除名の後始末（アカウント削除）が、
+  独立に存在するアカウントを巻き込まないための保証でもある
 - **卒業**: 独立（ADR-0014、親の指示 + 本人の承認）で guest → `member` へ昇格し、
   所属なしのメンバーになる。昇格の実装（`grant_guardian_permissions` — 保護者の
   scope を全て持つ場合はロール構成へ触れない）は ADR-0017 から引き継ぐ

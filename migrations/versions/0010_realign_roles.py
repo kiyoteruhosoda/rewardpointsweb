@@ -5,12 +5,16 @@
 - ``member`` = 親（メンバー）: ``family:manage`` / ``point:manage`` を得る
 - ``guest``  = 子（ゲスト）: ``family:view`` / ``point:view`` を得る
 - ``manager`` = 運用者: family / point 系の scope を失う（家族機能とは無関係になる）
+- ``admin``  = システム管理者: family / point 系の scope を失う（家族・ポイントは
+  家庭の当事者の領分で、システム管理者は関与しない）
 
 割り当ての引き直し:
 
 - 子として家族に結び付いているアカウント（``family_memberships.role = 'child'``）は
   ``member`` から ``guest`` へ
-- ``manager`` を持つアカウントは ``member`` へ（これまで親は manager だった）
+- ``manager`` を持つアカウントは ``member`` へ。このリビジョンまで manager は
+  「親」の役だった（運用者という位置付けはここから始まる）ので、保有者は
+  家族への参加の有無に関わらず全員が親として扱われていたアカウントである
 
 このリビジョン時点の姿を固定するため、付与の増減はこのファイルが持つ定数で
 行う（0005 と同じ方針）。正本（master_data）は「今あるべき姿」を表すもので、
@@ -43,6 +47,7 @@ _ADDED_GRANTS: dict[str, tuple[str, ...]] = {
 }
 _REMOVED_GRANTS: dict[str, tuple[str, ...]] = {
     "manager": _FAMILY_SCOPES,
+    "admin": _FAMILY_SCOPES,
 }
 
 _roles = sa.table("roles", sa.column("id"), sa.column("name"))
@@ -163,6 +168,6 @@ def downgrade() -> None:
         )
     _apply_grants(
         bind,
-        added={"manager": _FAMILY_SCOPES},
+        added={"manager": _FAMILY_SCOPES, "admin": _FAMILY_SCOPES},
         removed={"member": ("family:manage", "point:manage"), "guest": ("family:view", "point:view")},
     )

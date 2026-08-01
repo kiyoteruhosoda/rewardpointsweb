@@ -9,14 +9,18 @@ ADR の文章（親=メンバー、子=ゲスト）と実装（親=manager、子
 引き直し、ADR-0017 の「作成時の昇格」を廃止した。
 
 - member が `family:manage` / `point:manage` を持つので、親は最初から家族を
-  作れる（再ログイン不要）。子= guest は閲覧のみで、家族の作成・親招待の受諾は
-  scope で閉じる（親招待は `guardian_account_required` で断り、コードは消費しない）。
-- 子アカウントは家族の参加としてだけ存在する: 招待の受諾で生まれ、独立
+  作れる（再ログイン不要）。作成は保護者の scope 一式を要求する。子= guest は
+  閲覧のみで、家族の作成・親招待の受諾は scope で閉じる（親招待は
+  `guardian_account_required` で断り、コードは消費しない）。
+- admin は家族・ポイントの scope を持たない。家族・ポイントは家庭の当事者
+  （member / guest）の領分で、システム管理者はユーザー管理等に徹する。
+- 子アカウントは家族の参加としてだけ存在する: 招待の受諾（redeem 専用 —
+  accept では `child_invitation_requires_signup` で断る）で生まれ、独立
   （ADR-0014）で member へ昇格して卒業し、除名（台帳が空の場合のみ）では
   アカウントごと削除する。未所属の guest は運用上存在しない。
 - マイグレーション 0010 が既存データを引き直す（child の参加を持つ member →
-  guest、manager 保有者 → member）。manager は運用系（item/log）だけの
-  ロールとして残る。
+  guest、manager 保有者 → member、admin から family/point を除去）。manager は
+  運用系（item/log）だけのロールとして残る。
 - システム管理への導線をプロフィール設定から Sidebar の独立した節へ移した。
 
 ## 2026-08 member ロールでも家族を作れるようにした（ADR-0017、ADR-0018 で置き換え）

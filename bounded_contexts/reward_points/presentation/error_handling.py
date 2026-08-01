@@ -19,6 +19,7 @@ from bounded_contexts.reward_points.domain.exceptions import (
     AlreadyBelongsToFamilyError,
     ChildAccountRequiredError,
     ChildCannotLeaveFamilyError,
+    ChildInvitationRequiresSignupError,
     DisplayNameRequiredError,
     FamilyAccessDeniedError,
     FamilyNotEmptyError,
@@ -62,6 +63,7 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     ChildCannotLeaveFamilyError: status.HTTP_403_FORBIDDEN,
     GuardianAccountRequiredError: status.HTTP_403_FORBIDDEN,
     MembershipNotLinkedError: status.HTTP_400_BAD_REQUEST,
+    ChildInvitationRequiresSignupError: status.HTTP_400_BAD_REQUEST,
     DisplayNameRequiredError: status.HTTP_400_BAD_REQUEST,
     RoleNotInvitableError: status.HTTP_400_BAD_REQUEST,
 }

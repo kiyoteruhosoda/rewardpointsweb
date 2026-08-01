@@ -165,6 +165,17 @@ class GuardianAccountRequiredError(RewardPointsError):
     code = "guardian_account_required"
 
 
+class ChildInvitationRequiresSignupError(RewardPointsError):
+    """子の招待コードを、既存アカウントの受諾（accept）で使おうとした。
+
+    子アカウントは招待の受諾で「新しく生まれる」もの（redeem — ADR-0011 /
+    ADR-0018）。既存のアカウントを子として結び付けると、除名時の後始末
+    （アカウント削除）が独立に存在するアカウントを巻き込んでしまう。
+    """
+
+    code = "child_invitation_requires_signup"
+
+
 class DisplayNameRequiredError(RewardPointsError):
     """呼び名の要る招待（参加者を指していない招待）に、呼び名が渡されなかった。"""
 
@@ -202,6 +213,7 @@ __all__ = [
     "AlreadyBelongsToFamilyError",
     "ChildAccountRequiredError",
     "ChildCannotLeaveFamilyError",
+    "ChildInvitationRequiresSignupError",
     "DisplayNameRequiredError",
     "FamilyAccessDeniedError",
     "FamilyNotEmptyError",

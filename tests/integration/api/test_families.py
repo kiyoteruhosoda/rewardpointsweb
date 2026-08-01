@@ -215,6 +215,61 @@ def test_removing_an_unlinked_child_keeps_other_accounts(client: TestClient, par
     assert client.get("/api/families", headers=parent.headers).status_code == 200
 
 
+def test_admin_has_no_family_access(client: TestClient, admin_headers: dict[str, str]) -> None:
+    """システム管理者は家族・ポイントに関与しない（ADR-0018）。"""
+    assert client.get("/api/families", headers=admin_headers).status_code == 403
+    denied = client.post("/api/families", headers=admin_headers, json={"name": "かんりしゃの家"})
+    assert denied.status_code == 403
+
+
+def test_partial_guardian_scope_cannot_create_a_family(client: TestClient, admin_headers: dict[str, str]) -> None:
+    """保護者の scope が一部欠けるカスタムロールでは家族を作れない。
+
+    family:manage だけで通すと、閲覧も記録もできない owner が生まれてしまう。
+    """
+    created_role = client.post(
+        "/api/admin/roles",
+        headers=admin_headers,
+        json={"name": "clerk", "permissions": ["gui:view", "family:view", "family:manage"]},
+    )
+    assert created_role.status_code == 201, created_role.text
+    clerk = create_account(client, admin_headers, username="clerk1", role="clerk")
+
+    denied = client.post("/api/families", headers=clerk.headers, json={"name": "しょきの家"})
+    assert denied.status_code == 403
+
+
+def test_existing_account_cannot_accept_a_child_invitation(
+    client: TestClient, admin_headers: dict[str, str], parent: Account
+) -> None:
+    """子の招待コードは redeem（アカウント新規作成）専用。
+
+    既存アカウントを子として結び付けられると、除名の後始末（アカウント削除）が
+    独立に存在するアカウントを巻き込んでしまう。断られたコードは消費されず、
+    本来の使い方（redeem）でそのまま使える。
+    """
+    family_id = create_family(client, parent.headers)
+    child = add_child(client, parent.headers, family_id, display_name="たろう")
+    invitation = issue_invitation(
+        client, parent.headers, family_id, role="child", target_membership_id=int(str(child["id"]))
+    )
+    outsider = create_account(client, admin_headers, username="aunt", role="member")
+
+    denied = client.post(
+        "/api/families/invitations/accept",
+        headers=outsider.headers,
+        json={"code": invitation["code"], "display_name": "たろう？"},
+    )
+    assert denied.status_code == 400
+    assert denied.json()["detail"]["error"] == "child_invitation_requires_signup"
+
+    redeemed = client.post(
+        "/api/families/invitations/redeem",
+        json={"code": invitation["code"], "username": "taro", "password": "taro-pass-123"},
+    )
+    assert redeemed.status_code == 201, redeemed.text
+
+
 def test_invited_parent_can_manage_every_child(client: TestClient, parent: Account, other_parent: Account) -> None:
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")

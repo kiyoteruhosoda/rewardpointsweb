@@ -50,11 +50,15 @@ PERMISSION_CODES: Sequence[str] = (
 # ロール名 -> 付与する権限コードの集合。有効 scope は所属ロールの和集合。
 #
 # ロールはアクター（人）に対応する（ADR-0018）。
+#   admin   = システム管理者。ユーザー・ロール・設定・ログを扱うが、
+#             家族・ポイントは家庭の当事者（member / guest）の領分で関与しない
 #   member  = 親・大人（メンバー）。家族を作り、子を追加し、ポイントを記録できる
 #   guest   = 子（ゲスト）。招待の受諾でのみ生まれ、自分の家族と台帳を見るだけ
 #   manager = 運用者。家族機能とは無関係で、家族のフローでは一切割り当てない
+_FAMILY_POINT_SCOPES: frozenset[str] = frozenset({"family:view", "family:manage", "point:view", "point:manage"})
+
 ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
-    "admin": tuple(PERMISSION_CODES),  # 全権限
+    "admin": tuple(code for code in PERMISSION_CODES if code not in _FAMILY_POINT_SCOPES),
     "manager": (
         "item:view",
         "item:manage",

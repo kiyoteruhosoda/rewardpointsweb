@@ -73,6 +73,7 @@
   "error.challenge_not_found": "受付期限が切れました。もう一度お試しください。",
   "error.child_account_required": "この操作は子どものアカウントにだけ行えます。",
   "error.child_cannot_leave_family": "子どもは自分では家族から抜けられません。",
+  "error.child_invitation_requires_signup": "子の招待コードは、子ども本人の新しいアカウント作成でだけ使えます。",
   "error.display_name_required": "名前を入力してください。",
   "error.email_already_exists": "このメールアドレスは既に登録されています。",
   "error.family_access_denied": "この家族でその操作を行える立場ではありません。",

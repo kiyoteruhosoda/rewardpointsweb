@@ -1,9 +1,10 @@
 /**
  * 家族の一覧。
  *
- * 家族を作れるのは親（member ロール — `family:manage`）だけで、作った人が owner に
- * なる（ADR-0018）。子（guest）は招待コードで加わるので、この画面に「作る」は
- * 出ない。親の招待コードを子が使うとサーバーが断る（guardian_account_required）。
+ * 家族を作れるのは親（member ロール — 保護者の scope 一式）だけで、作った人が
+ * owner になる（ADR-0018）。子（guest）は招待コードで加わるので、この画面に
+ * 「作る」は出ない。親の招待コードを子が使うとサーバーが断る
+ * （guardian_account_required）。
  */
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
@@ -22,7 +23,8 @@ export function FamiliesPage() {
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
 
-  const canCreate = hasScope('family:manage')
+  // 作成は保護者の scope 一式が要る（サーバーの入口と同じ条件 — ADR-0018）
+  const canCreate = hasScope('family:view', 'family:manage', 'point:view', 'point:manage')
 
   const reload = () => families.list().then(setList)
 
