@@ -36,6 +36,13 @@ class MembershipDTO:
     balance: int | None
     # 独立が指示され、子本人の承認待ちか（ADR-0014）
     independence_proposed: bool = False
+    # 見ている人がこの参加者に対して行える操作。画面はこれだけを見て操作を出す
+    # （台帳の ``can_modify`` と同じ考え方 — 押してから断られる操作を出さない）。
+    # 既定はすべて偽。参加者 1 人を作って返すだけの応答（子の追加・独立の指示）は
+    # 家族全体を読み直さないので、可否を答えられる立場にない。
+    can_reset_password: bool = False
+    can_propose_independence: bool = False
+    can_remove: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)

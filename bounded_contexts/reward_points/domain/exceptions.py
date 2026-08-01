@@ -198,6 +198,17 @@ class LedgerNotEmptyError(RewardPointsError):
     code = "ledger_not_empty"
 
 
+class InvalidMemberOrderError(RewardPointsError):
+    """並べ替えの指定が、その家族の並べられる参加者と一致しない。
+
+    並び替えは順番を入れ替えるだけの操作で、参加者を増やしも減らしもしない。
+    抜け・重複・他家族の参加者が混ざった指定は、画面が古い一覧を握っている
+    合図なので断る。
+    """
+
+    code = "invalid_member_order"
+
+
 class UserStillOwnsFamiliesError(RewardPointsError):
     """家族の owner として残っているアカウントは削除できない。
 
@@ -220,6 +231,7 @@ __all__ = [
     "FamilyNotFoundError",
     "GuardianAccountRequiredError",
     "IndependenceNotProposedError",
+    "InvalidMemberOrderError",
     "InvitationNotFoundError",
     "InvitationTargetUnavailableError",
     "LastGuardianCannotLeaveError",

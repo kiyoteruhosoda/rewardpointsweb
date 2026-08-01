@@ -55,6 +55,7 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     RedeemInvitationDep,
     RemoveMembershipDep,
     RenameFamilyDep,
+    ReorderMembersDep,
     ResetChildPasswordDep,
     ReverseTransactionDep,
     RevokeIndependenceDep,
@@ -74,6 +75,7 @@ from bounded_contexts.reward_points.presentation.schemas import (
     InvitationRedeemRequest,
     InvitationResponse,
     LedgerResponse,
+    MemberOrderRequest,
     MembershipResponse,
     RedeemedInvitationResponse,
     ReversalCreateRequest,
@@ -110,6 +112,9 @@ def _to_membership(dto: MembershipDTO) -> MembershipResponse:
         ledger_id=dto.ledger_id,
         balance=dto.balance,
         independence_proposed=dto.independence_proposed,
+        can_reset_password=dto.can_reset_password,
+        can_propose_independence=dto.can_propose_independence,
+        can_remove=dto.can_remove,
     )
 
 
@@ -246,7 +251,19 @@ async def create_family(
 
 @router.get("/{family_id}", response_model=FamilyDetailResponse)
 async def view_family(family_id: int, use_case: ViewFamilyDep, principal: FamilyViewer) -> FamilyDetailResponse:
-    return _to_family(use_case.execute(family_id=family_id, account_id=principal.user_id))
+    """参加者と、見える範囲の台帳・残高。
+
+    参加者ごとの操作の可否（``can_*``）は、家族の中での立場と ``family:manage``
+    の両方から決まる（ADR-0019）。除名・独立の指示・一時パスワードの入口は
+    どれも ``family:manage`` を要求するため、持っていない呼び出し元には
+    出さない。
+    """
+    dto = use_case.execute(
+        family_id=family_id,
+        account_id=principal.user_id,
+        can_manage=principal.can("family:manage"),
+    )
+    return _to_family(dto)
 
 
 @router.patch("/{family_id}", response_model=FamilyDetailResponse)
@@ -314,6 +331,28 @@ async def remove_membership(
 ) -> None:
     use_case.execute(family_id=family_id, membership_id=membership_id, account_id=principal.user_id)
     logger.info("membership_removed", extra={"family_id": family_id, "membership_id": membership_id})
+
+
+@router.put("/{family_id}/member-order", response_model=FamilyDetailResponse)
+async def reorder_members(
+    *,
+    family_id: int,
+    body: MemberOrderRequest,
+    use_case: ReorderMembersDep,
+    principal: FamilyManager,
+) -> FamilyDetailResponse:
+    """子を並べる順を決める（親メンバー）。
+
+    ナビゲーションもダッシュボードもこの順で並ぶ。並びは家族に 1 つで、誰が
+    見ても同じ順になる。
+    """
+    dto = use_case.execute(
+        family_id=family_id,
+        account_id=principal.user_id,
+        membership_ids=body.membership_ids,
+    )
+    logger.info("family_members_reordered", extra={"family_id": family_id})
+    return _to_family(dto)
 
 
 @router.post(

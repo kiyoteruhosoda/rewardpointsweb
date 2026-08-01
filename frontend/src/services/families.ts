@@ -22,6 +22,17 @@ export interface Membership {
   balance: number | null
   /** 親から独立の指示が出ているか（ADR-0014）。子本人の承認で成立する。 */
   independence_proposed: boolean
+  /**
+   * 見ている人がこの参加者に対して行える操作。
+   *
+   * 立場から画面が組み立て直すと、サーバーが断る操作まで出てしまう（記録の
+   * 残る子の「削除」など）。出し分けはこの 3 つだけを見て決める。
+   */
+  can_reset_password: boolean
+  /** 独立の指示 — アカウントのある子だけ。ADR-0014 */
+  can_propose_independence: boolean
+  /** 削除 — owner だけ、自分以外、台帳に記録が無いとき */
+  can_remove: boolean
 }
 
 export interface FamilySummary {
@@ -146,6 +157,12 @@ export const families = {
   /** 独立を承認する（指示を受けた子本人）。成立すると台帳ごと家族から消える。 */
   approveIndependence: (familyId: number) =>
     api.post<undefined>(`/api/families/${familyId}/independence`),
+
+  /** 子を並べる順を決める（親メンバー）。並びは家族に 1 つで、誰が見ても同じ。 */
+  reorderMembers: (familyId: number, membershipIds: number[]) =>
+    api.put<FamilyDetail>(`/api/families/${familyId}/member-order`, {
+      membership_ids: membershipIds,
+    }),
 
   addChild: (familyId: number, displayName: string) =>
     api.post<Membership>(`/api/families/${familyId}/memberships`, { display_name: displayName }),

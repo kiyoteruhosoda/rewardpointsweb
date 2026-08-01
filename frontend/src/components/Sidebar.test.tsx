@@ -3,17 +3,51 @@ import { fireEvent, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { familyOf, member } from '../test-support/familyFixtures'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { Sidebar } from './Sidebar'
 
 const CLOSE_LABEL = 'Close the menu'
 
 describe('Sidebar', () => {
+  it('家族の子をダッシュボードの下に並べる（台帳への入口）', () => {
+    renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
+      scopes: ['dashboard:view', 'family:view'],
+      family: familyOf('owner', [
+        member({ id: 1, display_name: 'おとうさん', role: 'owner', ledger_id: null }),
+        member(),
+        member({ id: 3, display_name: 'タロウ', ledger_id: 30 }),
+      ]),
+    })
+
+    expect(screen.getByRole('link', { name: 'ハナ' })).toHaveAttribute(
+      'href',
+      '/families/1/ledgers/20',
+    )
+    // 台帳を持たない参加者（親）は並べない
+    expect(screen.queryByRole('link', { name: 'おとうさん' })).not.toBeInTheDocument()
+    // 並びはサーバーが返した順（家族が決めた並び順）のまま
+    const links = screen.getAllByRole('link').map((link) => link.textContent)
+    expect(links).toEqual(['Dashboard', 'ハナ', 'タロウ', 'Family settings', 'Profile & settings'])
+  })
+
+  it('家族がなければ子の入口は出さない', () => {
+    renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
+      scopes: ['dashboard:view', 'family:view'],
+    })
+
+    expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'Dashboard',
+      'Family settings',
+      'Profile & settings',
+    ])
+  })
+
   it('scope を持つ項目だけを出す', () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
       scopes: ['family:view'],
     })
-    expect(screen.getByRole('link', { name: 'Family' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Family settings' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
   })
 
@@ -62,7 +96,7 @@ describe('Sidebar', () => {
     const onClose = vi.fn()
     renderWithProviders(<Sidebar open onClose={onClose} />, { scopes: ['family:view'] })
 
-    fireEvent.click(screen.getByRole('link', { name: 'Family' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Family settings' }))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -130,7 +164,7 @@ describe('Sidebar', () => {
     }
 
     renderWithProviders(<Drawer />, { scopes: ['family:view'] })
-    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Family' }))
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Family settings' }))
 
     fireEvent.click(screen.getByRole('button', { name: CLOSE_LABEL }))
     expect(document.activeElement).toBe(opener)

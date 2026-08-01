@@ -288,28 +288,32 @@ def test_invited_parent_can_manage_every_child(client: TestClient, parent: Accou
     assert added["granted_by"] == "おかあさん"
 
 
-def test_parent_cannot_administer_family(client: TestClient, parent: Account, other_parent: Account) -> None:
-    """家族の管理（招待・除名）は owner のみ。子の作成と記録は parent もできる。"""
-    family_id = create_family(client, parent.headers)
-    child = add_child(client, parent.headers, family_id, display_name="たろう")
-    invitation = issue_invitation(client, parent.headers, family_id, role="parent")
-    client.post(
+def _join_as_parent(client: TestClient, joining: Account, *, invitation: dict[str, object]) -> None:
+    accepted = client.post(
         "/api/families/invitations/accept",
-        headers=other_parent.headers,
+        headers=joining.headers,
         json={"code": invitation["code"], "display_name": "おかあさん"},
     )
+    assert accepted.status_code == 200, accepted.text
+
+
+def test_parent_cannot_administer_family(client: TestClient, parent: Account, other_parent: Account) -> None:
+    """除名と「新しい大人を入れる招待」は owner のみ（ADR-0009 / ADR-0020）。"""
+    family_id = create_family(client, parent.headers)
+    child = add_child(client, parent.headers, family_id, display_name="たろう")
+    _join_as_parent(client, other_parent, invitation=issue_invitation(client, parent.headers, family_id, role="parent"))
 
     removal = client.delete(f"/api/families/{family_id}/memberships/{child['id']}", headers=other_parent.headers)
     assert removal.status_code == 403
     assert removal.json()["detail"]["error"] == "family_access_denied"
 
-    issuing = client.post(
+    inviting_a_parent = client.post(
         f"/api/families/{family_id}/invitations",
         headers=other_parent.headers,
-        json={"role": "child", "target_membership_id": child["id"]},
+        json={"role": "parent", "target_membership_id": None},
     )
-    assert issuing.status_code == 403
-    assert client.get(f"/api/families/{family_id}/invitations", headers=other_parent.headers).status_code == 403
+    assert inviting_a_parent.status_code == 403
+    assert inviting_a_parent.json()["detail"]["error"] == "family_access_denied"
 
     # 子の作成はできる
     assert (
@@ -320,6 +324,29 @@ def test_parent_cannot_administer_family(client: TestClient, parent: Account, ot
         ).status_code
         == 201
     )
+
+
+def test_parent_hands_a_child_its_own_code(client: TestClient, parent: Account, other_parent: Account) -> None:
+    """子ども宛の招待は親メンバーも配れる（ADR-0020）。顔ぶれは変わらないため。"""
+    family_id = create_family(client, parent.headers)
+    child = add_child(client, parent.headers, family_id, display_name="たろう")
+    _join_as_parent(client, other_parent, invitation=issue_invitation(client, parent.headers, family_id, role="parent"))
+
+    issued = client.post(
+        f"/api/families/{family_id}/invitations",
+        headers=other_parent.headers,
+        json={"role": "child", "target_membership_id": child["id"]},
+    )
+    assert issued.status_code == 201, issued.text
+
+    # 配った本人が確かめて取り消せる（平文のコードは一覧に載らない）
+    listed = client.get(f"/api/families/{family_id}/invitations", headers=other_parent.headers)
+    assert listed.status_code == 200, listed.text
+    assert [i["code"] for i in listed.json()] == [None]
+    revoked = client.delete(
+        f"/api/families/{family_id}/invitations/{issued.json()['id']}", headers=other_parent.headers
+    )
+    assert revoked.status_code == 204
 
 
 def test_membership_with_records_cannot_be_removed(client: TestClient, parent: Account) -> None:

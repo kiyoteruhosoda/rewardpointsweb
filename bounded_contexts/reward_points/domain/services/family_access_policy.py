@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from bounded_contexts.reward_points.domain.entities.family_membership import FamilyMembership
 from bounded_contexts.reward_points.domain.entities.point_ledger import PointLedger
+from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
 
 
 def can_view_ledger(membership: FamilyMembership, ledger: PointLedger) -> bool:
@@ -36,17 +37,52 @@ def can_administer_family(membership: FamilyMembership) -> bool:
     return membership.role.can_administer_family
 
 
-def can_invite(membership: FamilyMembership) -> bool:
-    """招待コードの発行。**家族の管理**にあたるので owner のみ。
+def can_invite(membership: FamilyMembership, invited: FamilyRole) -> bool:
+    """招待コードを発行できるか。配る立場で分かれる（ADR-0020）。
 
-    子の追加（呼び名と台帳を作る）は parent にも許すが、誰をこの家族へ入れるかは
-    owner が決める。招待は「家族の構成を変える」操作で、除名と対になる。
+    **新しい人を家族へ入れる招待（親）は owner のみ。** 誰をこの家族へ入れるかは
+    owner が決める。除名と対になる「家族の構成を変える」操作だから。
+
+    **すでにいる子ども宛の招待は親（owner / parent）も配れる。** 指す先は自分たちが
+    作った未紐付けの参加者だけで、顔ぶれは変わらない — 変わるのは「その子が本人と
+    してログインできるか」だけ。子の参加を作れるのは親なのだから
+    （:func:`can_create_child`）、作った本人がログインを渡せないと経路が途切れる。
     """
+    if invited.has_own_ledger:
+        return membership.role.is_guardian
     return membership.role.can_administer_family
 
 
 def can_create_child(membership: FamilyMembership) -> bool:
     return membership.role.is_guardian
+
+
+def can_reorder_members(membership: FamilyMembership) -> bool:
+    """参加者の並び順を変えられるか。親（owner / parent）なら変えられる。
+
+    並びは見え方だけの話で、家族の構成も台帳も動かさない。除名や招待と同じ
+    「家族の管理」に含めると、日々の画面を整えるのに owner を呼ぶことになる。
+    """
+    return membership.role.is_guardian
+
+
+def can_propose_independence_for(actor: FamilyMembership, target: FamilyMembership) -> bool:
+    """独立を指示できるか（ADR-0014）。
+
+    対象はアカウントの結び付いた子だけ。未紐付けの子は本人が承認のしようが
+    ないので、そちらは :func:`can_remove_member`（削除）が受け持つ。
+    """
+    return actor.role.is_guardian and target.role.has_own_ledger and target.is_linked
+
+
+def can_remove_member(actor: FamilyMembership, target: FamilyMembership, *, ledger_is_empty: bool) -> bool:
+    """参加者を家族から削除できるか。
+
+    owner だけができ、自分自身は外せない（家族を管理できる人がいなくなる）。
+    記録の残る台帳は道連れにしない（``ledger_not_empty``。ADR-0010）ので、
+    台帳が空であることも条件に含める — 押してから断られる操作を画面に出さない。
+    """
+    return actor.role.can_administer_family and target.id != actor.id and ledger_is_empty
 
 
 def can_reset_password_of(actor: FamilyMembership, target: FamilyMembership) -> bool:
@@ -63,11 +99,26 @@ def can_reset_password_of(actor: FamilyMembership, target: FamilyMembership) -> 
     )
 
 
+def can_issue_temporary_password_for(actor: FamilyMembership, target: FamilyMembership) -> bool:
+    """いま一時パスワードを発行できるか（画面の出し分け用）。
+
+    :func:`can_reset_password_of` に「本人のアカウントがあること」を足したもの。
+    立場の判定（誰に対して許すか）と、アカウントの有無（今できるか）は別の理由で
+    断られる — ユースケースは区別してエラーコードを返し、画面は両方が揃った
+    ときだけボタンを出す。
+    """
+    return can_reset_password_of(actor, target) and target.is_linked
+
+
 __all__ = [
     "can_administer_family",
     "can_create_child",
     "can_invite",
+    "can_issue_temporary_password_for",
     "can_modify_ledger",
+    "can_propose_independence_for",
+    "can_remove_member",
+    "can_reorder_members",
     "can_reset_password_of",
     "can_view_ledger",
 ]

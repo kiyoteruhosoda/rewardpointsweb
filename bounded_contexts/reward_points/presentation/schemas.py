@@ -71,6 +71,10 @@ class MembershipResponse(BaseModel):
     balance: int | None
     # 独立が指示され、子本人の承認待ちか（ADR-0014）
     independence_proposed: bool
+    # 見ている人がこの参加者に対して行える操作。画面はこれを見て操作を出す
+    can_reset_password: bool
+    can_propose_independence: bool
+    can_remove: bool
 
 
 class FamilySummaryResponse(BaseModel):
@@ -95,6 +99,12 @@ class FamilyRenameRequest(BaseModel):
 
 class ChildCreateRequest(BaseModel):
     display_name: DisplayNameStr
+
+
+class MemberOrderRequest(BaseModel):
+    """並べたい順の参加者 ID。その家族の子をちょうど 1 度ずつ並べる。"""
+
+    membership_ids: list[int]
 
 
 # --- 招待 --------------------------------------------------------------------
@@ -194,6 +204,7 @@ __all__ = [
     "InvitationRedeemRequest",
     "InvitationResponse",
     "LedgerResponse",
+    "MemberOrderRequest",
     "MembershipResponse",
     "NonBlankStr",
     "RedeemedInvitationResponse",
