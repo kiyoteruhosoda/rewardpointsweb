@@ -27,6 +27,7 @@ function member(overrides: Partial<Membership> = {}): Membership {
     username: 'hana',
     ledger_id: 20,
     balance: 70,
+    independence_proposed: false,
     ...overrides,
   }
 }
@@ -120,5 +121,73 @@ describe('FamilyPage', () => {
     expect(
       screen.queryByRole('button', { name: 'Issue a temporary password' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('owner には改名・脱退・解散を出す', async () => {
+    view.mockResolvedValue(detail('owner', [member()]))
+    renderPage()
+
+    await screen.findByText('70 pt')
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Leave this family' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Dissolve this family' })).toBeInTheDocument()
+  })
+
+  it('parent には脱退だけを出す（改名・解散は owner の役目）', async () => {
+    view.mockResolvedValue(detail('parent', [member()]))
+    renderPage()
+
+    await screen.findByText('70 pt')
+    expect(screen.getByRole('button', { name: 'Leave this family' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Rename' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Dissolve this family' })).not.toBeInTheDocument()
+  })
+
+  it('子には家族の設定を出さない（子は自分では抜けられない）', async () => {
+    view.mockResolvedValue(detail('child', [member({ is_me: true })]))
+    renderPage()
+
+    await screen.findByText('70 pt')
+    expect(screen.queryByText('Family settings')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Leave this family' })).not.toBeInTheDocument()
+  })
+
+  it('アカウントの結び付いた子には独立の指示を出す（未紐付けには出さない）', async () => {
+    view.mockResolvedValue(
+      detail('parent', [
+        member(),
+        member({ id: 3, display_name: 'タロウ', is_linked: false, username: null, balance: 30 }),
+      ]),
+    )
+    renderPage()
+
+    await screen.findByText('70 pt')
+    expect(screen.getAllByRole('button', { name: 'Propose independence' })).toHaveLength(1)
+  })
+
+  it('指示済みの子には取り下げと目印を出す', async () => {
+    view.mockResolvedValue(detail('parent', [member({ independence_proposed: true })]))
+    renderPage()
+
+    await screen.findByText('70 pt')
+    expect(screen.getByText(/independence proposed/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Withdraw the proposal' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Propose independence' })).not.toBeInTheDocument()
+  })
+
+  it('指示を受けた子本人には承認を出す', async () => {
+    view.mockResolvedValue(detail('child', [member({ is_me: true, independence_proposed: true })]))
+    renderPage()
+
+    await screen.findByText('70 pt')
+    expect(screen.getByRole('button', { name: 'Approve independence' })).toBeInTheDocument()
+  })
+
+  it('指示が無ければ子に承認を出さない', async () => {
+    view.mockResolvedValue(detail('child', [member({ is_me: true })]))
+    renderPage()
+
+    await screen.findByText('70 pt')
+    expect(screen.queryByRole('button', { name: 'Approve independence' })).not.toBeInTheDocument()
   })
 })

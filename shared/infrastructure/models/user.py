@@ -56,7 +56,11 @@ class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
 
     id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(BigIntPk, sa.ForeignKey("users.id"), nullable=False, index=True)
+    # アカウントの削除に追随して消える（拒否ではなく CASCADE。トークンは
+    # 本人が居なければ意味を持たない）
+    user_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     token_hash: Mapped[str] = mapped_column(sa.String(64), unique=True, nullable=False)
     expires_at = mapped_column(sa.DateTime(), nullable=False)
     used_at = mapped_column(sa.DateTime(), nullable=True)

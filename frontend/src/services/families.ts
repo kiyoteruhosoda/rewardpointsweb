@@ -20,6 +20,8 @@ export interface Membership {
   /** 台帳を持つのは role = child だけ。見えない相手のものは null。 */
   ledger_id: number | null
   balance: number | null
+  /** 親から独立の指示が出ているか（ADR-0014）。子本人の承認で成立する。 */
+  independence_proposed: boolean
 }
 
 export interface FamilySummary {
@@ -120,6 +122,30 @@ export const families = {
   create: (name: string) => api.post<FamilyDetail>('/api/families', { name }),
 
   view: (familyId: number) => api.get<FamilyDetail>(`/api/families/${familyId}`),
+
+  rename: (familyId: number, name: string) =>
+    api.patch<FamilyDetail>(`/api/families/${familyId}`, { name }),
+
+  /** 家族から抜ける（親のみ。他にアカウントの結び付いた親が残る場合に限る）。 */
+  leave: (familyId: number) => api.post<undefined>(`/api/families/${familyId}/leave`),
+
+  /** 家族を解散する（owner のみ。自分以外の参加者がいないこと）。 */
+  dissolve: (familyId: number) => api.delete<undefined>(`/api/families/${familyId}`),
+
+  /** 子の独立を指示する（親メンバー）。子本人の承認までは取り下げられる（ADR-0014）。 */
+  proposeIndependence: (familyId: number, membershipId: number) =>
+    api.post<Membership>(
+      `/api/families/${familyId}/memberships/${membershipId}/independence-proposal`,
+    ),
+
+  revokeIndependenceProposal: (familyId: number, membershipId: number) =>
+    api.delete<undefined>(
+      `/api/families/${familyId}/memberships/${membershipId}/independence-proposal`,
+    ),
+
+  /** 独立を承認する（指示を受けた子本人）。成立すると台帳ごと家族から消える。 */
+  approveIndependence: (familyId: number) =>
+    api.post<undefined>(`/api/families/${familyId}/independence`),
 
   addChild: (familyId: number, displayName: string) =>
     api.post<Membership>(`/api/families/${familyId}/memberships`, { display_name: displayName }),
