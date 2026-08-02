@@ -13,9 +13,14 @@
  * 落ちた（5xx・オフライン）ときに `family` を null にすると、画面は「家族が
  * ない」と判断して作成・参加を出し、押せば必ず `already_belongs_to_family` に
  * なる。読めなかったことは `failed` として別に伝える。
+ *
+ * ここには残高も入る。**ポイントを変えたら `reload` を呼ぶ**（ADR-0021）。
+ * 呼ばないと、記録した画面だけが新しい残高になり、ダッシュボード・
+ * ナビゲーション・家族設定は古い数字を出したままになる。
  */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
+import { useRefreshOnReturn } from '../hooks/useRefreshOnReturn'
 import { families, type FamilyDetail } from '../services/families'
 import { useAuth } from './AuthContext'
 
@@ -66,6 +71,10 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void reload()
   }, [reload])
+
+  // 別の端末（もう一人の親・子ども本人）の記録は、こちらの画面には届かない。
+  // 手元に戻ってきたときに読み直して、開きっぱなしの残高が居座らないようにする。
+  useRefreshOnReturn(reload)
 
   return (
     <FamilyContext.Provider value={{ ...loaded, loading, reload }}>

@@ -6,15 +6,21 @@
  *
  * 変更 UI を出すのはサーバーが `can_modify` を返したときだけ。子ども本人は同じ
  * 画面で残高と履歴を見るが、変更の入り口は現れない。
+ *
+ * 残高を出すのはこの画面だけではない。ダッシュボード・ナビゲーション・家族設定は
+ * 家族の応答（FamilyContext）に載る残高を見るので、記録したら**両方**読み直す
+ * （ADR-0021）。片方だけだと、同じ残高が画面ごとに食い違う。
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { PointEntryForm } from '../components/PointEntryForm'
 import { useToast } from '../components/ToastNotification'
+import { useRefreshOnReturn } from '../hooks/useRefreshOnReturn'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families, newIdempotencyKey, parseUtc, type Ledger } from '../services/families'
+import { useFamily } from '../store/FamilyContext'
 
 /** 増減が読み取れるよう、加算には符号を付ける（消費は元から `-`）。 */
 function withSign(amount: number): string {
@@ -25,6 +31,7 @@ export function LedgerPage() {
   const { familyId, ledgerId } = useParams<{ familyId: string; ledgerId: string }>()
   const { t, locale } = useI18n()
   const { notify } = useToast()
+  const { reload: reloadFamily } = useFamily()
   const [ledger, setLedger] = useState<Ledger | null>(null)
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null)
   const [reasons, setReasons] = useState<string[]>([])
@@ -40,6 +47,7 @@ export function LedgerPage() {
         .then((result) => {
           setLedger(result.data)
           setFetchedAt(result.fetchedAt)
+          setFailed(false)
         })
         .catch((error: unknown) => {
           setFailed(true)
@@ -48,9 +56,16 @@ export function LedgerPage() {
     [family, id, notify, t],
   )
 
+  // 別の子の台帳へ移ったら、前の子の残高と履歴を消してから読む。残したまま読むと、
+  // 応答が届くまでのあいだ、開いた覚えのない子の数字がこの画面の見出しの下に出る。
   useEffect(() => {
+    setLedger(null)
+    setFetchedAt(null)
     void reload()
   }, [reload])
+
+  // 手元に戻ってきたら読み直す（別の端末からの記録はこの画面には届かない）
+  useRefreshOnReturn(reload)
 
   // 候補が取れなくても記録はできる（自由入力なので、無ければ何も出さないだけ）
   useEffect(() => {
@@ -62,10 +77,15 @@ export function LedgerPage() {
       })
   }, [family])
 
+  /**
+   * 記録の後は台帳と家族の両方を読み直す。残高の出所は 2 つあり
+   * （台帳の応答とこの家族の応答）、片方だけ読み直すと、この画面は増えたのに
+   * ダッシュボードとナビゲーションの子は古い数字のまま、という食い違いになる。
+   */
   const run = async (action: Promise<unknown>) => {
     try {
       await action
-      await reload()
+      await Promise.all([reload(), reloadFamily()])
     } catch (error) {
       notify('error', t(errorMessageKey(error)))
     }
@@ -79,8 +99,16 @@ export function LedgerPage() {
     void run(families.reverse(family, id, transactionId, newIdempotencyKey()))
   }
 
-  if (failed) return <p className="error">{t('points.unavailable')}</p>
-  if (ledger === null) return <p className="loading">{t('common.loading')}</p>
+  // 読み直しに失敗しても、いま出している残高は消さない（手元に戻った瞬間の
+  // 一時的な不通で、読めていた履歴まで消えると出所の分からない画面になる）。
+  // 失敗はトーストで伝わっており、時刻の行が古さを示す。
+  if (ledger === null) {
+    return failed ? (
+      <p className="error">{t('points.unavailable')}</p>
+    ) : (
+      <p className="loading">{t('common.loading')}</p>
+    )
+  }
 
   return (
     <div className="page">
