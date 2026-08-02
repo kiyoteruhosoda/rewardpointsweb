@@ -11,6 +11,11 @@
 
 送り直しは「すでに打ち消し済み」として断る（409）。打ち消しの操作と同じで、
 二重に効いてしまうより、効かずに知らせる方を選ぶ。
+
+冪等キーは 2 行それぞれのために段階ごとへ分ける。区切り文字はこの分割の予約で、
+クライアントの鍵には現れない（API で弾く）。それでも同じ鍵を別の記録の訂正へ
+使い回されると分けた鍵が重なるため、打ち消しの行が本当に自分の対象を指して
+いるかを書いた直後に確かめる。
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from bounded_contexts.reward_points.application.dto.ledger_dto import Correction
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
 from bounded_contexts.reward_points.domain.entities.point_transaction import PointTransaction
 from bounded_contexts.reward_points.domain.exceptions import (
+    IdempotencyKeyReusedError,
     TransactionAlreadyReversedError,
     TransactionNotFoundError,
 )
@@ -81,6 +87,11 @@ class CorrectPointTransactionUseCase:
                 reversal_of_id=undo.reversal_of_id,
             )
         )
+        if reversal.reversal_of_id != undo.reversal_of_id:
+            # 分けた鍵で既存の行が返った ＝ その鍵は別の訂正で使われている。
+            # このまま進めると打ち消しを書かないまま訂正後の行だけが足され、
+            # 元の記録と両方が残高に効いてしまう
+            raise IdempotencyKeyReusedError
         correction = self._transactions.append(
             NewTransaction(
                 ledger_id=corrected.ledger_id,

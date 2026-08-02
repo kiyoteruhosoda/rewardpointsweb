@@ -83,6 +83,7 @@
   "error.family_not_found": "That family no longer exists.",
   "error.forbidden": "You do not have permission for this operation.",
   "error.guardian_account_required": "This invitation is for a parent. It cannot be used with a child account.",
+  "error.idempotency_key_reused": "That entry was not corrected. Please try again.",
   "error.independence_not_proposed": "Independence has not been proposed by a parent.",
   "error.internal_error": "The server hit an error. Please try again in a moment; if it keeps happening, contact your administrator.",
   "error.invalid_amount": "Check the number of points.",

@@ -80,14 +80,20 @@ export function LedgerPage() {
   useRefreshOnReturn(reload)
 
   // 候補が取れなくても記録はできる（自由入力なので、無ければ何も出さないだけ）
+  const loadReasons = useCallback(
+    () =>
+      families
+        .reasonSuggestions(family)
+        .then(setReasons)
+        .catch(() => {
+          setReasons([])
+        }),
+    [family],
+  )
+
   useEffect(() => {
-    void families
-      .reasonSuggestions(family)
-      .then(setReasons)
-      .catch(() => {
-        setReasons([])
-      })
-  }, [family])
+    void loadReasons()
+  }, [loadReasons])
 
   /**
    * 記録の後は台帳と家族の両方を読み直す。残高の出所は 2 つあり
@@ -105,7 +111,9 @@ export function LedgerPage() {
       notify('error', t(errorMessageKey(error)))
       throw error
     }
-    await Promise.all([reload(), reloadFamily()])
+    // 入力候補も取り直す。書いた理由は候補に加わり、訂正で言い直した理由は
+    // 候補から外れる。取り直さないと、直したはずの書き間違いを選び直せてしまう
+    await Promise.all([reload(), reloadFamily(), loadReasons()])
   }
 
   const record = (amount: number, reason: string, idempotencyKey: string) =>

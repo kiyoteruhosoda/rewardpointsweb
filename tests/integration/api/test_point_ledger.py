@@ -308,6 +308,51 @@ def test_resent_correction_is_refused_rather_than_applied_twice(
     assert _view(client, parent.headers, ledger)["balance"] == 50
 
 
+def test_step_shaped_keys_are_refused_by_the_ordinary_endpoints(
+    client: TestClient, parent: Account, ledger: Ledger
+) -> None:
+    """訂正が内部で作る鍵の形は外から書けない。
+
+    書けてしまうと、その行が訂正の打ち消し行と同じ鍵になり、``append`` が
+    無関係な既存の行を返す。打ち消しを書いたつもりで書けていない状態になる。
+    """
+    response = client.post(
+        f"{ledger.path()}/transactions",
+        headers=parent.headers,
+        json={"amount": 100, "reason": "おてつだい", "idempotency_key": "k1#reversal"},
+    )
+    assert response.status_code == 422
+
+
+def test_the_same_key_cannot_correct_two_different_records(client: TestClient, parent: Account, ledger: Ledger) -> None:
+    """別の記録の訂正へ鍵を使い回されても、打ち消し無しの訂正を残さない。"""
+    first = ledger.record(client, parent.headers, amount=100, reason="おてつだい", key="k1")
+    second = ledger.record(client, parent.headers, amount=200, reason="そうじ", key="k2")
+    _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(first["id"])),
+        amount=50,
+        reason="おてつだい",
+        idempotency_key="same",
+    )
+
+    response = _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(second["id"])),
+        amount=20,
+        reason="そうじ",
+        idempotency_key="same",
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "idempotency_key_reused"
+    # 2 件目は打ち消しも訂正後の行も残らない（50 + 200）
+    assert _view(client, parent.headers, ledger)["balance"] == 250
+
+
 def test_correction_from_another_ledger_is_not_reachable(client: TestClient, parent: Account, ledger: Ledger) -> None:
     other = add_child(client, parent.headers, ledger.family_id, display_name="はなこ")
     other_ledger = Ledger(family_id=ledger.family_id, ledger_id=int(str(other["ledger_id"])))

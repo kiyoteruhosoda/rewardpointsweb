@@ -8,6 +8,10 @@
 このとき同じ鍵を 2 度使うと、2 行目が 1 行目の使い回しになってしまうため、
 :meth:`IdempotencyKey.for_step` で段階ごとの鍵へ分ける。分けた後も上限に収まる
 よう、受け取る鍵の上限は :data:`MAX_BASE_LENGTH` までとする。
+
+:data:`STEP_SEPARATOR` はこの分割のための予約で、クライアントの鍵には現れては
+ならない（:func:`is_derived` で弾く）。台帳の鍵の空間は 1 つしかなく、分けた鍵と
+受け取った鍵が同じ形を取れると、無関係な行を「同じ操作の再送」と取り違える。
 """
 
 from __future__ import annotations
@@ -43,4 +47,22 @@ class IdempotencyKey:
         return IdempotencyKey(f"{self.value}{STEP_SEPARATOR}{step}")
 
 
-__all__ = ["MAX_BASE_LENGTH", "MAX_LENGTH", "MAX_STEP_LENGTH", "STEP_SEPARATOR", "IdempotencyKey"]
+def is_derived(value: str) -> bool:
+    """段階ごとに分けた鍵の形か。
+
+    区切り文字はこの分割のための予約で、クライアントからは受け取らない
+    （``API`` 側で弾く）。受け取ってしまうと、``<鍵>#reversal`` をそのまま
+    送られたときに訂正が書くはずの打ち消し行と衝突し、``append`` が無関係な
+    既存の行を返してしまう。
+    """
+    return STEP_SEPARATOR in value
+
+
+__all__ = [
+    "MAX_BASE_LENGTH",
+    "MAX_LENGTH",
+    "MAX_STEP_LENGTH",
+    "STEP_SEPARATOR",
+    "IdempotencyKey",
+    "is_derived",
+]

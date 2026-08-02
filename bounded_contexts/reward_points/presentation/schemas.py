@@ -23,6 +23,10 @@ from bounded_contexts.reward_points.domain.value_objects.idempotency_key import 
 from bounded_contexts.reward_points.domain.value_objects.idempotency_key import (
     MAX_LENGTH as IDEMPOTENCY_KEY_MAX_LENGTH,
 )
+from bounded_contexts.reward_points.domain.value_objects.idempotency_key import (
+    STEP_SEPARATOR,
+    is_derived,
+)
 from bounded_contexts.reward_points.domain.value_objects.point_amount import MAX_MAGNITUDE as AMOUNT_MAX
 from bounded_contexts.reward_points.domain.value_objects.transaction_reason import (
     MAX_LENGTH as REASON_MAX_LENGTH,
@@ -49,7 +53,26 @@ def _non_zero(value: int) -> int:
     return value
 
 
+def _not_a_step_key(value: str) -> str:
+    """段階ごとに分けた鍵の形（``<鍵>#reversal``）は受け取らない。
+
+    台帳の鍵の空間は 1 つ（``UNIQUE (ledger_id, idempotency_key)``）しかない。
+    訂正が内部で作る鍵と同じ形を外から書けると、無関係な記録を「同じ操作の
+    再送」と取り違え、打ち消しを書いたつもりで書けていない状態になる。
+    """
+    if is_derived(value):
+        raise ValueError(f"must not contain {STEP_SEPARATOR!r}")
+    return value
+
+
 NonBlankStr = Annotated[str, AfterValidator(_non_blank)]
+IdempotencyKeyStr = Annotated[
+    NonBlankStr, AfterValidator(_not_a_step_key), Field(max_length=IDEMPOTENCY_KEY_MAX_LENGTH)
+]
+# 訂正は 1 回で 2 行書き、鍵を段階ごとに分ける。分けた後も列に収まる長さまで
+CorrectionKeyStr = Annotated[
+    NonBlankStr, AfterValidator(_not_a_step_key), Field(max_length=IDEMPOTENCY_KEY_MAX_BASE_LENGTH)
+]
 DisplayNameStr = Annotated[NonBlankStr, Field(max_length=DISPLAY_NAME_MAX_LENGTH)]
 CodeStr = Annotated[NonBlankStr, Field(max_length=64)]
 
@@ -166,13 +189,13 @@ class TransactionCreateRequest(BaseModel):
     # 符号で加算（正）と消費（負）を表す
     amount: Annotated[int, Field(ge=-AMOUNT_MAX, le=AMOUNT_MAX), AfterValidator(_non_zero)]
     reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
-    idempotency_key: Annotated[NonBlankStr, Field(max_length=IDEMPOTENCY_KEY_MAX_LENGTH)]
+    idempotency_key: IdempotencyKeyStr
     # 未指定なら受け付けた時刻（UTC）
     occurred_at: datetime | None = None
 
 
 class ReversalCreateRequest(BaseModel):
-    idempotency_key: Annotated[NonBlankStr, Field(max_length=IDEMPOTENCY_KEY_MAX_LENGTH)]
+    idempotency_key: IdempotencyKeyStr
 
 
 class CorrectionCreateRequest(BaseModel):
@@ -180,9 +203,7 @@ class CorrectionCreateRequest(BaseModel):
 
     amount: Annotated[int, Field(ge=-AMOUNT_MAX, le=AMOUNT_MAX), AfterValidator(_non_zero)]
     reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
-    # 1 回の訂正が 2 行を書くため、鍵は段階ごとに分けて使う。分けた後も
-    # UNIQUE 列に収まるよう、受け取る上限はその分だけ短い
-    idempotency_key: Annotated[NonBlankStr, Field(max_length=IDEMPOTENCY_KEY_MAX_BASE_LENGTH)]
+    idempotency_key: CorrectionKeyStr
     # 未指定なら元の記録の発生日時を引き継ぐ
     occurred_at: datetime | None = None
 

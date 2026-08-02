@@ -269,6 +269,26 @@ describe('LedgerPage', () => {
     expect(screen.queryByText('These points could not be loaded.')).not.toBeInTheDocument()
   })
 
+  it('訂正の後は入力候補も取り直す（直した書き間違いを選び直させない）', async () => {
+    viewLedger.mockResolvedValue(ledger())
+    reasonSuggestions.mockResolvedValueOnce(['おてつだいい']).mockResolvedValue(['おてつだい'])
+    correct.mockResolvedValue({
+      reversal: transaction({ id: 2, amount: -100, reversal_of_id: 1 }),
+      correction: transaction({ id: 3, corrects_id: 1 }),
+    })
+    renderPage()
+
+    await screen.findByText('100 pt')
+    startCorrection()
+    fireEvent.click(screen.getByRole('button', { name: 'Save as added points' }))
+
+    await waitFor(() => {
+      expect(reasonSuggestions).toHaveBeenCalledTimes(2)
+    })
+    const options = document.querySelectorAll('datalist option')
+    expect([...options].map((option) => option.getAttribute('value'))).toEqual(['おてつだい'])
+  })
+
   it('訂正を選ぶと、元の内容が入った入力欄に替わる', async () => {
     viewLedger.mockResolvedValue(
       ledger({ transactions: [transaction({ amount: -60, reason: 'おかし' })] }),

@@ -11,6 +11,7 @@ from bounded_contexts.reward_points.domain.value_objects.idempotency_key import 
     MAX_BASE_LENGTH,
     MAX_STEP_LENGTH,
     IdempotencyKey,
+    is_derived,
 )
 from bounded_contexts.reward_points.domain.value_objects.idempotency_key import (
     MAX_LENGTH as IDEMPOTENCY_KEY_MAX_LENGTH,
@@ -56,6 +57,12 @@ def test_a_split_key_still_fits_the_column() -> None:
     longest = IdempotencyKey("k" * MAX_BASE_LENGTH).for_step("x" * MAX_STEP_LENGTH)
 
     assert len(longest.value) <= IDEMPOTENCY_KEY_MAX_LENGTH
+
+
+def test_a_split_key_is_recognisable_as_one() -> None:
+    """区切り文字は分割の予約。この形の鍵は API 側で受け取らない。"""
+    assert is_derived(IdempotencyKey("abc").for_step("reversal").value)
+    assert not is_derived("abc")
 
 
 def test_a_key_too_long_to_split_is_rejected() -> None:
