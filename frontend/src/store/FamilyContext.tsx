@@ -27,7 +27,11 @@ import { useAuth } from './AuthContext'
 export interface FamilyValue {
   /** 所属している家族。どこにも所属していなければ null。 */
   family: FamilyDetail | null
-  /** 読み込めなかった。所属の有無は分からない（「所属していない」ではない）。 */
+  /**
+   * 読み込めず、出せるものが何も無い。所属の有無は分からない
+   * （「所属していない」ではない）。一度読めた後の読み直しが失敗しても、
+   * 前の内容を出したままにするので、ここは偽のままになる（ADR-0021）。
+   */
   failed: boolean
   /** 最初の取得が終わるまで真。「家族がない」との区別に使う。 */
   loading: boolean
@@ -62,7 +66,10 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
       const first = list[0]
       setLoaded({ family: first ? await families.view(first.id) : null, failed: false })
     } catch {
-      setLoaded({ family: null, failed: true })
+      // 読み直しに失敗しても、すでに読めている家族は捨てない（ADR-0021）。手元に
+      // 戻った瞬間の一時的な不通で残高・子への入口が消えると、家族から外された
+      // ようにしか見えない。「読めなかった」と伝えるのは、出せるものが無いときだけ。
+      setLoaded((current) => (current.family ? current : { family: null, failed: true }))
     } finally {
       setLoading(false)
     }
