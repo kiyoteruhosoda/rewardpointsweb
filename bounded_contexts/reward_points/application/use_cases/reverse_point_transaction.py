@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from bounded_contexts.reward_points.application.dto.ledger_dto import TransactionDTO
+from bounded_contexts.reward_points.application.dto.ledger_dto import TransactionDTO, just_written
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
 from bounded_contexts.reward_points.domain.exceptions import (
     TransactionAlreadyReversedError,
@@ -54,16 +54,7 @@ class ReversePointTransactionUseCase:
                 reversal_of_id=draft.reversal_of_id,
             )
         )
-        return TransactionDTO(
-            id=reversal.id,
-            amount=reversal.amount.value,
-            reason=reversal.reason.value,
-            occurred_at=reversal.occurred_at,
-            created_at=reversal.created_at,
-            reversal_of_id=reversal.reversal_of_id,
-            is_reversed=False,
-            granted_by=found.membership.display_name_value,
-        )
+        return just_written(reversal, granted_by=found.membership.display_name_value)
 
 
 __all__ = ["ReversePointTransactionUseCase", "ReverseTransactionCommand"]

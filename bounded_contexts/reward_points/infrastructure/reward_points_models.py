@@ -5,7 +5,9 @@ Alembic が認識できるよう ``migrations/env.py`` へ import を追加し�
 VARCHAR）で持つ（CLAUDE.md「DB モデリング」）。
 
 ``point_transactions`` は追記専用（ADR-0010）。``updated_at`` を持たないのは、
-更新される想定が無いことをスキーマ自身で示すため。
+更新される想定が無いことをスキーマ自身で示すため。入力の間違いは
+``reversal_of_id``（打ち消し）と ``corrects_id``（訂正後の言い直し）の 2 行で
+表す（ADR-0022）。
 """
 
 from __future__ import annotations
@@ -80,6 +82,9 @@ class PointTransactionModel(Base):
         sa.UniqueConstraint("ledger_id", "idempotency_key", name="uq_point_transactions_idempotency"),
         # 同一レコードの二重取り消しを DB 制約で防ぐ
         sa.UniqueConstraint("reversal_of_id", name="uq_point_transactions_reversal_of"),
+        # 同じ記録を 2 度言い直させない。訂正は必ず打ち消しを伴うので上の UNIQUE でも
+        # 止まるが、対応が 1 対 1 であることをこの表自身に持たせておく
+        sa.UniqueConstraint("corrects_id", name="uq_point_transactions_corrects"),
         sa.CheckConstraint("amount <> 0", name="ck_point_transactions_amount_nonzero"),
         sa.Index("ix_point_transactions_ledger_occurred", "ledger_id", "occurred_at", "id"),
     )
@@ -99,6 +104,11 @@ class PointTransactionModel(Base):
     occurred_at = mapped_column(sa.DateTime(), nullable=False)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     reversal_of_id: Mapped[int | None] = mapped_column(BigIntPk, sa.ForeignKey("point_transactions.id"), nullable=True)
+    # 訂正後の行なら、言い直した相手の ID（ADR-0022）。台帳ごと消すとき
+    # （独立の成立。ADR-0014）に消す順で拒まれないよう ON DELETE SET NULL。
+    corrects_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("point_transactions.id", ondelete="SET NULL"), nullable=True
+    )
     idempotency_key: Mapped[str] = mapped_column(sa.String(64), nullable=False)
 
 

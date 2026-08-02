@@ -18,6 +18,9 @@ from bounded_contexts.reward_points.domain.value_objects.display_name import (
 from bounded_contexts.reward_points.domain.value_objects.family_name import MAX_LENGTH as FAMILY_NAME_MAX_LENGTH
 from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
 from bounded_contexts.reward_points.domain.value_objects.idempotency_key import (
+    MAX_BASE_LENGTH as IDEMPOTENCY_KEY_MAX_BASE_LENGTH,
+)
+from bounded_contexts.reward_points.domain.value_objects.idempotency_key import (
     MAX_LENGTH as IDEMPOTENCY_KEY_MAX_LENGTH,
 )
 from bounded_contexts.reward_points.domain.value_objects.point_amount import MAX_MAGNITUDE as AMOUNT_MAX
@@ -172,6 +175,18 @@ class ReversalCreateRequest(BaseModel):
     idempotency_key: Annotated[NonBlankStr, Field(max_length=IDEMPOTENCY_KEY_MAX_LENGTH)]
 
 
+class CorrectionCreateRequest(BaseModel):
+    """訂正後の内容（ADR-0022）。書き換えではなく、正しい内容を書き直す。"""
+
+    amount: Annotated[int, Field(ge=-AMOUNT_MAX, le=AMOUNT_MAX), AfterValidator(_non_zero)]
+    reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
+    # 1 回の訂正が 2 行を書くため、鍵は段階ごとに分けて使う。分けた後も
+    # UNIQUE 列に収まるよう、受け取る上限はその分だけ短い
+    idempotency_key: Annotated[NonBlankStr, Field(max_length=IDEMPOTENCY_KEY_MAX_BASE_LENGTH)]
+    # 未指定なら元の記録の発生日時を引き継ぐ
+    occurred_at: datetime | None = None
+
+
 class TransactionResponse(BaseModel):
     id: int
     amount: int
@@ -179,8 +194,17 @@ class TransactionResponse(BaseModel):
     occurred_at: datetime
     created_at: datetime
     reversal_of_id: int | None
+    # 訂正後のレコードなら、言い直した相手の ID（ADR-0022）
+    corrects_id: int | None
     is_reversed: bool
     granted_by: str | None
+
+
+class CorrectionResponse(BaseModel):
+    """1 回の訂正で足された 2 行。元のレコードは履歴に残る。"""
+
+    reversal: TransactionResponse
+    correction: TransactionResponse
 
 
 class LedgerResponse(BaseModel):
@@ -195,6 +219,8 @@ class LedgerResponse(BaseModel):
 
 __all__ = [
     "ChildCreateRequest",
+    "CorrectionCreateRequest",
+    "CorrectionResponse",
     "FamilyCreateRequest",
     "FamilyDetailResponse",
     "FamilyRenameRequest",

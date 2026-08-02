@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from bounded_contexts.reward_points.application.dto.ledger_dto import TransactionDTO
+from bounded_contexts.reward_points.application.dto.ledger_dto import TransactionDTO, just_written
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
 from bounded_contexts.reward_points.domain.repositories.point_transaction_repository import (
     IPointTransactionRepository,
@@ -49,16 +49,7 @@ class RecordPointTransactionUseCase:
                 idempotency_key=command.idempotency_key,
             )
         )
-        return TransactionDTO(
-            id=transaction.id,
-            amount=transaction.amount.value,
-            reason=transaction.reason.value,
-            occurred_at=transaction.occurred_at,
-            created_at=transaction.created_at,
-            reversal_of_id=transaction.reversal_of_id,
-            is_reversed=False,
-            granted_by=found.membership.display_name_value,
-        )
+        return just_written(transaction, granted_by=found.membership.display_name_value)
 
 
 __all__ = ["RecordPointTransactionUseCase", "RecordTransactionCommand"]

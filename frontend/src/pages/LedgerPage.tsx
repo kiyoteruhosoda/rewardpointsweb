@@ -4,6 +4,9 @@
  * 台帳は追記専用で、訂正は打ち消しの行を足して表す（ADR-0010）。履歴からは
  * 何も消えないので、取り消されたレコードには印を付けて対で見せる。
  *
+ * 入力の間違いは「訂正」で直す（ADR-0022）。打ち消して正しい内容を書き直す
+ * 操作を 1 つにまとめたもので、履歴には打ち消しと訂正後の 2 行が足される。
+ *
  * 変更 UI を出すのはサーバーが `can_modify` を返したときだけ。子ども本人は同じ
  * 画面で残高と履歴を見るが、変更の入り口は現れない。
  *
@@ -19,7 +22,13 @@ import { useToast } from '../components/ToastNotification'
 import { useRefreshOnReturn } from '../hooks/useRefreshOnReturn'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
-import { families, newIdempotencyKey, parseUtc, type Ledger } from '../services/families'
+import {
+  families,
+  newIdempotencyKey,
+  parseUtc,
+  type Ledger,
+  type Transaction,
+} from '../services/families'
 import { useFamily } from '../store/FamilyContext'
 
 /** 増減が読み取れるよう、加算には符号を付ける（消費は元から `-`）。 */
@@ -36,6 +45,8 @@ export function LedgerPage() {
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null)
   const [reasons, setReasons] = useState<string[]>([])
   const [failed, setFailed] = useState(false)
+  // 訂正の対象。null なら入力欄はいつもの記録用
+  const [editing, setEditing] = useState<Transaction | null>(null)
 
   const family = Number(familyId)
   const id = Number(ledgerId)
@@ -61,6 +72,7 @@ export function LedgerPage() {
   useEffect(() => {
     setLedger(null)
     setFetchedAt(null)
+    setEditing(null)
     void reload()
   }, [reload])
 
@@ -81,22 +93,41 @@ export function LedgerPage() {
    * 記録の後は台帳と家族の両方を読み直す。残高の出所は 2 つあり
    * （台帳の応答とこの家族の応答）、片方だけ読み直すと、この画面は増えたのに
    * ダッシュボードとナビゲーションの子は古い数字のまま、という食い違いになる。
+   *
+   * 書き込みの失敗はここで伝えたうえで**呼び出し元へ投げ直す**。打ち込んだ内容を
+   * 残すか、訂正の入力を開いたままにするかは、送った側にしか決められない。
+   * 読み直しの失敗は投げ直さない（書き込みそのものは通っている）。
    */
   const run = async (action: Promise<unknown>) => {
     try {
       await action
-      await Promise.all([reload(), reloadFamily()])
     } catch (error) {
       notify('error', t(errorMessageKey(error)))
+      throw error
     }
+    await Promise.all([reload(), reloadFamily()])
   }
 
   const record = (amount: number, reason: string, idempotencyKey: string) =>
     run(families.record(family, id, { amount, reason, idempotencyKey }))
 
+  /** 訂正が通ったときだけ入力欄を閉じる（失敗したら直した内容を残す）。 */
+  const correct = async (
+    target: number,
+    amount: number,
+    reason: string,
+    idempotencyKey: string,
+  ) => {
+    await run(families.correct(family, id, target, { amount, reason, idempotencyKey }))
+    setEditing(null)
+  }
+
   const reverse = (transactionId: number) => {
     if (!window.confirm(t('points.confirmReverse'))) return
-    void run(families.reverse(family, id, transactionId, newIdempotencyKey()))
+    // 取り消しは入力欄を持たないので、伝えるところまでで終わってよい
+    void run(families.reverse(family, id, transactionId, newIdempotencyKey())).catch(
+      () => undefined,
+    )
   }
 
   // 読み直しに失敗しても、いま出している残高は消さない（手元に戻った瞬間の
@@ -109,6 +140,33 @@ export function LedgerPage() {
       <p className="loading">{t('common.loading')}</p>
     )
   }
+
+  // 訂正のあいだは記録の入力欄をその場で置き換える。同じ画面に「足す」と
+  // 「直す」の入力が並ぶと、どちらへ打ち込んでいるのか分からなくなる。
+  const entryForm =
+    editing === null ? (
+      <PointEntryForm onSubmit={record} reasonSuggestions={reasons} />
+    ) : (
+      <>
+        <h2>{t('points.correctTitle')}</h2>
+        <p>{t('points.correctNote')}</p>
+        <PointEntryForm
+          // 別の記録の訂正へ移ったら、入力欄をその記録の内容で作り直す
+          key={editing.id}
+          onSubmit={(amount, reason, idempotencyKey) =>
+            correct(editing.id, amount, reason, idempotencyKey)
+          }
+          reasonSuggestions={reasons}
+          editing={{
+            amount: editing.amount,
+            reason: editing.reason,
+            onCancel: () => {
+              setEditing(null)
+            },
+          }}
+        />
+      </>
+    )
 
   return (
     <div className="page">
@@ -130,11 +188,7 @@ export function LedgerPage() {
       </section>
 
       <section className="card">
-        {ledger.can_modify ? (
-          <PointEntryForm onSubmit={record} reasonSuggestions={reasons} />
-        ) : (
-          <p>{t('points.readOnly')}</p>
-        )}
+        {ledger.can_modify ? entryForm : <p>{t('points.readOnly')}</p>}
       </section>
 
       <section className="card">
@@ -160,21 +214,33 @@ export function LedgerPage() {
                     <td>
                       {transaction.reason}
                       {transaction.reversal_of_id !== null && ` (${t('points.isReversal')})`}
+                      {transaction.corrects_id !== null && ` (${t('points.isCorrection')})`}
                       {transaction.is_reversed && ` (${t('points.wasReversed')})`}
                     </td>
                     <td>{t('points.value', { points: withSign(transaction.amount) })}</td>
                     <td>{transaction.granted_by ?? '—'}</td>
                     {ledger.can_modify && (
                       <td>
+                        {/* 打ち消しの行と、すでに打ち消された行はどちらも直せない */}
                         {transaction.reversal_of_id === null && !transaction.is_reversed && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              reverse(transaction.id)
-                            }}
-                          >
-                            {t('points.reverse')}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditing(transaction)
+                              }}
+                            >
+                              {t('points.edit')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                reverse(transaction.id)
+                              }}
+                            >
+                              {t('points.reverse')}
+                            </button>
+                          </>
                         )}
                       </td>
                     )}

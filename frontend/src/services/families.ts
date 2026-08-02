@@ -85,9 +85,17 @@ export interface Transaction {
   created_at: string
   /** 打ち消しレコードなら、打ち消した相手の ID。 */
   reversal_of_id: number | null
+  /** 訂正後のレコードなら、言い直した相手の ID（ADR-0022）。 */
+  corrects_id: number | null
   /** このレコードが打ち消されているか。 */
   is_reversed: boolean
   granted_by: string | null
+}
+
+/** 1 回の訂正で台帳に足された 2 行。元のレコードは履歴に残る（ADR-0022）。 */
+export interface Correction {
+  reversal: Transaction
+  correction: Transaction
 }
 
 export interface Ledger {
@@ -221,5 +229,24 @@ export const families = {
     api.post<Transaction>(
       `${ledgerPath(familyId, ledgerId)}/transactions/${transactionId}/reversals`,
       { idempotency_key: idempotencyKey },
+    ),
+
+  /**
+   * 入力の間違いを直す。元のレコードは書き換わらず、打ち消しと正しい内容の
+   * 2 行が足される（ADR-0022）。発生日時は元のレコードから引き継ぐ。
+   */
+  correct: (
+    familyId: number,
+    ledgerId: number,
+    transactionId: number,
+    entry: NewTransaction,
+  ): Promise<Correction> =>
+    api.post<Correction>(
+      `${ledgerPath(familyId, ledgerId)}/transactions/${transactionId}/corrections`,
+      {
+        amount: entry.amount,
+        reason: entry.reason,
+        idempotency_key: entry.idempotencyKey,
+      },
     ),
 }

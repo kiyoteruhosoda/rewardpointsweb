@@ -54,18 +54,39 @@ AST で見る（`FamilyRole` を比較してよいのはポリシーと変換の
 - 残高は保持せず `SUM(amount)` で導出する（`LedgerStatement`）。有効期限・期間
   リセットが無いため、集計対象は常に台帳の全レコード。
 - **マイナス残高を許容する**（前借りの運用）。消費時の残高検証は行わない。
-- 訂正は元レコードの逆符号の行を追加し、`reversal_of_id` で対応を示す。
+- 打ち消しは元レコードの逆符号の行を追加し、`reversal_of_id` で対応を示す。
   `reversal_of_id` は UNIQUE なので二重取り消しは DB でも防がれる。打ち消しレコード
   自体は打ち消せない（`reversal_of_reversal_not_allowed`）。
 - 加算・消費の API は `idempotency_key` を必須とする。`UNIQUE (ledger_id,
   idempotency_key)` に抵触した場合はエラーとせず既存レコードを返す。
+
+### 訂正（入力の間違いを直す）
+
+打ち消して正しい内容を書き直す操作を 1 つにまとめたもの（ADR-0022）。
+`.../transactions/{id}/corrections` へ訂正後の内容を送ると、1 つのトランザクションで
+2 行が足される。
+
+| 足す行 | 参照 |
+|---|---|
+| 打ち消し | `reversal_of_id` = 元の行 |
+| 訂正後 | `corrects_id` = 元の行（NULL 可・UNIQUE・`ON DELETE SET NULL`） |
+
+- `occurred_at` を省くと元の行の発生日時を引き継ぐ（量を直しただけで出来事が
+  今日へ動かない）。日付そのものを直したいときは指定する。
+- 打ち消しの行は訂正できない（409 `correction_of_reversal_not_allowed`）。
+  すでに打ち消された行も訂正できない（409 `transaction_already_reversed`）。
+  訂正後の行はさらに訂正できる。
+- 送り直しは打ち消しの UNIQUE に当たって 409 になる。二重には効かない。
+- 1 回の訂正が 2 行を書くため、鍵は `IdempotencyKey.for_step` で段階ごとに分ける。
+  受け取る鍵の上限は分けた後も収まる長さ（`MAX_BASE_LENGTH`）まで。
 
 `occurred_at`（出来事の発生日時。遡って入力できる）と `created_at`（レコード作成
 日時）は別物。どちらも UTC。一覧は `occurred_at` の降順（同値なら `id` の降順）。
 
 `GET /api/families/{id}/reason-suggestions` が、その家族でよく使われた理由を頻度順に
 返す（入力候補）。他家族の理由は混ざらず、打ち消しは数えない（元の理由を引き継ぐため
-二重に効いてしまう）。理由の文言は他の子の記録から来ることがあるので、親にだけ返す。
+二重に効いてしまう）。訂正で言い直された理由も数えない（直したはずの書き間違いを
+選び直さないため）。理由の文言は他の子の記録から来ることがあるので、親にだけ返す。
 
 ## 参加の追加
 
@@ -120,7 +141,7 @@ AST で見る（`FamilyRole` を比較してよいのはポリシーと変換の
 | `families` | 家族（集約ルート） |
 | `family_memberships` | 参加。`account_id`（任意）・`role`・`display_name` |
 | `point_ledgers` | 台帳。`membership_id` は一意（`role = child` と 1 対 1） |
-| `point_transactions` | 記録（追記専用）。`amount` / `reversal_of_id` / `idempotency_key` |
+| `point_transactions` | 記録（追記専用）。`amount` / `reversal_of_id` / `corrects_id` / `idempotency_key` |
 | `family_invitations` | 招待。`code_hash`・`role`・`target_membership_id`・有効期限 |
 
 定義の正本は `infrastructure/reward_points_models.py`。DDL の変更は Alembic で行う。

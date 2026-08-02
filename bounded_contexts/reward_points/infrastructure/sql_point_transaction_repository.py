@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from bounded_contexts.reward_points.domain.entities.point_transaction import PointTransaction
 from bounded_contexts.reward_points.domain.repositories.point_transaction_repository import (
@@ -85,6 +85,7 @@ class SqlPointTransactionRepository(IPointTransactionRepository):
             occurred_at=new_transaction.occurred_at,
             idempotency_key=key.value,
             reversal_of_id=new_transaction.reversal_of_id,
+            corrects_id=new_transaction.corrects_id,
         )
         try:
             # SAVEPOINT の中で書く。衝突しても巻き戻るのはこの 1 行だけで、
@@ -106,7 +107,8 @@ class SqlPointTransactionRepository(IPointTransactionRepository):
 
     def delete_by_ledger(self, ledger_id: int) -> None:
         # 打ち消し行から先に消す。reversal_of_id の自己参照外部キーに ON DELETE が
-        # 無いため、元の行を先に消すと参照が残って拒まれる。
+        # 無いため、元の行を先に消すと参照が残って拒まれる。訂正の corrects_id は
+        # ON DELETE SET NULL なので、残りは 1 文でまとめて消せる。
         self._session.execute(
             delete(PointTransactionModel).where(
                 PointTransactionModel.ledger_id == ledger_id,
@@ -117,6 +119,8 @@ class SqlPointTransactionRepository(IPointTransactionRepository):
 
     def frequent_reasons(self, *, family_id: int, limit: int) -> list[str]:
         occurrences = func.count().label("occurrences")
+        rewritten = aliased(PointTransactionModel)
+        corrected_ids = select(rewritten.corrects_id).where(rewritten.corrects_id.is_not(None))
         rows = self._session.execute(
             select(PointTransactionModel.reason, occurrences)
             .join(PointLedgerModel, PointLedgerModel.id == PointTransactionModel.ledger_id)
@@ -124,6 +128,10 @@ class SqlPointTransactionRepository(IPointTransactionRepository):
                 PointLedgerModel.family_id == family_id,
                 # 打ち消しは元の理由をそのまま引き継ぐので、数えると二重になる
                 PointTransactionModel.reversal_of_id.is_(None),
+                # 訂正で言い直された理由も候補にしない。書き間違いを直しても、
+                # 元の文言が候補に出続けると同じ間違いを選び直してしまう
+                # （打ち消しただけの理由は残す。文言が誤りだったとは限らない）
+                PointTransactionModel.id.not_in(corrected_ids),
             )
             .group_by(PointTransactionModel.reason)
             # 同数のときは文字列順。並びが実行のたびに変わらないようにする
@@ -152,6 +160,7 @@ def _to_transaction(row: PointTransactionModel) -> PointTransaction:
         occurred_at=row.occurred_at,
         created_at=row.created_at,
         reversal_of_id=row.reversal_of_id,
+        corrects_id=row.corrects_id,
     )
 
 

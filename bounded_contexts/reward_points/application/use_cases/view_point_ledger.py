@@ -59,6 +59,7 @@ class ViewPointLedgerUseCase:
                 occurred_at=transaction.occurred_at,
                 created_at=transaction.created_at,
                 reversal_of_id=transaction.reversal_of_id,
+                corrects_id=transaction.corrects_id,
                 is_reversed=transaction.id in reversed_ids,
                 granted_by=actors.get(transaction.granted_by_membership_id or 0),
             )

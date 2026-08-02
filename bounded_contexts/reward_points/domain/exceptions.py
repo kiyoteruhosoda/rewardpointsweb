@@ -60,6 +60,17 @@ class ReversalOfReversalError(RewardPointsError):
     code = "reversal_of_reversal_not_allowed"
 
 
+class CorrectionOfReversalError(RewardPointsError):
+    """打ち消しレコード自体を訂正しようとした（ADR-0022）。
+
+    訂正は「打ち消して書き直す」操作で、打ち消しの行にはどちらも行えない。
+    直したいのは打ち消された元の行の方であり、それはもう打ち消し済みなので、
+    正しい内容を新しい記録として足す。
+    """
+
+    code = "correction_of_reversal_not_allowed"
+
+
 class InvitationNotFoundError(RewardPointsError):
     """招待コードが存在しない、期限切れ、または使用済み。
 
@@ -225,6 +236,7 @@ __all__ = [
     "ChildAccountRequiredError",
     "ChildCannotLeaveFamilyError",
     "ChildInvitationRequiresSignupError",
+    "CorrectionOfReversalError",
     "DisplayNameRequiredError",
     "FamilyAccessDeniedError",
     "FamilyNotEmptyError",
