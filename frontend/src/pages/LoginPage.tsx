@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { PasswordField } from '../components/PasswordField'
 import { useI18n } from '../i18n'
 import { ApiError, errorMessageKey } from '../services/api'
-import { isPasskeyCancellation, isPasskeySupported } from '../services/webauthn'
+import { isPasskeySupported, passkeyErrorKey } from '../services/webauthn'
 import { useAuth } from '../store/AuthContext'
 
 /** 資格情報の入力 → （二要素認証が有効なら）ワンタイムコードの入力。 */
@@ -55,11 +55,7 @@ export function LoginPage() {
       await loginWithPasskey()
       navigate(destination)
     } catch (err) {
-      if (isPasskeyCancellation(err)) {
-        setError('error.passkey_cancelled')
-      } else {
-        setError(errorMessageKey(err))
-      }
+      setError(passkeyErrorKey(err) ?? errorMessageKey(err))
     } finally {
       setPasskeyBusy(false)
     }

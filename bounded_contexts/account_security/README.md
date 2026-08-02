@@ -74,6 +74,17 @@ B のアカウントへ保存でき、以後その資格情報で B としてロ
 すべて無効になる。指定できるのはドメイン名のみで IP アドレスは使えない
 （開発時は `127.0.0.1` ではなく `localhost` で開く）。
 
+RP ID は `WEBAUTHN_ORIGIN` のホストと一致するか、その登録可能なサフィックス
+（上位ドメイン）でなければならない。外れているとブラウザが登録を `SecurityError`
+で拒むため、`build_relying_party()` が
+`domain/services/relying_party_configuration.py` の規則で先に確かめ、合わなければ
+チャレンジを発行せず `PasskeyConfigurationError` を投げる。同じ規則を
+`/admin/config` の保存も通るので、誤った組み合わせは設定として保存できない。
+
+検証は正規化した `RelyingPartyConfiguration` を返す。`PyWebAuthnRelyingParty` へ渡す
+のは設定の生値ではなくこの戻り値で、空白・大文字・末尾のドット・既定ポートを落とした
+形になっている（ブラウザが送る `rp.id` とオリジンの形に揃える）。
+
 ## 拡張するときの注意
 
 `TotpAuthenticator` / `WebAuthnRelyingParty` は Domain 層のインターフェース。

@@ -18,6 +18,7 @@ from presentation.fastapi.admin.system_settings_definitions import (
     SYSTEM_SETTING_DEFINITIONS,
     SYSTEM_SETTING_DEFINITIONS_BY_KEY,
 )
+from presentation.fastapi.admin.system_settings_validation import validate_system_settings
 from shared.infrastructure.models import SystemSetting
 from shared.kernel.restart import ALL_RESTART_SCOPES, RestartScope
 from shared.kernel.settings.settings import settings
@@ -81,8 +82,11 @@ class SystemSettingService:
         return result
 
     @classmethod
-    def save(cls, session: Session, values: Mapping[str, Any]) -> SettingsSaveResult:
+    def save(cls, session: Session, values: Mapping[str, Any], env: Any = None) -> SettingsSaveResult:
         """編集可能なキーのみを保存する。未知のキーは黙って捨てる。
+
+        書き込む前に、保存後に有効となる値の組み合わせを検証する。合わなければ
+        例外を送出し、DB には一切触れない（壊れた設定を保存しない）。
 
         戻り値には、採り込んだキーと、そのうち反映に再起動が必要なものが入る。
         """
@@ -101,6 +105,8 @@ class SystemSettingService:
                 payload[key] = value
             changed.append(key)
 
+        validate_system_settings(cls._effective_after_save(payload, env))
+
         row = session.get(SystemSetting, _SETTING_KEY)
         if row is None:
             session.add(SystemSetting(setting_key=_SETTING_KEY, setting_json=payload))
@@ -112,6 +118,26 @@ class SystemSettingService:
             accepted_keys=tuple(sorted(set(changed))),
             restart=cls.restart_requirement(changed),
         )
+
+    @staticmethod
+    def _effective_after_save(payload: Mapping[str, Any], env: Any = None) -> dict[str, Any]:
+        """保存後に ``settings`` が返すことになる値（環境変数 > DB > デフォルト）。
+
+        環境変数で固定された項目は保存しても効かない。実際に効く値で検証しないと、
+        画面上は直したのに動かない、という食い違いが起きる。
+        """
+        env = os.environ if env is None else env
+        resolved: dict[str, Any] = {}
+        for definition in SYSTEM_SETTING_DEFINITIONS:
+            key = str(definition["key"])
+            env_value = env.get(key)
+            if env_value:
+                resolved[key] = env_value
+            elif key in payload:
+                resolved[key] = payload[key]
+            else:
+                resolved[key] = DEFAULT_APPLICATION_SETTINGS.get(key)
+        return resolved
 
     @staticmethod
     def restart_requirement(keys: Iterable[str]) -> RestartRequirement:

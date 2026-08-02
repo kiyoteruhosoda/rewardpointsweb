@@ -18,7 +18,10 @@ from bounded_contexts.account_security.domain.exceptions import (
     AccountSecurityError,
     ChallengeNotFoundError,
     InvalidTotpCodeError,
+    InvalidWebAuthnOriginError,
+    InvalidWebAuthnRelyingPartyIdError,
     PasskeyAlreadyRegisteredError,
+    PasskeyConfigurationError,
     PasskeyNotFoundError,
     PasskeyVerificationError,
     TotpAlreadyEnabledError,
@@ -30,7 +33,11 @@ from presentation.fastapi.error_handling import log_failed_request
 _STATUS_BY_ERROR: dict[type[AccountSecurityError], int] = {
     ChallengeNotFoundError: status.HTTP_400_BAD_REQUEST,
     InvalidTotpCodeError: status.HTTP_400_BAD_REQUEST,
+    # 設定の誤りは利用者に直せない。入力の誤り（4xx）ではなくサーバー側の不備として返す。
+    InvalidWebAuthnOriginError: status.HTTP_500_INTERNAL_SERVER_ERROR,
+    InvalidWebAuthnRelyingPartyIdError: status.HTTP_500_INTERNAL_SERVER_ERROR,
     PasskeyAlreadyRegisteredError: status.HTTP_409_CONFLICT,
+    PasskeyConfigurationError: status.HTTP_500_INTERNAL_SERVER_ERROR,
     PasskeyNotFoundError: status.HTTP_404_NOT_FOUND,
     PasskeyVerificationError: status.HTTP_401_UNAUTHORIZED,
     TotpAlreadyEnabledError: status.HTTP_409_CONFLICT,

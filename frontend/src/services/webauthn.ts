@@ -124,3 +124,26 @@ export function isPasskeyCancellation(error: unknown): boolean {
   if (error instanceof Error && error.message === PASSKEY_CANCELLED) return true
   return error instanceof DOMException && error.name === 'NotAllowedError'
 }
+
+/** `navigator.credentials` が投げる DOMException の名前 → 翻訳キー。 */
+const BROWSER_ERROR_KEYS: Record<string, string> = {
+  // RP ID が開いている URL のドメインと噛み合っていない（設定の誤り）。
+  SecurityError: 'error.passkey_domain_mismatch',
+  // その認証器にはすでに同じアカウントのパスキーがある（excludeCredentials）。
+  InvalidStateError: 'error.passkey_already_on_device',
+  // 認証器が要求された方式に対応していない。
+  NotSupportedError: 'error.passkey_unsupported_authenticator',
+}
+
+/**
+ * ブラウザ由来の失敗を翻訳キーへ変換する。サーバー由来なら `null`。
+ *
+ * `navigator.credentials` の失敗は `ApiError` ではないため、そのまま
+ * `errorMessageKey()` へ渡すと原因を問わず「エラーが発生しました」になる。
+ * 呼び出し側は `passkeyErrorKey(err) ?? errorMessageKey(err)` と書く。
+ */
+export function passkeyErrorKey(error: unknown): string | null {
+  if (isPasskeyCancellation(error)) return 'error.passkey_cancelled'
+  if (!(error instanceof DOMException)) return null
+  return BROWSER_ERROR_KEYS[error.name] ?? null
+}

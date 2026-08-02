@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { useToast } from '../components/ToastNotification'
 import { useI18n } from '../i18n'
-import { api } from '../services/api'
+import { api, errorMessageKey } from '../services/api'
 import { useAuth } from '../store/AuthContext'
 
 interface SettingItem {
@@ -50,10 +50,16 @@ export function ConfigPage() {
   }, [])
 
   const save = async () => {
-    const result = await api.put<SaveResult>('/api/admin/config', { values: edits })
-    await reload()
-    notify('success', t('common.saved'))
-    setPendingRestart(result.restart_required)
+    // 保存はサーバー側で拒まれることがある（設定どうしの組み合わせが不正な場合）。
+    // 捨てると画面には何も出ず、保存できたように見えてしまう。
+    try {
+      const result = await api.put<SaveResult>('/api/admin/config', { values: edits })
+      await reload()
+      notify('success', t('common.saved'))
+      setPendingRestart(result.restart_required)
+    } catch (error) {
+      notify('error', t(errorMessageKey(error)))
+    }
   }
 
   const requestRestart = async () => {
