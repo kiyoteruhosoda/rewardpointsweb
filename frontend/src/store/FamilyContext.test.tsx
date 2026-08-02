@@ -57,6 +57,35 @@ function authValueOf(scopes: string[]): AuthValue {
   }
 }
 
+/** 応答の届く順を組み立てるための、外から解決できる約束。 */
+interface Deferred {
+  promise: Promise<FamilyDetail>
+  arrive: (family: FamilyDetail) => void
+}
+
+function deferred(): Deferred {
+  let resolve: (family: FamilyDetail) => void = () => {
+    throw new Error('Promise の実行子がまだ走っていない')
+  }
+  const promise = new Promise<FamilyDetail>((settle) => {
+    resolve = settle
+  })
+  return {
+    promise,
+    arrive: (family) => {
+      resolve(family)
+    },
+  }
+}
+
+/** 届いた応答の反映まで含めて流し切る。 */
+async function flush(arrival: () => void): Promise<void> {
+  await act(() => {
+    arrival()
+    return Promise.resolve()
+  })
+}
+
 /** 状態をそのまま文字にして出す（描き分けは各画面の責務なのでここでは見ない）。 */
 function Probe() {
   const { family, failed, loading } = useFamily()
@@ -129,16 +158,10 @@ describe('FamilyProvider', () => {
   })
 
   it('追い越された応答で新しい内容を上書きしない', async () => {
-    let arriveLate: (family: FamilyDetail) => void = () => {
-      throw new Error('最初の取得がまだ始まっていない')
-    }
+    const late = deferred()
     list.mockResolvedValue([SUMMARY])
     view
-      .mockReturnValueOnce(
-        new Promise<FamilyDetail>((resolve) => {
-          arriveLate = resolve
-        }),
-      )
+      .mockReturnValueOnce(late.promise)
       .mockResolvedValue({ ...DETAIL, name: 'ほその家（改名）' })
     renderProvider()
 
@@ -146,12 +169,38 @@ describe('FamilyProvider', () => {
     fireEvent.click(screen.getByRole('link', { name: '家族設定へ' }))
     await screen.findByText('ほその家（改名）')
 
-    // 遅れて届いた 1 回目を、状態の反映まで含めて流し切る
-    await act(() => {
-      arriveLate(DETAIL)
-      return Promise.resolve()
+    await flush(() => {
+      late.arrive(DETAIL)
     })
 
+    expect(screen.getByText('ほその家（改名）')).toBeInTheDocument()
+  })
+
+  it('追い越された取得が先に終わっても、読み込み中を解かない', async () => {
+    const first = deferred()
+    const second = deferred()
+    list.mockResolvedValue([SUMMARY])
+    view.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    renderProvider()
+
+    await waitFor(() => {
+      expect(view).toHaveBeenCalledTimes(1)
+    })
+    fireEvent.click(screen.getByRole('link', { name: '家族設定へ' }))
+    await waitFor(() => {
+      expect(view).toHaveBeenCalledTimes(2)
+    })
+
+    // 捨てた結果で読み込み中を解くと、まだ何も入っていない状態が
+    // 「家族がない・子どもがいない」として画面に出てしまう
+    await flush(() => {
+      first.arrive(DETAIL)
+    })
+    expect(screen.getByText('loading')).toBeInTheDocument()
+
+    await flush(() => {
+      second.arrive({ ...DETAIL, name: 'ほその家（改名）' })
+    })
     expect(screen.getByText('ほその家（改名）')).toBeInTheDocument()
   })
 

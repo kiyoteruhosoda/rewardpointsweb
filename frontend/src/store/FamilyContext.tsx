@@ -94,7 +94,9 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
       // ようにしか見えない。「読めなかった」と伝えるのは、出せるものが無いときだけ。
       setLoaded((current) => (current.family ? current : { family: null, failed: true }))
     } finally {
-      setLoading(false)
+      // 追い越された取得は終わりも告げない。結果を捨てたのに読み込み中を解くと、
+      // まだ何も入っていない状態が「家族がない・子どもがいない」として画面に出る。
+      if (isLatest()) setLoading(false)
     }
   }, [canView])
 
