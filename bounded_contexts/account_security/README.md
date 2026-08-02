@@ -81,6 +81,10 @@ RP ID は `WEBAUTHN_ORIGIN` のホストと一致するか、その登録可能�
 チャレンジを発行せず `PasskeyConfigurationError` を投げる。同じ規則を
 `/admin/config` の保存も通るので、誤った組み合わせは設定として保存できない。
 
+検証は正規化した `RelyingPartyConfiguration` を返す。`PyWebAuthnRelyingParty` へ渡す
+のは設定の生値ではなくこの戻り値で、空白・大文字・末尾のドット・既定ポートを落とした
+形になっている（ブラウザが送る `rp.id` とオリジンの形に揃える）。
+
 ## 拡張するときの注意
 
 `TotpAuthenticator` / `WebAuthnRelyingParty` は Domain 層のインターフェース。

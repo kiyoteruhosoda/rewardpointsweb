@@ -79,17 +79,24 @@ def build_relying_party() -> WebAuthnRelyingParty:
     RP ID とオリジンが噛み合っていないと、チャレンジの発行までは成功したうえで
     ブラウザが ``SecurityError`` で拒む。原因が画面から分からなくなるため、
     ここで止めて設定の誤りだと分かるエラーコードを返す。
+
+    渡すのは検証が返した**正規化済みの値**。設定に紛れた空白や既定ポートを
+    そのまま渡すと、``rp.id`` やオリジンの比較がブラウザ側で外れる。
     """
     rp_id = settings.webauthn_rp_id
     origin = settings.webauthn_origin
     try:
-        validate_relying_party_configuration(rp_id=rp_id, origin=origin)
+        configuration = validate_relying_party_configuration(rp_id=rp_id, origin=origin)
     except PasskeyConfigurationError as error:
         # 値そのものを残す。RP ID とオリジンは秘匿情報でなく、これが無いと
         # 「どちらをどう直すか」がログから分からない。
         logger.error("passkey_misconfigured: %s rp_id=%s origin=%s", error.code, rp_id, origin)
         raise
-    return PyWebAuthnRelyingParty(rp_id=rp_id, rp_name=settings.webauthn_rp_name, origin=origin)
+    return PyWebAuthnRelyingParty(
+        rp_id=configuration.rp_id,
+        rp_name=settings.webauthn_rp_name,
+        origin=configuration.origin,
+    )
 
 
 # 外部要素（TOTP 実装・WebAuthn ライブラリ）は依存として差し込む。テストでは

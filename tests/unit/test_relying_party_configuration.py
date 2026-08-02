@@ -34,6 +34,26 @@ def test_accepts_matching_configuration(rp_id: str, origin: str) -> None:
 
 
 @pytest.mark.parametrize(
+    ("rp_id", "origin", "expected"),
+    [
+        # 設定に紛れた空白・大文字はここで落とす。そのまま authenticator へ渡すと
+        # ブラウザ側の rp.id 照合とオリジンの比較が外れる。
+        (" Example.COM ", " HTTPS://Example.com ", ("example.com", "https://example.com")),
+        # 末尾のドット・スラッシュ
+        ("example.com.", "https://example.com./", ("example.com", "https://example.com")),
+        # 既定ポートはブラウザの送るオリジンに付かない
+        ("example.com", "https://example.com:443", ("example.com", "https://example.com")),
+        ("localhost", "http://localhost:80", ("localhost", "http://localhost")),
+        # 既定以外のポートは残す
+        ("example.com", "https://example.com:8443", ("example.com", "https://example.com:8443")),
+    ],
+)
+def test_returns_normalized_values(rp_id: str, origin: str, expected: tuple[str, str]) -> None:
+    configuration = validate_relying_party_configuration(rp_id=rp_id, origin=origin)
+    assert (configuration.rp_id, configuration.origin) == expected
+
+
+@pytest.mark.parametrize(
     ("rp_id", "origin"),
     [
         # 画面から報告された誤り: RP 名をそのまま RP ID に入れてしまった
@@ -44,6 +64,9 @@ def test_accepts_matching_configuration(rp_id: str, origin: str) -> None:
         ("pointsweb.com", "https://rewardpointsweb.com"),
         # 逆向き（子ドメインを RP ID にして親で開く）は使えない
         ("app.example.com", "https://example.com"),
+        # 公開サフィックス（登録できるドメインではない）
+        ("com", "https://example.com"),
+        ("jp", "https://www.example.jp"),
         # RP ID にドメイン名以外は書けない
         ("", "https://example.com"),
         ("192.0.2.10", "https://192.0.2.10"),
@@ -67,6 +90,13 @@ def test_rejects_mismatched_relying_party_id(rp_id: str, origin: str) -> None:
         "https://",
         "https://example.com/app",  # パス付きはオリジンではない
         "http://example.com",  # http はループバックだけ（WebAuthn は安全なコンテキスト必須）
+        # 以下はブラウザが clientDataJSON へ入れるオリジンと一致し得ない。通すと
+        # 「登録はできたのにサーバーの検証だけ落ちる」形で失敗する。
+        "https://example.com?tenant=1",
+        "https://example.com#top",
+        "https://user:pass@example.com",
+        "https://example.com:port",
+        "https://example.com:99999",
     ],
 )
 def test_rejects_unusable_origin(origin: str) -> None:

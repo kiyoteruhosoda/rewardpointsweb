@@ -135,6 +135,22 @@ def test_real_relying_party_produces_browser_ready_options(client: TestClient, a
     assert login_options["allowCredentials"] == []
 
 
+def test_relying_party_options_use_the_normalized_settings(
+    client: TestClient, admin_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """設定に紛れた空白・大文字・既定ポートは、発行するオプションに出さない。
+
+    そのまま渡すとブラウザ側の ``rp.id`` 照合が外れ、検証は通っているのに
+    登録できない、という同じ症状に戻る。
+    """
+    monkeypatch.setenv("WEBAUTHN_RP_ID", " Example.COM ")
+    monkeypatch.setenv("WEBAUTHN_ORIGIN", " HTTPS://Example.com:443 ")
+
+    response = client.post("/api/account/security/passkeys/registration", headers=admin_headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["public_key"]["rp"]["id"] == "example.com"
+
+
 def test_misconfigured_relying_party_refuses_to_issue_a_challenge(
     client: TestClient, admin_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
