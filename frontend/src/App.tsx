@@ -46,7 +46,8 @@ function RequireAuth() {
     return <Navigate to="/change-password" replace />
   }
   // 家族はナビゲーション・ダッシュボード・家族設定が同じものを見る。ログイン後の
-  // 画面をまとめて包み、取得を 1 回に保つ（FamilyContext）。
+  // 画面をまとめて包み、出所を 1 つに保つ（FamilyContext）。同じ瞬間に何度も
+  // 取りには行かないが、画面を移るたびには読み直す（ADR-0021）。
   return (
     <FamilyProvider>
       <div className="layout">

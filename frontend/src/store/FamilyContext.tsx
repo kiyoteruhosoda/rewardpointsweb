@@ -17,8 +17,21 @@
  * ここには残高も入る。**ポイントを変えたら `reload` を呼ぶ**（ADR-0021）。
  * 呼ばないと、記録した画面だけが新しい残高になり、ダッシュボード・
  * ナビゲーション・家族設定は古い数字を出したままになる。
+ *
+ * 取得は 1 回きりにしない。画面を移るたび・手元に戻るたびに読み直す。ログイン中に
+ * 1 回だけだと、別の端末や別のタブで足されたポイントがブラウザの再読込まで
+ * 出てこない。読み直しても表示は消さないので、画面はちらつかない。
  */
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { useRefreshOnReturn } from '../hooks/useRefreshOnReturn'
 import { families, type FamilyDetail } from '../services/families'
@@ -52,10 +65,18 @@ export const FamilyContext = createContext<FamilyValue | null>(null)
 export function FamilyProvider({ children }: { children: ReactNode }) {
   const { hasScope } = useAuth()
   const canView = hasScope('family:view')
+  const { pathname } = useLocation()
   const [loaded, setLoaded] = useState<Loaded>(NONE)
   const [loading, setLoading] = useState(true)
+  /** 何番目の取得か。追い越された（古い）応答を捨てるために持つ。 */
+  const latest = useRef(0)
 
   const reload = useCallback(async () => {
+    // 読み直しは重なり得る（記録の直後に画面を移る等）。先に始めた取得が後から
+    // 届いても、新しい取得の結果を古い内容で上書きしない。
+    const ticket = ++latest.current
+    const isLatest = () => ticket === latest.current
+
     if (!canView) {
       setLoaded(NONE)
       setLoading(false)
@@ -64,20 +85,28 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
     try {
       const list = await families.list()
       const first = list[0]
-      setLoaded({ family: first ? await families.view(first.id) : null, failed: false })
+      const family = first ? await families.view(first.id) : null
+      if (isLatest()) setLoaded({ family, failed: false })
     } catch {
+      if (!isLatest()) return
       // 読み直しに失敗しても、すでに読めている家族は捨てない（ADR-0021）。手元に
       // 戻った瞬間の一時的な不通で残高・子への入口が消えると、家族から外された
       // ようにしか見えない。「読めなかった」と伝えるのは、出せるものが無いときだけ。
       setLoaded((current) => (current.family ? current : { family: null, failed: true }))
     } finally {
-      setLoading(false)
+      // 追い越された取得は終わりも告げない。結果を捨てたのに読み込み中を解くと、
+      // まだ何も入っていない状態が「家族がない・子どもがいない」として画面に出る。
+      if (isLatest()) setLoading(false)
     }
   }, [canView])
 
+  // 最初の 1 回と、**画面を移るたび**に読み直す。ログイン中に 1 回だけ取ると、
+  // 別の端末・別のタブで足されたポイントはブラウザを再読込するまで出てこない
+  // （利用者からは「ダッシュボードに古い値が残る」に見える）。表示は消さないので、
+  // 読み直しは画面のちらつきにならず、値が届いたときに入れ替わるだけ。
   useEffect(() => {
     void reload()
-  }, [reload])
+  }, [reload, pathname])
 
   // 別の端末（もう一人の親・子ども本人）の記録は、こちらの画面には届かない。
   // 手元に戻ってきたときに読み直して、開きっぱなしの残高が居座らないようにする。
