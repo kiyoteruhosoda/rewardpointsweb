@@ -156,7 +156,10 @@ commit を待てず、下流で設定された `contextvars`（`user_id_hash`）
 画面一覧・遷移図・各画面の仕様は `frontend/README.md`。
 
 - `services/api.ts` — fetch ラッパー。JWT の保持・期限切れ時の refresh・401 処理。
-- `store/` — 認証状態（React Context）。
+- `store/` — 認証状態と、所属する家族（React Context）。家族の応答は残高も含めて
+  ここに 1 つだけ置き、ナビゲーション・ダッシュボード・家族設定が共有する。
+  内容を変えたら `reload()` を呼ぶ（ADR-0021）。
+- `hooks/` — 画面をまたいで使う React フック。
 - `pages/` — 画面単位。管理画面は scope で表示制御する。
 - `i18n/` — 言語別 JSON（en / ja）。キーは英語。訳の抜けは
   `tests/unit/test_i18n_dictionaries.py` が検出する。

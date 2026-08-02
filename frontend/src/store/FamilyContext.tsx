@@ -13,16 +13,25 @@
  * 落ちた（5xx・オフライン）ときに `family` を null にすると、画面は「家族が
  * ない」と判断して作成・参加を出し、押せば必ず `already_belongs_to_family` に
  * なる。読めなかったことは `failed` として別に伝える。
+ *
+ * ここには残高も入る。**ポイントを変えたら `reload` を呼ぶ**（ADR-0021）。
+ * 呼ばないと、記録した画面だけが新しい残高になり、ダッシュボード・
+ * ナビゲーション・家族設定は古い数字を出したままになる。
  */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
+import { useRefreshOnReturn } from '../hooks/useRefreshOnReturn'
 import { families, type FamilyDetail } from '../services/families'
 import { useAuth } from './AuthContext'
 
 export interface FamilyValue {
   /** 所属している家族。どこにも所属していなければ null。 */
   family: FamilyDetail | null
-  /** 読み込めなかった。所属の有無は分からない（「所属していない」ではない）。 */
+  /**
+   * 読み込めず、出せるものが何も無い。所属の有無は分からない
+   * （「所属していない」ではない）。一度読めた後の読み直しが失敗しても、
+   * 前の内容を出したままにするので、ここは偽のままになる（ADR-0021）。
+   */
   failed: boolean
   /** 最初の取得が終わるまで真。「家族がない」との区別に使う。 */
   loading: boolean
@@ -57,7 +66,10 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
       const first = list[0]
       setLoaded({ family: first ? await families.view(first.id) : null, failed: false })
     } catch {
-      setLoaded({ family: null, failed: true })
+      // 読み直しに失敗しても、すでに読めている家族は捨てない（ADR-0021）。手元に
+      // 戻った瞬間の一時的な不通で残高・子への入口が消えると、家族から外された
+      // ようにしか見えない。「読めなかった」と伝えるのは、出せるものが無いときだけ。
+      setLoaded((current) => (current.family ? current : { family: null, failed: true }))
     } finally {
       setLoading(false)
     }
@@ -66,6 +78,10 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void reload()
   }, [reload])
+
+  // 別の端末（もう一人の親・子ども本人）の記録は、こちらの画面には届かない。
+  // 手元に戻ってきたときに読み直して、開きっぱなしの残高が居座らないようにする。
+  useRefreshOnReturn(reload)
 
   return (
     <FamilyContext.Provider value={{ ...loaded, loading, reload }}>

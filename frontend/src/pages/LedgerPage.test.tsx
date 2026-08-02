@@ -1,5 +1,9 @@
-/** 台帳: 追記型の見え方（打ち消しの対表示）と、変更 UI の出し分け。 */
-import { screen } from '@testing-library/react'
+/**
+ * 台帳: 追記型の見え方（打ち消しの対表示）と、変更 UI の出し分け。
+ * 残高を出す画面は他にもあるので、記録の後に家族まで読み直すかも見る（ADR-0021）。
+ */
+import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { Link } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Fetched } from '../services/api'
@@ -9,6 +13,8 @@ import { LedgerPage } from './LedgerPage'
 
 const viewLedger = vi.fn<() => Promise<Fetched<Ledger>>>()
 const reasonSuggestions = vi.fn<() => Promise<string[]>>()
+const record = vi.fn<() => Promise<Transaction>>()
+const reverse = vi.fn<() => Promise<Transaction>>()
 
 vi.mock('../services/families', () => ({
   parseUtc: (value: string) => new Date(`${value}Z`),
@@ -16,6 +22,8 @@ vi.mock('../services/families', () => ({
   families: {
     viewLedger: () => viewLedger(),
     reasonSuggestions: () => reasonSuggestions(),
+    record: () => record(),
+    reverse: () => reverse(),
   },
 }))
 
@@ -49,19 +57,37 @@ function ledger(overrides: Partial<Ledger> = {}): Fetched<Ledger> {
   }
 }
 
-function renderPage() {
-  return renderWithProviders(<LedgerPage />, {
-    scopes: ['point:view', 'point:manage'],
-    route: '/families/1/ledgers/20',
-    path: '/families/:familyId/ledgers/:ledgerId',
-  })
+/** 別の子へ移るところまで見たいので、同じ経路に一致する行き先を添えて描く。 */
+function renderPage(reloadFamily = () => Promise.resolve()) {
+  return renderWithProviders(
+    <>
+      <Link to="/families/1/ledgers/21">タロウ</Link>
+      <LedgerPage />
+    </>,
+    {
+      scopes: ['point:view', 'point:manage'],
+      route: '/families/1/ledgers/20',
+      path: '/families/:familyId/ledgers/:ledgerId',
+      reloadFamily,
+    },
+  )
+}
+
+/** 加算を 1 件記録する（フォームは加算・消費を符号で分ける）。 */
+function addPoints(): void {
+  fireEvent.change(screen.getByLabelText('Points'), { target: { value: '50' } })
+  fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'おてつだい' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add points' }))
 }
 
 describe('LedgerPage', () => {
   beforeEach(() => {
     viewLedger.mockReset()
     reasonSuggestions.mockReset()
+    record.mockReset()
+    reverse.mockReset()
     reasonSuggestions.mockResolvedValue([])
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
   it('残高と履歴、記録した人を出す', async () => {
@@ -165,5 +191,84 @@ describe('LedgerPage', () => {
 
     await screen.findByText('100 pt')
     expect(screen.queryByText(/As of /)).not.toBeInTheDocument()
+  })
+
+  it('記録したら台帳と家族の両方を読み直す（他の画面の残高が古いまま残らない）', async () => {
+    viewLedger.mockResolvedValueOnce(ledger()).mockResolvedValue(ledger({ balance: 150 }))
+    record.mockResolvedValue(transaction({ id: 2, amount: 50 }))
+    const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()
+    renderPage(reloadFamily)
+
+    await screen.findByText('100 pt')
+    addPoints()
+
+    expect(await screen.findByText('150 pt')).toBeInTheDocument()
+    expect(reloadFamily).toHaveBeenCalled()
+  })
+
+  it('取り消しでも家族を読み直す（残高が減るのはどの画面でも同じ）', async () => {
+    viewLedger.mockResolvedValueOnce(ledger()).mockResolvedValue(ledger({ balance: 0 }))
+    reverse.mockResolvedValue(transaction({ id: 2, amount: -100, reversal_of_id: 1 }))
+    const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()
+    renderPage(reloadFamily)
+
+    await screen.findByText('100 pt')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+
+    expect(await screen.findByText('0 pt')).toBeInTheDocument()
+    expect(reloadFamily).toHaveBeenCalled()
+  })
+
+  it('記録に失敗したら読み直さない（無かった記録を映さない）', async () => {
+    viewLedger.mockResolvedValue(ledger())
+    record.mockRejectedValue(new Error('offline'))
+    const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()
+    renderPage(reloadFamily)
+
+    await screen.findByText('100 pt')
+    addPoints()
+
+    await waitFor(() => {
+      expect(record).toHaveBeenCalled()
+    })
+    expect(reloadFamily).not.toHaveBeenCalled()
+    expect(viewLedger).toHaveBeenCalledTimes(1)
+  })
+
+  it('手元に戻ってきたら読み直す（別の端末で足された分を映す）', async () => {
+    viewLedger.mockResolvedValueOnce(ledger()).mockResolvedValue(ledger({ balance: 150 }))
+    renderPage()
+
+    await screen.findByText('100 pt')
+    fireEvent(document, new Event('visibilitychange'))
+
+    expect(await screen.findByText('150 pt')).toBeInTheDocument()
+  })
+
+  it('読み直しに失敗しても、出している残高は消さない', async () => {
+    viewLedger.mockResolvedValueOnce(ledger()).mockRejectedValue(new Error('offline'))
+    renderPage()
+
+    await screen.findByText('100 pt')
+    fireEvent(document, new Event('visibilitychange'))
+
+    await waitFor(() => {
+      expect(viewLedger).toHaveBeenCalledTimes(2)
+    })
+    expect(screen.getByText('100 pt')).toBeInTheDocument()
+    expect(screen.queryByText('These points could not be loaded.')).not.toBeInTheDocument()
+  })
+
+  it('別の子へ移ったら、前の子の残高を出したまま待たない', async () => {
+    viewLedger
+      .mockResolvedValueOnce(ledger())
+      .mockReturnValue(new Promise<Fetched<Ledger>>(() => undefined))
+    renderPage()
+
+    await screen.findByText('100 pt')
+    fireEvent.click(screen.getByRole('link', { name: 'タロウ' }))
+
+    expect(screen.queryByText('100 pt')).not.toBeInTheDocument()
+    expect(screen.getByText('Loading...')).toBeInTheDocument()
   })
 })
