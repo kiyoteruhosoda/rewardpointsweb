@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Fetched } from '../services/api'
-import type { Ledger, Transaction } from '../services/families'
+import type { Correction, Ledger, NewTransaction, Transaction } from '../services/families'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { LedgerPage } from './LedgerPage'
 
@@ -15,6 +15,7 @@ const viewLedger = vi.fn<() => Promise<Fetched<Ledger>>>()
 const reasonSuggestions = vi.fn<() => Promise<string[]>>()
 const record = vi.fn<() => Promise<Transaction>>()
 const reverse = vi.fn<() => Promise<Transaction>>()
+const correct = vi.fn<(transactionId: number, entry: NewTransaction) => Promise<Correction>>()
 
 vi.mock('../services/families', () => ({
   parseUtc: (value: string) => new Date(`${value}Z`),
@@ -24,6 +25,8 @@ vi.mock('../services/families', () => ({
     reasonSuggestions: () => reasonSuggestions(),
     record: () => record(),
     reverse: () => reverse(),
+    correct: (_family: number, _ledger: number, transactionId: number, entry: NewTransaction) =>
+      correct(transactionId, entry),
   },
 }))
 
@@ -35,6 +38,7 @@ function transaction(overrides: Partial<Transaction> = {}): Transaction {
     occurred_at: '2026-08-01T00:00:00',
     created_at: '2026-08-01T00:00:00',
     reversal_of_id: null,
+    corrects_id: null,
     is_reversed: false,
     granted_by: 'おとうさん',
     ...overrides,
@@ -73,6 +77,11 @@ function renderPage(reloadFamily = () => Promise.resolve()) {
   )
 }
 
+/** 訂正の入力を開く（対象は最初の「訂正する」を出している行）。 */
+function startCorrection(): void {
+  fireEvent.click(screen.getAllByRole('button', { name: 'Correct' })[0] as HTMLElement)
+}
+
 /** 加算を 1 件記録する（フォームは加算・消費を符号で分ける）。 */
 function addPoints(): void {
   fireEvent.change(screen.getByLabelText('Points'), { target: { value: '50' } })
@@ -86,6 +95,7 @@ describe('LedgerPage', () => {
     reasonSuggestions.mockReset()
     record.mockReset()
     reverse.mockReset()
+    correct.mockReset()
     reasonSuggestions.mockResolvedValue([])
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
@@ -257,6 +267,149 @@ describe('LedgerPage', () => {
     })
     expect(screen.getByText('100 pt')).toBeInTheDocument()
     expect(screen.queryByText('These points could not be loaded.')).not.toBeInTheDocument()
+  })
+
+  it('訂正の後は入力候補も取り直す（直した書き間違いを選び直させない）', async () => {
+    viewLedger.mockResolvedValue(ledger())
+    reasonSuggestions.mockResolvedValueOnce(['おてつだいい']).mockResolvedValue(['おてつだい'])
+    correct.mockResolvedValue({
+      reversal: transaction({ id: 2, amount: -100, reversal_of_id: 1 }),
+      correction: transaction({ id: 3, corrects_id: 1 }),
+    })
+    renderPage()
+
+    await screen.findByText('100 pt')
+    startCorrection()
+    fireEvent.click(screen.getByRole('button', { name: 'Save as added points' }))
+
+    await waitFor(() => {
+      expect(reasonSuggestions).toHaveBeenCalledTimes(2)
+    })
+    const options = document.querySelectorAll('datalist option')
+    expect([...options].map((option) => option.getAttribute('value'))).toEqual(['おてつだい'])
+  })
+
+  it('訂正を選ぶと、元の内容が入った入力欄に替わる', async () => {
+    viewLedger.mockResolvedValue(
+      ledger({ transactions: [transaction({ amount: -60, reason: 'おかし' })] }),
+    )
+    renderPage()
+
+    await screen.findByText('-60 pt')
+    startCorrection()
+
+    // 符号はボタンで決めるので、入力欄には絶対値が入る
+    expect(await screen.findByLabelText('Points')).toHaveValue(60)
+    expect(screen.getByLabelText('Reason')).toHaveValue('おかし')
+    // 記録の入力欄とは入れ替わる（どちらへ打っているのか分からなくならない）
+    expect(screen.queryByRole('button', { name: 'Add points' })).not.toBeInTheDocument()
+  })
+
+  it('訂正を送ると、直した内容と符号でその記録を指して送る', async () => {
+    viewLedger.mockResolvedValueOnce(ledger()).mockResolvedValue(ledger({ balance: 50 }))
+    correct.mockResolvedValue({
+      reversal: transaction({ id: 2, amount: -100, reversal_of_id: 1 }),
+      correction: transaction({ id: 3, amount: 50, corrects_id: 1 }),
+    })
+    const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()
+    renderPage(reloadFamily)
+
+    await screen.findByText('100 pt')
+    startCorrection()
+    fireEvent.change(screen.getByLabelText('Points'), { target: { value: '50' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save as added points' }))
+
+    expect(await screen.findByText('50 pt')).toBeInTheDocument()
+    expect(correct).toHaveBeenCalledWith(1, {
+      amount: 50,
+      reason: 'おてつだい',
+      idempotencyKey: 'test-key',
+    })
+    // 残高はどの画面でも同じなので、家族も読み直す（ADR-0021）
+    expect(reloadFamily).toHaveBeenCalled()
+    // 通ったら入力欄は記録用に戻る
+    expect(await screen.findByRole('button', { name: 'Add points' })).toBeInTheDocument()
+  })
+
+  it('符号の付け間違いは消費として保存し直せる', async () => {
+    viewLedger.mockResolvedValue(ledger())
+    correct.mockResolvedValue({
+      reversal: transaction({ id: 2, amount: -100, reversal_of_id: 1 }),
+      correction: transaction({ id: 3, amount: -100, corrects_id: 1 }),
+    })
+    renderPage()
+
+    await screen.findByText('100 pt')
+    startCorrection()
+    fireEvent.click(screen.getByRole('button', { name: 'Save as used points' }))
+
+    await waitFor(() => {
+      expect(correct).toHaveBeenCalledWith(1, expect.objectContaining({ amount: -100 }))
+    })
+  })
+
+  it('訂正に失敗したら入力欄を閉じない（直した内容を打ち直させない）', async () => {
+    viewLedger.mockResolvedValue(ledger())
+    correct.mockRejectedValue(new Error('offline'))
+    renderPage()
+
+    await screen.findByText('100 pt')
+    startCorrection()
+    fireEvent.change(screen.getByLabelText('Points'), { target: { value: '50' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save as added points' }))
+
+    await waitFor(() => {
+      expect(correct).toHaveBeenCalled()
+    })
+    expect(screen.getByLabelText('Points')).toHaveValue(50)
+    expect(viewLedger).toHaveBeenCalledTimes(1)
+  })
+
+  it('やめれば記録の入力欄へ戻る', async () => {
+    viewLedger.mockResolvedValue(ledger())
+    renderPage()
+
+    await screen.findByText('100 pt')
+    startCorrection()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(await screen.findByRole('button', { name: 'Add points' })).toBeInTheDocument()
+    expect(correct).not.toHaveBeenCalled()
+  })
+
+  it('打ち消しと訂正の行には、それと分かる印を付ける', async () => {
+    viewLedger.mockResolvedValue(
+      ledger({
+        balance: 50,
+        transactions: [
+          transaction({ id: 3, amount: 50, corrects_id: 1 }),
+          transaction({ id: 2, amount: -100, reversal_of_id: 1 }),
+          transaction({ id: 1, is_reversed: true }),
+        ],
+      }),
+    )
+    renderPage()
+
+    await screen.findByText('50 pt')
+    expect(screen.getByText(/\(correction\)/)).toBeInTheDocument()
+    expect(screen.getByText(/\(undo\)/)).toBeInTheDocument()
+    // 直せるのは打ち消しでも打ち消し済みでもない行だけ（ここでは訂正後の 1 行）
+    expect(screen.getAllByRole('button', { name: 'Correct' })).toHaveLength(1)
+  })
+
+  it('記録に失敗したら入力を残す（同じ鍵で送り直せる）', async () => {
+    viewLedger.mockResolvedValue(ledger())
+    record.mockRejectedValue(new Error('offline'))
+    renderPage()
+
+    await screen.findByText('100 pt')
+    addPoints()
+
+    await waitFor(() => {
+      expect(record).toHaveBeenCalled()
+    })
+    expect(screen.getByLabelText('Points')).toHaveValue(50)
+    expect(screen.getByLabelText('Reason')).toHaveValue('おてつだい')
   })
 
   it('別の子へ移ったら、前の子の残高を出したまま待たない', async () => {

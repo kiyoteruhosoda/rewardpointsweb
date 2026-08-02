@@ -137,6 +137,259 @@ def test_transactions_from_another_ledger_are_not_reachable(
     assert response.json()["detail"]["error"] == "transaction_not_found"
 
 
+def _correct(client: TestClient, headers: dict[str, str], ledger: Ledger, **body: object) -> Any:
+    """訂正を送る。対象は ``transaction_id``、残りはそのまま本文になる。"""
+    transaction_id = body.pop("transaction_id")
+    return client.post(
+        f"{ledger.path()}/transactions/{transaction_id}/corrections",
+        headers=headers,
+        json=body,
+    )
+
+
+def test_correction_undoes_the_original_and_writes_the_new_content(
+    client: TestClient, parent: Account, ledger: Ledger
+) -> None:
+    """訂正は書き換えではなく、打ち消しと書き直しの 2 行（ADR-0022）。"""
+    original = ledger.record(client, parent.headers, amount=1000, reason="おてつだい", key="k1")
+
+    response = _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(original["id"])),
+        amount=100,
+        reason="おてつだい",
+        idempotency_key="k2",
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["reversal"]["amount"] == -1000
+    assert body["reversal"]["reversal_of_id"] == original["id"]
+    assert body["correction"]["amount"] == 100
+    assert body["correction"]["corrects_id"] == original["id"]
+
+    view = _view(client, parent.headers, ledger)
+    assert view["balance"] == 100
+    transactions = {t["id"]: t for t in view["transactions"]}
+    # 元のレコードは消えず、取り消された印が付く
+    assert len(transactions) == 3
+    assert transactions[original["id"]]["is_reversed"] is True
+
+
+def test_correction_keeps_the_original_moment(client: TestClient, parent: Account, ledger: Ledger) -> None:
+    response = client.post(
+        f"{ledger.path()}/transactions",
+        headers=parent.headers,
+        json={
+            "amount": 10,
+            "reason": "せんしゅうのおてつだい",
+            "idempotency_key": "k1",
+            "occurred_at": "2026-07-20T09:00:00+09:00",
+        },
+    )
+    original = response.json()
+
+    corrected = _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(original["id"])),
+        amount=20,
+        reason="せんしゅうのおてつだい",
+        idempotency_key="k2",
+    ).json()
+
+    assert corrected["correction"]["occurred_at"] == original["occurred_at"]
+
+
+def test_correction_may_move_the_moment(client: TestClient, parent: Account, ledger: Ledger) -> None:
+    """日付の打ち間違いも直せる。"""
+    original = ledger.record(client, parent.headers, amount=10, reason="おてつだい", key="k1")
+
+    corrected = _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(original["id"])),
+        amount=10,
+        reason="おてつだい",
+        idempotency_key="k2",
+        occurred_at="2026-07-20T09:00:00+09:00",
+    ).json()
+
+    assert corrected["correction"]["occurred_at"].startswith("2026-07-20T00:00:00")
+
+
+def test_correcting_an_already_reversed_record_is_rejected(client: TestClient, parent: Account, ledger: Ledger) -> None:
+    original = ledger.record(client, parent.headers, amount=100, reason="まちがい", key="k1")
+    client.post(
+        f"{ledger.path()}/transactions/{original['id']}/reversals",
+        headers=parent.headers,
+        json={"idempotency_key": "k2"},
+    )
+
+    response = _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(original["id"])),
+        amount=50,
+        reason="まちがい",
+        idempotency_key="k3",
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "transaction_already_reversed"
+
+
+def test_correcting_a_reversal_is_rejected(client: TestClient, parent: Account, ledger: Ledger) -> None:
+    original = ledger.record(client, parent.headers, amount=100, reason="まちがい", key="k1")
+    reversal = client.post(
+        f"{ledger.path()}/transactions/{original['id']}/reversals",
+        headers=parent.headers,
+        json={"idempotency_key": "k2"},
+    ).json()
+
+    response = _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(reversal["id"])),
+        amount=50,
+        reason="まちがい",
+        idempotency_key="k3",
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "correction_of_reversal_not_allowed"
+
+
+def test_a_correction_can_be_corrected_again(client: TestClient, parent: Account, ledger: Ledger) -> None:
+    original = ledger.record(client, parent.headers, amount=100, reason="おてつだい", key="k1")
+    first = _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(original["id"])),
+        amount=50,
+        reason="おてつだい",
+        idempotency_key="k2",
+    ).json()
+
+    second = _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(first["correction"]["id"])),
+        amount=30,
+        reason="おてつだい",
+        idempotency_key="k3",
+    )
+    assert second.status_code == 201, second.text
+    assert _view(client, parent.headers, ledger)["balance"] == 30
+
+
+def test_resent_correction_is_refused_rather_than_applied_twice(
+    client: TestClient, parent: Account, ledger: Ledger
+) -> None:
+    """届き直しても二重に効かない（打ち消しの UNIQUE で先に止まる）。"""
+    original = ledger.record(client, parent.headers, amount=100, reason="おてつだい", key="k1")
+    for _ in range(2):
+        response = _correct(
+            client,
+            parent.headers,
+            ledger,
+            transaction_id=int(str(original["id"])),
+            amount=50,
+            reason="おてつだい",
+            idempotency_key="same",
+        )
+
+    assert response.status_code == 409
+    assert _view(client, parent.headers, ledger)["balance"] == 50
+
+
+def test_step_shaped_keys_are_refused_by_the_ordinary_endpoints(
+    client: TestClient, parent: Account, ledger: Ledger
+) -> None:
+    """訂正が内部で作る鍵の形は外から書けない。
+
+    書けてしまうと、その行が訂正の打ち消し行と同じ鍵になり、``append`` が
+    無関係な既存の行を返す。打ち消しを書いたつもりで書けていない状態になる。
+    """
+    response = client.post(
+        f"{ledger.path()}/transactions",
+        headers=parent.headers,
+        json={"amount": 100, "reason": "おてつだい", "idempotency_key": "k1#reversal"},
+    )
+    assert response.status_code == 422
+
+
+def test_the_same_key_cannot_correct_two_different_records(client: TestClient, parent: Account, ledger: Ledger) -> None:
+    """別の記録の訂正へ鍵を使い回されても、打ち消し無しの訂正を残さない。"""
+    first = ledger.record(client, parent.headers, amount=100, reason="おてつだい", key="k1")
+    second = ledger.record(client, parent.headers, amount=200, reason="そうじ", key="k2")
+    _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(first["id"])),
+        amount=50,
+        reason="おてつだい",
+        idempotency_key="same",
+    )
+
+    response = _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(second["id"])),
+        amount=20,
+        reason="そうじ",
+        idempotency_key="same",
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "idempotency_key_reused"
+    # 2 件目は打ち消しも訂正後の行も残らない（50 + 200）
+    assert _view(client, parent.headers, ledger)["balance"] == 250
+
+
+def test_correction_from_another_ledger_is_not_reachable(client: TestClient, parent: Account, ledger: Ledger) -> None:
+    other = add_child(client, parent.headers, ledger.family_id, display_name="はなこ")
+    other_ledger = Ledger(family_id=ledger.family_id, ledger_id=int(str(other["ledger_id"])))
+    theirs = other_ledger.record(client, parent.headers, amount=10, reason="おてつだい", key="k1")
+
+    response = _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(theirs["id"])),
+        amount=20,
+        reason="おてつだい",
+        idempotency_key="k2",
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["error"] == "transaction_not_found"
+
+
+def test_corrected_reason_replaces_the_mistaken_one_in_suggestions(
+    client: TestClient, parent: Account, ledger: Ledger
+) -> None:
+    """書き間違えた理由が候補に出続けると、同じ間違いを選び直してしまう。"""
+    original = ledger.record(client, parent.headers, amount=100, reason="おてつだいい", key="k1")
+    _correct(
+        client,
+        parent.headers,
+        ledger,
+        transaction_id=int(str(original["id"])),
+        amount=100,
+        reason="おてつだい",
+        idempotency_key="k2",
+    )
+
+    response = client.get(f"/api/families/{ledger.family_id}/reason-suggestions", headers=parent.headers)
+    assert response.json() == ["おてつだい"]
+
+
 def test_backdated_occurred_at_is_accepted(client: TestClient, parent: Account, ledger: Ledger) -> None:
     response = client.post(
         f"{ledger.path()}/transactions",

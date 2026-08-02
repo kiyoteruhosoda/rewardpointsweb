@@ -60,6 +60,28 @@ class ReversalOfReversalError(RewardPointsError):
     code = "reversal_of_reversal_not_allowed"
 
 
+class CorrectionOfReversalError(RewardPointsError):
+    """打ち消しレコード自体を訂正しようとした（ADR-0022）。
+
+    訂正は「打ち消して書き直す」操作で、打ち消しの行にはどちらも行えない。
+    直したいのは打ち消された元の行の方であり、それはもう打ち消し済みなので、
+    正しい内容を新しい記録として足す。
+    """
+
+    code = "correction_of_reversal_not_allowed"
+
+
+class IdempotencyKeyReusedError(RewardPointsError):
+    """1 つの冪等キーが、別の訂正にも使われた（ADR-0022）。
+
+    訂正は 1 回で 2 行書くため、鍵を段階ごとに分けて使う。同じ鍵で別の記録を
+    訂正しようとすると、分けた鍵が先の訂正のものと重なり、書いたつもりの行が
+    書けていない状態になる。黙って通さず、鍵を作り直してもらう。
+    """
+
+    code = "idempotency_key_reused"
+
+
 class InvitationNotFoundError(RewardPointsError):
     """招待コードが存在しない、期限切れ、または使用済み。
 
@@ -225,11 +247,13 @@ __all__ = [
     "ChildAccountRequiredError",
     "ChildCannotLeaveFamilyError",
     "ChildInvitationRequiresSignupError",
+    "CorrectionOfReversalError",
     "DisplayNameRequiredError",
     "FamilyAccessDeniedError",
     "FamilyNotEmptyError",
     "FamilyNotFoundError",
     "GuardianAccountRequiredError",
+    "IdempotencyKeyReusedError",
     "IndependenceNotProposedError",
     "InvalidMemberOrderError",
     "InvitationNotFoundError",

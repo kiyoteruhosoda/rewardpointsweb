@@ -19,7 +19,7 @@ from bounded_contexts.reward_points.domain.entities.point_transaction import Poi
 class NewTransaction:
     """まだ台帳へ書かれていない 1 行。
 
-    書き込みに必要な値をまとめて 1 つの引数にする（加算・消費・打ち消しで
+    書き込みに必要な値をまとめて 1 つの引数にする（加算・消費・打ち消し・訂正で
     渡すものが同じなので、書き込み口も 1 つで足りる）。
     """
 
@@ -30,6 +30,8 @@ class NewTransaction:
     occurred_at: datetime
     idempotency_key: str
     reversal_of_id: int | None = None
+    # 訂正後の行なら、言い直した相手の ID（ADR-0022）
+    corrects_id: int | None = None
 
 
 class IPointTransactionRepository(ABC):

@@ -26,10 +26,13 @@ from bounded_contexts.reward_points.application.dto.family_dto import (
     MembershipDTO,
     RedeemedInvitationDTO,
 )
-from bounded_contexts.reward_points.application.dto.ledger_dto import TransactionDTO
+from bounded_contexts.reward_points.application.dto.ledger_dto import CorrectionDTO, TransactionDTO
 from bounded_contexts.reward_points.application.use_cases.accept_invitation import AcceptInvitationCommand
 from bounded_contexts.reward_points.application.use_cases.add_child_membership import (
     AddChildMembershipCommand,
+)
+from bounded_contexts.reward_points.application.use_cases.correct_point_transaction import (
+    CorrectTransactionCommand,
 )
 from bounded_contexts.reward_points.application.use_cases.create_family import CreateFamilyCommand
 from bounded_contexts.reward_points.application.use_cases.issue_invitation import IssueInvitationCommand
@@ -44,6 +47,7 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     AcceptInvitationDep,
     AddChildDep,
     ApproveIndependenceDep,
+    CorrectTransactionDep,
     CreateFamilyDep,
     DissolveFamilyDep,
     IssueInvitationDep,
@@ -66,6 +70,8 @@ from bounded_contexts.reward_points.presentation.dependencies import (
 )
 from bounded_contexts.reward_points.presentation.schemas import (
     ChildCreateRequest,
+    CorrectionCreateRequest,
+    CorrectionResponse,
     FamilyCreateRequest,
     FamilyDetailResponse,
     FamilyRenameRequest,
@@ -157,8 +163,16 @@ def _to_transaction(dto: TransactionDTO) -> TransactionResponse:
         occurred_at=dto.occurred_at,
         created_at=dto.created_at,
         reversal_of_id=dto.reversal_of_id,
+        corrects_id=dto.corrects_id,
         is_reversed=dto.is_reversed,
         granted_by=dto.granted_by,
+    )
+
+
+def _to_correction(dto: CorrectionDTO) -> CorrectionResponse:
+    return CorrectionResponse(
+        reversal=_to_transaction(dto.reversal),
+        correction=_to_transaction(dto.correction),
     )
 
 
@@ -579,3 +593,44 @@ async def reverse_transaction(
         extra={"ledger_id": ledger_id, "transaction_id": transaction_id},
     )
     return _to_transaction(dto)
+
+
+@router.post(
+    "/{family_id}/ledgers/{ledger_id}/transactions/{transaction_id}/corrections",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CorrectionResponse,
+)
+async def correct_transaction(
+    *,
+    ledger_id: int,
+    transaction_id: int,
+    body: CorrectionCreateRequest,
+    use_case: CorrectTransactionDep,
+    principal: PointManager,
+) -> CorrectionResponse:
+    """入力の間違いを直す。元のレコードは書き換えず、打ち消しと正しい内容の
+    2 行を足す（ADR-0022）。
+
+    ``occurred_at`` を省くと、元のレコードの発生日時を引き継ぐ。すでに打ち消し
+    済みのレコードは訂正できない（409）。
+    """
+    dto = use_case.execute(
+        CorrectTransactionCommand(
+            ledger_id=ledger_id,
+            transaction_id=transaction_id,
+            account_id=principal.user_id,
+            amount=body.amount,
+            reason=body.reason,
+            occurred_at=body.occurred_at,
+            idempotency_key=body.idempotency_key,
+        )
+    )
+    logger.info(
+        "point_transaction_corrected",
+        extra={
+            "ledger_id": ledger_id,
+            "transaction_id": transaction_id,
+            "amount": dto.correction.amount,
+        },
+    )
+    return _to_correction(dto)

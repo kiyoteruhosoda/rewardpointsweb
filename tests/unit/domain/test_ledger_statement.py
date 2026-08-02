@@ -12,7 +12,9 @@ from bounded_contexts.reward_points.domain.value_objects.transaction_reason impo
 _MOMENT = datetime(2026, 8, 1, 0, 0, 0)
 
 
-def _transaction(*, id: int, amount: int, reversal_of_id: int | None = None) -> PointTransaction:
+def _transaction(
+    *, id: int, amount: int, reversal_of_id: int | None = None, corrects_id: int | None = None
+) -> PointTransaction:
     return PointTransaction(
         id=id,
         ledger_id=1,
@@ -22,6 +24,7 @@ def _transaction(*, id: int, amount: int, reversal_of_id: int | None = None) -> 
         occurred_at=_MOMENT,
         created_at=_MOMENT,
         reversal_of_id=reversal_of_id,
+        corrects_id=corrects_id,
     )
 
 
