@@ -4,7 +4,8 @@
  * 画面の側は `FamilyContext` を差し替えて描けるので（`test-support`）、ここでは
  * 状態を作る `FamilyProvider` そのものを見る。
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Link, MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { FamilyDetail, FamilySummary } from '../services/families'
@@ -63,12 +64,16 @@ function Probe() {
   return <p>{failed ? 'failed' : (family?.name ?? 'none')}</p>
 }
 
+/** 画面を移るところまで見たいので、行き先へのリンクを添えて描く。 */
 function renderProvider(scopes = ['family:view']) {
   return render(
     <AuthContext.Provider value={authValueOf(scopes)}>
-      <FamilyProvider>
-        <Probe />
-      </FamilyProvider>
+      <MemoryRouter initialEntries={['/']}>
+        <FamilyProvider>
+          <Link to="/families">家族設定へ</Link>
+          <Probe />
+        </FamilyProvider>
+      </MemoryRouter>
     </AuthContext.Provider>,
   )
 }
@@ -110,6 +115,44 @@ describe('FamilyProvider', () => {
     fireEvent(document, new Event('visibilitychange'))
 
     expect(await screen.findByText('ほその家（改名）')).toBeInTheDocument()
+  })
+
+  it('画面を移るたびに読み直す（1 回きりだと別の端末で足された分が出てこない）', async () => {
+    list.mockResolvedValue([SUMMARY])
+    view.mockResolvedValueOnce(DETAIL).mockResolvedValue({ ...DETAIL, name: 'ほその家（改名）' })
+    renderProvider()
+
+    await screen.findByText('ほその家')
+    fireEvent.click(screen.getByRole('link', { name: '家族設定へ' }))
+
+    expect(await screen.findByText('ほその家（改名）')).toBeInTheDocument()
+  })
+
+  it('追い越された応答で新しい内容を上書きしない', async () => {
+    let arriveLate: (family: FamilyDetail) => void = () => {
+      throw new Error('最初の取得がまだ始まっていない')
+    }
+    list.mockResolvedValue([SUMMARY])
+    view
+      .mockReturnValueOnce(
+        new Promise<FamilyDetail>((resolve) => {
+          arriveLate = resolve
+        }),
+      )
+      .mockResolvedValue({ ...DETAIL, name: 'ほその家（改名）' })
+    renderProvider()
+
+    // 最初の取得が届かないうちに 2 回目を始め、そちらが先に届く
+    fireEvent.click(screen.getByRole('link', { name: '家族設定へ' }))
+    await screen.findByText('ほその家（改名）')
+
+    // 遅れて届いた 1 回目を、状態の反映まで含めて流し切る
+    await act(() => {
+      arriveLate(DETAIL)
+      return Promise.resolve()
+    })
+
+    expect(screen.getByText('ほその家（改名）')).toBeInTheDocument()
   })
 
   it('読み直しに失敗しても、読めている家族は捨てない', async () => {
