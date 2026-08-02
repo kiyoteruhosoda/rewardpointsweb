@@ -6,8 +6,8 @@ import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 import {
   createPasskey,
-  isPasskeyCancellation,
   isPasskeySupported,
+  passkeyErrorKey,
   type PasskeyChallenge,
 } from '../services/webauthn'
 
@@ -132,7 +132,7 @@ export function SecurityPage() {
       await reloadPasskeys()
       notify('success', t('security.passkeyRegistered'))
     } catch (err) {
-      setPasskeyError(isPasskeyCancellation(err) ? 'error.passkey_cancelled' : errorMessageKey(err))
+      setPasskeyError(passkeyErrorKey(err) ?? errorMessageKey(err))
     } finally {
       setPasskeyBusy(false)
     }

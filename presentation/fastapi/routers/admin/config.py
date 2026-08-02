@@ -10,9 +10,12 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from bounded_contexts.account_security.domain.exceptions import (
+    PasskeyConfigurationError,
+)
 from presentation.fastapi.dependencies.auth import require_permission
 from presentation.fastapi.schemas.admin import (
     RestartRequirementResponse,
@@ -46,7 +49,13 @@ async def update_config(body: SystemSettingsUpdateRequest, db: DbDep) -> SystemS
     起動時にしか読まれない設定を変更した場合は ``restart_required`` を返す。
     実際の再起動は ``POST /api/admin/system/restart`` で要求する。
     """
-    saved = SystemSettingService.save(db, body.values)
+    try:
+        saved = SystemSettingService.save(db, body.values)
+    except PasskeyConfigurationError as error:
+        # 既定のハンドラは「サーバーの設定不備」として 500 を返す。ここでは
+        # 管理者が今まさに入力している値の誤りなので、入力エラーとして返す。
+        logger.info("system_settings_rejected: %s", error.code)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": error.code}) from error
     # 実際に採り込んだキーだけを残す。要求されたキーを使うと、未知のキーや伏せ字の
     # ままの秘匿項目（どちらも保存されない）まで「変更した」ことになってしまう。
     logger.info("system_settings_updated: keys=%s", ",".join(saved.accepted_keys) or "none")

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import Depends
@@ -33,6 +34,12 @@ from bounded_contexts.account_security.application.use_cases.register_passkey im
 from bounded_contexts.account_security.application.use_cases.verify_second_factor import (
     VerifySecondFactor,
 )
+from bounded_contexts.account_security.domain.exceptions import (
+    PasskeyConfigurationError,
+)
+from bounded_contexts.account_security.domain.services.relying_party_configuration import (
+    validate_relying_party_configuration,
+)
 from bounded_contexts.account_security.domain.services.totp_authenticator import (
     TotpAuthenticator,
 )
@@ -57,6 +64,8 @@ from bounded_contexts.account_security.infrastructure.sql_webauthn_challenge_rep
 from shared.kernel.database.session import get_db
 from shared.kernel.settings.settings import settings
 
+logger = logging.getLogger(__name__)
+
 DbDep = Annotated[Session, Depends(get_db)]
 
 
@@ -65,11 +74,22 @@ def build_totp_authenticator() -> TotpAuthenticator:
 
 
 def build_relying_party() -> WebAuthnRelyingParty:
-    return PyWebAuthnRelyingParty(
-        rp_id=settings.webauthn_rp_id,
-        rp_name=settings.webauthn_rp_name,
-        origin=settings.webauthn_origin,
-    )
+    """RP を組み立てる。設定が WebAuthn の規則に反していれば発行させない。
+
+    RP ID とオリジンが噛み合っていないと、チャレンジの発行までは成功したうえで
+    ブラウザが ``SecurityError`` で拒む。原因が画面から分からなくなるため、
+    ここで止めて設定の誤りだと分かるエラーコードを返す。
+    """
+    rp_id = settings.webauthn_rp_id
+    origin = settings.webauthn_origin
+    try:
+        validate_relying_party_configuration(rp_id=rp_id, origin=origin)
+    except PasskeyConfigurationError as error:
+        # 値そのものを残す。RP ID とオリジンは秘匿情報でなく、これが無いと
+        # 「どちらをどう直すか」がログから分からない。
+        logger.error("passkey_misconfigured: %s rp_id=%s origin=%s", error.code, rp_id, origin)
+        raise
+    return PyWebAuthnRelyingParty(rp_id=rp_id, rp_name=settings.webauthn_rp_name, origin=origin)
 
 
 # 外部要素（TOTP 実装・WebAuthn ライブラリ）は依存として差し込む。テストでは

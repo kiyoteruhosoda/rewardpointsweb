@@ -342,8 +342,13 @@ git pull → build.sh → dist/ 取り込み → deploy.sh を 1 本で実行す
 | docker compose（nginx 経由） | `localhost` | `http://localhost:8080` |
 | 本番 | 公開ドメイン | `https://<公開ドメイン>` |
 
-RP ID にはドメイン名しか指定できない（IP アドレス不可）。開発時は
-`127.0.0.1` ではなく `localhost` で開くこと。
+RP ID にはドメイン名しか指定できない（IP アドレス・ポート番号・URL は不可）。開発時は
+`127.0.0.1` ではなく `localhost` で開くこと。RP 名（`WEBAUTHN_RP_NAME`）は画面に出す
+表示名で、RP ID とは別物——同じ値を入れないこと。
+
+RP ID がオリジンのドメイン（またはその上位ドメイン）になっていない組み合わせは
+`/admin/config` が保存を拒む。環境変数で固定してしまった場合は画面から直せないため、
+パスキーの発行が `passkey_misconfigured` 系のエラーになる。`.env` を直して再起動する。
 
 ## ログを確認したいとき
 

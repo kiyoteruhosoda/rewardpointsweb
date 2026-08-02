@@ -135,6 +135,25 @@ def test_real_relying_party_produces_browser_ready_options(client: TestClient, a
     assert login_options["allowCredentials"] == []
 
 
+def test_misconfigured_relying_party_refuses_to_issue_a_challenge(
+    client: TestClient, admin_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RP ID がオリジンと噛み合わないなら、チャレンジを発行せずエラーを返す。
+
+    発行してしまうとブラウザが ``SecurityError`` で拒み、画面には原因の分からない
+    失敗だけが出る。設定の誤りだと分かるコードを返して切り分けられるようにする。
+    """
+    monkeypatch.setenv("WEBAUTHN_RP_ID", "rewardpointsweb")
+    monkeypatch.setenv("WEBAUTHN_ORIGIN", "https://rewardpointsweb.com")
+
+    response = client.post("/api/account/security/passkeys/registration", headers=admin_headers)
+    assert response.status_code == 500
+    assert response.json()["detail"]["error"] == "invalid_webauthn_rp_id"
+
+    # ログイン側も同じ（使えない資格情報を配らない）
+    assert client.post("/api/auth/passkey/challenge").status_code == 500
+
+
 def test_registration_stores_the_credential(
     client: TestClient, admin_headers: dict[str, str], relying_party: FakeRelyingParty
 ) -> None:

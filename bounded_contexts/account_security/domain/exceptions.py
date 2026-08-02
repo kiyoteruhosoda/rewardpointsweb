@@ -61,11 +61,35 @@ class PasskeyNotFoundError(AccountSecurityError):
     code = "passkey_not_found"
 
 
+class PasskeyConfigurationError(AccountSecurityError):
+    """パスキーの設定（RP ID・オリジン）が WebAuthn の規則に合っていない。
+
+    利用者の操作ではなく設定の誤り。パスキーの発行を止め、管理者に直させる。
+    """
+
+    code = "passkey_misconfigured"
+
+
+class InvalidWebAuthnOriginError(PasskeyConfigurationError):
+    """``WEBAUTHN_ORIGIN`` が URL として使えない（scheme・ホストの誤り）。"""
+
+    code = "invalid_webauthn_origin"
+
+
+class InvalidWebAuthnRelyingPartyIdError(PasskeyConfigurationError):
+    """``WEBAUTHN_RP_ID`` がオリジンのドメインと噛み合っていない。"""
+
+    code = "invalid_webauthn_rp_id"
+
+
 __all__ = [
     "AccountSecurityError",
     "ChallengeNotFoundError",
     "InvalidTotpCodeError",
+    "InvalidWebAuthnOriginError",
+    "InvalidWebAuthnRelyingPartyIdError",
     "PasskeyAlreadyRegisteredError",
+    "PasskeyConfigurationError",
     "PasskeyNotFoundError",
     "PasskeyVerificationError",
     "TotpAlreadyEnabledError",
