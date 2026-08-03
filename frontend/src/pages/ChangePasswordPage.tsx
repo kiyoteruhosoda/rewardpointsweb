@@ -6,8 +6,10 @@
  */
 import { useState, type FormEvent } from 'react'
 
+import { ActionButton } from '../components/ActionButton'
 import { PasswordField } from '../components/PasswordField'
 import { useToast } from '../components/ToastNotification'
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 import { useAuth } from '../store/AuthContext'
@@ -19,7 +21,7 @@ export function ChangePasswordPage() {
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
 
-  const submit = async (e: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (e: FormEvent) => {
     e.preventDefault()
     try {
       await api.post('/api/auth/change-password', {
@@ -34,15 +36,10 @@ export function ChangePasswordPage() {
     } catch (err) {
       notify('error', t(errorMessageKey(err)))
     }
-  }
+  })
 
   return (
-    <form
-      className="card"
-      onSubmit={(e) => {
-        void submit(e)
-      }}
-    >
+    <form className="card" onSubmit={submit}>
       <h1>{t('changePassword.title')}</h1>
       {user?.must_change_password && <p>{t('changePassword.required')}</p>}
       <PasswordField
@@ -60,7 +57,9 @@ export function ChangePasswordPage() {
         minLength={8}
         required
       />
-      <button type="submit">{t('changePassword.submit')}</button>
+      <ActionButton type="submit" pending={submitting}>
+        {t('changePassword.submit')}
+      </ActionButton>
     </form>
   )
 }

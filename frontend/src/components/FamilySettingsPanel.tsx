@@ -12,9 +12,11 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families, type FamilyDetail } from '../services/families'
+import { ActionButton } from './ActionButton'
 import { useToast } from './ToastNotification'
 
 interface Props {
@@ -27,6 +29,9 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
   const { notify } = useToast()
   const navigate = useNavigate()
   const [name, setName] = useState(family.name)
+  // 並べ替え中の子と向き。上下の矢印は同じ子を指すので、押した方だけに目印を出すには
+  // 「どちらへ動かしているか」まで持つ必要がある。
+  const [moving, setMoving] = useState<{ childId: number; delta: number } | null>(null)
 
   const isOwner = family.my_role === 'owner'
   const children = family.memberships.filter((member) => member.role === 'child')
@@ -35,7 +40,7 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
     notify('error', t(errorMessageKey(error)))
   }
 
-  const rename = async (event: FormEvent) => {
+  const [rename, renaming] = usePendingAction(async (event: FormEvent) => {
     event.preventDefault()
     try {
       await families.rename(family.id, name)
@@ -44,7 +49,7 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
     } catch (error) {
       fail(error)
     }
-  }
+  })
 
   /** *index* の子を 1 つ上（-1）／下（+1）へ動かす。 */
   const move = async (index: number, delta: number) => {
@@ -52,15 +57,23 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
     const here = ids[index]
     const there = ids[index + delta]
     if (here === undefined || there === undefined) return
+    if (moving !== null) return
     ids[index] = there
     ids[index + delta] = here
+    setMoving({ childId: here, delta })
     try {
       await families.reorderMembers(family.id, ids)
       await onChanged()
     } catch (error) {
       fail(error)
+    } finally {
+      setMoving(null)
     }
   }
+
+  /** 押された矢印（子 × 向き）が実行中か。 */
+  const isMoving = (childId: number, delta: number) =>
+    moving !== null && moving.childId === childId && moving.delta === delta
 
   /** 家族から離れる（脱退・解散）。読み直してから送らないと、消えた家族へ戻される。 */
   const depart = async (leaving: () => Promise<void>, message: string) => {
@@ -74,27 +87,22 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
     }
   }
 
-  const leave = async () => {
+  const [leave, leaving] = usePendingAction(async () => {
     if (!window.confirm(t('families.confirmLeave', { name: family.name }))) return
     await depart(() => families.leave(family.id), 'families.left')
-  }
+  })
 
-  const dissolve = async () => {
+  const [dissolve, dissolving] = usePendingAction(async () => {
     if (!window.confirm(t('families.confirmDissolve', { name: family.name }))) return
     await depart(() => families.dissolve(family.id), 'families.dissolved')
-  }
+  })
 
   return (
     <section className="card">
       <h2>{t('families.settings')}</h2>
 
       {isOwner && (
-        <form
-          className="inline-form"
-          onSubmit={(event) => {
-            void rename(event)
-          }}
-        >
+        <form className="inline-form" onSubmit={rename}>
           <label>
             {t('families.name')}
             <input
@@ -105,7 +113,9 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
               required
             />
           </label>
-          <button type="submit">{t('families.rename')}</button>
+          <ActionButton type="submit" pending={renaming}>
+            {t('families.rename')}
+          </ActionButton>
         </form>
       )}
 
@@ -116,26 +126,28 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
             {children.map((child, index) => (
               <li key={child.id}>
                 <span className="order-list-name">{child.display_name}</span>
-                <button
+                <ActionButton
                   type="button"
                   aria-label={t('families.moveUp', { name: child.display_name })}
-                  disabled={index === 0}
+                  pending={isMoving(child.id, -1)}
+                  disabled={index === 0 || moving !== null}
                   onClick={() => {
                     void move(index, -1)
                   }}
                 >
                   ↑
-                </button>
-                <button
+                </ActionButton>
+                <ActionButton
                   type="button"
                   aria-label={t('families.moveDown', { name: child.display_name })}
-                  disabled={index === children.length - 1}
+                  pending={isMoving(child.id, 1)}
+                  disabled={index === children.length - 1 || moving !== null}
                   onClick={() => {
                     void move(index, 1)
                   }}
                 >
                   ↓
-                </button>
+                </ActionButton>
               </li>
             ))}
           </ul>
@@ -143,27 +155,16 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
       )}
 
       <p>{t('families.leaveHint')}</p>
-      <button
-        type="button"
-        onClick={() => {
-          void leave()
-        }}
-      >
+      <ActionButton type="button" pending={leaving} onClick={leave}>
         {t('families.leave')}
-      </button>
+      </ActionButton>
 
       {isOwner && (
         <>
           <p>{t('families.dissolveHint')}</p>
-          <button
-            type="button"
-            className="danger"
-            onClick={() => {
-              void dissolve()
-            }}
-          >
+          <ActionButton type="button" className="danger" pending={dissolving} onClick={dissolve}>
             {t('families.dissolve')}
-          </button>
+          </ActionButton>
         </>
       )}
     </section>

@@ -17,10 +17,13 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { ActionButton } from '../components/ActionButton'
 import { FamilySettingsPanel } from '../components/FamilySettingsPanel'
 import { InvitationPanel } from '../components/InvitationPanel'
-import { MemberList } from '../components/MemberList'
+import { MemberList, type MemberAction } from '../components/MemberList'
 import { useToast } from '../components/ToastNotification'
+import { usePendingAction } from '../hooks/usePendingAction'
+import { usePendingRows } from '../hooks/usePendingRows'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families, parseUtc, type Membership, type TemporaryPassword } from '../services/families'
@@ -35,6 +38,7 @@ export function FamilyPage() {
   const { family, loading, reload } = useFamily()
   const [childName, setChildName] = useState('')
   const [issued, setIssued] = useState<TemporaryPassword | null>(null)
+  const { pendingActionOf, runForRow } = usePendingRows<MemberAction>()
 
   /** 失敗はどれも「文言を出して読み直す」で終わる。成否で分岐する呼び出し元は無い。 */
   const run = async (action: () => Promise<unknown>) => {
@@ -45,6 +49,30 @@ export function FamilyPage() {
       notify('error', t(errorMessageKey(error)))
     }
   }
+
+  const [addChild, addingChild] = usePendingAction(async (event: FormEvent) => {
+    event.preventDefault()
+    if (!family) return
+    const familyId = family.id
+    await run(async () => {
+      await families.addChild(familyId, childName)
+      setChildName('')
+    })
+  })
+
+  // 成立すると scope が変わる（guest → member）。scope は JWT に焼き込まれて
+  // いるため、ログアウトして再ログインするまで新しい権限は効かない（ADR-0014）。
+  const [approveIndependence, approving] = usePendingAction(async () => {
+    if (!family) return
+    if (!window.confirm(t('families.independence.confirmApprove'))) return
+    try {
+      await families.approveIndependence(family.id)
+      notify('success', t('families.independence.approved'))
+      logout()
+    } catch (error) {
+      notify('error', t(errorMessageKey(error)))
+    }
+  })
 
   if (loading) return <p className="loading">{t('common.loading')}</p>
   // 所属は 1 家族まで（ADR-0013）。URL が今の所属と違えば、もう見られない家族。
@@ -59,21 +87,20 @@ export function FamilyPage() {
   const me = family.memberships.find((m) => m.is_me)
   const independenceProposedToMe = family.my_role === 'child' && me?.independence_proposed === true
 
-  const addChild = (event: FormEvent) => {
-    event.preventDefault()
-    void run(async () => {
-      await families.addChild(id, childName)
-      setChildName('')
-    })
-  }
+  /** 参加者ごとの操作。終わるまでその参加者の次の操作を受け付けない。 */
+  const runForMember = (
+    member: Membership,
+    action: MemberAction,
+    request: () => Promise<unknown>,
+  ) => runForRow(member.id, action, () => run(request))
 
   const remove = (member: Membership) => {
     if (!window.confirm(t('families.confirmRemove', { name: member.display_name }))) return
-    void run(() => families.removeMembership(id, member.id))
+    void runForMember(member, 'removal', () => families.removeMembership(id, member.id))
   }
 
   const resetPassword = (member: Membership) => {
-    void run(async () => {
+    void runForMember(member, 'passwordReset', async () => {
       setIssued(await families.resetChildPassword(id, member.id))
     })
   }
@@ -82,24 +109,13 @@ export function FamilyPage() {
     if (!window.confirm(t('families.independence.confirmPropose', { name: member.display_name }))) {
       return
     }
-    void run(() => families.proposeIndependence(id, member.id))
+    void runForMember(member, 'independence', () => families.proposeIndependence(id, member.id))
   }
 
   const withdrawIndependence = (member: Membership) => {
-    void run(() => families.revokeIndependenceProposal(id, member.id))
-  }
-
-  // 成立すると scope が変わる（guest → member）。scope は JWT に焼き込まれて
-  // いるため、ログアウトして再ログインするまで新しい権限は効かない（ADR-0014）。
-  const approveIndependence = async () => {
-    if (!window.confirm(t('families.independence.confirmApprove'))) return
-    try {
-      await families.approveIndependence(id)
-      notify('success', t('families.independence.approved'))
-      logout()
-    } catch (error) {
-      notify('error', t(errorMessageKey(error)))
-    }
+    void runForMember(member, 'independence', () =>
+      families.revokeIndependenceProposal(id, member.id),
+    )
   }
 
   return (
@@ -118,6 +134,7 @@ export function FamilyPage() {
           onWithdrawIndependence={withdrawIndependence}
           onRemove={remove}
           onResetPassword={resetPassword}
+          pendingActionOf={(member) => pendingActionOf(member.id)}
         />
 
         {issued && (
@@ -147,7 +164,9 @@ export function FamilyPage() {
                 required
               />
             </label>
-            <button type="submit">{t('families.addChild')}</button>
+            <ActionButton type="submit" pending={addingChild}>
+              {t('families.addChild')}
+            </ActionButton>
           </form>
         </section>
       )}
@@ -165,14 +184,9 @@ export function FamilyPage() {
         <section className="card">
           <h2>{t('families.independence.title')}</h2>
           <p>{t('families.independence.approveHint')}</p>
-          <button
-            type="button"
-            onClick={() => {
-              void approveIndependence()
-            }}
-          >
+          <ActionButton type="button" pending={approving} onClick={approveIndependence}>
             {t('families.independence.approve')}
-          </button>
+          </ActionButton>
         </section>
       )}
 

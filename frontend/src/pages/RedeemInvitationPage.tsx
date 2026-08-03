@@ -12,7 +12,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
+import { ActionButton } from '../components/ActionButton'
 import { PasswordField } from '../components/PasswordField'
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families } from '../services/families'
@@ -35,7 +37,7 @@ export function RedeemInvitationPage() {
   // 打ち込んだコードはログインの先まで運ぶ。空のまま送っても意味がないので付けない。
   const signInPath = code.trim() ? `/login?code=${encodeURIComponent(code.trim())}` : '/login'
 
-  const submit = async (event: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
     try {
@@ -46,16 +48,11 @@ export function RedeemInvitationPage() {
     } catch (err) {
       setError(errorMessageKey(err))
     }
-  }
+  })
 
   return (
     <div className="auth-page">
-      <form
-        className="card"
-        onSubmit={(event) => {
-          void submit(event)
-        }}
-      >
+      <form className="card" onSubmit={submit}>
         <h1>{t('join.title')}</h1>
         <p>{t('join.hint')}</p>
         {error && <p className="error">{t(error)}</p>}
@@ -109,7 +106,9 @@ export function RedeemInvitationPage() {
           minLength={8}
           required
         />
-        <button type="submit">{t('join.submit')}</button>
+        <ActionButton type="submit" pending={submitting}>
+          {t('join.submit')}
+        </ActionButton>
 
         <div className="card-inset">
           <h2>{t('join.haveAccountTitle')}</h2>

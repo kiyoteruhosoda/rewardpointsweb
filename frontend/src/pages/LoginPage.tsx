@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
+import { ActionButton } from '../components/ActionButton'
 import { PasswordField } from '../components/PasswordField'
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { ApiError, errorMessageKey } from '../services/api'
 import { isPasskeySupported, passkeyErrorKey } from '../services/webauthn'
@@ -26,9 +28,8 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [totpCode, setTotpCode] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [passkeyBusy, setPasskeyBusy] = useState(false)
 
-  const submit = async (e: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     try {
@@ -46,20 +47,17 @@ export function LoginPage() {
       if (code === 'invalid_totp') setTotpCode('')
       setError(errorMessageKey(err))
     }
-  }
+  })
 
-  const signInWithPasskey = async () => {
+  const [signInWithPasskey, passkeyPending] = usePendingAction(async () => {
     setError(null)
-    setPasskeyBusy(true)
     try {
       await loginWithPasskey()
       navigate(destination)
     } catch (err) {
       setError(passkeyErrorKey(err) ?? errorMessageKey(err))
-    } finally {
-      setPasskeyBusy(false)
     }
-  }
+  })
 
   const backToCredentials = () => {
     setStep('credentials')
@@ -69,12 +67,7 @@ export function LoginPage() {
 
   return (
     <div className="auth-page">
-      <form
-        className="card"
-        onSubmit={(e) => {
-          void submit(e)
-        }}
-      >
+      <form className="card" onSubmit={submit}>
         <h1>{step === 'totp' ? t('login.totpTitle') : t('login.title')}</h1>
         {pendingCode && <p className="notice">{t('login.invitationPending')}</p>}
         {error && <p className="error">{t(error)}</p>}
@@ -100,17 +93,13 @@ export function LoginPage() {
               onChange={setPassword}
               required
             />
-            <button type="submit">{t('login.submit')}</button>
+            <ActionButton type="submit" pending={submitting}>
+              {t('login.submit')}
+            </ActionButton>
             {isPasskeySupported() && (
-              <button
-                type="button"
-                onClick={() => {
-                  void signInWithPasskey()
-                }}
-                disabled={passkeyBusy}
-              >
-                {passkeyBusy ? t('common.loading') : t('login.withPasskey')}
-              </button>
+              <ActionButton type="button" pending={passkeyPending} onClick={signInWithPasskey}>
+                {t('login.withPasskey')}
+              </ActionButton>
             )}
             <Link to="/forgot-password">{t('login.forgot')}</Link>
             <Link to={joinPath}>{t('login.withInvitation')}</Link>
@@ -133,7 +122,9 @@ export function LoginPage() {
                 required
               />
             </label>
-            <button type="submit">{t('login.submit')}</button>
+            <ActionButton type="submit" pending={submitting}>
+              {t('login.submit')}
+            </ActionButton>
             <button type="button" onClick={backToCredentials}>
               {t('common.back')}
             </button>

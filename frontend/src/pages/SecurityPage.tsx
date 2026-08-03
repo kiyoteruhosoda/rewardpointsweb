@@ -1,7 +1,9 @@
 /** アカウントのセキュリティ設定（二要素認証・パスキー）。 */
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 
+import { ActionButton } from '../components/ActionButton'
 import { useToast } from '../components/ToastNotification'
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 import {
@@ -41,7 +43,8 @@ export function SecurityPage() {
 
   const [passkeys, setPasskeys] = useState<Passkey[]>([])
   const [passkeyName, setPasskeyName] = useState('')
-  const [passkeyBusy, setPasskeyBusy] = useState(false)
+  // 削除中のパスキー（その行にだけスピナーを出す）。
+  const [removingPasskeyId, setRemovingPasskeyId] = useState<number | null>(null)
   const [passkeyError, setPasskeyError] = useState<string | null>(null)
 
   const reloadStatus = useCallback(
@@ -76,7 +79,7 @@ export function SecurityPage() {
 
   // --- 二要素認証 -------------------------------------------------------
 
-  const startEnrollment = async () => {
+  const [startEnrollment, starting] = usePendingAction(async () => {
     setTwoFactorError(null)
     try {
       setEnrollment(await api.post<TotpEnrollment>('/api/account/security/two-factor/enrollment'))
@@ -84,9 +87,9 @@ export function SecurityPage() {
     } catch (err) {
       setTwoFactorError(errorMessageKey(err))
     }
-  }
+  })
 
-  const confirmEnrollment = async (e: FormEvent) => {
+  const [confirmEnrollment, confirming] = usePendingAction(async (e: FormEvent) => {
     e.preventDefault()
     setTwoFactorError(null)
     try {
@@ -98,9 +101,9 @@ export function SecurityPage() {
     } catch (err) {
       setTwoFactorError(errorMessageKey(err))
     }
-  }
+  })
 
-  const disableTwoFactor = async (e: FormEvent) => {
+  const [disableTwoFactor, disabling] = usePendingAction(async (e: FormEvent) => {
     e.preventDefault()
     setTwoFactorError(null)
     try {
@@ -111,13 +114,12 @@ export function SecurityPage() {
     } catch (err) {
       setTwoFactorError(errorMessageKey(err))
     }
-  }
+  })
 
   // --- パスキー ---------------------------------------------------------
 
-  const registerPasskey = async () => {
+  const [registerPasskey, registering] = usePendingAction(async () => {
     setPasskeyError(null)
-    setPasskeyBusy(true)
     try {
       const challenge = await api.post<PasskeyChallenge>(
         '/api/account/security/passkeys/registration',
@@ -133,18 +135,20 @@ export function SecurityPage() {
       notify('success', t('security.passkeyRegistered'))
     } catch (err) {
       setPasskeyError(passkeyErrorKey(err) ?? errorMessageKey(err))
-    } finally {
-      setPasskeyBusy(false)
     }
-  }
+  })
 
   const removePasskey = async (id: number) => {
+    if (removingPasskeyId !== null) return
     setPasskeyError(null)
+    setRemovingPasskeyId(id)
     try {
       await api.delete(`/api/account/security/passkeys/${id}`)
       await reloadPasskeys()
     } catch (err) {
       setPasskeyError(errorMessageKey(err))
+    } finally {
+      setRemovingPasskeyId(null)
     }
   }
 
@@ -158,12 +162,7 @@ export function SecurityPage() {
         {status === null ? (
           <p className="loading">{t('common.loading')}</p>
         ) : status.enabled ? (
-          <form
-            className="inline-form"
-            onSubmit={(e) => {
-              void disableTwoFactor(e)
-            }}
-          >
+          <form className="inline-form" onSubmit={disableTwoFactor}>
             <p>{t('security.twoFactorOn')}</p>
             <label>
               {t('security.code')}
@@ -177,15 +176,12 @@ export function SecurityPage() {
                 required
               />
             </label>
-            <button type="submit">{t('security.disableTwoFactor')}</button>
+            <ActionButton type="submit" pending={disabling}>
+              {t('security.disableTwoFactor')}
+            </ActionButton>
           </form>
         ) : enrollment ? (
-          <form
-            className="card-inset"
-            onSubmit={(e) => {
-              void confirmEnrollment(e)
-            }}
-          >
+          <form className="card-inset" onSubmit={confirmEnrollment}>
             <p>{t('security.scanQr')}</p>
             <img className="qr-code" src={enrollment.qr_code} alt={t('security.qrAlt')} />
             <p>
@@ -204,19 +200,16 @@ export function SecurityPage() {
                 required
               />
             </label>
-            <button type="submit">{t('security.confirm')}</button>
+            <ActionButton type="submit" pending={confirming}>
+              {t('security.confirm')}
+            </ActionButton>
           </form>
         ) : (
           <>
             <p>{t('security.twoFactorOff')}</p>
-            <button
-              type="button"
-              onClick={() => {
-                void startEnrollment()
-              }}
-            >
+            <ActionButton type="button" pending={starting} onClick={startEnrollment}>
               {status.enrolling ? t('security.restartEnrollment') : t('security.enable')}
-            </button>
+            </ActionButton>
           </>
         )}
       </section>
@@ -241,15 +234,9 @@ export function SecurityPage() {
                   placeholder={t('security.passkeyNamePlaceholder')}
                 />
               </label>
-              <button
-                type="button"
-                onClick={() => {
-                  void registerPasskey()
-                }}
-                disabled={passkeyBusy}
-              >
-                {passkeyBusy ? t('common.loading') : t('security.addPasskey')}
-              </button>
+              <ActionButton type="button" pending={registering} onClick={registerPasskey}>
+                {t('security.addPasskey')}
+              </ActionButton>
             </div>
           </>
         )}
@@ -273,14 +260,16 @@ export function SecurityPage() {
                     <td>{formatDate(passkey.created_at)}</td>
                     <td>{formatDate(passkey.last_used_at)}</td>
                     <td>
-                      <button
+                      <ActionButton
                         type="button"
+                        pending={removingPasskeyId === passkey.id}
+                        disabled={removingPasskeyId !== null}
                         onClick={() => {
                           void removePasskey(passkey.id)
                         }}
                       >
                         {t('common.delete')}
-                      </button>
+                      </ActionButton>
                     </td>
                   </tr>
                 ))}

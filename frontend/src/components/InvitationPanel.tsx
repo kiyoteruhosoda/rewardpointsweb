@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families, parseUtc, type Invitation, type Membership } from '../services/families'
+import { ActionButton } from './ActionButton'
 import { useToast } from './ToastNotification'
 
 interface Props {
@@ -29,6 +30,10 @@ export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, o
   const { notify } = useToast()
   const [pending, setPending] = useState<Invitation[]>([])
   const [issued, setIssued] = useState<Invitation | null>(null)
+  // 発行中の宛先（親宛は `'parent'`、子宛はその参加 ID）と取り消し中の招待。
+  // 押したボタンにだけスピナーを出すため、どれを実行中かまで持つ。
+  const [issuingFor, setIssuingFor] = useState<number | 'parent' | null>(null)
+  const [revokingId, setRevokingId] = useState<number | null>(null)
 
   const reload = () => families.listInvitations(familyId).then(setPending)
 
@@ -42,6 +47,8 @@ export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, o
   }, [familyId])
 
   const issue = async (targetMembershipId: number | null) => {
+    if (issuingFor !== null) return
+    setIssuingFor(targetMembershipId ?? 'parent')
     try {
       const invitation = await families.issueInvitation(
         familyId,
@@ -53,16 +60,22 @@ export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, o
       await onChanged()
     } catch (error) {
       notify('error', t(errorMessageKey(error)))
+    } finally {
+      setIssuingFor(null)
     }
   }
 
   const revoke = async (invitationId: number) => {
+    if (revokingId !== null) return
+    setRevokingId(invitationId)
     try {
       await families.revokeInvitation(familyId, invitationId)
       setIssued(null)
       await reload()
     } catch (error) {
       notify('error', t(errorMessageKey(error)))
+    } finally {
+      setRevokingId(null)
     }
   }
 
@@ -79,25 +92,29 @@ export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, o
 
       <div className="inline-form">
         {canInviteParent && (
-          <button
+          <ActionButton
             type="button"
+            pending={issuingFor === 'parent'}
+            disabled={issuingFor !== null}
             onClick={() => {
               void issue(null)
             }}
           >
             {t('invitations.inviteParent')}
-          </button>
+          </ActionButton>
         )}
         {unlinkedChildren.map((child) => (
-          <button
+          <ActionButton
             key={child.id}
             type="button"
+            pending={issuingFor === child.id}
+            disabled={issuingFor !== null}
             onClick={() => {
               void issue(child.id)
             }}
           >
             {t('invitations.inviteChild', { name: child.display_name })}
-          </button>
+          </ActionButton>
         ))}
       </div>
 
@@ -119,14 +136,16 @@ export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, o
                   <td>{invitation.target_display_name ?? t(`families.role.${invitation.role}`)}</td>
                   <td>{parseUtc(invitation.expires_at).toLocaleString(locale)}</td>
                   <td>
-                    <button
+                    <ActionButton
                       type="button"
+                      pending={revokingId === invitation.id}
+                      disabled={revokingId !== null}
                       onClick={() => {
                         void revoke(invitation.id)
                       }}
                     >
                       {t('invitations.revoke')}
-                    </button>
+                    </ActionButton>
                   </td>
                 </tr>
               ))}
