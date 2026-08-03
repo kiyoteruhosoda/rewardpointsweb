@@ -14,6 +14,7 @@ import { useRef, useState } from 'react'
 
 import { useI18n } from '../i18n'
 import { newIdempotencyKey } from '../services/families'
+import { ActionButton } from './ActionButton'
 
 /** 訂正のときだけ渡す。元の記録の内容と、やめるときの戻り先。 */
 interface CorrectionTarget {
@@ -37,14 +38,16 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
   const { t } = useI18n()
   const [points, setPoints] = useState(editing ? String(Math.abs(editing.amount)) : '')
   const [reason, setReason] = useState(editing?.reason ?? '')
-  const [busy, setBusy] = useState(false)
+  // 送信中の符号（押したボタンにだけスピナーを出す）。null なら送信していない。
+  const [submittingSign, setSubmittingSign] = useState<1 | -1 | null>(null)
+  const busy = submittingSign !== null
   const pendingKey = useRef<string | null>(null)
 
   const submit = async (sign: 1 | -1) => {
     const amount = sign * Number(points)
     if (busy || !Number.isFinite(amount) || amount === 0 || !reason.trim()) return
     pendingKey.current ??= newIdempotencyKey()
-    setBusy(true)
+    setSubmittingSign(sign)
     try {
       await onSubmit(amount, reason, pendingKey.current)
       pendingKey.current = null
@@ -54,7 +57,7 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
       // 失敗は呼び出し元がトーストで伝える。ここでは入力と鍵を残し、
       // 同じ内容・同じ鍵でもう一度押せる状態にしておく
     } finally {
-      setBusy(false)
+      setSubmittingSign(null)
     }
   }
 
@@ -96,18 +99,19 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
           <option key={suggestion} value={suggestion} />
         ))}
       </datalist>
-      <button type="submit" disabled={busy}>
+      <ActionButton type="submit" pending={submittingSign === 1} disabled={busy}>
         {editing ? t('points.saveAsAdd') : t('points.add')}
-      </button>
-      <button
+      </ActionButton>
+      <ActionButton
         type="button"
+        pending={submittingSign === -1}
         disabled={busy}
         onClick={() => {
           void submit(-1)
         }}
       >
         {editing ? t('points.saveAsConsume') : t('points.consume')}
-      </button>
+      </ActionButton>
       {editing && (
         <button type="button" disabled={busy} onClick={editing.onCancel}>
           {t('common.cancel')}

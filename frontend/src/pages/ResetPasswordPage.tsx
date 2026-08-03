@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
+import { ActionButton } from '../components/ActionButton'
 import { PasswordField } from '../components/PasswordField'
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 
@@ -12,7 +14,7 @@ export function ResetPasswordPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const submit = async (e: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     try {
@@ -24,16 +26,11 @@ export function ResetPasswordPage() {
     } catch (err) {
       setError(errorMessageKey(err))
     }
-  }
+  })
 
   return (
     <div className="auth-page">
-      <form
-        className="card"
-        onSubmit={(e) => {
-          void submit(e)
-        }}
-      >
+      <form className="card" onSubmit={submit}>
         <h1>{t('reset.title')}</h1>
         {error && <p className="error">{t(error)}</p>}
         <PasswordField
@@ -44,7 +41,9 @@ export function ResetPasswordPage() {
           minLength={8}
           required
         />
-        <button type="submit">{t('reset.submit')}</button>
+        <ActionButton type="submit" pending={submitting}>
+          {t('reset.submit')}
+        </ActionButton>
       </form>
     </div>
   )

@@ -12,6 +12,10 @@ import { Link } from 'react-router-dom'
 
 import { useI18n } from '../i18n'
 import type { FamilyDetail, Membership } from '../services/families'
+import { ActionButton } from './ActionButton'
+
+/** 参加者ごとに実行しうる操作。押したボタンにだけ実行中の目印を出すために使う。 */
+export type MemberAction = 'independence' | 'removal' | 'passwordReset'
 
 export interface MemberActions {
   /** 独立を指示する（ADR-0014）。子本人の承認で成立する。 */
@@ -21,6 +25,8 @@ export interface MemberActions {
   /** 参加ごと削除する（台帳が空のときだけ出る）。 */
   onRemove: (member: Membership) => void
   onResetPassword: (member: Membership) => void
+  /** その参加者で実行中の操作（実行していなければ `null`）。 */
+  pendingActionOf: (member: Membership) => MemberAction | null
 }
 
 interface Props extends MemberActions {
@@ -69,6 +75,9 @@ interface ButtonProps extends MemberActions {
 
 function MemberActionButtons({ member, familyId, ...actions }: ButtonProps) {
   const { t } = useI18n()
+  const pendingAction = actions.pendingActionOf(member)
+  // 1 人の参加者に対する操作は 1 つずつ（結果の取り違えを防ぐ）。
+  const busy = pendingAction !== null
 
   return (
     <>
@@ -78,45 +87,53 @@ function MemberActionButtons({ member, familyId, ...actions }: ButtonProps) {
         </Link>
       )}
       {member.can_reset_password && (
-        <button
+        <ActionButton
           type="button"
+          pending={pendingAction === 'passwordReset'}
+          disabled={busy}
           onClick={() => {
             actions.onResetPassword(member)
           }}
         >
           {t('families.resetPassword')}
-        </button>
+        </ActionButton>
       )}
       {member.can_propose_independence &&
         (member.independence_proposed ? (
-          <button
+          <ActionButton
             type="button"
+            pending={pendingAction === 'independence'}
+            disabled={busy}
             onClick={() => {
               actions.onWithdrawIndependence(member)
             }}
           >
             {t('families.independence.withdraw')}
-          </button>
+          </ActionButton>
         ) : (
-          <button
+          <ActionButton
             type="button"
+            pending={pendingAction === 'independence'}
+            disabled={busy}
             onClick={() => {
               actions.onProposeIndependence(member)
             }}
           >
             {t('families.independence.propose')}
-          </button>
+          </ActionButton>
         ))}
       {member.can_remove && (
-        <button
+        <ActionButton
           type="button"
           className="danger"
+          pending={pendingAction === 'removal'}
+          disabled={busy}
           onClick={() => {
             actions.onRemove(member)
           }}
         >
           {t('families.remove')}
-        </button>
+        </ActionButton>
       )}
     </>
   )

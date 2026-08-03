@@ -17,8 +17,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { ActionButton } from '../components/ActionButton'
 import { PointEntryForm } from '../components/PointEntryForm'
 import { useToast } from '../components/ToastNotification'
+import { usePendingRows } from '../hooks/usePendingRows'
 import { useRefreshOnReturn } from '../hooks/useRefreshOnReturn'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
@@ -47,6 +49,8 @@ export function LedgerPage() {
   const [failed, setFailed] = useState(false)
   // 訂正の対象。null なら入力欄はいつもの記録用
   const [editing, setEditing] = useState<Transaction | null>(null)
+  // 取り消し中の記録（押した行のボタンにだけスピナーを出す）
+  const { pendingActionOf, runForRow } = usePendingRows<'reversal'>()
 
   const family = Number(familyId)
   const id = Number(ledgerId)
@@ -133,8 +137,8 @@ export function LedgerPage() {
   const reverse = (transactionId: number) => {
     if (!window.confirm(t('points.confirmReverse'))) return
     // 取り消しは入力欄を持たないので、伝えるところまでで終わってよい
-    void run(families.reverse(family, id, transactionId, newIdempotencyKey())).catch(
-      () => undefined,
+    void runForRow(transactionId, 'reversal', () =>
+      run(families.reverse(family, id, transactionId, newIdempotencyKey())).catch(() => undefined),
     )
   }
 
@@ -240,14 +244,15 @@ export function LedgerPage() {
                             >
                               {t('points.edit')}
                             </button>
-                            <button
+                            <ActionButton
                               type="button"
+                              pending={pendingActionOf(transaction.id) === 'reversal'}
                               onClick={() => {
                                 reverse(transaction.id)
                               }}
                             >
                               {t('points.reverse')}
-                            </button>
+                            </ActionButton>
                           </>
                         )}
                       </td>

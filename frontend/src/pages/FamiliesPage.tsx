@@ -17,7 +17,9 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
+import { ActionButton } from '../components/ActionButton'
 import { useToast } from '../components/ToastNotification'
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families } from '../services/families'
@@ -44,7 +46,7 @@ export function FamiliesPage() {
     navigate(`/families/${String(familyId)}`)
   }
 
-  const create = async (event: FormEvent) => {
+  const [create, creating] = usePendingAction(async (event: FormEvent) => {
     event.preventDefault()
     try {
       const created = await families.create(name)
@@ -53,9 +55,9 @@ export function FamiliesPage() {
     } catch (error) {
       notify('error', t(errorMessageKey(error)))
     }
-  }
+  })
 
-  const join = async (event: FormEvent) => {
+  const [join, joining] = usePendingAction(async (event: FormEvent) => {
     event.preventDefault()
     try {
       const joined = await families.acceptInvitation(code, null)
@@ -67,7 +69,7 @@ export function FamiliesPage() {
     } catch (error) {
       notify('error', t(errorMessageKey(error)))
     }
-  }
+  })
 
   if (loading) return <p className="loading">{t('common.loading')}</p>
   // 読めなかっただけかもしれない。所属していないと決めつけて作成・参加を出すと、
@@ -85,12 +87,7 @@ export function FamiliesPage() {
       {canCreate && (
         <section className="card">
           <h2>{t('families.create')}</h2>
-          <form
-            className="inline-form"
-            onSubmit={(event) => {
-              void create(event)
-            }}
-          >
+          <form className="inline-form" onSubmit={create}>
             <label>
               {t('families.name')}
               <input
@@ -101,7 +98,9 @@ export function FamiliesPage() {
                 required
               />
             </label>
-            <button type="submit">{t('families.create')}</button>
+            <ActionButton type="submit" pending={creating}>
+              {t('families.create')}
+            </ActionButton>
           </form>
         </section>
       )}
@@ -113,12 +112,7 @@ export function FamiliesPage() {
         ) : (
           <p>{t('families.joinHint')}</p>
         )}
-        <form
-          className="inline-form"
-          onSubmit={(event) => {
-            void join(event)
-          }}
-        >
+        <form className="inline-form" onSubmit={join}>
           <label>
             {t('families.code')}
             <input
@@ -129,7 +123,9 @@ export function FamiliesPage() {
               required
             />
           </label>
-          <button type="submit">{t('families.join')}</button>
+          <ActionButton type="submit" pending={joining}>
+            {t('families.join')}
+          </ActionButton>
         </form>
       </section>
     </div>

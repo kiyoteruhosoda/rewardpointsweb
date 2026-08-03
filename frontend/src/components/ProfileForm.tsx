@@ -9,9 +9,11 @@
  */
 import { useState, type FormEvent } from 'react'
 
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 import { useAuth, type Me } from '../store/AuthContext'
+import { ActionButton } from './ActionButton'
 import { useToast } from './ToastNotification'
 
 export function ProfileForm() {
@@ -20,11 +22,9 @@ export function ProfileForm() {
   const { notify } = useToast()
   const [displayName, setDisplayName] = useState(user?.display_name ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
-  const [busy, setBusy] = useState(false)
 
-  const submit = async (event: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (event: FormEvent) => {
     event.preventDefault()
-    setBusy(true)
     try {
       await api.put<Me>('/api/auth/me', {
         display_name: displayName,
@@ -34,17 +34,11 @@ export function ProfileForm() {
       notify('success', t('common.saved'))
     } catch (error) {
       notify('error', t(errorMessageKey(error)))
-    } finally {
-      setBusy(false)
     }
-  }
+  })
 
   return (
-    <form
-      onSubmit={(event) => {
-        void submit(event)
-      }}
-    >
+    <form onSubmit={submit}>
       <label>
         {t('profile.displayName')}
         <input
@@ -68,9 +62,9 @@ export function ProfileForm() {
         />
       </label>
       <p className="page-subtitle">{t('profile.emailHint')}</p>
-      <button type="submit" disabled={busy}>
+      <ActionButton type="submit" pending={submitting}>
         {t('common.save')}
-      </button>
+      </ActionButton>
     </form>
   )
 }

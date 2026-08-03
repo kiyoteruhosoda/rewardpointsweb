@@ -6,8 +6,11 @@
  */
 import { useEffect, useState, type FormEvent } from 'react'
 
+import { ActionButton } from '../components/ActionButton'
 import { PasswordField } from '../components/PasswordField'
 import { useToast } from '../components/ToastNotification'
+import { usePendingAction } from '../hooks/usePendingAction'
+import { usePendingRows } from '../hooks/usePendingRows'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 
@@ -25,6 +28,9 @@ interface Role {
   name: string
 }
 
+/** 行の中で実行しうる操作（実行中の目印をどこに出すかが変わる）。 */
+type RowAction = 'update' | 'removal'
+
 export function UsersPage() {
   const { t } = useI18n()
   const { notify } = useToast()
@@ -35,6 +41,7 @@ export function UsersPage() {
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState('member')
+  const { pendingActionOf, runForRow } = usePendingRows<RowAction>()
 
   const reload = () => api.get<User[]>('/api/admin/users').then(setUsers)
 
@@ -48,7 +55,7 @@ export function UsersPage() {
       })
   }, [])
 
-  const create = async (e: FormEvent) => {
+  const [create, creating] = usePendingAction(async (e: FormEvent) => {
     e.preventDefault()
     try {
       await api.post('/api/admin/users', {
@@ -67,27 +74,31 @@ export function UsersPage() {
     } catch (err) {
       notify('error', t(errorMessageKey(err)))
     }
-  }
+  })
 
-  const toggleActive = async (user: User) => {
-    await api.put(`/api/admin/users/${user.id}`, { is_active: !user.is_active })
-    await reload()
-  }
+  /** 1 行分の更新。終わるまでその行の次の操作を受け付けない。 */
+  const runExclusively = (user: User, action: RowAction, request: () => Promise<unknown>) =>
+    runForRow(user.id, action, async () => {
+      try {
+        await request()
+        await reload()
+      } catch (err) {
+        notify('error', t(errorMessageKey(err)))
+      }
+    })
 
-  const remove = async (user: User) => {
-    await api.delete(`/api/admin/users/${user.id}`)
-    await reload()
-  }
+  const toggleActive = (user: User) =>
+    runExclusively(user, 'update', () =>
+      api.put(`/api/admin/users/${user.id}`, { is_active: !user.is_active }),
+    )
+
+  const remove = (user: User) =>
+    runExclusively(user, 'removal', () => api.delete(`/api/admin/users/${user.id}`))
 
   return (
     <div className="card">
       <h1>{t('users.title')}</h1>
-      <form
-        className="inline-form"
-        onSubmit={(e) => {
-          void create(e)
-        }}
-      >
+      <form className="inline-form" onSubmit={create}>
         <input
           value={username}
           onChange={(e) => {
@@ -140,7 +151,9 @@ export function UsersPage() {
             </option>
           ))}
         </select>
-        <button type="submit">{t('users.add')}</button>
+        <ActionButton type="submit" pending={creating}>
+          {t('users.add')}
+        </ActionButton>
       </form>
       <div className="table-scroll">
         <table>
@@ -156,34 +169,46 @@ export function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
-              <tr key={user.id}>
-                <td>{user.id}</td>
-                <td>{user.username}</td>
-                <td>{user.display_name}</td>
-                <td>{user.email ?? '—'}</td>
-                <td>{user.roles.join(', ')}</td>
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={user.is_active}
-                    aria-label={t('common.active')}
-                    onChange={() => {
-                      void toggleActive(user)
-                    }}
-                  />
-                </td>
-                <td>
-                  <button
-                    onClick={() => {
-                      void remove(user)
-                    }}
-                  >
-                    {t('common.delete')}
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {users.map((user) => {
+              const rowAction = pendingActionOf(user.id)
+              const busy = rowAction !== null
+              return (
+                <tr key={user.id}>
+                  <td>{user.id}</td>
+                  <td>{user.username}</td>
+                  <td>{user.display_name}</td>
+                  <td>{user.email ?? '—'}</td>
+                  <td>{user.roles.join(', ')}</td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={user.is_active}
+                      aria-label={t('common.active')}
+                      disabled={busy}
+                      onChange={() => {
+                        void toggleActive(user)
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <ActionButton
+                      type="button"
+                      pending={rowAction === 'removal'}
+                      disabled={busy}
+                      onClick={() => {
+                        void remove(user)
+                      }}
+                    >
+                      {t('common.delete')}
+                    </ActionButton>
+                    {/* チェックの付け外しは押しても表示が変わらないので、行に目印を出す。 */}
+                    {rowAction === 'update' && (
+                      <span className="spinner" role="status" aria-label={t('common.processing')} />
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

@@ -7,6 +7,8 @@
  */
 import { useState, type FormEvent } from 'react'
 
+import { ActionButton } from '../components/ActionButton'
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { api } from '../services/api'
 
@@ -19,20 +21,15 @@ export function ForgotPasswordPage() {
   const [username, setUsername] = useState('')
   const [outcome, setOutcome] = useState<Outcome['status'] | null>(null)
 
-  const submit = async (e: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (e: FormEvent) => {
     e.preventDefault()
     const response = await api.post<Outcome>('/api/auth/forgot-password', { username })
     setOutcome(response.status)
-  }
+  })
 
   return (
     <div className="auth-page">
-      <form
-        className="card"
-        onSubmit={(e) => {
-          void submit(e)
-        }}
-      >
+      <form className="card" onSubmit={submit}>
         <h1>{t('forgot.title')}</h1>
         {outcome !== null ? (
           <p>{outcome === 'ask_guardian' ? t('forgot.askGuardian') : t('forgot.sent')}</p>
@@ -50,7 +47,9 @@ export function ForgotPasswordPage() {
                 required
               />
             </label>
-            <button type="submit">{t('forgot.submit')}</button>
+            <ActionButton type="submit" pending={submitting}>
+              {t('forgot.submit')}
+            </ActionButton>
           </>
         )}
       </form>
