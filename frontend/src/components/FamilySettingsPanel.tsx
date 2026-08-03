@@ -29,8 +29,9 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
   const { notify } = useToast()
   const navigate = useNavigate()
   const [name, setName] = useState(family.name)
-  // 並べ替え中の子（押した矢印にだけスピナーを出す）。
-  const [movingId, setMovingId] = useState<number | null>(null)
+  // 並べ替え中の子と向き。上下の矢印は同じ子を指すので、押した方だけに目印を出すには
+  // 「どちらへ動かしているか」まで持つ必要がある。
+  const [moving, setMoving] = useState<{ childId: number; delta: number } | null>(null)
 
   const isOwner = family.my_role === 'owner'
   const children = family.memberships.filter((member) => member.role === 'child')
@@ -56,19 +57,23 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
     const here = ids[index]
     const there = ids[index + delta]
     if (here === undefined || there === undefined) return
-    if (movingId !== null) return
+    if (moving !== null) return
     ids[index] = there
     ids[index + delta] = here
-    setMovingId(here)
+    setMoving({ childId: here, delta })
     try {
       await families.reorderMembers(family.id, ids)
       await onChanged()
     } catch (error) {
       fail(error)
     } finally {
-      setMovingId(null)
+      setMoving(null)
     }
   }
+
+  /** 押された矢印（子 × 向き）が実行中か。 */
+  const isMoving = (childId: number, delta: number) =>
+    moving !== null && moving.childId === childId && moving.delta === delta
 
   /** 家族から離れる（脱退・解散）。読み直してから送らないと、消えた家族へ戻される。 */
   const depart = async (leaving: () => Promise<void>, message: string) => {
@@ -124,8 +129,8 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
                 <ActionButton
                   type="button"
                   aria-label={t('families.moveUp', { name: child.display_name })}
-                  pending={movingId === child.id}
-                  disabled={index === 0 || movingId !== null}
+                  pending={isMoving(child.id, -1)}
+                  disabled={index === 0 || moving !== null}
                   onClick={() => {
                     void move(index, -1)
                   }}
@@ -135,8 +140,8 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
                 <ActionButton
                   type="button"
                   aria-label={t('families.moveDown', { name: child.display_name })}
-                  pending={movingId === child.id}
-                  disabled={index === children.length - 1 || movingId !== null}
+                  pending={isMoving(child.id, 1)}
+                  disabled={index === children.length - 1 || moving !== null}
                   onClick={() => {
                     void move(index, 1)
                   }}
