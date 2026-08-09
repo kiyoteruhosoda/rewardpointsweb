@@ -7,10 +7,12 @@
 
 from __future__ import annotations
 
+from bounded_contexts.reward_points.application.dto.daily_bonus_dto import to_dto as bonus_to_dto
 from bounded_contexts.reward_points.application.dto.ledger_dto import LedgerDTO, TransactionDTO
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
 from bounded_contexts.reward_points.domain.entities.point_transaction import PointTransaction
 from bounded_contexts.reward_points.domain.exceptions import MembershipNotFoundError
+from bounded_contexts.reward_points.domain.repositories.daily_bonus_repository import IDailyBonusRepository
 from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
     IFamilyMembershipRepository,
 )
@@ -24,13 +26,16 @@ from bounded_contexts.reward_points.domain.services.ledger_statement import Ledg
 class ViewPointLedgerUseCase:
     def __init__(
         self,
+        *,
         access: FamilyAccessResolver,
         transactions: IPointTransactionRepository,
         memberships: IFamilyMembershipRepository,
+        bonuses: IDailyBonusRepository,
     ) -> None:
         self._access = access
         self._transactions = transactions
         self._memberships = memberships
+        self._bonuses = bonuses
 
     def execute(self, *, ledger_id: int, account_id: int) -> LedgerDTO:
         found = self._access.viewable_ledger(ledger_id=ledger_id, account_id=account_id)
@@ -38,6 +43,9 @@ class ViewPointLedgerUseCase:
         if owner is None:
             raise MembershipNotFoundError
         statement = LedgerStatement(self._transactions.list_by_ledger(ledger_id))
+        # 毎日のボーナス（ADR-0024）は台帳と一緒に返す。設定を出すためだけに
+        # もう 1 往復させると、開いた直後の画面に一瞬「設定なし」が出る
+        bonus = self._bonuses.find_by_ledger(ledger_id)
         return LedgerDTO(
             ledger_id=found.ledger.id,
             family_id=found.ledger.family_id,
@@ -46,6 +54,7 @@ class ViewPointLedgerUseCase:
             balance=statement.balance.value,
             can_modify=family_access_policy.can_modify_ledger(found.membership, found.ledger),
             transactions=self._to_dtos(statement),
+            daily_bonus=bonus_to_dto(bonus) if bonus else None,
         )
 
     def _to_dtos(self, statement: LedgerStatement) -> tuple[TransactionDTO, ...]:

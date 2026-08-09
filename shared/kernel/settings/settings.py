@@ -227,6 +227,20 @@ class ApplicationSettings:
         return self.get_int("FAMILY_INVITATION_TTL_SECONDS", 7 * 24 * 3600)
 
     # ------------------------------------------------------------------
+    # 毎日のボーナス（ADR-0024）
+    # ------------------------------------------------------------------
+
+    @property
+    def daily_bonus_time_zone(self) -> str:
+        """1 日の区切りに使う地域（IANA 名）。"""
+        return str(self._get("DAILY_BONUS_TIME_ZONE"))
+
+    @property
+    def daily_bonus_max_catch_up_days(self) -> int:
+        """止まっていたあいだの何日分まで遡って渡すか。"""
+        return self.get_int("DAILY_BONUS_MAX_CATCH_UP_DAYS", 31)
+
+    # ------------------------------------------------------------------
     # 二要素認証（TOTP）
     # ------------------------------------------------------------------
 

@@ -42,7 +42,7 @@ Domain がフレームワーク・DB（`fastapi` / `sqlalchemy` / `pydantic` 等
   - `shared/domain/auth/` — 認可マスタデータ（`master_data.py` が唯一の出所）
   - `shared/infrastructure/models/` — 共有 SQLAlchemy モデル（User / Role / Permission /
     SystemSetting / Log / PasswordResetToken）
-  - `shared/kernel/` — settings / logging / database / restart / timestamps
+  - `shared/kernel/` — settings / logging / database / restart / scheduling / timestamps
     （技術基盤。ドメイン知識を持たない）
 - `presentation/fastapi/` はコンテキスト横断の API（認証・管理系）と
   アプリケーションファクトリ（`app.py`）を持つ。
@@ -94,6 +94,20 @@ scope は「その操作を行える立場か」を表す。「*その* デー�
 要求を DB 経由にするのは、管理 API を処理したプロセスと再起動すべきプロセスが
 別だから（Gunicorn は複数ワーカー）。判定を時刻ではなく token の変化で行うのは、
 時計のずれで再起動ループに陥らないようにするため（ADR-0004）。
+
+## 定期実行の設計
+
+誰の要求もきっかけにならない処理（毎日のボーナスの付与）は
+`shared/kernel/scheduling/` の `PeriodicRunner` が回す。決まった間隔で 1 周し、
+1 周が例外で終わってもスレッドは生き続ける（止まると以後の処理が誰にも気付かれない
+まま行われなくなる）。起動直後にも 1 周走るので、止まっていたあいだの取りこぼしは
+再起動と同時に片付く。
+
+**1 回だけの実行は保証しない。** Gunicorn のワーカーごとにスレッドが立つため、
+渡す処理は同時に走っても壊れないもの（冪等なもの）に限る。毎日のボーナスは冪等キーに
+日付を持たせ、二重付与を DB の一意制約で止めている（ADR-0024）。排他ロックや
+リーダー選出を持たないのは、ロックの取りこぼしと解放漏れという別の問題を
+抱え込まないため。
 
 ## 設定管理の設計
 

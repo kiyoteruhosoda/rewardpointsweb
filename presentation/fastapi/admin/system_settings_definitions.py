@@ -60,6 +60,19 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "label": "Family invitation code TTL (seconds)",
         "value_type": "integer",
     },
+    # --- 家族（reward_points コンテキスト） ---
+    {
+        "key": "DAILY_BONUS_TIME_ZONE",
+        "category": "family",
+        "label": "Daily bonus day boundary (IANA time zone)",
+        "value_type": "string",
+    },
+    {
+        "key": "DAILY_BONUS_MAX_CATCH_UP_DAYS",
+        "category": "family",
+        "label": "Daily bonus catch-up limit (days)",
+        "value_type": "integer",
+    },
     # --- 二要素認証（TOTP） ---
     {
         "key": "TOTP_ISSUER",

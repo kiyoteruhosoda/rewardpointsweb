@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+import logging
+from datetime import UTC, timedelta
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
@@ -21,6 +23,10 @@ from bounded_contexts.reward_points.application.use_cases.add_child_membership i
 )
 from bounded_contexts.reward_points.application.use_cases.approve_independence import (
     ApproveIndependenceUseCase,
+)
+from bounded_contexts.reward_points.application.use_cases.configure_daily_bonus import (
+    ConfigureDailyBonusUseCase,
+    StopDailyBonusUseCase,
 )
 from bounded_contexts.reward_points.application.use_cases.correct_point_transaction import (
     CorrectPointTransactionUseCase,
@@ -57,9 +63,13 @@ from bounded_contexts.reward_points.application.use_cases.suggest_transaction_re
 )
 from bounded_contexts.reward_points.application.use_cases.view_family import ViewFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.view_point_ledger import ViewPointLedgerUseCase
+from bounded_contexts.reward_points.domain.services.day_boundary import DayBoundary
 from bounded_contexts.reward_points.infrastructure.sql_account_directory import (
     SqlAccountDirectory,
     SqlAccountProvisioning,
+)
+from bounded_contexts.reward_points.infrastructure.sql_daily_bonus_repository import (
+    SqlDailyBonusRepository,
 )
 from bounded_contexts.reward_points.infrastructure.sql_family_invitation_repository import (
     SqlFamilyInvitationRepository,
@@ -77,7 +87,24 @@ from bounded_contexts.reward_points.infrastructure.sql_point_transaction_reposit
 from shared.kernel.database.session import get_db
 from shared.kernel.settings.settings import settings
 
+logger = logging.getLogger(__name__)
+
 DbDep = Annotated[Session, Depends(get_db)]
+
+
+def resolve_day_boundary() -> DayBoundary:
+    """設定の地域で 1 日を区切る（ADR-0024）。
+
+    読めない地域名（打ち間違い・OS に tzdata が無い）でも起動は止めない。UTC へ
+    落として 1 行残す — 区切りが 1 日ずれることはあっても、ボーナスが止まるより
+    直しやすい。
+    """
+    name = settings.daily_bonus_time_zone
+    try:
+        return DayBoundary(ZoneInfo(name))
+    except (ZoneInfoNotFoundError, ValueError):
+        logger.warning("daily_bonus_time_zone_unknown", extra={"time_zone": name})
+        return DayBoundary(UTC)
 
 
 # --- リポジトリ --------------------------------------------------------------
@@ -103,6 +130,10 @@ def get_invitation_repository(db: DbDep) -> SqlFamilyInvitationRepository:
     return SqlFamilyInvitationRepository(db)
 
 
+def get_daily_bonus_repository(db: DbDep) -> SqlDailyBonusRepository:
+    return SqlDailyBonusRepository(db)
+
+
 def get_account_directory(db: DbDep) -> SqlAccountDirectory:
     return SqlAccountDirectory(db)
 
@@ -116,6 +147,7 @@ MembershipRepoDep = Annotated[SqlFamilyMembershipRepository, Depends(get_members
 LedgerRepoDep = Annotated[SqlPointLedgerRepository, Depends(get_ledger_repository)]
 TransactionRepoDep = Annotated[SqlPointTransactionRepository, Depends(get_transaction_repository)]
 InvitationRepoDep = Annotated[SqlFamilyInvitationRepository, Depends(get_invitation_repository)]
+DailyBonusRepoDep = Annotated[SqlDailyBonusRepository, Depends(get_daily_bonus_repository)]
 DirectoryDep = Annotated[SqlAccountDirectory, Depends(get_account_directory)]
 ProvisioningDep = Annotated[SqlAccountProvisioning, Depends(get_account_provisioning)]
 
@@ -295,9 +327,21 @@ def get_reset_child_password_use_case(
 
 
 def get_view_ledger_use_case(
-    access: AccessDep, transactions: TransactionRepoDep, memberships: MembershipRepoDep
+    *,
+    access: AccessDep,
+    transactions: TransactionRepoDep,
+    memberships: MembershipRepoDep,
+    bonuses: DailyBonusRepoDep,
 ) -> ViewPointLedgerUseCase:
-    return ViewPointLedgerUseCase(access, transactions, memberships)
+    return ViewPointLedgerUseCase(access=access, transactions=transactions, memberships=memberships, bonuses=bonuses)
+
+
+def get_configure_daily_bonus_use_case(access: AccessDep, bonuses: DailyBonusRepoDep) -> ConfigureDailyBonusUseCase:
+    return ConfigureDailyBonusUseCase(access, bonuses, resolve_day_boundary())
+
+
+def get_stop_daily_bonus_use_case(access: AccessDep, bonuses: DailyBonusRepoDep) -> StopDailyBonusUseCase:
+    return StopDailyBonusUseCase(access, bonuses)
 
 
 def get_record_transaction_use_case(
@@ -351,6 +395,8 @@ RecordTransactionDep = Annotated[RecordPointTransactionUseCase, Depends(get_reco
 ReverseTransactionDep = Annotated[ReversePointTransactionUseCase, Depends(get_reverse_transaction_use_case)]
 CorrectTransactionDep = Annotated[CorrectPointTransactionUseCase, Depends(get_correct_transaction_use_case)]
 SuggestReasonsDep = Annotated[SuggestTransactionReasonsUseCase, Depends(get_suggest_reasons_use_case)]
+ConfigureDailyBonusDep = Annotated[ConfigureDailyBonusUseCase, Depends(get_configure_daily_bonus_use_case)]
+StopDailyBonusDep = Annotated[StopDailyBonusUseCase, Depends(get_stop_daily_bonus_use_case)]
 
 
 __all__ = [
@@ -358,6 +404,7 @@ __all__ = [
     "AccessDep",
     "AddChildDep",
     "ApproveIndependenceDep",
+    "ConfigureDailyBonusDep",
     "CorrectTransactionDep",
     "CreateFamilyDep",
     "DissolveFamilyDep",
@@ -375,8 +422,10 @@ __all__ = [
     "ReverseTransactionDep",
     "RevokeIndependenceDep",
     "RevokeInvitationDep",
+    "StopDailyBonusDep",
     "SuggestReasonsDep",
     "ViewFamilyDep",
     "ViewLedgerDep",
     "get_ensure_user_can_be_deleted_use_case",
+    "resolve_day_boundary",
 ]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from bounded_contexts.reward_points.application.dto.daily_bonus_dto import DailyBonusDTO
 from bounded_contexts.reward_points.domain.entities.point_transaction import PointTransaction
 
 
@@ -42,6 +43,8 @@ class LedgerDTO:
     # 画面が変更 UI を出すかはこの 1 つの値で決める（role 名で分岐しない）
     can_modify: bool
     transactions: tuple[TransactionDTO, ...]
+    # 毎日のボーナスの設定（ADR-0024）。決めていなければ ``None``
+    daily_bonus: DailyBonusDTO | None
 
 
 def just_written(transaction: PointTransaction, *, granted_by: str | None) -> TransactionDTO:

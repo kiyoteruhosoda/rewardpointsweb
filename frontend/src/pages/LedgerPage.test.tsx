@@ -7,7 +7,13 @@ import { Link } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Fetched } from '../services/api'
-import type { Correction, Ledger, NewTransaction, Transaction } from '../services/families'
+import type {
+  Correction,
+  DailyBonus,
+  Ledger,
+  NewTransaction,
+  Transaction,
+} from '../services/families'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { LedgerPage } from './LedgerPage'
 
@@ -16,6 +22,8 @@ const reasonSuggestions = vi.fn<() => Promise<string[]>>()
 const record = vi.fn<() => Promise<Transaction>>()
 const reverse = vi.fn<() => Promise<Transaction>>()
 const correct = vi.fn<(transactionId: number, entry: NewTransaction) => Promise<Correction>>()
+const setDailyBonus = vi.fn<(amount: number, reason: string) => Promise<DailyBonus>>()
+const stopDailyBonus = vi.fn<() => Promise<undefined>>()
 
 vi.mock('../services/families', () => ({
   parseUtc: (value: string) => new Date(`${value}Z`),
@@ -27,6 +35,9 @@ vi.mock('../services/families', () => ({
     reverse: () => reverse(),
     correct: (_family: number, _ledger: number, transactionId: number, entry: NewTransaction) =>
       correct(transactionId, entry),
+    setDailyBonus: (_family: number, _ledger: number, amount: number, reason: string) =>
+      setDailyBonus(amount, reason),
+    stopDailyBonus: () => stopDailyBonus(),
   },
 }))
 
@@ -45,6 +56,17 @@ function transaction(overrides: Partial<Transaction> = {}): Transaction {
   }
 }
 
+function dailyBonus(overrides: Partial<DailyBonus> = {}): DailyBonus {
+  return {
+    ledger_id: 20,
+    amount: 10,
+    reason: 'まいにちのボーナス',
+    starts_on: '2026-08-01',
+    granted_through: '2026-08-01',
+    ...overrides,
+  }
+}
+
 function ledger(overrides: Partial<Ledger> = {}): Fetched<Ledger> {
   return {
     data: {
@@ -55,6 +77,7 @@ function ledger(overrides: Partial<Ledger> = {}): Fetched<Ledger> {
       balance: 100,
       can_modify: true,
       transactions: [transaction()],
+      daily_bonus: null,
       ...overrides,
     },
     fetchedAt: null,
@@ -96,8 +119,72 @@ describe('LedgerPage', () => {
     record.mockReset()
     reverse.mockReset()
     correct.mockReset()
+    setDailyBonus.mockReset()
+    stopDailyBonus.mockReset()
     reasonSuggestions.mockResolvedValue([])
     vi.spyOn(window, 'confirm').mockReturnValue(true)
+  })
+
+  describe('毎日のボーナス（ADR-0024）', () => {
+    it('決めていなければ、始めるための入力欄を出す', async () => {
+      viewLedger.mockResolvedValue(ledger())
+      renderPage()
+
+      expect(
+        await screen.findByRole('button', { name: 'Start the daily bonus' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Stop' })).not.toBeInTheDocument()
+    })
+
+    it('決めてあれば、いまの量と「やめる」を出す', async () => {
+      viewLedger.mockResolvedValue(ledger({ daily_bonus: dailyBonus({ amount: 25 }) }))
+      renderPage()
+
+      expect(await screen.findByText('25 pt are added every day.')).toBeInTheDocument()
+      expect(screen.getByLabelText('Points per day')).toHaveValue(25)
+      expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
+    })
+
+    it('保存したら台帳を読み直す（次に日付が変わるまで残高は動かない）', async () => {
+      viewLedger
+        .mockResolvedValueOnce(ledger())
+        .mockResolvedValue(ledger({ daily_bonus: dailyBonus({ amount: 30 }) }))
+      setDailyBonus.mockResolvedValue(dailyBonus({ amount: 30 }))
+      renderPage()
+
+      await screen.findByText('100 pt')
+      fireEvent.change(screen.getByLabelText('Points per day'), { target: { value: '30' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Start the daily bonus' }))
+
+      expect(await screen.findByText('30 pt are added every day.')).toBeInTheDocument()
+      expect(setDailyBonus).toHaveBeenCalledWith(30, 'Daily bonus')
+      // 決めただけでは足されない
+      expect(screen.getByText('100 pt')).toBeInTheDocument()
+    })
+
+    it('やめたら入力欄は「始める」に戻る', async () => {
+      viewLedger
+        .mockResolvedValueOnce(ledger({ daily_bonus: dailyBonus() }))
+        .mockResolvedValue(ledger())
+      stopDailyBonus.mockResolvedValue(undefined)
+      renderPage()
+
+      await screen.findByRole('button', { name: 'Stop' })
+      fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+
+      expect(
+        await screen.findByRole('button', { name: 'Start the daily bonus' }),
+      ).toBeInTheDocument()
+      expect(stopDailyBonus).toHaveBeenCalled()
+    })
+
+    it('can_modify が偽なら設定の入り口を出さない', async () => {
+      viewLedger.mockResolvedValue(ledger({ can_modify: false, daily_bonus: dailyBonus() }))
+      renderPage()
+
+      await screen.findByText('100 pt')
+      expect(screen.queryByLabelText('Points per day')).not.toBeInTheDocument()
+    })
   })
 
   it('残高と履歴、記録した人を出す', async () => {
