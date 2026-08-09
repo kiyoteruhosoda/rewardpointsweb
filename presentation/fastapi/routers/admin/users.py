@@ -30,20 +30,25 @@ from presentation.fastapi.schemas.admin import (
     UserResponse,
     UserUpdateRequest,
 )
+from shared.application.authenticated_principal import AuthenticatedPrincipal
 from shared.domain.auth.username import Username
 from shared.infrastructure.models import Role, User
 from shared.kernel.database.session import get_db
 
 logger = logging.getLogger(__name__)
 
+# このルーター自体を開けるための scope。自分からこれを取り上げる変更は拒む。
+MANAGE_USERS = "user:manage"
+
 router = APIRouter(
     prefix="/api/admin/users",
     tags=["admin"],
-    dependencies=[Depends(require_permission("user:manage"))],
+    dependencies=[Depends(require_permission(MANAGE_USERS))],
 )
 
 DbDep = Annotated[Session, Depends(get_db)]
 DeletableDep = Annotated[EnsureUserCanBeDeletedUseCase, Depends(get_ensure_user_can_be_deleted_use_case)]
+UserManagerDep = Annotated[AuthenticatedPrincipal, Depends(require_permission(MANAGE_USERS))]
 
 
 def _to_response(user: User) -> UserResponse:
@@ -55,6 +60,7 @@ def _to_response(user: User) -> UserResponse:
         is_active=user.is_active,
         must_change_password=user.must_change_password,
         roles=sorted(r.name for r in user.roles),
+        permissions=sorted(user.permission_codes),
     )
 
 
@@ -78,6 +84,24 @@ def _resolve_roles(db: Session, names: list[str]) -> list[Role]:
             detail={"error": "unknown_roles", "roles": sorted(missing)},
         )
     return list(roles)
+
+
+def _reject_self_lockout(principal: AuthenticatedPrincipal, user: User, roles: list[Role]) -> None:
+    """自分自身からユーザー管理の scope を取り上げる変更を拒む。
+
+    ロールの付け替えは画面上ではチェックの付け外し 1 つで済む。最後の管理者が
+    自分の管理ロールを外すと、この API を含む管理系すべてが閉じ、画面からは
+    戻せなくなる（DB へ直接入るか、マスタデータの再投入が要る）。他人に対する
+    変更は止めない——引き継ぎのために必要な操作であり、実行者の手は残る。
+    """
+    if user.id != principal.user_id:
+        return
+    if any(permission.code == MANAGE_USERS for role in roles for permission in role.permissions):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={"error": "cannot_revoke_own_user_manage"},
+    )
 
 
 @router.get("", response_model=list[UserResponse])
@@ -120,7 +144,13 @@ async def create_user(body: UserCreateRequest, db: DbDep) -> UserResponse:
 
 
 @router.put("/{user_id}", response_model=UserResponse)
-async def update_user(user_id: int, body: UserUpdateRequest, db: DbDep) -> UserResponse:
+async def update_user(user_id: int, body: UserUpdateRequest, db: DbDep, *, principal: UserManagerDep) -> UserResponse:
+    """アカウントを変更する。
+
+    ``roles`` は差分ではなく **変更後の全体** を渡す（省略時はロールを触らない）。
+    権限はロール経由でのみ付く（CLAUDE.md「権限管理」）ので、その人が行えること
+    を変えるにはロールを付け替える。
+    """
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "user_not_found"})
@@ -129,11 +159,21 @@ async def update_user(user_id: int, body: UserUpdateRequest, db: DbDep) -> UserR
     if body.is_active is not None:
         user.is_active = body.is_active
     if body.roles is not None:
-        user.roles = _resolve_roles(db, body.roles)
+        roles = _resolve_roles(db, body.roles)
+        _reject_self_lockout(principal, user, roles)
+        user.roles = roles
     if body.password is not None:
         user.password_hash = generate_password_hash(body.password)
     db.flush()
     logger.info("admin_user_updated: user_id=%s fields=%s", user_id, ",".join(_changed_fields(body)) or "none")
+    if body.roles is not None:
+        # ロールは「変わった後の姿」を残す。差分だけでは、後から見たときにその時点で
+        # 誰が何を行えたかを組み立て直せない（roles.py の権限ログと同じ理由）。
+        logger.info(
+            "admin_user_roles_changed: user_id=%s roles=%s",
+            user_id,
+            ",".join(sorted(r.name for r in user.roles)) or "none",
+        )
     return _to_response(user)
 
 

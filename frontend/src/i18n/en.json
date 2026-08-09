@@ -87,6 +87,7 @@
   "dashboard.title": "Dashboard",
   "error.account_already_in_family": "You already belong to this family.",
   "error.already_belongs_to_family": "You can only belong to one family. Leave your current family first.",
+  "error.cannot_revoke_own_user_manage": "You cannot take the user management permission away from yourself. Ask another administrator to do it.",
   "error.challenge_not_found": "The request expired. Please try again.",
   "error.child_account_required": "This action only applies to a child's account.",
   "error.child_cannot_leave_family": "A child cannot leave the family on their own.",
@@ -144,6 +145,7 @@
   "error.totp_required": "Enter the code from your authenticator app.",
   "error.transaction_already_reversed": "That record has already been undone.",
   "error.transaction_not_found": "That record no longer exists.",
+  "error.unknown_roles": "That role no longer exists. Reload the page and try again.",
   "error.unknown_error": "Something went wrong.",
   "error.user_still_owns_families": "This account owns a family. Hand it over or delete the family first, or deactivate the account instead.",
   "error.username_already_taken": "That username is already taken.",
@@ -313,7 +315,9 @@
   "theme.light": "Light",
   "theme.system": "Follow the OS",
   "users.add": "Add user",
+  "users.effectivePermissions": "Permissions in effect",
   "users.emailOptional": "Email (optional)",
   "users.role": "Role",
+  "users.roles": "Roles",
   "users.title": "Users"
 }

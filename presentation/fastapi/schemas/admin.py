@@ -16,6 +16,9 @@ class UserResponse(BaseModel):
     is_active: bool
     must_change_password: bool
     roles: list[str]
+    # 実際に効いている scope（所属ロールの権限の和集合）。ロールを付け替えた
+    # 結果その人が何を行えるようになったかは、ロール名だけでは読み取れない。
+    permissions: list[str]
 
 
 class UserCreateRequest(BaseModel):
