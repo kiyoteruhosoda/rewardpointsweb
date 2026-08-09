@@ -68,7 +68,7 @@ describe('InvitationPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Invite another parent/ }))
 
-    const expected = `${window.location.origin}/join?code=AB%2BCD`
+    const expected = `${window.location.origin}/join#code=AB%2BCD`
     const link = await screen.findByRole('link', { name: expected })
     expect(link).toHaveAttribute('href', expected)
     // URL を開けない相手のために、コードそのものも併せて出す。
@@ -84,7 +84,7 @@ describe('InvitationPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Copy the link/ }))
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/join?code=AB%2BCD`)
+      expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/join#code=AB%2BCD`)
     })
     expect(await screen.findByText('The link was copied.')).toBeInTheDocument()
   })
@@ -100,7 +100,7 @@ describe('InvitationPanel', () => {
       await screen.findByText('The link could not be copied. Select it and copy it by hand.'),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('link', { name: `${window.location.origin}/join?code=AB%2BCD` }),
+      screen.getByRole('link', { name: `${window.location.origin}/join#code=AB%2BCD` }),
     ).toBeInTheDocument()
   })
 })

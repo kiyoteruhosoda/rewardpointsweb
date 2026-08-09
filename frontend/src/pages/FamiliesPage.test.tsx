@@ -95,7 +95,7 @@ describe('FamiliesPage', () => {
   it('ログイン前に入力したコードを引き継いで入れておく', async () => {
     renderWithProviders(<FamiliesPage />, {
       scopes: PARENT_SCOPES,
-      route: '/families?code=CODE1234',
+      route: '/families#code=CODE1234',
     })
 
     expect(await screen.findByLabelText('Invitation code')).toHaveValue('CODE1234')
