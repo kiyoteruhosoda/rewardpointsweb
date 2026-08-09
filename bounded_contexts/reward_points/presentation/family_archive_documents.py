@@ -1,4 +1,4 @@
-"""控えの JSON（Pydantic）と Application 層の DTO を行き来する（ADR-0025）。
+"""控えの JSON（Pydantic）と Application 層の DTO を行き来する（ADR-0026）。
 
 入れ子が深いぶん変換も長くなるので、ルーターから外へ出す。ルーター本体は
 「ユースケースを 1 回呼んで、1 回変換する」だけに保つ。

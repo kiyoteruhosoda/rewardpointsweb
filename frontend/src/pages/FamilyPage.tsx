@@ -84,7 +84,7 @@ export function FamilyPage() {
   const id = family.id
   const isGuardian = family.my_role === 'owner' || family.my_role === 'parent'
   const isOwner = family.my_role === 'owner'
-  // 未紐付けなのは、親が作ったばかりの子と、バックアップから戻した参加者（ADR-0025）
+  // 未紐付けなのは、親が作ったばかりの子と、バックアップから戻した参加者（ADR-0026）
   const unlinkedMembers = family.memberships.filter((m) => !m.is_linked && m.role !== 'owner')
   const me = family.memberships.find((m) => m.is_me)
   const independenceProposedToMe = family.my_role === 'child' && me?.independence_proposed === true

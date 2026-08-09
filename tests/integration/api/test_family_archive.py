@@ -1,4 +1,4 @@
-"""家族まるごとの控え — 書き出しと取り込み（ADR-0025）。
+"""家族まるごとの控え — 書き出しと取り込み（ADR-0026）。
 
 バックアップの値打ちは「戻せること」なので、確かめ方も往復で見る。書き出した
 JSON をそのまま取り込み、**もう一度書き出した控えが元と一致する**ことを主な
@@ -186,7 +186,7 @@ def test_the_archive_holds_the_whole_family(family: Json) -> None:
 
 
 def test_the_archive_holds_no_account(family: Json) -> None:
-    """ログイン ID もパスワードも招待コードも載らない（ADR-0025）。"""
+    """ログイン ID もパスワードも招待コードも載らない（ADR-0026）。"""
     written = str(family)
 
     assert "dad" not in written

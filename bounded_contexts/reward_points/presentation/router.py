@@ -120,7 +120,7 @@ FamilyGuardian = Annotated[
     Depends(require_permission("family:view", "family:manage", "point:view", "point:manage")),
 ]
 # 控えには家族の全部（子どもの台帳と履歴）が載るので、家族と台帳の両方を
-# 見られる立場を要求する（ADR-0025）。どの家族を書き出せるかは、この先で
+# 見られる立場を要求する（ADR-0026）。どの家族を書き出せるかは、この先で
 # 家族の中での立場が決める
 ArchiveReader = Annotated[AuthenticatedPrincipal, Depends(require_permission("family:view", "point:view"))]
 
@@ -291,7 +291,7 @@ async def create_family(
     return _to_family(dto)
 
 
-# --- 控え（バックアップ。ADR-0025） ------------------------------------------
+# --- 控え（バックアップ。ADR-0026） ------------------------------------------
 
 
 @router.post("/import", status_code=status.HTTP_201_CREATED, response_model=ImportedFamilyResponse)

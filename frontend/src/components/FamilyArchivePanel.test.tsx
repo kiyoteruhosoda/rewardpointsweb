@@ -1,5 +1,5 @@
 /**
- * 家族まるごとの書き出し（ADR-0025）。
+ * 家族まるごとの書き出し（ADR-0026）。
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

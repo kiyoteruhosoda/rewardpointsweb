@@ -128,7 +128,7 @@ export interface Ledger {
 }
 
 /**
- * 家族まるごとの控え（バックアップ。ADR-0025）。
+ * 家族まるごとの控え（バックアップ。ADR-0026）。
  *
  * 書き出しの応答であり、取り込みの本文でもある。同じ形を両方向で使うので、
  * 保存した JSON をそのまま送り返せば元に戻る。
@@ -225,7 +225,7 @@ export const families = {
     api.patch<FamilyDetail>(`/api/families/${familyId}`, { name }),
 
   /**
-   * 家族まるごとを控えとして受け取る（親のみ。ADR-0025）。
+   * 家族まるごとを控えとして受け取る（親のみ。ADR-0026）。
    *
    * 子どもの台帳と履歴が全部入る。保存の仕方は `familyArchiveFile.ts`。
    */

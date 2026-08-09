@@ -4,13 +4,16 @@
  * 子アカウントの入り口はここだけ。子ども自身では作れず、親が参加を用意して
  * 招待コードを渡した場合にのみ成立する（ADR-0011）。メールアドレスは尋ねない。
  *
+ * 招待リンクから開かれると、コードは URL の断片（`#code=...`）に載っている
+ * （ADR-0025）。入力欄の初期値にして、打ち込まずに始められるようにする。
+ *
  * すでにアカウントを持つ人はここでは作れない（所属できる家族は 1 つまで —
  * ADR-0013）。その場合はログインしてから家族の画面で参加する経路になるため、
- * 入力済みの招待コードを `?code=` で持たせてログインへ送る。行き先で拾えないと
+ * 入力済みの招待コードを持たせてログインへ送る。行き先で拾えないと
  * 「コードを持っているのに元の画面へ戻される」動線になる。
  */
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
 import { PasswordField } from '../components/PasswordField'
@@ -18,6 +21,7 @@ import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families } from '../services/families'
+import { invitationSignInPath, readInvitationCode } from '../services/invitationLink'
 import { useAuth } from '../store/AuthContext'
 
 /** 家族の中での呼び名の上限（DisplayName の MAX_LENGTH と同じ）。 */
@@ -27,15 +31,15 @@ export function RedeemInvitationPage() {
   const { t } = useI18n()
   const { login } = useAuth()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const [code, setCode] = useState(() => searchParams.get('code') ?? '')
+  const { hash } = useLocation()
+  const [code, setCode] = useState(() => readInvitationCode(hash))
   const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   // 打ち込んだコードはログインの先まで運ぶ。空のまま送っても意味がないので付けない。
-  const signInPath = code.trim() ? `/login?code=${encodeURIComponent(code.trim())}` : '/login'
+  const signInPath = invitationSignInPath(code)
 
   const [submit, submitting] = usePendingAction(async (event: FormEvent) => {
     event.preventDefault()

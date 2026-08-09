@@ -1,5 +1,5 @@
 /**
- * 控え（バックアップ）のファイル入出力（ADR-0025）。
+ * 控え（バックアップ）のファイル入出力（ADR-0026）。
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 

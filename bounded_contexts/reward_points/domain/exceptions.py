@@ -232,7 +232,7 @@ class InvalidMemberOrderError(RewardPointsError):
 
 
 class InvalidFamilyArchiveError(RewardPointsError):
-    """書き出したファイルとして辻褄の合わない内容を取り込もうとした（ADR-0025）。
+    """書き出したファイルとして辻褄の合わない内容を取り込もうとした（ADR-0026）。
 
     形式そのもの（項目の有無・型・長さ）は Pydantic が先に弾く。ここで断るのは
     **中身の辻褄** — owner が 1 人でないもの、台帳を持たない立場に台帳が付いて
@@ -247,7 +247,7 @@ class InvalidFamilyArchiveError(RewardPointsError):
 
 
 class UnsupportedArchiveVersionError(RewardPointsError):
-    """このアプリが読めない版のファイルを取り込もうとした（ADR-0025）。
+    """このアプリが読めない版のファイルを取り込もうとした（ADR-0026）。
 
     :class:`InvalidFamilyArchiveError` と分けるのは、打つ手が違うため。壊れて
     いるのではなく、**新しいアプリで書き出したファイルを古いアプリへ持ち込んだ**

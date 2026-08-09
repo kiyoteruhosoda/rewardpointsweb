@@ -278,7 +278,7 @@ describe('FamilyPage', () => {
     expect(screen.getByRole('button', { name: 'Move タロウ down' })).toBeDisabled()
   })
 
-  it('親にはバックアップの書き出しを出す（ADR-0025）', () => {
+  it('親にはバックアップの書き出しを出す（ADR-0026）', () => {
     renderPage(familyOf('parent', [member()]))
 
     expect(screen.getByRole('button', { name: 'Save a backup' })).toBeInTheDocument()
@@ -290,7 +290,7 @@ describe('FamilyPage', () => {
     expect(screen.queryByRole('button', { name: 'Save a backup' })).not.toBeInTheDocument()
   })
 
-  it('復元で戻った親にも、その人を指した招待コードを配れる（ADR-0025）', async () => {
+  it('復元で戻った親にも、その人を指した招待コードを配れる（ADR-0026）', async () => {
     listInvitations.mockResolvedValue([])
     renderPage(familyOf('owner', [restoredParent()]))
 

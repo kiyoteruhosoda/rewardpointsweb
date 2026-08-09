@@ -3,6 +3,10 @@
  *
  * ログイン識別子は `username`、画面に出す名前は `display_name` と別に持つ。
  * メールアドレスは任意項目で、空のまま作れる（ADR-0011）。
+ *
+ * 権限はロール経由でのみ付く。そのため一覧では **ロールを付け外し** し、その結果
+ * 実際に効く scope（ロールの和集合）はサーバーが返した値をそのまま読み取り専用で
+ * 並べる。scope を直に付け替える口は用意しない（CLAUDE.md「権限管理」）。
  */
 import { useEffect, useState, type FormEvent } from 'react'
 
@@ -21,6 +25,8 @@ interface User {
   display_name: string
   is_active: boolean
   roles: string[]
+  /** 所属ロールの権限の和集合（サーバーが計算する。ここでは変更できない）。 */
+  permissions: string[]
 }
 
 interface Role {
@@ -30,6 +36,41 @@ interface Role {
 
 /** 行の中で実行しうる操作（実行中の目印をどこに出すかが変わる）。 */
 type RowAction = 'update' | 'removal'
+
+interface RoleCheckboxesProps {
+  user: User
+  roles: Role[]
+  disabled: boolean
+  onToggle: (user: User, roleName: string) => void
+}
+
+/**
+ * 1 人分のロールの付け外し。
+ *
+ * ロール一覧の取得には `role:manage` が要る（`/api/admin/roles`）。持っていない
+ * 管理者には選択肢を出しようがないので、その場合は今のロール名だけを示す。
+ */
+function RoleCheckboxes({ user, roles, disabled, onToggle }: RoleCheckboxesProps) {
+  if (roles.length === 0) return <>{user.roles.join(', ') || '—'}</>
+  return (
+    <div className="checkbox-list">
+      {roles.map((role) => (
+        <label key={role.id}>
+          <input
+            type="checkbox"
+            aria-label={`${user.username}: ${role.name}`}
+            checked={user.roles.includes(role.name)}
+            disabled={disabled}
+            onChange={() => {
+              onToggle(user, role.name)
+            }}
+          />
+          <span>{role.name}</span>
+        </label>
+      ))}
+    </div>
+  )
+}
 
 export function UsersPage() {
   const { t } = useI18n()
@@ -91,6 +132,16 @@ export function UsersPage() {
     runExclusively(user, 'update', () =>
       api.put(`/api/admin/users/${user.id}`, { is_active: !user.is_active }),
     )
+
+  /** ロールの付け外し。差分ではなく変更後の全体を送る（API がそう受け取る）。 */
+  const toggleRole = (user: User, roleName: string) => {
+    const next = user.roles.includes(roleName)
+      ? user.roles.filter((name) => name !== roleName)
+      : [...user.roles, roleName]
+    return runExclusively(user, 'update', () =>
+      api.put(`/api/admin/users/${user.id}`, { roles: next }),
+    )
+  }
 
   const remove = (user: User) =>
     runExclusively(user, 'removal', () => api.delete(`/api/admin/users/${user.id}`))
@@ -163,7 +214,8 @@ export function UsersPage() {
               <th>{t('common.username')}</th>
               <th>{t('common.displayName')}</th>
               <th>{t('common.email')}</th>
-              <th>{t('users.role')}</th>
+              <th>{t('users.roles')}</th>
+              <th>{t('users.effectivePermissions')}</th>
               <th>{t('common.active')}</th>
               <th>{t('common.actions')}</th>
             </tr>
@@ -178,7 +230,27 @@ export function UsersPage() {
                   <td>{user.username}</td>
                   <td>{user.display_name}</td>
                   <td>{user.email ?? '—'}</td>
-                  <td>{user.roles.join(', ')}</td>
+                  <td>
+                    <RoleCheckboxes
+                      user={user}
+                      roles={roles}
+                      disabled={busy}
+                      onToggle={(target, roleName) => {
+                        void toggleRole(target, roleName)
+                      }}
+                    />
+                  </td>
+                  <td>
+                    {user.permissions.length === 0 ? (
+                      '—'
+                    ) : (
+                      <div className="scope-list">
+                        {user.permissions.map((code) => (
+                          <code key={code}>{code}</code>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <input
                       type="checkbox"

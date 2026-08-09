@@ -74,7 +74,7 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     DisplayNameRequiredError: status.HTTP_400_BAD_REQUEST,
     RoleNotInvitableError: status.HTTP_400_BAD_REQUEST,
     InvalidMemberOrderError: status.HTTP_400_BAD_REQUEST,
-    # 控えの中身が辻褄に合わない・読めない版（ADR-0025）。どちらも送られた
+    # 控えの中身が辻褄に合わない・読めない版（ADR-0026）。どちらも送られた
     # ものの問題なので 400。打つ手が違うのでコードは分ける
     InvalidFamilyArchiveError: status.HTTP_400_BAD_REQUEST,
     UnsupportedArchiveVersionError: status.HTTP_400_BAD_REQUEST,

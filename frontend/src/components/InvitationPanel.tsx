@@ -8,16 +8,22 @@
  * 宛先は 2 通り。**すでにいる参加者を指す**コード（その人がログインできるように
  * なるだけで、顔ぶれは変わらない）と、**新しい人を入れる**コード（親のみ）。
  * バックアップから復元した家族では owner 以外が全員未紐付けで戻るので、指せる
- * 相手には子だけでなく親も並ぶ（ADR-0025）。
+ * 相手には子だけでなく親も並ぶ（ADR-0026）。
  *
  * 平文のコードは発行の応答にしか現れないので、受け取った直後だけ画面に出す。
  * 一覧へ戻ると二度と読めない（保存されているのはハッシュだけ。ADR-0009）。
+ *
+ * 渡すのはコードそのものより、コードを載せた URL を主にする。受け取った人は開く
+ * だけで入力済みの状態から始められる（`invitationLink.ts`）。コードも併せて出す —
+ * URL を開けない相手（口頭・別の端末）には打ち込んでもらう必要がある。
  */
 import { useEffect, useState } from 'react'
 
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families, parseUtc, type Invitation, type Membership } from '../services/families'
+import { invitationUrl } from '../services/invitationLink'
 import { ActionButton } from './ActionButton'
 import { useToast } from './ToastNotification'
 
@@ -27,7 +33,7 @@ interface Props {
    * アカウント未紐付けの参加者。宛先を指す招待は必ずこのどれかを指す。
    *
    * 子だけとは限らない。バックアップから復元した家族では、owner 以外は全員
-   * 未紐付けで戻る（ADR-0025）。その人を指して配れば、台帳の「記録した人」が
+   * 未紐付けで戻る（ADR-0026）。その人を指して配れば、台帳の「記録した人」が
    * 元のまま残る — 新しく入れ直すと参照が外れる。
    */
   unlinkedMembers: Membership[]
@@ -96,15 +102,48 @@ export function InvitationPanel({ familyId, unlinkedMembers, canInviteParent, on
     (member) => member.role === 'child' || (member.role === 'parent' && canInviteParent),
   )
 
+  // 出す URL は「いま見ている入口」から作る。別の宛先を持ち出すと、手元では
+  // 開けるのに配った先で届かない URL になり得る。
+  const issuedLink = issued?.code
+    ? { code: issued.code, url: invitationUrl(issued.code, window.location.origin) }
+    : null
+
+  const [copyUrl, copying] = usePendingAction(async (url: string) => {
+    try {
+      // 安全でない出所（http のまま開いた場合など）ではクリップボードを触れない。
+      // 参照した時点で例外になるので、失敗はここでまとめて拾う。URL は画面に
+      // 出したままなので、手で選んで写すことはできる。
+      await navigator.clipboard.writeText(url)
+      notify('success', t('invitations.linkCopied'))
+    } catch {
+      notify('error', t('invitations.linkCopyFailed'))
+    }
+  })
+
   return (
     <section className="card">
       <h2>{t('invitations.title')}</h2>
       <p>{t('invitations.hint')}</p>
 
-      {issued?.code && (
-        <p className="balance">
-          {t('invitations.issued')}: <strong>{issued.code}</strong>
-        </p>
+      {issuedLink && (
+        <div className="card-inset">
+          <p>{t('invitations.linkHint')}</p>
+          <p className="invitation-link">
+            <a href={issuedLink.url}>{issuedLink.url}</a>
+          </p>
+          <ActionButton
+            type="button"
+            pending={copying}
+            onClick={() => {
+              copyUrl(issuedLink.url)
+            }}
+          >
+            {t('invitations.copyLink')}
+          </ActionButton>
+          <p className="balance">
+            {t('invitations.issued')}: <strong>{issuedLink.code}</strong>
+          </p>
+        </div>
       )}
 
       <div className="inline-form">
