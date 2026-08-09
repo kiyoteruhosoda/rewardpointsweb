@@ -4,7 +4,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { FamilyDetail, Membership } from '../services/families'
+import type { FamilyDetail, FamilyRole, Invitation, Membership } from '../services/families'
 import { familyOf, member } from '../test-support/familyFixtures'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { FamilyPage } from './FamilyPage'
@@ -16,6 +16,8 @@ const revokeIndependenceProposal =
 const removeMembership = vi.fn<(familyId: number, membershipId: number) => Promise<void>>()
 const reorderMembers = vi.fn<(familyId: number, ids: number[]) => Promise<FamilyDetail>>()
 const leave = vi.fn<(familyId: number) => Promise<void>>()
+const issueInvitation =
+  vi.fn<(familyId: number, role: FamilyRole, targetId: number | null) => Promise<Invitation>>()
 
 vi.mock('../services/families', () => ({
   parseUtc: (value: string) => new Date(`${value}Z`),
@@ -29,8 +31,24 @@ vi.mock('../services/families', () => ({
       removeMembership(familyId, membershipId),
     reorderMembers: (familyId: number, ids: number[]) => reorderMembers(familyId, ids),
     leave: (familyId: number) => leave(familyId),
+    issueInvitation: (familyId: number, role: FamilyRole, targetId: number | null) =>
+      issueInvitation(familyId, role, targetId),
   },
 }))
+
+function restoredParent(): Membership {
+  return member({
+    id: 5,
+    display_name: 'おかあさん',
+    role: 'parent',
+    is_linked: false,
+    username: null,
+    ledger_id: null,
+    balance: null,
+    can_reset_password: false,
+    can_propose_independence: false,
+  })
+}
 
 function renderPage(family: FamilyDetail, reloadFamily = () => Promise.resolve()) {
   return renderWithProviders(<FamilyPage />, {
@@ -258,5 +276,38 @@ describe('FamilyPage', () => {
 
     expect(screen.getByRole('button', { name: 'Move ハナ up' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Move タロウ down' })).toBeDisabled()
+  })
+
+  it('親にはバックアップの書き出しを出す（ADR-0026）', () => {
+    renderPage(familyOf('parent', [member()]))
+
+    expect(screen.getByRole('button', { name: 'Save a backup' })).toBeInTheDocument()
+  })
+
+  it('子には出さない（控えには家族全員の台帳が載る）', () => {
+    renderPage(familyOf('child', [member({ is_me: true })]))
+
+    expect(screen.queryByRole('button', { name: 'Save a backup' })).not.toBeInTheDocument()
+  })
+
+  it('復元で戻った親にも、その人を指した招待コードを配れる（ADR-0026）', async () => {
+    listInvitations.mockResolvedValue([])
+    renderPage(familyOf('owner', [restoredParent()]))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Invitation code for おかあさん' }))
+
+    // 立場はその参加者のもの。指して配るから、台帳の「記録した人」が元のまま残る
+    await waitFor(() => {
+      expect(issueInvitation).toHaveBeenCalledWith(1, 'parent', 5)
+    })
+  })
+
+  it('親宛のコードは owner だけが配れる（ADR-0020）', () => {
+    listInvitations.mockResolvedValue([])
+    renderPage(familyOf('parent', [restoredParent()]))
+
+    expect(
+      screen.queryByRole('button', { name: 'Invitation code for おかあさん' }),
+    ).not.toBeInTheDocument()
   })
 })

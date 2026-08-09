@@ -37,11 +37,11 @@ const ISSUED: Invitation = {
   code: 'AB+CD',
 }
 
-function renderPanel(unlinkedChildren: Membership[] = []) {
+function renderPanel(unlinkedMembers: Membership[] = []) {
   return renderWithProviders(
     <InvitationPanel
       familyId={1}
-      unlinkedChildren={unlinkedChildren}
+      unlinkedMembers={unlinkedMembers}
       canInviteParent
       onChanged={() => Promise.resolve()}
     />,

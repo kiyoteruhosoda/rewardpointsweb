@@ -18,6 +18,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
+import { FamilyArchivePanel } from '../components/FamilyArchivePanel'
 import { FamilySettingsPanel } from '../components/FamilySettingsPanel'
 import { InvitationPanel } from '../components/InvitationPanel'
 import { MemberList, type MemberAction } from '../components/MemberList'
@@ -83,7 +84,8 @@ export function FamilyPage() {
   const id = family.id
   const isGuardian = family.my_role === 'owner' || family.my_role === 'parent'
   const isOwner = family.my_role === 'owner'
-  const unlinkedChildren = family.memberships.filter((m) => m.role === 'child' && !m.is_linked)
+  // 未紐付けなのは、親が作ったばかりの子と、バックアップから戻した参加者（ADR-0026）
+  const unlinkedMembers = family.memberships.filter((m) => !m.is_linked && m.role !== 'owner')
   const me = family.memberships.find((m) => m.is_me)
   const independenceProposedToMe = family.my_role === 'child' && me?.independence_proposed === true
 
@@ -174,7 +176,7 @@ export function FamilyPage() {
       {isGuardian && (
         <InvitationPanel
           familyId={family.id}
-          unlinkedChildren={unlinkedChildren}
+          unlinkedMembers={unlinkedMembers}
           canInviteParent={isOwner}
           onChanged={reload}
         />
@@ -191,6 +193,8 @@ export function FamilyPage() {
       )}
 
       {isGuardian && <FamilySettingsPanel family={family} onChanged={reload} />}
+
+      {isGuardian && <FamilyArchivePanel familyId={id} />}
 
       <p>
         <Link to="/">{t('common.back')}</Link>

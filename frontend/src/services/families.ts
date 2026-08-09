@@ -128,6 +128,66 @@ export interface Ledger {
 }
 
 /**
+ * 家族まるごとの控え（バックアップ。ADR-0026）。
+ *
+ * 書き出しの応答であり、取り込みの本文でもある。同じ形を両方向で使うので、
+ * 保存した JSON をそのまま送り返せば元に戻る。
+ *
+ * 行どうしの繋がり（誰が記録したか・どの記録の打ち消しか）は、DB の ID ではなく
+ * ファイルの中だけで通じる `ref` で表す。復元先では ID が全部変わるため。
+ *
+ * **アカウントは入らない。** ログイン ID もパスワードも招待コードも載らないので、
+ * 控えを持ち出しても誰かのアカウントには届かない。
+ */
+export interface ArchivedTransaction {
+  ref: string
+  amount: number
+  reason: string
+  occurred_at: string
+  /** 記録した参加者の ref。毎日のボーナスと、家族を離れた人の行では null。 */
+  granted_by: string | null
+  reverses: string | null
+  corrects: string | null
+}
+
+export interface ArchivedDailyBonus {
+  amount: number
+  reason: string
+  starts_on: string
+  granted_through: string | null
+}
+
+export interface ArchivedLedger {
+  /** 書いた順（古い行が先）。 */
+  transactions: ArchivedTransaction[]
+  daily_bonus: ArchivedDailyBonus | null
+}
+
+export interface ArchivedMember {
+  ref: string
+  display_name: string
+  role: FamilyRole
+  /** 台帳を持つのは role = child だけ。 */
+  ledger: ArchivedLedger | null
+}
+
+export interface FamilyArchive {
+  format: string
+  version: number
+  exported_at: string
+  family_name: string
+  members: ArchivedMember[]
+}
+
+/** 取り込みの結果。戻った量を人が確かめられるように数が返る。 */
+export interface ImportedFamily {
+  family_id: number
+  name: string
+  member_count: number
+  transaction_count: number
+}
+
+/**
  * サーバーの時刻は UTC だが、タイムゾーンの接尾辞は付かない
  * （`2026-07-30T08:54:13`）。JavaScript はそれを **ローカル時刻** として解釈する
  * ため、そのまま `new Date()` に渡すと時差の分だけずれて表示される。
@@ -163,6 +223,20 @@ export const families = {
 
   rename: (familyId: number, name: string) =>
     api.patch<FamilyDetail>(`/api/families/${familyId}`, { name }),
+
+  /**
+   * 家族まるごとを控えとして受け取る（親のみ。ADR-0026）。
+   *
+   * 子どもの台帳と履歴が全部入る。保存の仕方は `familyArchiveFile.ts`。
+   */
+  exportArchive: (familyId: number) => api.get<FamilyArchive>(`/api/families/${familyId}/export`),
+
+  /**
+   * 控えから家族を作り直す（復元）。作られるのは **新しい家族** で、呼んだ人が
+   * owner になる。どこかに所属したままでは呼べない（ADR-0013）。
+   */
+  importArchive: (archive: FamilyArchive) =>
+    api.post<ImportedFamily>('/api/families/import', archive),
 
   /** 家族から抜ける（親のみ。他にアカウントの結び付いた親が残る場合に限る）。 */
   leave: (familyId: number) => api.post<undefined>(`/api/families/${familyId}/leave`),

@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, model_validator
 
 from bounded_contexts.reward_points.domain.value_objects.display_name import (
     MAX_LENGTH as DISPLAY_NAME_MAX_LENGTH,
@@ -260,16 +260,106 @@ class LedgerResponse(BaseModel):
     daily_bonus: DailyBonusResponse | None
 
 
+# --- 控え（バックアップ。ADR-0026） ------------------------------------------
+
+#: 1 つの控えに入れられる参加者と記録の上限。
+#:
+#: 家族の大きさとしては現実離れした数で、通る控えを狭めるためではなく、
+#: 取り込みが 1 リクエストで無限に書けないようにするための蓋。記録の上限は
+#: **控え全体** に掛ける — 台帳ごとに掛けると、参加者の数だけ掛け算で伸びる。
+MAX_ARCHIVED_MEMBERS = 100
+MAX_ARCHIVED_TRANSACTIONS = 20_000
+
+#: ファイルの中だけで通じる名前。DB の ID は載せない（復元先では別物になる）
+ArchiveRefStr = Annotated[str, Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")]
+
+
+class ArchivedTransactionDocument(BaseModel):
+    ref: ArchiveRefStr
+    amount: Annotated[int, Field(ge=-AMOUNT_MAX, le=AMOUNT_MAX), AfterValidator(_non_zero)]
+    reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
+    occurred_at: datetime
+    # 記録した参加者の ref。毎日のボーナスと、家族を離れた人の行では null
+    granted_by: ArchiveRefStr | None = None
+    reverses: ArchiveRefStr | None = None
+    corrects: ArchiveRefStr | None = None
+
+
+class ArchivedDailyBonusDocument(BaseModel):
+    amount: Annotated[int, Field(ge=1, le=AMOUNT_MAX)]
+    reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
+    starts_on: date
+    granted_through: date | None = None
+
+
+class ArchivedLedgerDocument(BaseModel):
+    # 書いた順（古い行が先）。打ち消し・訂正は必ず相手より後に並ぶ
+    transactions: Annotated[list[ArchivedTransactionDocument], Field(max_length=MAX_ARCHIVED_TRANSACTIONS)]
+    daily_bonus: ArchivedDailyBonusDocument | None = None
+
+
+class ArchivedMemberDocument(BaseModel):
+    ref: ArchiveRefStr
+    display_name: DisplayNameStr
+    role: FamilyRole
+    # 台帳を持つのは role = child だけ
+    ledger: ArchivedLedgerDocument | None = None
+
+
+class FamilyArchiveDocument(BaseModel):
+    """家族まるごとの控え。書き出しの応答であり、取り込みの本文でもある。
+
+    同じ形を両方向で使うので、書き出した JSON をそのまま送り返せば元に戻る。
+    """
+
+    # 別のアプリの JSON を取り違えて渡されたときに気付くための印
+    format: str
+    version: int
+    exported_at: datetime
+    family_name: Annotated[NonBlankStr, Field(max_length=FAMILY_NAME_MAX_LENGTH)]
+    members: Annotated[list[ArchivedMemberDocument], Field(max_length=MAX_ARCHIVED_MEMBERS)]
+
+    @model_validator(mode="after")
+    def _within_the_transaction_cap(self) -> FamilyArchiveDocument:
+        """記録の上限は控え全体で見る。
+
+        台帳ごとに掛けると、参加者を並べるだけで上限が掛け算で伸びる（100 人 ×
+        20,000 行）。取り込みは 1 リクエストの中で 1 行ずつ書くので、通した分だけ
+        DB とワーカーを占める。
+        """
+        written = sum(len(member.ledger.transactions) for member in self.members if member.ledger)
+        if written > MAX_ARCHIVED_TRANSACTIONS:
+            raise ValueError(f"cannot hold more than {MAX_ARCHIVED_TRANSACTIONS} transactions in total")
+        return self
+
+
+class ImportedFamilyResponse(BaseModel):
+    """取り込みの結果。戻った量を人が確かめられるように数を返す。"""
+
+    family_id: int
+    name: str
+    member_count: int
+    transaction_count: int
+
+
 __all__ = [
+    "MAX_ARCHIVED_MEMBERS",
+    "MAX_ARCHIVED_TRANSACTIONS",
+    "ArchivedDailyBonusDocument",
+    "ArchivedLedgerDocument",
+    "ArchivedMemberDocument",
+    "ArchivedTransactionDocument",
     "ChildCreateRequest",
     "CorrectionCreateRequest",
     "CorrectionResponse",
     "DailyBonusRequest",
     "DailyBonusResponse",
+    "FamilyArchiveDocument",
     "FamilyCreateRequest",
     "FamilyDetailResponse",
     "FamilyRenameRequest",
     "FamilySummaryResponse",
+    "ImportedFamilyResponse",
     "InvitationAcceptRequest",
     "InvitationCreateRequest",
     "InvitationRedeemRequest",

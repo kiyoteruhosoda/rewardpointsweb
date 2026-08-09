@@ -14,11 +14,15 @@
  * すでにアカウントを持つ人がコードを使う経路はここだけ。アカウント作成の画面から
  * ログインを経て来た場合は URL の断片（`#code=...`）にコードが載っているので
  * （ADR-0025）、参加の欄へ入れておく。
+ *
+ * バックアップからの復元（ADR-0026）もここに置く。復元は新しい家族を作る操作で、
+ * 所属していない状態からしか行えない — 作成と同じ条件なので、同じ画面に並ぶ。
  */
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
+import { FamilyImportPanel } from '../components/FamilyImportPanel'
 import { useToast } from '../components/ToastNotification'
 import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
@@ -106,6 +110,9 @@ export function FamiliesPage() {
           </form>
         </section>
       )}
+
+      {/* 復元も家族を作る操作なので、作成と同じ scope を要求する（ADR-0026） */}
+      {canCreate && <FamilyImportPanel onImported={enter} />}
 
       <section className="card">
         <h2>{t('families.join')}</h2>
