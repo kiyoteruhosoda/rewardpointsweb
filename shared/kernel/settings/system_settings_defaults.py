@@ -21,6 +21,13 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     "TEMPORARY_PASSWORD_TTL_SECONDS": 24 * 3600,
     # --- 家族（reward_points コンテキスト） ---
     "FAMILY_INVITATION_TTL_SECONDS": 7 * 24 * 3600,
+    # 毎日のボーナス（ADR-0024）の 1 日の区切り。保存する時刻は常に UTC だが、
+    # 「毎日」を UTC の 0 時で切ると日本では毎朝 9 時が日付の変わり目になる。
+    # 暮らしの側の 1 日に合わせたい家族は Asia/Tokyo 等へ変える（IANA 名）
+    "DAILY_BONUS_TIME_ZONE": "UTC",
+    # 止まっていたあいだの何日分まで遡って渡すか。超えた分は渡さない
+    # （久しぶりに開いた台帳が何百行ものボーナスで埋まらないようにする）
+    "DAILY_BONUS_MAX_CATCH_UP_DAYS": 31,
     # --- 二要素認証（TOTP） ---
     "TOTP_ISSUER": "rewardpointsweb",  # 認証アプリに表示される発行者名
     "TOTP_VALID_WINDOW": 1,  # 前後いくつの時間枠を許容するか（時刻ずれ吸収）

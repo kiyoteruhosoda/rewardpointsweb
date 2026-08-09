@@ -7,7 +7,7 @@ OpenAPI にも列挙として現れる。
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, Field
@@ -228,6 +228,26 @@ class CorrectionResponse(BaseModel):
     correction: TransactionResponse
 
 
+# --- 毎日のボーナス（ADR-0024） ----------------------------------------------
+
+
+class DailyBonusRequest(BaseModel):
+    """毎日いくつ足すか。加算だけなので符号は持たない（正の数のみ）。"""
+
+    amount: Annotated[int, Field(ge=1, le=AMOUNT_MAX)]
+    reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
+
+
+class DailyBonusResponse(BaseModel):
+    ledger_id: int
+    amount: int
+    reason: str
+    # 最初に渡す日（決めた日）
+    starts_on: date
+    # 渡し終えた最後の日。まだ 1 日も渡していなければ null
+    granted_through: date | None
+
+
 class LedgerResponse(BaseModel):
     ledger_id: int
     family_id: int
@@ -236,12 +256,16 @@ class LedgerResponse(BaseModel):
     balance: int
     can_modify: bool
     transactions: list[TransactionResponse]
+    # 毎日のボーナスの設定（ADR-0024）。決めていなければ null
+    daily_bonus: DailyBonusResponse | None
 
 
 __all__ = [
     "ChildCreateRequest",
     "CorrectionCreateRequest",
     "CorrectionResponse",
+    "DailyBonusRequest",
+    "DailyBonusResponse",
     "FamilyCreateRequest",
     "FamilyDetailResponse",
     "FamilyRenameRequest",

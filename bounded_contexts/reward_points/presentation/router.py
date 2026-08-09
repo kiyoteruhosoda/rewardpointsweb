@@ -20,6 +20,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
+from bounded_contexts.reward_points.application.dto.daily_bonus_dto import DailyBonusDTO
 from bounded_contexts.reward_points.application.dto.family_dto import (
     FamilyDetailDTO,
     InvitationDTO,
@@ -30,6 +31,9 @@ from bounded_contexts.reward_points.application.dto.ledger_dto import Correction
 from bounded_contexts.reward_points.application.use_cases.accept_invitation import AcceptInvitationCommand
 from bounded_contexts.reward_points.application.use_cases.add_child_membership import (
     AddChildMembershipCommand,
+)
+from bounded_contexts.reward_points.application.use_cases.configure_daily_bonus import (
+    ConfigureDailyBonusCommand,
 )
 from bounded_contexts.reward_points.application.use_cases.correct_point_transaction import (
     CorrectTransactionCommand,
@@ -47,6 +51,7 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     AcceptInvitationDep,
     AddChildDep,
     ApproveIndependenceDep,
+    ConfigureDailyBonusDep,
     CorrectTransactionDep,
     CreateFamilyDep,
     DissolveFamilyDep,
@@ -64,6 +69,7 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     ReverseTransactionDep,
     RevokeIndependenceDep,
     RevokeInvitationDep,
+    StopDailyBonusDep,
     SuggestReasonsDep,
     ViewFamilyDep,
     ViewLedgerDep,
@@ -72,6 +78,8 @@ from bounded_contexts.reward_points.presentation.schemas import (
     ChildCreateRequest,
     CorrectionCreateRequest,
     CorrectionResponse,
+    DailyBonusRequest,
+    DailyBonusResponse,
     FamilyCreateRequest,
     FamilyDetailResponse,
     FamilyRenameRequest,
@@ -166,6 +174,16 @@ def _to_transaction(dto: TransactionDTO) -> TransactionResponse:
         corrects_id=dto.corrects_id,
         is_reversed=dto.is_reversed,
         granted_by=dto.granted_by,
+    )
+
+
+def _to_daily_bonus(dto: DailyBonusDTO) -> DailyBonusResponse:
+    return DailyBonusResponse(
+        ledger_id=dto.ledger_id,
+        amount=dto.amount,
+        reason=dto.reason,
+        starts_on=dto.starts_on,
+        granted_through=dto.granted_through,
     )
 
 
@@ -533,6 +551,7 @@ async def view_ledger(ledger_id: int, use_case: ViewLedgerDep, principal: PointV
         balance=dto.balance,
         can_modify=dto.can_modify,
         transactions=[_to_transaction(transaction) for transaction in dto.transactions],
+        daily_bonus=_to_daily_bonus(dto.daily_bonus) if dto.daily_bonus else None,
     )
 
 
@@ -634,3 +653,47 @@ async def correct_transaction(
         },
     )
     return _to_correction(dto)
+
+
+# --- 毎日のボーナス（ADR-0024） ----------------------------------------------
+
+
+@router.put("/{family_id}/ledgers/{ledger_id}/daily-bonus", response_model=DailyBonusResponse)
+async def configure_daily_bonus(
+    *,
+    ledger_id: int,
+    body: DailyBonusRequest,
+    use_case: ConfigureDailyBonusDep,
+    principal: PointManager,
+) -> DailyBonusResponse:
+    """毎日いくつ足すかを決める（すでに決まっていれば書き換える）。
+
+    渡し始めるのは決めた日から。実際に台帳へ 1 行足すのは日付が変わったときで、
+    この呼び出しでは足さない。現在の設定は台帳（``GET .../ledgers/{id}``）の
+    ``daily_bonus`` に載る。
+    """
+    dto = use_case.execute(
+        ConfigureDailyBonusCommand(
+            ledger_id=ledger_id,
+            account_id=principal.user_id,
+            amount=body.amount,
+            reason=body.reason,
+        )
+    )
+    logger.info("daily_bonus_configured", extra={"ledger_id": ledger_id, "amount": dto.amount})
+    return _to_daily_bonus(dto)
+
+
+@router.delete("/{family_id}/ledgers/{ledger_id}/daily-bonus", status_code=status.HTTP_204_NO_CONTENT)
+async def stop_daily_bonus(
+    *,
+    ledger_id: int,
+    use_case: StopDailyBonusDep,
+    principal: PointManager,
+) -> None:
+    """毎日のボーナスをやめる。すでに渡したポイントはそのまま残る。
+
+    設定が無いときも成功する（やめたいという求めはすでに満たされている）。
+    """
+    use_case.execute(ledger_id=ledger_id, account_id=principal.user_id)
+    logger.info("daily_bonus_stopped", extra={"ledger_id": ledger_id})

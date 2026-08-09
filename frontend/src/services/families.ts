@@ -98,6 +98,23 @@ export interface Correction {
   correction: Transaction
 }
 
+/**
+ * 毎日のボーナスの設定（ADR-0024）。
+ *
+ * 決めておくと、日付が変わるたびにこの量が台帳へ 1 行足される。足すのはサーバー
+ * 側の定期実行で、画面は決めるだけ。
+ */
+export interface DailyBonus {
+  ledger_id: number
+  /** 毎日足す量（正の数のみ）。 */
+  amount: number
+  reason: string
+  /** 最初に渡す日（決めた日）。これより前へは遡らない。 */
+  starts_on: string
+  /** 渡し終えた最後の日。まだ 1 日も渡していなければ null。 */
+  granted_through: string | null
+}
+
 export interface Ledger {
   ledger_id: number
   family_id: number
@@ -106,6 +123,8 @@ export interface Ledger {
   balance: number
   can_modify: boolean
   transactions: Transaction[]
+  /** 決めていなければ null。 */
+  daily_bonus: DailyBonus | null
 }
 
 /**
@@ -249,4 +268,16 @@ export const families = {
         idempotency_key: entry.idempotencyKey,
       },
     ),
+
+  /**
+   * 毎日のボーナスを決める（すでに決まっていれば書き換える。ADR-0024）。
+   *
+   * 決めた時点では台帳は動かない。最初の 1 行が入るのは次に日付が変わったとき。
+   */
+  setDailyBonus: (familyId: number, ledgerId: number, amount: number, reason: string) =>
+    api.put<DailyBonus>(`${ledgerPath(familyId, ledgerId)}/daily-bonus`, { amount, reason }),
+
+  /** やめる。すでに渡したポイントはそのまま残る。 */
+  stopDailyBonus: (familyId: number, ledgerId: number) =>
+    api.delete<undefined>(`${ledgerPath(familyId, ledgerId)}/daily-bonus`),
 }

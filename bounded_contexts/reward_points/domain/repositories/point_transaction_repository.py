@@ -26,7 +26,9 @@ class NewTransaction:
     ledger_id: int
     amount: int
     reason: str
-    granted_by_membership_id: int
+    # 毎日のボーナス（ADR-0024）は誰の操作でもないので ``None`` で書く。
+    # 画面には記録者の欄が空のまま並ぶ
+    granted_by_membership_id: int | None
     occurred_at: datetime
     idempotency_key: str
     reversal_of_id: int | None = None

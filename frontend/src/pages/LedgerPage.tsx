@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
+import { DailyBonusPanel } from '../components/DailyBonusPanel'
 import { PointEntryForm } from '../components/PointEntryForm'
 import { useToast } from '../components/ToastNotification'
 import { usePendingRows } from '../hooks/usePendingRows'
@@ -202,6 +203,18 @@ export function LedgerPage() {
       <section className="card">
         {ledger.can_modify ? entryForm : <p>{t('points.readOnly')}</p>}
       </section>
+
+      {/* 毎日のボーナス（ADR-0024）。読み直すと設定が変わり得るので、入力欄は
+          その都度作り直す（保存した値を出したまま古い入力が残らないように） */}
+      {ledger.can_modify && (
+        <DailyBonusPanel
+          key={`${ledger.daily_bonus?.amount ?? 'none'}:${ledger.daily_bonus?.reason ?? ''}`}
+          familyId={family}
+          ledgerId={id}
+          bonus={ledger.daily_bonus}
+          onChanged={reload}
+        />
+      )}
 
       <section className="card">
         <h2>{t('points.history')}</h2>

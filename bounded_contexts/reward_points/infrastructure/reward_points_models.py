@@ -12,6 +12,8 @@ VARCHAR）で持つ（CLAUDE.md「DB モデリング」）。
 
 from __future__ import annotations
 
+from datetime import date
+
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -112,6 +114,37 @@ class PointTransactionModel(Base):
     idempotency_key: Mapped[str] = mapped_column(sa.String(64), nullable=False)
 
 
+class DailyBonusModel(Base):
+    """台帳へ毎日足す約束（ADR-0024）。
+
+    台帳につき 1 件。台帳が消えれば一緒に消える（家族の解散・参加者の削除・
+    独立の成立）。渡し終えた日を ``granted_through`` に持つので、アプリが
+    止まっていた日は次に動いたときにまとめて追いつける。
+    """
+
+    __tablename__ = "daily_bonuses"
+    __table_args__ = (
+        # 毎日減っていく設定は「ボーナス」ではない（消費は手で記録する）
+        sa.CheckConstraint("amount > 0", name="ck_daily_bonuses_amount_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    ledger_id: Mapped[int] = mapped_column(
+        BigIntPk,
+        sa.ForeignKey("point_ledgers.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    amount: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
+    reason: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    # 最初に渡す日（設定した日）。これより前へは遡らない
+    starts_on: Mapped[date] = mapped_column(sa.Date(), nullable=False)
+    # 渡し終えた最後の日。まだ 1 日も渡していなければ NULL
+    granted_through: Mapped[date | None] = mapped_column(sa.Date(), nullable=True)
+    created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
+    updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
+
+
 class FamilyInvitationModel(Base):
     __tablename__ = "family_invitations"
 
@@ -133,6 +166,7 @@ class FamilyInvitationModel(Base):
 
 __all__ = [
     "FAMILY_ROLE",
+    "DailyBonusModel",
     "FamilyInvitationModel",
     "FamilyMembershipModel",
     "FamilyModel",
