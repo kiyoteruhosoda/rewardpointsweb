@@ -7,12 +7,18 @@
  *
  * 平文のコードは発行の応答にしか現れないので、受け取った直後だけ画面に出す。
  * 一覧へ戻ると二度と読めない（保存されているのはハッシュだけ。ADR-0009）。
+ *
+ * 渡すのはコードそのものより、コードを載せた URL を主にする。受け取った人は開く
+ * だけで入力済みの状態から始められる（`invitationLink.ts`）。コードも併せて出す —
+ * URL を開けない相手（口頭・別の端末）には打ち込んでもらう必要がある。
  */
 import { useEffect, useState } from 'react'
 
+import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families, parseUtc, type Invitation, type Membership } from '../services/families'
+import { invitationUrl } from '../services/invitationLink'
 import { ActionButton } from './ActionButton'
 import { useToast } from './ToastNotification'
 
@@ -79,15 +85,48 @@ export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, o
     }
   }
 
+  // 出す URL は「いま見ている入口」から作る。別の宛先を持ち出すと、手元では
+  // 開けるのに配った先で届かない URL になり得る。
+  const issuedLink = issued?.code
+    ? { code: issued.code, url: invitationUrl(issued.code, window.location.origin) }
+    : null
+
+  const [copyUrl, copying] = usePendingAction(async (url: string) => {
+    try {
+      // 安全でない出所（http のまま開いた場合など）ではクリップボードを触れない。
+      // 参照した時点で例外になるので、失敗はここでまとめて拾う。URL は画面に
+      // 出したままなので、手で選んで写すことはできる。
+      await navigator.clipboard.writeText(url)
+      notify('success', t('invitations.linkCopied'))
+    } catch {
+      notify('error', t('invitations.linkCopyFailed'))
+    }
+  })
+
   return (
     <section className="card">
       <h2>{t('invitations.title')}</h2>
       <p>{t('invitations.hint')}</p>
 
-      {issued?.code && (
-        <p className="balance">
-          {t('invitations.issued')}: <strong>{issued.code}</strong>
-        </p>
+      {issuedLink && (
+        <div className="card-inset">
+          <p>{t('invitations.linkHint')}</p>
+          <p className="invitation-link">
+            <a href={issuedLink.url}>{issuedLink.url}</a>
+          </p>
+          <ActionButton
+            type="button"
+            pending={copying}
+            onClick={() => {
+              copyUrl(issuedLink.url)
+            }}
+          >
+            {t('invitations.copyLink')}
+          </ActionButton>
+          <p className="balance">
+            {t('invitations.issued')}: <strong>{issuedLink.code}</strong>
+          </p>
+        </div>
       )}
 
       <div className="inline-form">

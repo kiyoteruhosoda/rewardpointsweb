@@ -33,7 +33,7 @@ function signIn() {
 
 describe('LoginPage', () => {
   it('招待コードを持って来た人には、先にログインする理由を出す', () => {
-    renderLogin('/login?code=CODE1234')
+    renderLogin('/login#code=CODE1234')
 
     expect(
       screen.getByText(
@@ -43,7 +43,7 @@ describe('LoginPage', () => {
   })
 
   it('ログイン後はコードを持ったまま家族の画面へ送る', async () => {
-    renderLogin('/login?code=CODE1234')
+    renderLogin('/login#code=CODE1234')
     signIn()
 
     expect(await screen.findByText('families page')).toBeInTheDocument()

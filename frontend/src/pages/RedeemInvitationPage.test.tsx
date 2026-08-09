@@ -80,7 +80,7 @@ describe('RedeemInvitationPage', () => {
 
     expect(screen.getByRole('link', { name: 'Sign in and join' })).toHaveAttribute(
       'href',
-      '/login?code=CODE%201234',
+      '/login#code=CODE%201234',
     )
   })
 
@@ -91,7 +91,7 @@ describe('RedeemInvitationPage', () => {
   })
 
   it('URL で渡されたコードを入れておく（ログインから戻ってきた場合）', () => {
-    renderWithProviders(<RedeemInvitationPage />, { route: '/join?code=CODE1234' })
+    renderWithProviders(<RedeemInvitationPage />, { route: '/join#code=CODE1234' })
     expect(screen.getByLabelText('Invitation code')).toHaveValue('CODE1234')
   })
 })

@@ -1,11 +1,16 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
 import { PasswordField } from '../components/PasswordField'
 import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { ApiError, errorMessageKey } from '../services/api'
+import {
+  invitationAcceptPath,
+  invitationJoinPath,
+  readInvitationCode,
+} from '../services/invitationLink'
 import { isPasskeySupported, passkeyErrorKey } from '../services/webauthn'
 import { useAuth } from '../store/AuthContext'
 
@@ -17,12 +22,13 @@ export function LoginPage() {
   const { login, loginWithPasskey } = useAuth()
   const navigate = useNavigate()
   // 招待コードを持ったままここへ来ることがある（アカウント作成の画面から回された
-  // 場合）。ログイン後は既定の行き先ではなく、そのコードで参加できる家族の画面へ送る。
-  const [searchParams] = useSearchParams()
-  const pendingCode = searchParams.get('code')?.trim() ?? ''
-  const destination = pendingCode ? `/families?code=${encodeURIComponent(pendingCode)}` : '/'
+  // 場合、または招待リンクから直接）。コードは URL の断片で運ばれる（ADR-0025）。
+  // ログイン後は既定の行き先ではなく、そのコードで参加できる家族の画面へ送る。
+  const { hash } = useLocation()
+  const pendingCode = readInvitationCode(hash)
+  const destination = pendingCode ? invitationAcceptPath(pendingCode) : '/'
   // 行き来してもコードを落とさない（ここで落とすと打ち直しになる）
-  const joinPath = pendingCode ? `/join?code=${encodeURIComponent(pendingCode)}` : '/join'
+  const joinPath = invitationJoinPath(pendingCode)
   const [step, setStep] = useState<Step>('credentials')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')

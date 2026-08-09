@@ -790,6 +790,16 @@ th {
   font-variant-numeric: tabular-nums;
 }
 
+/* 発行した招待の URL。狭い画面でも枠から出さない。途中で切れると写せないので、
+ * 区切りの無い文字列でも折り返す。 */
+.invitation-link {
+  margin: 0;
+  max-width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
 /* 残高をいつ取得したか。オフラインでは古いキャッシュが出得るため常に示す
    （ADR-0015）。 */
 .fetched-at {
