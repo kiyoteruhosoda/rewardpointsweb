@@ -87,6 +87,7 @@
   "dashboard.title": "ダッシュボード",
   "error.account_already_in_family": "すでにこの家族に参加しています。",
   "error.already_belongs_to_family": "所属できる家族は 1 つまでです。先に今の家族から抜けてください。",
+  "error.cannot_revoke_own_user_manage": "自分からユーザー管理の権限は外せません。ほかの管理者に依頼してください。",
   "error.challenge_not_found": "受付期限が切れました。もう一度お試しください。",
   "error.child_account_required": "この操作は子どものアカウントにだけ行えます。",
   "error.child_cannot_leave_family": "子どもは自分では家族から抜けられません。",
@@ -144,6 +145,7 @@
   "error.totp_required": "認証アプリのコードを入力してください。",
   "error.transaction_already_reversed": "その記録はすでに取り消されています。",
   "error.transaction_not_found": "その記録はすでにありません。",
+  "error.unknown_roles": "そのロールはすでにありません。画面を読み込み直してからもう一度お試しください。",
   "error.unknown_error": "エラーが発生しました。",
   "error.user_still_owns_families": "このアカウントは家族の管理者です。先に家族を引き継ぐか削除するか、アカウントを無効化してください。",
   "error.username_already_taken": "そのユーザー名はすでに使われています。",
@@ -317,7 +319,9 @@
   "theme.light": "ライト",
   "theme.system": "OS の設定に従う",
   "users.add": "ユーザーを追加",
+  "users.effectivePermissions": "実際に効く権限",
   "users.emailOptional": "メールアドレス（任意）",
   "users.role": "ロール",
+  "users.roles": "ロール",
   "users.title": "ユーザー管理"
 }
