@@ -242,7 +242,7 @@ class DailyBonusResponse(BaseModel):
     ledger_id: int
     amount: int
     reason: str
-    # 最初に渡す日（決めた日）
+    # 最初に渡す日（決めた日の翌日）
     starts_on: date
     # 渡し終えた最後の日。まだ 1 日も渡していなければ null
     granted_through: date | None

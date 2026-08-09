@@ -12,6 +12,7 @@ ADR-0010）。すでに設定が無いときも黙って成功させる — や�
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, timedelta
 
 from bounded_contexts.reward_points.application.dto.daily_bonus_dto import DailyBonusDTO, to_dto
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
@@ -44,17 +45,28 @@ class ConfigureDailyBonusUseCase:
 
     def execute(self, command: ConfigureDailyBonusCommand) -> DailyBonusDTO:
         found = self._access.modifiable_ledger(ledger_id=command.ledger_id, account_id=command.account_id)
-        # 決めた日から渡し始める。遡って渡すと、設定した瞬間に身に覚えのない
-        # 行が並ぶ（過去の分を足したいなら、手で 1 行書く方が意図が残る）
         bonus = self._bonuses.save(
             DailyBonusDraft(
                 ledger_id=found.ledger.id,
                 amount=command.amount,
                 reason=command.reason,
-                starts_on=self._boundary.day_of(utcnow()),
+                starts_on=self._next_day(),
             )
         )
         return to_dto(bonus)
+
+    def _next_day(self) -> date:
+        """最初に渡す日 ＝ **決めた日の翌日**。
+
+        当日から渡すと、決めた時刻によって受け取り方が変わる。朝に決めれば
+        その日の分が数分後に着き、夜 23 時 50 分に決めれば 10 分の間に 2 日分が
+        並ぶ。「次に日付が変わったときから」と一本に決めておけば、いつ決めても
+        同じで、画面の文言（`dailyBonus.hint`）とも食い違わない。
+
+        当日にも渡したいときは手で 1 行書く。その方が「今日はこういう理由で
+        足した」という意図が履歴に残る。
+        """
+        return self._boundary.day_of(utcnow()) + timedelta(days=1)
 
 
 class StopDailyBonusUseCase:

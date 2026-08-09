@@ -668,9 +668,9 @@ async def configure_daily_bonus(
 ) -> DailyBonusResponse:
     """毎日いくつ足すかを決める（すでに決まっていれば書き換える）。
 
-    渡し始めるのは決めた日から。実際に台帳へ 1 行足すのは日付が変わったときで、
-    この呼び出しでは足さない。現在の設定は台帳（``GET .../ledgers/{id}``）の
-    ``daily_bonus`` に載る。
+    渡し始めるのは **次に日付が変わったとき** から。この呼び出しでは台帳へ 1 行も
+    足さないので、決めた時刻によって受け取り方は変わらない。現在の設定は台帳
+    （``GET .../ledgers/{id}``）の ``daily_bonus`` に載る。
     """
     dto = use_case.execute(
         ConfigureDailyBonusCommand(

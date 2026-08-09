@@ -109,7 +109,7 @@ export interface DailyBonus {
   /** 毎日足す量（正の数のみ）。 */
   amount: number
   reason: string
-  /** 最初に渡す日（決めた日）。これより前へは遡らない。 */
+  /** 最初に渡す日（決めた日の翌日）。これより前へは遡らない。 */
   starts_on: string
   /** 渡し終えた最後の日。まだ 1 日も渡していなければ null。 */
   granted_through: string | null

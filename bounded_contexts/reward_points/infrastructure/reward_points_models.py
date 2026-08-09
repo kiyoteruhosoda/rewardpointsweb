@@ -137,7 +137,7 @@ class DailyBonusModel(Base):
     )
     amount: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
     reason: Mapped[str] = mapped_column(sa.String(255), nullable=False)
-    # 最初に渡す日（設定した日）。これより前へは遡らない
+    # 最初に渡す日（設定した日の翌日）。これより前へは遡らない
     starts_on: Mapped[date] = mapped_column(sa.Date(), nullable=False)
     # 渡し終えた最後の日。まだ 1 日も渡していなければ NULL
     granted_through: Mapped[date | None] = mapped_column(sa.Date(), nullable=True)

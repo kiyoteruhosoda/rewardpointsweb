@@ -3,7 +3,7 @@
 設定の API は利用者と同じ道（HTTP）で確かめる。配る側は定期実行から呼ばれる
 ものなので、ユースケースを直接呼び、``now`` を渡して日付を動かす。
 
-日付は設定が返す ``starts_on``（決めた日）を基点に組み立てる。実行した日の
+日付は設定が返す ``starts_on``（最初に渡す日）を基点に組み立てる。実行した日の
 暦に寄りかかると、日が変わった瞬間に落ちるテストになる。
 """
 
@@ -16,19 +16,23 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bounded_contexts.reward_points.application.use_cases.grant_due_daily_bonuses import (
     GrantDueDailyBonusesUseCase,
     GrantedDailyBonuses,
 )
+from bounded_contexts.reward_points.domain.repositories.daily_bonus_repository import DailyBonusDraft
 from bounded_contexts.reward_points.domain.services.day_boundary import DayBoundary
+from bounded_contexts.reward_points.infrastructure.reward_points_models import DailyBonusModel
 from bounded_contexts.reward_points.infrastructure.sql_daily_bonus_repository import (
     SqlDailyBonusRepository,
 )
 from bounded_contexts.reward_points.infrastructure.sql_point_transaction_repository import (
     SqlPointTransactionRepository,
 )
+from shared.kernel.timestamps import utcnow
 from tests.integration.api.family_support import (
     Account,
     Ledger,
@@ -315,8 +319,47 @@ def test_the_day_boundary_follows_the_configured_time_zone(client: TestClient, h
     assert granted_through == (start + timedelta(days=1)).isoformat()
 
 
-def test_nothing_arrives_before_the_day_it_was_decided(client: TestClient, home: Home, db_session: Session) -> None:
-    """設定した日より前へは遡らない。"""
+def test_nothing_arrives_before_the_starting_day(client: TestClient, home: Home, db_session: Session) -> None:
+    """開始日より前へは遡らない。"""
     start = _starting_day(_configure(client, home.headers, home.ledger, amount=10))
 
     assert _grant(db_session, now=_noon(start, plus_days=-1)).granted == 0
+
+
+def test_nothing_arrives_on_the_day_it_was_decided(client: TestClient, home: Home, db_session: Session) -> None:
+    """決めた当日には渡さない。
+
+    当日から渡すと、決めた時刻によって受け取り方が変わる（夜遅くに決めれば
+    数分の間に 2 日分が並ぶ）。画面の「次に日付が変わったときから」とも食い違う。
+
+    実際の時計で確かめる — ここだけは「決めた瞬間から見た今日」が要るので、
+    組み立てた日付では条件を再現できない。
+    """
+    decided_at = utcnow()
+    _configure(client, home.headers, home.ledger, amount=10)
+
+    assert _grant(db_session, now=decided_at).granted == 0
+
+
+def test_a_row_made_outside_this_request_is_replaced_not_duplicated(
+    client: TestClient, home: Home, db_session: Session
+) -> None:
+    """別の経路ですでに行があっても、``PUT`` は置き換えとして通る。
+
+    台帳につき 1 件（``UNIQUE (ledger_id)``）なので、2 件目を足しに行けば一意制約に
+    当たる。同時に最初の ``PUT`` が 2 つ届いた場合の競り負けも同じ制約に当たり、
+    こちらは ``SqlDailyBonusRepository._add_row`` が勝った行を読み直して書き換える
+    （SQLite の in-memory は接続を 1 本しか持たないので、その競り合いそのものは
+    ここでは再現できない）。
+    """
+    SqlDailyBonusRepository(db_session).save(
+        DailyBonusDraft(ledger_id=home.ledger.ledger_id, amount=5, reason="さきに", starts_on=date(2026, 1, 1))
+    )
+    db_session.commit()
+
+    saved = _configure(client, home.headers, home.ledger, amount=30, reason="あとから")
+
+    assert (saved["amount"], saved["reason"]) == (30, "あとから")
+    # 開始日は動かさない（量を直しただけで渡し方の起点が変わってはいけない）
+    assert saved["starts_on"] == "2026-01-01"
+    assert db_session.scalar(select(func.count()).select_from(DailyBonusModel)) == 1

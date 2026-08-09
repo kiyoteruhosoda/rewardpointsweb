@@ -37,7 +37,7 @@ def _bonus(*, starts_on: date, granted_through: date | None = None, amount: int 
 # --- どの日を渡すか -----------------------------------------------------------
 
 
-def test_the_first_day_is_the_day_it_was_decided() -> None:
+def test_the_starting_day_is_the_first_one_due() -> None:
     bonus = _bonus(starts_on=date(2026, 8, 9))
 
     due = bonus.due_days(today=date(2026, 8, 9), limit=31)
@@ -47,7 +47,7 @@ def test_the_first_day_is_the_day_it_was_decided() -> None:
 
 
 def test_nothing_is_due_before_the_starting_day() -> None:
-    """決めた日より前へは遡らない（設定した瞬間に身に覚えのない行が並ばない）。"""
+    """開始日より前へは遡らない（設定した瞬間に身に覚えのない行が並ばない）。"""
     bonus = _bonus(starts_on=date(2026, 8, 9))
 
     assert bonus.due_days(today=date(2026, 8, 8), limit=31).days == ()

@@ -50,7 +50,7 @@ class DailyBonus:
     ledger_id: int
     amount: PointAmount
     reason: TransactionReason
-    #: 最初に渡す日（設定した日）。これより前へは遡らない
+    #: 最初に渡す日。これより前へは遡らない（決めるのは Application 層）
     starts_on: date
     #: 渡し終えた最後の日。まだ 1 日も渡していなければ ``None``
     granted_through: date | None
