@@ -27,6 +27,7 @@ from bounded_contexts.reward_points.infrastructure.sql_daily_bonus_repository im
 from bounded_contexts.reward_points.infrastructure.sql_point_transaction_repository import (
     SqlPointTransactionRepository,
 )
+from bounded_contexts.reward_points.presentation.schemas import MAX_ARCHIVED_TRANSACTIONS
 from tests.integration.api.family_support import (
     Account,
     Ledger,
@@ -377,6 +378,32 @@ def test_some_other_json_is_refused(backup: Backup) -> None:
     assert response.json()["detail"]["error"] == "invalid_family_archive"
 
 
+def test_an_archive_beyond_the_transaction_cap_is_refused(backup: Backup) -> None:
+    """上限は控え全体に掛かる。
+
+    台帳ごとに掛けると、参加者を並べるだけで上限が掛け算で伸びる（100 人 ×
+    20,000 行）。取り込みは 1 リクエストの中で 1 行ずつ書くので、通した分だけ
+    DB とワーカーを占める。
+    """
+    backup.archive["members"][2]["ledger"]["transactions"] = [
+        {
+            "ref": f"t{index}",
+            "amount": 1,
+            "reason": "おてつだい",
+            "occurred_at": "2026-08-09T12:00:00",
+            "granted_by": None,
+            "reverses": None,
+            "corrects": None,
+        }
+        for index in range(MAX_ARCHIVED_TRANSACTIONS + 1)
+    ]
+
+    response = backup.send()
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["error"] == "validation_error"
+
+
 @pytest.mark.parametrize(
     "break_it",
     [
@@ -402,6 +429,22 @@ def test_some_other_json_is_refused(backup: Backup) -> None:
         pytest.param(
             lambda archive: archive["members"][2]["ledger"]["transactions"][1].update({"ref": "t1"}),
             id="the-same-name-used-twice",
+        ),
+        pytest.param(
+            # 記録した人の欄に子（3 人目 = たろう）を置く。台帳へ書けるのは親だけ
+            lambda archive: archive["members"][2]["ledger"]["transactions"][0].update(
+                {"granted_by": archive["members"][2]["ref"]}
+            ),
+            id="recorded-by-a-child",
+        ),
+        pytest.param(
+            # 訂正が伴っていた打ち消しを、ただの記録に変えてしまう
+            lambda archive: archive["members"][2]["ledger"]["transactions"][4].update({"reverses": None}),
+            id="a-correction-without-the-undo",
+        ),
+        pytest.param(
+            lambda archive: archive["members"][3]["ledger"]["daily_bonus"].update({"granted_through": "2020-01-01"}),
+            id="a-bonus-granted-before-it-starts",
         ),
     ],
 )

@@ -17,6 +17,8 @@ from collections.abc import Iterable, Sequence
 from bounded_contexts.reward_points.application.dto.family_archive_dto import (
     ARCHIVE_FORMAT,
     ARCHIVE_VERSION,
+    ArchivedDailyBonusDTO,
+    ArchivedLedgerDTO,
     ArchivedMemberDTO,
     ArchivedTransactionDTO,
     FamilyArchiveDTO,
@@ -30,12 +32,15 @@ from bounded_contexts.reward_points.domain.exceptions import (
 def require_importable(archive: FamilyArchiveDTO) -> None:
     """取り込める控えでなければ例外を投げる。"""
     _require_readable_format(archive)
-    member_refs = _unique_refs(member.ref for member in archive.members)
+    _unique_refs(member.ref for member in archive.members)
     _require_single_owner(archive.members)
+    # 台帳へ書けるのは親だけ（``can_modify_ledger``）。記録した人の欄に子を置いた
+    # 控えは、この API を通しては作れない履歴になる
+    recorders = frozenset(member.ref for member in archive.members if member.role.is_guardian)
     for member in archive.members:
         _require_ledger_matches_role(member)
         if member.ledger is not None:
-            _require_writable_history(member.ledger.transactions, member_refs=member_refs)
+            _require_writable_ledger(member.ledger, recorders=recorders)
 
 
 def _require_readable_format(archive: FamilyArchiveDTO) -> None:
@@ -73,11 +78,29 @@ def _require_ledger_matches_role(member: ArchivedMemberDTO) -> None:
         raise InvalidFamilyArchiveError
 
 
-def _require_writable_history(entries: Sequence[ArchivedTransactionDTO], *, member_refs: frozenset[str]) -> None:
+def _require_writable_ledger(ledger: ArchivedLedgerDTO, *, recorders: frozenset[str]) -> None:
+    _require_consistent_bonus(ledger.daily_bonus)
+    _require_writable_history(ledger.transactions, recorders=recorders)
+
+
+def _require_consistent_bonus(bonus: ArchivedDailyBonusDTO | None) -> None:
+    """渡し終えた日が、最初に渡す日より前にならないこと（ADR-0024）。
+
+    渡した日は必ず ``starts_on`` 以降なので、実際の控えでこれが崩れることはない。
+    書き換えられた控えが通ると、次の付与が ``granted_through`` の翌日から始まり、
+    **開始日より前の日付でボーナスが足される**（``DailyBonus.due_days``）。
+    """
+    if bonus is None or bonus.granted_through is None:
+        return
+    if bonus.granted_through < bonus.starts_on:
+        raise InvalidFamilyArchiveError
+
+
+def _require_writable_history(entries: Sequence[ArchivedTransactionDTO], *, recorders: frozenset[str]) -> None:
     history = _WrittenHistory()
     for entry in entries:
-        # 記録した人は同じ家族の参加者。控えの外の誰かは指せない
-        if entry.granted_by is not None and entry.granted_by not in member_refs:
+        # 記録した人は、この家族で台帳へ書ける立場の参加者（親）
+        if entry.granted_by is not None and entry.granted_by not in recorders:
             raise InvalidFamilyArchiveError
         history.append(entry)
 
@@ -128,6 +151,11 @@ class _WrittenHistory:
         if target in self._reversals or target in self._corrected:
             raise InvalidFamilyArchiveError
         self._amount_of(target)
+        # 訂正は「打ち消して書き直す」1 つの操作で、打ち消しの行を必ず伴う
+        # （``CorrectPointTransactionUseCase``）。打ち消しの無い言い直しを通すと、
+        # 効いたままの元の行と訂正後の行が二重に足された残高になる
+        if target not in self._reversed:
+            raise InvalidFamilyArchiveError
         self._corrected.add(target)
 
     def _amount_of(self, ref: str) -> int:

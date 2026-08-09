@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, model_validator
 
 from bounded_contexts.reward_points.domain.value_objects.display_name import (
     MAX_LENGTH as DISPLAY_NAME_MAX_LENGTH,
@@ -265,7 +265,8 @@ class LedgerResponse(BaseModel):
 #: 1 つの控えに入れられる参加者と記録の上限。
 #:
 #: 家族の大きさとしては現実離れした数で、通る控えを狭めるためではなく、
-#: 取り込みが 1 リクエストで無限に書けないようにするための蓋。
+#: 取り込みが 1 リクエストで無限に書けないようにするための蓋。記録の上限は
+#: **控え全体** に掛ける — 台帳ごとに掛けると、参加者の数だけ掛け算で伸びる。
 MAX_ARCHIVED_MEMBERS = 100
 MAX_ARCHIVED_TRANSACTIONS = 20_000
 
@@ -317,6 +318,19 @@ class FamilyArchiveDocument(BaseModel):
     exported_at: datetime
     family_name: Annotated[NonBlankStr, Field(max_length=FAMILY_NAME_MAX_LENGTH)]
     members: Annotated[list[ArchivedMemberDocument], Field(max_length=MAX_ARCHIVED_MEMBERS)]
+
+    @model_validator(mode="after")
+    def _within_the_transaction_cap(self) -> FamilyArchiveDocument:
+        """記録の上限は控え全体で見る。
+
+        台帳ごとに掛けると、参加者を並べるだけで上限が掛け算で伸びる（100 人 ×
+        20,000 行）。取り込みは 1 リクエストの中で 1 行ずつ書くので、通した分だけ
+        DB とワーカーを占める。
+        """
+        written = sum(len(member.ledger.transactions) for member in self.members if member.ledger)
+        if written > MAX_ARCHIVED_TRANSACTIONS:
+            raise ValueError(f"cannot hold more than {MAX_ARCHIVED_TRANSACTIONS} transactions in total")
+        return self
 
 
 class ImportedFamilyResponse(BaseModel):
