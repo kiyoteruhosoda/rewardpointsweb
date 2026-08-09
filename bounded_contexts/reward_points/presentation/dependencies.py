@@ -15,6 +15,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
+from bounded_contexts.reward_points.application.family_archive_writer import FamilyArchiveWriter
 from bounded_contexts.reward_points.application.family_overview_builder import FamilyOverviewBuilder
 from bounded_contexts.reward_points.application.invitation_binder import InvitationBinder
 from bounded_contexts.reward_points.application.use_cases.accept_invitation import AcceptInvitationUseCase
@@ -36,6 +37,8 @@ from bounded_contexts.reward_points.application.use_cases.dissolve_family import
 from bounded_contexts.reward_points.application.use_cases.ensure_user_can_be_deleted import (
     EnsureUserCanBeDeletedUseCase,
 )
+from bounded_contexts.reward_points.application.use_cases.export_family import ExportFamilyUseCase
+from bounded_contexts.reward_points.application.use_cases.import_family import ImportFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.issue_invitation import IssueInvitationUseCase
 from bounded_contexts.reward_points.application.use_cases.leave_family import LeaveFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.list_families import ListFamiliesUseCase
@@ -177,6 +180,26 @@ def get_overview_builder(
 OverviewDep = Annotated[FamilyOverviewBuilder, Depends(get_overview_builder)]
 
 
+def get_archive_writer(
+    *,
+    families: FamilyRepoDep,
+    memberships: MembershipRepoDep,
+    ledgers: LedgerRepoDep,
+    transactions: TransactionRepoDep,
+    bonuses: DailyBonusRepoDep,
+) -> FamilyArchiveWriter:
+    return FamilyArchiveWriter(
+        families=families,
+        memberships=memberships,
+        ledgers=ledgers,
+        transactions=transactions,
+        bonuses=bonuses,
+    )
+
+
+ArchiveWriterDep = Annotated[FamilyArchiveWriter, Depends(get_archive_writer)]
+
+
 def get_invitation_binder(
     invitations: InvitationRepoDep,
     memberships: MembershipRepoDep,
@@ -217,6 +240,27 @@ def get_dissolve_family_use_case(
     access: AccessDep, families: FamilyRepoDep, memberships: MembershipRepoDep
 ) -> DissolveFamilyUseCase:
     return DissolveFamilyUseCase(access, families, memberships)
+
+
+def get_export_family_use_case(access: AccessDep, writer: ArchiveWriterDep) -> ExportFamilyUseCase:
+    return ExportFamilyUseCase(access, writer)
+
+
+def get_import_family_use_case(
+    *,
+    families: FamilyRepoDep,
+    memberships: MembershipRepoDep,
+    ledgers: LedgerRepoDep,
+    transactions: TransactionRepoDep,
+    bonuses: DailyBonusRepoDep,
+) -> ImportFamilyUseCase:
+    return ImportFamilyUseCase(
+        families=families,
+        memberships=memberships,
+        ledgers=ledgers,
+        transactions=transactions,
+        bonuses=bonuses,
+    )
 
 
 def get_propose_independence_use_case(access: AccessDep, memberships: MembershipRepoDep) -> ProposeIndependenceUseCase:
@@ -378,6 +422,8 @@ ViewFamilyDep = Annotated[ViewFamilyUseCase, Depends(get_view_family_use_case)]
 RenameFamilyDep = Annotated[RenameFamilyUseCase, Depends(get_rename_family_use_case)]
 LeaveFamilyDep = Annotated[LeaveFamilyUseCase, Depends(get_leave_family_use_case)]
 DissolveFamilyDep = Annotated[DissolveFamilyUseCase, Depends(get_dissolve_family_use_case)]
+ExportFamilyDep = Annotated[ExportFamilyUseCase, Depends(get_export_family_use_case)]
+ImportFamilyDep = Annotated[ImportFamilyUseCase, Depends(get_import_family_use_case)]
 ProposeIndependenceDep = Annotated[ProposeIndependenceUseCase, Depends(get_propose_independence_use_case)]
 RevokeIndependenceDep = Annotated[RevokeIndependenceProposalUseCase, Depends(get_revoke_independence_use_case)]
 ApproveIndependenceDep = Annotated[ApproveIndependenceUseCase, Depends(get_approve_independence_use_case)]
@@ -404,10 +450,13 @@ __all__ = [
     "AccessDep",
     "AddChildDep",
     "ApproveIndependenceDep",
+    "ArchiveWriterDep",
     "ConfigureDailyBonusDep",
     "CorrectTransactionDep",
     "CreateFamilyDep",
     "DissolveFamilyDep",
+    "ExportFamilyDep",
+    "ImportFamilyDep",
     "IssueInvitationDep",
     "LeaveFamilyDep",
     "ListFamiliesDep",

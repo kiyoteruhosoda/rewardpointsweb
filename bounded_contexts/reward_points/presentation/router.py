@@ -39,6 +39,7 @@ from bounded_contexts.reward_points.application.use_cases.correct_point_transact
     CorrectTransactionCommand,
 )
 from bounded_contexts.reward_points.application.use_cases.create_family import CreateFamilyCommand
+from bounded_contexts.reward_points.application.use_cases.import_family import ImportFamilyCommand
 from bounded_contexts.reward_points.application.use_cases.issue_invitation import IssueInvitationCommand
 from bounded_contexts.reward_points.application.use_cases.record_point_transaction import (
     RecordTransactionCommand,
@@ -47,6 +48,7 @@ from bounded_contexts.reward_points.application.use_cases.redeem_invitation impo
 from bounded_contexts.reward_points.application.use_cases.reverse_point_transaction import (
     ReverseTransactionCommand,
 )
+from bounded_contexts.reward_points.presentation import family_archive_documents
 from bounded_contexts.reward_points.presentation.dependencies import (
     AcceptInvitationDep,
     AddChildDep,
@@ -55,6 +57,8 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     CorrectTransactionDep,
     CreateFamilyDep,
     DissolveFamilyDep,
+    ExportFamilyDep,
+    ImportFamilyDep,
     IssueInvitationDep,
     LeaveFamilyDep,
     ListFamiliesDep,
@@ -80,10 +84,12 @@ from bounded_contexts.reward_points.presentation.schemas import (
     CorrectionResponse,
     DailyBonusRequest,
     DailyBonusResponse,
+    FamilyArchiveDocument,
     FamilyCreateRequest,
     FamilyDetailResponse,
     FamilyRenameRequest,
     FamilySummaryResponse,
+    ImportedFamilyResponse,
     InvitationAcceptRequest,
     InvitationCreateRequest,
     InvitationRedeemRequest,
@@ -113,6 +119,10 @@ FamilyGuardian = Annotated[
     AuthenticatedPrincipal,
     Depends(require_permission("family:view", "family:manage", "point:view", "point:manage")),
 ]
+# 控えには家族の全部（子どもの台帳と履歴）が載るので、家族と台帳の両方を
+# 見られる立場を要求する（ADR-0025）。どの家族を書き出せるかは、この先で
+# 家族の中での立場が決める
+ArchiveReader = Annotated[AuthenticatedPrincipal, Depends(require_permission("family:view", "point:view"))]
 
 
 def _to_membership(dto: MembershipDTO) -> MembershipResponse:
@@ -279,6 +289,61 @@ async def create_family(
     )
     logger.info("family_created", extra={"family_id": dto.id})
     return _to_family(dto)
+
+
+# --- 控え（バックアップ。ADR-0025） ------------------------------------------
+
+
+@router.post("/import", status_code=status.HTTP_201_CREATED, response_model=ImportedFamilyResponse)
+async def import_family(
+    body: FamilyArchiveDocument, use_case: ImportFamilyDep, principal: FamilyGuardian
+) -> ImportedFamilyResponse:
+    """控えから家族を作り直す（復元）。
+
+    作られるのは **新しい家族** で、呼んだ人が owner になる。既存の家族へ混ぜる
+    ことはできないので、どこかに所属したままでは呼べない（``already_belongs_to_family``）。
+
+    owner 以外の参加者はアカウント未紐付けで戻る。本人が入り直す道は招待コード。
+    子の台帳は記録ごと戻るので、招待を受けた子には自分の履歴が残っている。
+    """
+    dto = use_case.execute(
+        ImportFamilyCommand(
+            account_id=principal.user_id,
+            archive=family_archive_documents.to_dto(body),
+        )
+    )
+    logger.info(
+        "family_imported",
+        extra={
+            "family_id": dto.family_id,
+            "member_count": dto.member_count,
+            "transaction_count": dto.transaction_count,
+        },
+    )
+    return ImportedFamilyResponse(
+        family_id=dto.family_id,
+        name=dto.name,
+        member_count=dto.member_count,
+        transaction_count=dto.transaction_count,
+    )
+
+
+@router.get("/{family_id}/export", response_model=FamilyArchiveDocument)
+async def export_family(family_id: int, use_case: ExportFamilyDep, principal: ArchiveReader) -> FamilyArchiveDocument:
+    """家族まるごとを控えとして書き出す（親のみ）。
+
+    参加者・子どもの台帳・記録・毎日のボーナスが 1 つの JSON に入る。**アカウント
+    は入らない** — ログイン ID もパスワードも招待コードも載らないので、この控えから
+    誰かのアカウントを乗っ取ることはできない。
+
+    そのまま ``POST /api/families/import`` へ送れば元に戻る。
+    """
+    archive = use_case.execute(family_id=family_id, account_id=principal.user_id)
+    logger.info("family_exported", extra={"family_id": family_id, "member_count": len(archive.members)})
+    return family_archive_documents.to_document(archive)
+
+
+# --- 家族（続き） ------------------------------------------------------------
 
 
 @router.get("/{family_id}", response_model=FamilyDetailResponse)

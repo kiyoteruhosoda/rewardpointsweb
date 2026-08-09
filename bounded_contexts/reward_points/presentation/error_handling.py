@@ -28,6 +28,7 @@ from bounded_contexts.reward_points.domain.exceptions import (
     GuardianAccountRequiredError,
     IdempotencyKeyReusedError,
     IndependenceNotProposedError,
+    InvalidFamilyArchiveError,
     InvalidMemberOrderError,
     InvitationNotFoundError,
     InvitationTargetUnavailableError,
@@ -41,6 +42,7 @@ from bounded_contexts.reward_points.domain.exceptions import (
     RoleNotInvitableError,
     TransactionAlreadyReversedError,
     TransactionNotFoundError,
+    UnsupportedArchiveVersionError,
     UsernameAlreadyTakenError,
 )
 from presentation.fastapi.error_handling import log_failed_request
@@ -72,6 +74,10 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     DisplayNameRequiredError: status.HTTP_400_BAD_REQUEST,
     RoleNotInvitableError: status.HTTP_400_BAD_REQUEST,
     InvalidMemberOrderError: status.HTTP_400_BAD_REQUEST,
+    # 控えの中身が辻褄に合わない・読めない版（ADR-0025）。どちらも送られた
+    # ものの問題なので 400。打つ手が違うのでコードは分ける
+    InvalidFamilyArchiveError: status.HTTP_400_BAD_REQUEST,
+    UnsupportedArchiveVersionError: status.HTTP_400_BAD_REQUEST,
 }
 
 

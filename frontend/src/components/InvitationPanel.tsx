@@ -2,8 +2,13 @@
  * 招待コードの発行と取り消し（親メンバー）。
  *
  * 出せる招待は立場で分かれる（ADR-0020）。子ども宛のコードは親（owner / parent）
- * なら配れるが、もう 1 人の親を招くのは owner だけ — 誰をこの家族へ入れるかは
- * owner が決める。
+ * なら配れるが、親を入れるコードは owner だけ — 誰をこの家族へ入れるかは owner が
+ * 決める。
+ *
+ * 宛先は 2 通り。**すでにいる参加者を指す**コード（その人がログインできるように
+ * なるだけで、顔ぶれは変わらない）と、**新しい人を入れる**コード（親のみ）。
+ * バックアップから復元した家族では owner 以外が全員未紐付けで戻るので、指せる
+ * 相手には子だけでなく親も並ぶ（ADR-0025）。
  *
  * 平文のコードは発行の応答にしか現れないので、受け取った直後だけ画面に出す。
  * 一覧へ戻ると二度と読めない（保存されているのはハッシュだけ。ADR-0009）。
@@ -18,14 +23,20 @@ import { useToast } from './ToastNotification'
 
 interface Props {
   familyId: number
-  /** アカウント未紐付けの子。子ども宛の招待は必ずこのどれかを指す。 */
-  unlinkedChildren: Membership[]
-  /** もう 1 人の親を招けるか（owner のみ）。 */
+  /**
+   * アカウント未紐付けの参加者。宛先を指す招待は必ずこのどれかを指す。
+   *
+   * 子だけとは限らない。バックアップから復元した家族では、owner 以外は全員
+   * 未紐付けで戻る（ADR-0025）。その人を指して配れば、台帳の「記録した人」が
+   * 元のまま残る — 新しく入れ直すと参照が外れる。
+   */
+  unlinkedMembers: Membership[]
+  /** もう 1 人の親を招けるか（owner のみ）。宛先を指す親宛のコードも owner だけ。 */
   canInviteParent: boolean
   onChanged: () => Promise<void>
 }
 
-export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, onChanged }: Props) {
+export function InvitationPanel({ familyId, unlinkedMembers, canInviteParent, onChanged }: Props) {
   const { t, locale } = useI18n()
   const { notify } = useToast()
   const [pending, setPending] = useState<Invitation[]>([])
@@ -46,14 +57,15 @@ export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, o
       })
   }, [familyId])
 
-  const issue = async (targetMembershipId: number | null) => {
+  const issue = async (target: Membership | null) => {
     if (issuingFor !== null) return
-    setIssuingFor(targetMembershipId ?? 'parent')
+    setIssuingFor(target?.id ?? 'parent')
     try {
+      // 宛先を指す場合の立場は、その参加者のもの（子には子、親には親のコード）
       const invitation = await families.issueInvitation(
         familyId,
-        targetMembershipId === null ? 'parent' : 'child',
-        targetMembershipId,
+        target === null ? 'parent' : target.role,
+        target?.id ?? null,
       )
       setIssued(invitation)
       await reload()
@@ -79,6 +91,11 @@ export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, o
     }
   }
 
+  // 親宛のコードを配れるのは owner だけ（ADR-0020）。押してから断られる操作を出さない
+  const invitableMembers = unlinkedMembers.filter(
+    (member) => member.role === 'child' || (member.role === 'parent' && canInviteParent),
+  )
+
   return (
     <section className="card">
       <h2>{t('invitations.title')}</h2>
@@ -103,17 +120,17 @@ export function InvitationPanel({ familyId, unlinkedChildren, canInviteParent, o
             {t('invitations.inviteParent')}
           </ActionButton>
         )}
-        {unlinkedChildren.map((child) => (
+        {invitableMembers.map((member) => (
           <ActionButton
-            key={child.id}
+            key={member.id}
             type="button"
-            pending={issuingFor === child.id}
+            pending={issuingFor === member.id}
             disabled={issuingFor !== null}
             onClick={() => {
-              void issue(child.id)
+              void issue(member)
             }}
           >
-            {t('invitations.inviteChild', { name: child.display_name })}
+            {t('invitations.inviteMember', { name: member.display_name })}
           </ActionButton>
         ))}
       </div>
