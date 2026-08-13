@@ -73,6 +73,21 @@ describe('FamilyPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
+  it('並びは 参加者 → 家族設定 → 招待 → 子どもの追加', () => {
+    renderPage(familyOf('owner', [member()]))
+
+    const sections = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+
+    expect(sections).toEqual([
+      'Members',
+      'Family settings',
+      'Daily bonus',
+      'Invitations',
+      'Add a child',
+      'Backup',
+    ])
+  })
+
   it('参加者と、見える範囲の残高を出す', () => {
     renderPage(familyOf('owner', [member()]))
 
