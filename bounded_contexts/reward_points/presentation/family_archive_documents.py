@@ -31,6 +31,7 @@ def to_document(archive: FamilyArchiveDTO) -> FamilyArchiveDocument:
         version=archive.version,
         exported_at=archive.exported_at,
         family_name=archive.family_name,
+        family_rules=archive.family_rules,
         members=[_member_document(member) for member in archive.members],
     )
 
@@ -41,6 +42,7 @@ def to_dto(document: FamilyArchiveDocument) -> FamilyArchiveDTO:
         version=document.version,
         exported_at=document.exported_at,
         family_name=document.family_name,
+        family_rules=document.family_rules,
         members=tuple(_member_dto(member) for member in document.members),
     )
 

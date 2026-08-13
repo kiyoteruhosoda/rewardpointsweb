@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 
@@ -27,6 +28,13 @@ class DailyBonusDraft:
 class IDailyBonusRepository(ABC):
     @abstractmethod
     def find_by_ledger(self, ledger_id: int) -> DailyBonus | None: ...
+
+    @abstractmethod
+    def list_for_ledgers(self, ledger_ids: Sequence[int]) -> list[DailyBonus]:
+        """複数の台帳の設定をまとめて読む（家族設定の画面のため。ADR-0027）。
+
+        設定は家族設定に並ぶので、参加者ごとに引き直すと家族の人数だけ往復が増える。
+        """
 
     @abstractmethod
     def save(self, draft: DailyBonusDraft) -> DailyBonus:

@@ -1,13 +1,17 @@
 /**
- * 家族の設定（並び順・改名・脱退・解散）。
+ * 家族の設定（ルール・並び順・改名・脱退・解散）。
  *
- * 出し分けは立場で決める: 改名と解散は owner、脱退と並べ替えは親（owner / parent）。
+ * 出し分けは立場で決める: 改名と解散は owner、ルール・脱退・並べ替えは親
+ * （owner / parent）。
  * 「他に親が残っているか」「自分以外の参加者がいないか」といった成立条件は
  * サーバーが検証するので（ADR-0013）、ここではエラーコードの文言を出すだけ。
  *
  * 並び順は家族に 1 つで、左のナビゲーションとダッシュボードの両方に効く。
  * 上下に 1 つずつ動かす形にしているのは、指でも掴める操作にするため
  * （ドラッグはキーボードと支援技術から扱いにくい）。
+ *
+ * ルール（家族で決めた約束ごと。ADR-0027）も家族に 1 つ。ここが唯一の書く場所で、
+ * 子どもの台帳には同じ文面が読むだけの形で出る。
  */
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -16,6 +20,7 @@ import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families, type FamilyDetail } from '../services/families'
+import { useAuth } from '../store/AuthContext'
 import { ActionButton } from './ActionButton'
 import { useToast } from './ToastNotification'
 
@@ -27,8 +32,10 @@ interface Props {
 export function FamilySettingsPanel({ family, onChanged }: Props) {
   const { t } = useI18n()
   const { notify } = useToast()
+  const { hasScope } = useAuth()
   const navigate = useNavigate()
   const [name, setName] = useState(family.name)
+  const [rules, setRules] = useState(family.rules ?? '')
   // 並べ替え中の子と向き。上下の矢印は同じ子を指すので、押した方だけに目印を出すには
   // 「どちらへ動かしているか」まで持つ必要がある。
   const [moving, setMoving] = useState<{ childId: number; delta: number } | null>(null)
@@ -44,6 +51,17 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
     event.preventDefault()
     try {
       await families.rename(family.id, name)
+      await onChanged()
+      notify('success', t('common.saved'))
+    } catch (error) {
+      fail(error)
+    }
+  })
+
+  const [saveRules, savingRules] = usePendingAction(async (event: FormEvent) => {
+    event.preventDefault()
+    try {
+      await families.setRules(family.id, rules)
       await onChanged()
       notify('success', t('common.saved'))
     } catch (error) {
@@ -115,6 +133,30 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
           </label>
           <ActionButton type="submit" pending={renaming}>
             {t('families.rename')}
+          </ActionButton>
+        </form>
+      )}
+
+      {/* 家族で決めた約束ごと（ADR-0027）。親なら書ける（改名と違い owner 限定に
+          しない）。子どもの台帳にも同じ文面が出るので、ここが唯一の出所になる。
+          立場に加えて scope も見る — 運用者がロールの権限を編集した後に、押せば
+          必ず 403 になる入力欄を残さないため（ADR-0019 と同じ考え方） */}
+      {hasScope('family:manage') && (
+        <form className="card-inset family-rules-form" onSubmit={saveRules}>
+          <label>
+            {t('families.rules')}
+            <textarea
+              rows={5}
+              value={rules}
+              placeholder={t('families.rulesPlaceholder')}
+              onChange={(event) => {
+                setRules(event.target.value)
+              }}
+            />
+          </label>
+          <p className="field-hint">{t('families.rulesHint')}</p>
+          <ActionButton type="submit" pending={savingRules}>
+            {t('common.save')}
           </ActionButton>
         </form>
       )}

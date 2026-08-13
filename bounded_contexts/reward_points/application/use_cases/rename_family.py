@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from bounded_contexts.reward_points.application.dto.family_dto import FamilyDetailDTO
+from bounded_contexts.reward_points.application.dto.family_dto import FamilyDetailDTO, detail_of
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
 from bounded_contexts.reward_points.application.family_overview_builder import FamilyOverviewBuilder
 from bounded_contexts.reward_points.domain.repositories.family_repository import IFamilyRepository
@@ -22,14 +22,8 @@ class RenameFamilyUseCase:
     def execute(self, *, family_id: int, account_id: int, name: str) -> FamilyDetailDTO:
         viewer = self._access.require_owner(family_id=family_id, account_id=account_id)
         family = self._families.update_name(family_id=family_id, name=name)
-        return FamilyDetailDTO(
-            id=family.id,
-            name=family.name_value,
-            my_membership_id=viewer.id,
-            my_role=viewer.role,
-            # この入口は family:manage を要求する（router）ので、可否は立場だけで決まる
-            memberships=self._overview.build(viewer, can_manage=True),
-        )
+        # この入口は family:manage を要求する（router）ので、可否は立場だけで決まる
+        return detail_of(family, viewer=viewer, memberships=self._overview.build(viewer, can_manage=True))
 
 
 __all__ = ["RenameFamilyUseCase"]

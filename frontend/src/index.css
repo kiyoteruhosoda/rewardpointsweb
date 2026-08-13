@@ -180,7 +180,8 @@ td > .spinner {
 }
 
 input,
-select {
+select,
+textarea {
   padding: 0.45rem 0.6rem;
   background: var(--surface-raised);
   color: var(--text);
@@ -192,7 +193,8 @@ select {
 }
 
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -788,6 +790,37 @@ th {
   font-size: 1.4rem;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+}
+
+/* 家族のルール（ADR-0027）。家族設定では書き、子どもの台帳では読むだけ。
+ * 改行のとおりに読ませたいので、入力した折り返しをそのまま出す。 */
+.family-rules-form textarea {
+  /* 縦だけ伸ばせる。横へ広げると、隣の欄と桁がずれて読みにくくなる */
+  resize: vertical;
+  width: 100%;
+  font-family: inherit;
+}
+
+.family-rules-form label {
+  width: 100%;
+}
+
+.family-rules,
+.family-rules-form {
+  width: 100%;
+  align-self: stretch;
+}
+
+.family-rules-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 毎日のボーナス（ADR-0024）は子ごとに 1 枠並ぶ。誰の欄かを見出しで示す。 */
+.daily-bonus-child {
+  margin: 0;
+  font-weight: 600;
 }
 
 /* 発行した招待の URL。狭い画面でも枠から出さない。途中で切れると写せないので、

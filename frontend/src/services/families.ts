@@ -20,6 +20,13 @@ export interface Membership {
   /** 台帳を持つのは role = child だけ。見えない相手のものは null。 */
   ledger_id: number | null
   balance: number | null
+  /**
+   * 毎日のボーナスの設定（ADR-0024）。決めていなければ null。
+   *
+   * 決めるのは家族設定の画面（ADR-0027）。量は子ども一人ひとりで違うので、
+   * 家族ではなく参加者ごとに載る。
+   */
+  daily_bonus: DailyBonus | null
   /** 親から独立の指示が出ているか（ADR-0014）。子本人の承認で成立する。 */
   independence_proposed: boolean
   /**
@@ -46,6 +53,8 @@ export interface FamilySummary {
 export interface FamilyDetail {
   id: number
   name: string
+  /** 家族で決めた約束ごと（ADR-0027）。まだ書いていなければ null。 */
+  rules: string | null
   my_membership_id: number
   my_role: FamilyRole
   memberships: Membership[]
@@ -176,6 +185,8 @@ export interface FamilyArchive {
   version: number
   exported_at: string
   family_name: string
+  /** 家族で決めた約束ごと（ADR-0027）。版 1 の控えには入っていない。 */
+  family_rules?: string | null
   members: ArchivedMember[]
 }
 
@@ -223,6 +234,14 @@ export const families = {
 
   rename: (familyId: number, name: string) =>
     api.patch<FamilyDetail>(`/api/families/${familyId}`, { name }),
+
+  /**
+   * 家族で決めた約束ごとを書き換える（親メンバー。ADR-0027）。
+   *
+   * 空文字を送ると消える（サーバーが null へ寄せる）。
+   */
+  setRules: (familyId: number, rules: string) =>
+    api.put<FamilyDetail>(`/api/families/${familyId}/rules`, { rules }),
 
   /**
    * 家族まるごとを控えとして受け取る（親のみ。ADR-0026）。

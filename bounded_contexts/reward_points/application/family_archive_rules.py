@@ -16,7 +16,7 @@ from collections.abc import Iterable, Sequence
 
 from bounded_contexts.reward_points.application.dto.family_archive_dto import (
     ARCHIVE_FORMAT,
-    ARCHIVE_VERSION,
+    SUPPORTED_ARCHIVE_VERSIONS,
     ArchivedDailyBonusDTO,
     ArchivedLedgerDTO,
     ArchivedMemberDTO,
@@ -47,8 +47,9 @@ def _require_readable_format(archive: FamilyArchiveDTO) -> None:
     if archive.format != ARCHIVE_FORMAT:
         raise InvalidFamilyArchiveError
     # 知らない版は読めるところだけ読む、ということをしない。落ちた項目に記録が
-    # 入っていた場合、取り込めたように見えて中身が減る
-    if archive.version != ARCHIVE_VERSION:
+    # 入っていた場合、取り込めたように見えて中身が減る。古い版を受け付けるのは
+    # 「無くても復元が成立する」項目しか増えていないと分かっている版だけ
+    if archive.version not in SUPPORTED_ARCHIVE_VERSIONS:
         raise UnsupportedArchiveVersionError
 
 

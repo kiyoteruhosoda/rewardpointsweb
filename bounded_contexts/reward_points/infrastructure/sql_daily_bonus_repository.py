@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 
 from sqlalchemy import and_, delete, or_, select
@@ -32,6 +33,14 @@ class SqlDailyBonusRepository(IDailyBonusRepository):
     def find_by_ledger(self, ledger_id: int) -> DailyBonus | None:
         row = self._find_row(ledger_id)
         return _to_bonus(row) if row else None
+
+    def list_for_ledgers(self, ledger_ids: Sequence[int]) -> list[DailyBonus]:
+        if not ledger_ids:
+            return []
+        rows = self._session.scalars(
+            select(DailyBonusModel).where(DailyBonusModel.ledger_id.in_(ledger_ids)).order_by(DailyBonusModel.id)
+        ).all()
+        return [_to_bonus(row) for row in rows]
 
     def save(self, draft: DailyBonusDraft) -> DailyBonus:
         # 値オブジェクトを先に通す。列の CHECK と同じ不変条件をドメイン側でも守る
