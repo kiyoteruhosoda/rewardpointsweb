@@ -1,6 +1,11 @@
 /**
  * 家族の詳細（家族設定）。参加者と、見える範囲の残高が並ぶ。
  *
+ * 並びは「毎日見るもの → たまに触るもの」の順にする: 参加者 → 家族設定（家族の
+ * 決めごと。まいにちのボーナスもここに続く）→ 招待 → 子どもの追加 → 控え。
+ * 子どもを増やしたり招待コードを配ったりするのは家族を作る最初だけなので、
+ * 日々開く画面の先頭には置かない。
+ *
  * 参加者ごとの操作は、サーバーが返す可否（`can_*`）だけで出し分ける。子の追加と
  * 招待は自分の立場から決めるが、これも「サーバーが同じ条件で断る」場所に揃えて
  * ある（ADR-0009 の認可表）。子が開いた場合は自分の台帳への入り口だけが残る
@@ -156,6 +161,21 @@ export function FamilyPage() {
         )}
       </section>
 
+      {isGuardian && <FamilySettingsPanel family={family} onChanged={reload} />}
+
+      {/* 毎日のボーナス（ADR-0024）は家族の決めごとなので家族設定に置く
+          （ADR-0027）。量は子ごとに違ってよく、入力欄も子の数だけ並ぶ */}
+      {isGuardian && canManagePoints && <DailyBonusPanel family={family} onChanged={reload} />}
+
+      {isGuardian && (
+        <InvitationPanel
+          familyId={family.id}
+          unlinkedMembers={unlinkedMembers}
+          canInviteParent={isOwner}
+          onChanged={reload}
+        />
+      )}
+
       {isGuardian && (
         <section className="card">
           <h2>{t('families.addChild')}</h2>
@@ -178,15 +198,6 @@ export function FamilyPage() {
         </section>
       )}
 
-      {isGuardian && (
-        <InvitationPanel
-          familyId={family.id}
-          unlinkedMembers={unlinkedMembers}
-          canInviteParent={isOwner}
-          onChanged={reload}
-        />
-      )}
-
       {independenceProposedToMe && (
         <section className="card">
           <h2>{t('families.independence.title')}</h2>
@@ -196,12 +207,6 @@ export function FamilyPage() {
           </ActionButton>
         </section>
       )}
-
-      {isGuardian && <FamilySettingsPanel family={family} onChanged={reload} />}
-
-      {/* 毎日のボーナス（ADR-0024）は家族の決めごとなので家族設定に置く
-          （ADR-0027）。量は子ごとに違ってよく、入力欄も子の数だけ並ぶ */}
-      {isGuardian && canManagePoints && <DailyBonusPanel family={family} onChanged={reload} />}
 
       {isGuardian && <FamilyArchivePanel familyId={id} />}
 
