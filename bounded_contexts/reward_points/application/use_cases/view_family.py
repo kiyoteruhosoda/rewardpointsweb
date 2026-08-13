@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from bounded_contexts.reward_points.application.dto.family_dto import FamilyDetailDTO
+from bounded_contexts.reward_points.application.dto.family_dto import FamilyDetailDTO, detail_of
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
 from bounded_contexts.reward_points.application.family_overview_builder import FamilyOverviewBuilder
 from bounded_contexts.reward_points.domain.exceptions import FamilyNotFoundError
@@ -29,13 +29,7 @@ class ViewFamilyUseCase:
         family = self._families.find_by_id(family_id)
         if family is None:
             raise FamilyNotFoundError
-        return FamilyDetailDTO(
-            id=family.id,
-            name=family.name_value,
-            my_membership_id=viewer.id,
-            my_role=viewer.role,
-            memberships=self._overview.build(viewer, can_manage=can_manage),
-        )
+        return detail_of(family, viewer=viewer, memberships=self._overview.build(viewer, can_manage=can_manage))
 
 
 __all__ = ["ViewFamilyUseCase"]

@@ -70,6 +70,7 @@ class FamilyArchiveWriter:
             version=ARCHIVE_VERSION,
             exported_at=utcnow(),
             family_name=family.name_value,
+            family_rules=family.rules_value,
             members=tuple(
                 self._member(member, ledger=ledgers.get(member.id), histories=histories, member_refs=member_refs)
                 for member in members

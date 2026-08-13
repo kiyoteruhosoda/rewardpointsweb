@@ -33,6 +33,7 @@ const SUMMARY: FamilySummary = {
 const DETAIL: FamilyDetail = {
   id: 1,
   name: 'ほその家',
+  rules: null,
   my_membership_id: 1,
   my_role: 'owner',
   memberships: [],

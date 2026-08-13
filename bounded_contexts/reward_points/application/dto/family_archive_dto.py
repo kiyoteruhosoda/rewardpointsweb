@@ -24,8 +24,16 @@ from bounded_contexts.reward_points.domain.value_objects.family_role import Fami
 #: ファイルの種類。別のアプリの JSON を取り違えて渡されたときに気付くための印
 ARCHIVE_FORMAT = "rewardpointsweb.family"
 
-#: 読み書きできる形の版。形を変えたら上げる
-ARCHIVE_VERSION = 1
+#: 書き出す形の版。形を変えたら上げる
+ARCHIVE_VERSION = 2
+
+#: 取り込める版。
+#:
+#: 版 1 との違いは家族のルール（``family_rules``）が載るかどうかだけで、無くても
+#: 家族は元どおりに作り直せる（ADR-0027）。**すでに手元にある控えを読めなくしない**
+#: ため、増えた項目が「無くても復元が成立する」ものである限り、古い版も受け付ける。
+#: 記録に関わる形が変わったときは、この集合から外して断る。
+SUPPORTED_ARCHIVE_VERSIONS = frozenset({1, ARCHIVE_VERSION})
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -84,6 +92,8 @@ class FamilyArchiveDTO:
     version: int
     exported_at: datetime
     family_name: str
+    #: 家族で決めた約束ごと（ADR-0027）。書いていなければ None。版 1 の控えには無い
+    family_rules: str | None
     #: 画面に並ぶ順（owner が先、次に親、最後に家族が決めた順の子）
     members: tuple[ArchivedMemberDTO, ...]
 
@@ -101,6 +111,7 @@ class ImportedFamilyDTO:
 __all__ = [
     "ARCHIVE_FORMAT",
     "ARCHIVE_VERSION",
+    "SUPPORTED_ARCHIVE_VERSIONS",
     "ArchivedDailyBonusDTO",
     "ArchivedLedgerDTO",
     "ArchivedMemberDTO",

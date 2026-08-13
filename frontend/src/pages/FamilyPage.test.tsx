@@ -15,6 +15,7 @@ const revokeIndependenceProposal =
   vi.fn<(familyId: number, membershipId: number) => Promise<void>>()
 const removeMembership = vi.fn<(familyId: number, membershipId: number) => Promise<void>>()
 const reorderMembers = vi.fn<(familyId: number, ids: number[]) => Promise<FamilyDetail>>()
+const setRules = vi.fn<(familyId: number, rules: string) => Promise<FamilyDetail>>()
 const leave = vi.fn<(familyId: number) => Promise<void>>()
 const issueInvitation =
   vi.fn<(familyId: number, role: FamilyRole, targetId: number | null) => Promise<Invitation>>()
@@ -30,6 +31,7 @@ vi.mock('../services/families', () => ({
     removeMembership: (familyId: number, membershipId: number) =>
       removeMembership(familyId, membershipId),
     reorderMembers: (familyId: number, ids: number[]) => reorderMembers(familyId, ids),
+    setRules: (familyId: number, rules: string) => setRules(familyId, rules),
     leave: (familyId: number) => leave(familyId),
     issueInvitation: (familyId: number, role: FamilyRole, targetId: number | null) =>
       issueInvitation(familyId, role, targetId),
@@ -299,6 +301,52 @@ describe('FamilyPage', () => {
     // 立場はその参加者のもの。指して配るから、台帳の「記録した人」が元のまま残る
     await waitFor(() => {
       expect(issueInvitation).toHaveBeenCalledWith(1, 'parent', 5)
+    })
+  })
+
+  describe('家族のルール（ADR-0027）', () => {
+    it('親が書き換えられる（owner に限らない）', async () => {
+      setRules.mockResolvedValue(familyOf('parent', [member()]))
+      const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()
+      renderPage(familyOf('parent', [member()]), reloadFamily)
+
+      fireEvent.change(screen.getByLabelText('Family rules'), {
+        target: { value: 'おかたづけ 10 pt' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      await waitFor(() => {
+        expect(setRules).toHaveBeenCalledWith(1, 'おかたづけ 10 pt')
+      })
+      // 同じ文面は子どもの台帳にも出るので、書いたら家族を読み直す（ADR-0021）
+      expect(reloadFamily).toHaveBeenCalled()
+    })
+
+    it('書いてあるルールを入力欄の初期値にする', () => {
+      renderPage({ ...familyOf('owner', [member()]), rules: 'ゲームは 1 日 1 時間' })
+
+      expect(screen.getByLabelText('Family rules')).toHaveValue('ゲームは 1 日 1 時間')
+    })
+
+    it('子には書き換える入り口を出さない（読むのは自分の台帳の画面）', () => {
+      renderPage(familyOf('child', [member({ is_me: true })]))
+
+      expect(screen.queryByLabelText('Family rules')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('毎日のボーナス（ADR-0024・ADR-0027）', () => {
+    it('親には子ごとの設定欄を出す', () => {
+      renderPage(familyOf('parent', [member(), member({ id: 3, display_name: 'タロウ' })]))
+
+      expect(screen.getByLabelText('Points per day for ハナ')).toBeInTheDocument()
+      expect(screen.getByLabelText('Points per day for タロウ')).toBeInTheDocument()
+    })
+
+    it('子には出さない（自分の台帳でも決められない）', () => {
+      renderPage(familyOf('child', [member({ is_me: true })]))
+
+      expect(screen.queryByLabelText('Points per day for ハナ')).not.toBeInTheDocument()
     })
   })
 

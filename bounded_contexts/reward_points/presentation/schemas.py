@@ -17,6 +17,9 @@ from bounded_contexts.reward_points.domain.value_objects.display_name import (
 )
 from bounded_contexts.reward_points.domain.value_objects.family_name import MAX_LENGTH as FAMILY_NAME_MAX_LENGTH
 from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
+from bounded_contexts.reward_points.domain.value_objects.family_rules import (
+    MAX_LENGTH as FAMILY_RULES_MAX_LENGTH,
+)
 from bounded_contexts.reward_points.domain.value_objects.idempotency_key import (
     MAX_BASE_LENGTH as IDEMPOTENCY_KEY_MAX_BASE_LENGTH,
 )
@@ -77,6 +80,28 @@ DisplayNameStr = Annotated[NonBlankStr, Field(max_length=DISPLAY_NAME_MAX_LENGTH
 CodeStr = Annotated[NonBlankStr, Field(max_length=64)]
 
 
+# --- 毎日のボーナス（ADR-0024） ----------------------------------------------
+#
+# 家族の応答（参加者ごと）にも台帳の応答にも載るので、家族より先に置く。
+
+
+class DailyBonusRequest(BaseModel):
+    """毎日いくつ足すか。加算だけなので符号は持たない（正の数のみ）。"""
+
+    amount: Annotated[int, Field(ge=1, le=AMOUNT_MAX)]
+    reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
+
+
+class DailyBonusResponse(BaseModel):
+    ledger_id: int
+    amount: int
+    reason: str
+    # 最初に渡す日（決めた日の翌日）
+    starts_on: date
+    # 渡し終えた最後の日。まだ 1 日も渡していなければ null
+    granted_through: date | None
+
+
 # --- 家族 --------------------------------------------------------------------
 
 
@@ -95,6 +120,9 @@ class MembershipResponse(BaseModel):
     username: str | None
     ledger_id: int | None
     balance: int | None
+    # 毎日のボーナスの設定（ADR-0024）。決めていなければ null。設定を決めるのは
+    # 家族設定の画面なので、参加者ごとにここへ載せる（ADR-0027）
+    daily_bonus: DailyBonusResponse | None = None
     # 独立が指示され、子本人の承認待ちか（ADR-0014）
     independence_proposed: bool
     # 見ている人がこの参加者に対して行える操作。画面はこれを見て操作を出す
@@ -114,6 +142,8 @@ class FamilySummaryResponse(BaseModel):
 class FamilyDetailResponse(BaseModel):
     id: int
     name: str
+    # 家族で決めた約束ごと（ADR-0027）。まだ書いていなければ null
+    rules: str | None
     my_membership_id: int
     my_role: FamilyRole
     memberships: list[MembershipResponse]
@@ -121,6 +151,16 @@ class FamilyDetailResponse(BaseModel):
 
 class FamilyRenameRequest(BaseModel):
     name: Annotated[NonBlankStr, Field(max_length=FAMILY_NAME_MAX_LENGTH)]
+
+
+class FamilyRulesRequest(BaseModel):
+    """家族で決めた約束ごと（ADR-0027）。
+
+    空文字・空白だけの入力は「消す」と同じに扱うので、``NonBlankStr`` は使わない
+    （書いたものを消す道を、別の入口にしない）。
+    """
+
+    rules: Annotated[str, Field(max_length=FAMILY_RULES_MAX_LENGTH)] | None = None
 
 
 class ChildCreateRequest(BaseModel):
@@ -228,26 +268,6 @@ class CorrectionResponse(BaseModel):
     correction: TransactionResponse
 
 
-# --- 毎日のボーナス（ADR-0024） ----------------------------------------------
-
-
-class DailyBonusRequest(BaseModel):
-    """毎日いくつ足すか。加算だけなので符号は持たない（正の数のみ）。"""
-
-    amount: Annotated[int, Field(ge=1, le=AMOUNT_MAX)]
-    reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
-
-
-class DailyBonusResponse(BaseModel):
-    ledger_id: int
-    amount: int
-    reason: str
-    # 最初に渡す日（決めた日の翌日）
-    starts_on: date
-    # 渡し終えた最後の日。まだ 1 日も渡していなければ null
-    granted_through: date | None
-
-
 class LedgerResponse(BaseModel):
     ledger_id: int
     family_id: int
@@ -317,6 +337,8 @@ class FamilyArchiveDocument(BaseModel):
     version: int
     exported_at: datetime
     family_name: Annotated[NonBlankStr, Field(max_length=FAMILY_NAME_MAX_LENGTH)]
+    # 家族で決めた約束ごと（ADR-0027）。版 1 の控えには無いので既定は None
+    family_rules: Annotated[str, Field(max_length=FAMILY_RULES_MAX_LENGTH)] | None = None
     members: Annotated[list[ArchivedMemberDocument], Field(max_length=MAX_ARCHIVED_MEMBERS)]
 
     @model_validator(mode="after")
@@ -358,6 +380,7 @@ __all__ = [
     "FamilyCreateRequest",
     "FamilyDetailResponse",
     "FamilyRenameRequest",
+    "FamilyRulesRequest",
     "FamilySummaryResponse",
     "ImportedFamilyResponse",
     "InvitationAcceptRequest",

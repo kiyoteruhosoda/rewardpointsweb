@@ -34,6 +34,7 @@ from bounded_contexts.reward_points.application.use_cases.correct_point_transact
 )
 from bounded_contexts.reward_points.application.use_cases.create_family import CreateFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.dissolve_family import DissolveFamilyUseCase
+from bounded_contexts.reward_points.application.use_cases.edit_family_rules import EditFamilyRulesUseCase
 from bounded_contexts.reward_points.application.use_cases.ensure_user_can_be_deleted import (
     EnsureUserCanBeDeletedUseCase,
 )
@@ -170,10 +171,15 @@ def get_overview_builder(
     memberships: MembershipRepoDep,
     ledgers: LedgerRepoDep,
     transactions: TransactionRepoDep,
+    bonuses: DailyBonusRepoDep,
     directory: DirectoryDep,
 ) -> FamilyOverviewBuilder:
     return FamilyOverviewBuilder(
-        memberships=memberships, ledgers=ledgers, transactions=transactions, accounts=directory
+        memberships=memberships,
+        ledgers=ledgers,
+        transactions=transactions,
+        bonuses=bonuses,
+        accounts=directory,
     )
 
 
@@ -230,6 +236,12 @@ def get_rename_family_use_case(
     access: AccessDep, families: FamilyRepoDep, overview: OverviewDep
 ) -> RenameFamilyUseCase:
     return RenameFamilyUseCase(access, families, overview)
+
+
+def get_edit_family_rules_use_case(
+    access: AccessDep, families: FamilyRepoDep, overview: OverviewDep
+) -> EditFamilyRulesUseCase:
+    return EditFamilyRulesUseCase(access, families, overview)
 
 
 def get_leave_family_use_case(access: AccessDep, memberships: MembershipRepoDep) -> LeaveFamilyUseCase:
@@ -420,6 +432,7 @@ ListFamiliesDep = Annotated[ListFamiliesUseCase, Depends(get_list_families_use_c
 CreateFamilyDep = Annotated[CreateFamilyUseCase, Depends(get_create_family_use_case)]
 ViewFamilyDep = Annotated[ViewFamilyUseCase, Depends(get_view_family_use_case)]
 RenameFamilyDep = Annotated[RenameFamilyUseCase, Depends(get_rename_family_use_case)]
+EditFamilyRulesDep = Annotated[EditFamilyRulesUseCase, Depends(get_edit_family_rules_use_case)]
 LeaveFamilyDep = Annotated[LeaveFamilyUseCase, Depends(get_leave_family_use_case)]
 DissolveFamilyDep = Annotated[DissolveFamilyUseCase, Depends(get_dissolve_family_use_case)]
 ExportFamilyDep = Annotated[ExportFamilyUseCase, Depends(get_export_family_use_case)]
@@ -455,6 +468,7 @@ __all__ = [
     "CorrectTransactionDep",
     "CreateFamilyDep",
     "DissolveFamilyDep",
+    "EditFamilyRulesDep",
     "ExportFamilyDep",
     "ImportFamilyDep",
     "IssueInvitationDep",

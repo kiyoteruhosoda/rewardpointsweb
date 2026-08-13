@@ -18,6 +18,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
+import { DailyBonusPanel } from '../components/DailyBonusPanel'
 import { FamilyArchivePanel } from '../components/FamilyArchivePanel'
 import { FamilySettingsPanel } from '../components/FamilySettingsPanel'
 import { InvitationPanel } from '../components/InvitationPanel'
@@ -193,6 +194,10 @@ export function FamilyPage() {
       )}
 
       {isGuardian && <FamilySettingsPanel family={family} onChanged={reload} />}
+
+      {/* 毎日のボーナス（ADR-0024）は家族の決めごとなので家族設定に置く
+          （ADR-0027）。量は子ごとに違ってよく、入力欄も子の数だけ並ぶ */}
+      {isGuardian && <DailyBonusPanel family={family} onChanged={reload} />}
 
       {isGuardian && <FamilyArchivePanel familyId={id} />}
 

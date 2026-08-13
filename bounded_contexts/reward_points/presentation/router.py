@@ -57,6 +57,7 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     CorrectTransactionDep,
     CreateFamilyDep,
     DissolveFamilyDep,
+    EditFamilyRulesDep,
     ExportFamilyDep,
     ImportFamilyDep,
     IssueInvitationDep,
@@ -88,6 +89,7 @@ from bounded_contexts.reward_points.presentation.schemas import (
     FamilyCreateRequest,
     FamilyDetailResponse,
     FamilyRenameRequest,
+    FamilyRulesRequest,
     FamilySummaryResponse,
     ImportedFamilyResponse,
     InvitationAcceptRequest,
@@ -135,6 +137,7 @@ def _to_membership(dto: MembershipDTO) -> MembershipResponse:
         username=dto.username,
         ledger_id=dto.ledger_id,
         balance=dto.balance,
+        daily_bonus=_to_daily_bonus(dto.daily_bonus) if dto.daily_bonus else None,
         independence_proposed=dto.independence_proposed,
         can_reset_password=dto.can_reset_password,
         can_propose_independence=dto.can_propose_independence,
@@ -146,6 +149,7 @@ def _to_family(dto: FamilyDetailDTO) -> FamilyDetailResponse:
     return FamilyDetailResponse(
         id=dto.id,
         name=dto.name,
+        rules=dto.rules,
         my_membership_id=dto.my_membership_id,
         my_role=dto.my_role,
         memberships=[_to_membership(member) for member in dto.memberships],
@@ -374,6 +378,26 @@ async def rename_family(
     """家族名を変える（owner のみ）。"""
     dto = use_case.execute(family_id=family_id, account_id=principal.user_id, name=body.name)
     logger.info("family_renamed", extra={"family_id": family_id})
+    return _to_family(dto)
+
+
+@router.put("/{family_id}/rules", response_model=FamilyDetailResponse)
+async def edit_family_rules(
+    *,
+    family_id: int,
+    body: FamilyRulesRequest,
+    use_case: EditFamilyRulesDep,
+    principal: FamilyManager,
+) -> FamilyDetailResponse:
+    """家族で決めた約束ごと（ルール）を書き換える（親メンバー。ADR-0027）。
+
+    家族に 1 つで、参加している全員が同じ文面を読む。ポイントの付与は変わらない
+    — 何を約束したかを書き留めるだけで、量を決めるのは親の記録と毎日のボーナス。
+
+    ``rules`` を省く（``null``）か空にすると、書いてあったルールを消す。
+    """
+    dto = use_case.execute(family_id=family_id, account_id=principal.user_id, rules=body.rules)
+    logger.info("family_rules_edited", extra={"family_id": family_id})
     return _to_family(dto)
 
 

@@ -79,7 +79,7 @@ class ImportFamilyUseCase:
         if self._memberships.list_for_account(command.account_id):
             raise AlreadyBelongsToFamilyError
 
-        family = self._families.add(name=archive.family_name)
+        family = self._families.add(name=archive.family_name, rules=archive.family_rules)
         members = self._restore_members(family_id=family.id, command=command)
         written = sum(self._restore_ledger(member, family_id=family.id, members=members) for member in archive.members)
         return ImportedFamilyDTO(

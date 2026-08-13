@@ -37,6 +37,16 @@ def can_administer_family(membership: FamilyMembership) -> bool:
     return membership.role.can_administer_family
 
 
+def can_edit_family_rules(membership: FamilyMembership) -> bool:
+    """家族のルール（約束ごとのメモ）を書き換えられるか。親なら書ける（ADR-0027）。
+
+    改名や解散と違い、家族の構成も台帳も動かさない。日々の決めごとを書き直すたびに
+    owner を呼ぶ形にはしない — 子の並び替え（:func:`can_reorder_members`）と同じ
+    「家族の見え方を整える」側の操作として扱う。
+    """
+    return membership.role.is_guardian
+
+
 def can_invite(membership: FamilyMembership, invited: FamilyRole) -> bool:
     """招待コードを発行できるか。配る立場で分かれる（ADR-0020）。
 
@@ -113,6 +123,7 @@ def can_issue_temporary_password_for(actor: FamilyMembership, target: FamilyMemb
 __all__ = [
     "can_administer_family",
     "can_create_child",
+    "can_edit_family_rules",
     "can_invite",
     "can_issue_temporary_password_for",
     "can_modify_ledger",

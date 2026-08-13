@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from bounded_contexts.reward_points.application.dto.family_dto import FamilyDetailDTO, MembershipDTO
+from bounded_contexts.reward_points.application.dto.family_dto import FamilyDetailDTO, MembershipDTO, detail_of
 from bounded_contexts.reward_points.domain.exceptions import AlreadyBelongsToFamilyError
 from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
     IFamilyMembershipRepository,
@@ -43,11 +43,9 @@ class CreateFamilyUseCase:
             role=FamilyRole.OWNER,
             display_name=command.display_name,
         )
-        return FamilyDetailDTO(
-            id=family.id,
-            name=family.name_value,
-            my_membership_id=owner.id,
-            my_role=owner.role,
+        return detail_of(
+            family,
+            viewer=owner,
             memberships=(
                 MembershipDTO(
                     id=owner.id,

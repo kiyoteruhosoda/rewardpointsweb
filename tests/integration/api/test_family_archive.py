@@ -114,6 +114,13 @@ def family(client: TestClient, admin_headers: dict[str, str], db_session: Sessio
     mom = create_account(client, admin_headers, username="mom", role="member", display_name="おかあさん")
     family_id = create_family(client, dad.headers, name="ほその家")
 
+    rules = client.put(
+        f"/api/families/{family_id}/rules",
+        headers=dad.headers,
+        json={"rules": "おてつだい 10 pt"},
+    )
+    assert rules.status_code == 200, rules.text
+
     invitation = issue_invitation(client, dad.headers, family_id, role="parent")
     accepted = client.post(
         "/api/families/invitations/accept",
@@ -174,8 +181,10 @@ def _grant_one_day(db_session: Session, *, starts_on: date) -> None:
 
 def test_the_archive_holds_the_whole_family(family: Json) -> None:
     assert family["format"] == "rewardpointsweb.family"
-    assert family["version"] == 1
+    assert family["version"] == 2
     assert family["family_name"] == "ほその家"
+    # 家族で決めた約束ごとも控えに入る（ADR-0027）
+    assert family["family_rules"] == "おてつだい 10 pt"
     assert [member["role"] for member in family["members"]] == ["owner", "parent", "child", "child"]
     assert [member["display_name"] for member in family["members"]] == [
         "おとうさん",
@@ -369,6 +378,21 @@ def test_an_archive_from_a_newer_app_is_refused(backup: Backup) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"]["error"] == "unsupported_archive_version"
+
+
+def test_an_archive_from_before_the_family_rules_still_restores(backup: Backup) -> None:
+    """版 1 の控え（ルールを持たない）は今も取り込める（ADR-0027）。
+
+    増えたのは「無くても家族を作り直せる」項目だけなので、すでに手元にある控えを
+    読めなくしない。
+    """
+    older = {key: value for key, value in backup.archive.items() if key != "family_rules"}
+
+    imported = _import(backup.client, backup.headers, older | {"version": 1})
+
+    detail = backup.view(imported["family_id"])
+    assert detail["rules"] is None
+    assert imported["member_count"] == 4
 
 
 def test_some_other_json_is_refused(backup: Backup) -> None:

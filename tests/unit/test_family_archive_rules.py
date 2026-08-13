@@ -54,6 +54,7 @@ def _archive(*entries: ArchivedTransactionDTO, bonus: ArchivedDailyBonusDTO | No
         version=ARCHIVE_VERSION,
         exported_at=_OCCURRED,
         family_name="ほその家",
+        family_rules="ゲームは 1 日 1 時間",
         members=(
             ArchivedMemberDTO(ref="m1", display_name="おとうさん", role=FamilyRole.OWNER, ledger=None),
             ArchivedMemberDTO(

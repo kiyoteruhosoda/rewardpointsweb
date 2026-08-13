@@ -10,6 +10,10 @@
  * 変更 UI を出すのはサーバーが `can_modify` を返したときだけ。子ども本人は同じ
  * 画面で残高と履歴を見るが、変更の入り口は現れない。
  *
+ * 家族で決めた約束ごと（ADR-0027）は記録の入力欄の下に **読むだけ** で出す。
+ * 書き換えるのは家族設定で、毎日のボーナスの設定（ADR-0024）も同じくそちらへ
+ * 移した — 家族の決めごとは 1 か所に集める。
+ *
  * 残高を出すのはこの画面だけではない。ダッシュボード・ナビゲーション・家族設定は
  * 家族の応答（FamilyContext）に載る残高を見るので、記録したら**両方**読み直す
  * （ADR-0021）。片方だけだと、同じ残高が画面ごとに食い違う。
@@ -18,7 +22,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
-import { DailyBonusPanel } from '../components/DailyBonusPanel'
 import { PointEntryForm } from '../components/PointEntryForm'
 import { useToast } from '../components/ToastNotification'
 import { usePendingRows } from '../hooks/usePendingRows'
@@ -43,7 +46,7 @@ export function LedgerPage() {
   const { familyId, ledgerId } = useParams<{ familyId: string; ledgerId: string }>()
   const { t, locale } = useI18n()
   const { notify } = useToast()
-  const { reload: reloadFamily } = useFamily()
+  const { family: myFamily, reload: reloadFamily } = useFamily()
   const [ledger, setLedger] = useState<Ledger | null>(null)
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null)
   const [reasons, setReasons] = useState<string[]>([])
@@ -154,6 +157,10 @@ export function LedgerPage() {
     )
   }
 
+  // 家族のルール（ADR-0027）。家族を読めていないときは何も出さない（この画面は
+  // 台帳を出せていれば用を成す。ルールが読めないことを断り書きにはしない）
+  const familyRules = myFamily?.rules ?? null
+
   // 訂正のあいだは記録の入力欄をその場で置き換える。同じ画面に「足す」と
   // 「直す」の入力が並ぶと、どちらへ打ち込んでいるのか分からなくなる。
   const entryForm =
@@ -202,19 +209,18 @@ export function LedgerPage() {
 
       <section className="card">
         {ledger.can_modify ? entryForm : <p>{t('points.readOnly')}</p>}
-      </section>
 
-      {/* 毎日のボーナス（ADR-0024）。読み直すと設定が変わり得るので、入力欄は
-          その都度作り直す（保存した値を出したまま古い入力が残らないように） */}
-      {ledger.can_modify && (
-        <DailyBonusPanel
-          key={`${ledger.daily_bonus?.amount ?? 'none'}:${ledger.daily_bonus?.reason ?? ''}`}
-          familyId={family}
-          ledgerId={id}
-          bonus={ledger.daily_bonus}
-          onChanged={reload}
-        />
-      )}
+        {/* 家族で決めた約束ごと（ADR-0027）。**読むだけ**で、書き換えるのは家族設定。
+            付ける・使うを決める手前でいつでも読めるよう、入力欄のすぐ下に置く。
+            出所は家族の応答（FamilyContext）— 台帳の応答には載せない（同じ文面を
+            2 か所から返すと、書き換えた直後に画面ごとで食い違う） */}
+        {familyRules !== null && (
+          <div className="card-inset family-rules">
+            <h2>{t('families.rules')}</h2>
+            <p className="family-rules-text">{familyRules}</p>
+          </div>
+        )}
+      </section>
 
       <section className="card">
         <h2>{t('points.history')}</h2>

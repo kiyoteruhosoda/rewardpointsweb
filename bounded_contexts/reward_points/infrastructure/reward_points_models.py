@@ -28,6 +28,8 @@ class FamilyModel(Base):
 
     id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
+    # 家族で決めた約束ごと（ADR-0027）。書いていなければ NULL（空文字は入れない）
+    rules: Mapped[str | None] = mapped_column(sa.Text(), nullable=True)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 

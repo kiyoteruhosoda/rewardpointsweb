@@ -10,7 +10,8 @@ from bounded_contexts.reward_points.domain.entities.family import Family
 
 class IFamilyRepository(ABC):
     @abstractmethod
-    def add(self, *, name: str) -> Family: ...
+    def add(self, *, name: str, rules: str | None = None) -> Family:
+        """家族を作る。``rules`` は控えからの復元でだけ渡す（ADR-0026）。"""
 
     @abstractmethod
     def find_by_id(self, family_id: int) -> Family | None: ...
@@ -29,6 +30,10 @@ class IFamilyRepository(ABC):
     @abstractmethod
     def update_name(self, *, family_id: int, name: str) -> Family:
         """家族名を変える（改名は owner だけができる。ADR-0013）。"""
+
+    @abstractmethod
+    def update_rules(self, *, family_id: int, rules: str | None) -> Family:
+        """家族のルールを書き換える（``None`` で消す。ADR-0027）。"""
 
     @abstractmethod
     def delete(self, family_id: int) -> None:

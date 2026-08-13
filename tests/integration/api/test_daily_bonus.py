@@ -70,6 +70,33 @@ def home(client: TestClient, admin_headers: dict[str, str]) -> Home:
     return Home(parent=parent, ledger=Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"]))))
 
 
+def _member_of(client: TestClient, home: Home, *, display_name: str) -> dict[str, Any]:
+    response = client.get(f"/api/families/{home.ledger.family_id}", headers=home.headers)
+    assert response.status_code == 200, response.text
+    found: dict[str, Any] = next(
+        member for member in response.json()["memberships"] if member["display_name"] == display_name
+    )
+    return found
+
+
+def _sign_in_as(client: TestClient, home: Home, *, membership: dict[str, Any], username: str) -> dict[str, str]:
+    """その子として本人ログインできるようにする（招待コード。ADR-0011）。"""
+    invitation = issue_invitation(
+        client,
+        home.headers,
+        home.ledger.family_id,
+        role="child",
+        target_membership_id=int(str(membership["id"])),
+    )
+    password = f"{username}-pass-123"
+    redeemed = client.post(
+        "/api/families/invitations/redeem",
+        json={"code": invitation["code"], "username": username, "password": password},
+    )
+    assert redeemed.status_code == 201, redeemed.text
+    return login(client, username=username, password=password)
+
+
 def _bonus_path(ledger: Ledger) -> str:
     return f"{ledger.path()}/daily-bonus"
 
@@ -143,6 +170,42 @@ def test_the_setting_comes_back_with_the_ledger(client: TestClient, home: Home) 
     _configure(client, home.headers, home.ledger, amount=25)
 
     assert _view(client, home.headers, home.ledger)["daily_bonus"]["amount"] == 25
+
+
+def test_the_setting_comes_back_with_the_family(client: TestClient, home: Home) -> None:
+    """決めるのは家族設定の画面なので、家族の詳細にも載る（ADR-0027）。
+
+    子どもごとに量が違ってよいので、家族ではなく参加者ごとに付く。
+    """
+    hana = add_child(client, home.headers, home.ledger.family_id, display_name="はなこ")
+    hana_ledger = Ledger(family_id=home.ledger.family_id, ledger_id=int(str(hana["ledger_id"])))
+    _configure(client, home.headers, home.ledger, amount=25)
+    _configure(client, home.headers, hana_ledger, amount=5)
+
+    detail = client.get(f"/api/families/{home.ledger.family_id}", headers=home.headers)
+
+    assert detail.status_code == 200, detail.text
+    amounts = {
+        member["display_name"]: (member["daily_bonus"] or {}).get("amount") for member in detail.json()["memberships"]
+    }
+    # 親は台帳を持たないので設定も持たない
+    assert amounts == {"おとうさん": None, "たろう": 25, "はなこ": 5}
+
+
+def test_a_child_sees_only_their_own_setting_in_the_family(client: TestClient, home: Home) -> None:
+    """兄弟の台帳は見えないので、その子の設定も返らない（ADR-0009）。"""
+    hana = add_child(client, home.headers, home.ledger.family_id, display_name="はなこ")
+    hana_ledger = Ledger(family_id=home.ledger.family_id, ledger_id=int(str(hana["ledger_id"])))
+    _configure(client, home.headers, home.ledger, amount=25)
+    _configure(client, home.headers, hana_ledger, amount=5)
+    taro = _member_of(client, home, display_name="たろう")
+    child_headers = _sign_in_as(client, home, membership=taro, username="taro")
+
+    detail = client.get(f"/api/families/{home.ledger.family_id}", headers=child_headers)
+
+    assert detail.status_code == 200, detail.text
+    bonuses = {member["display_name"]: member["daily_bonus"] is not None for member in detail.json()["memberships"]}
+    assert bonuses == {"おとうさん": False, "たろう": True, "はなこ": False}
 
 
 def test_deciding_again_replaces_the_amount(client: TestClient, home: Home) -> None:
