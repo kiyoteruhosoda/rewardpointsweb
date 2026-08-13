@@ -52,9 +52,13 @@ function restoredParent(): Membership {
   })
 }
 
-function renderPage(family: FamilyDetail, reloadFamily = () => Promise.resolve()) {
+function renderPage(
+  family: FamilyDetail,
+  reloadFamily = () => Promise.resolve(),
+  scopes = ['family:view', 'family:manage', 'point:manage'],
+) {
   return renderWithProviders(<FamilyPage />, {
-    scopes: ['family:view'],
+    scopes,
     route: '/families/1',
     path: '/families/:familyId',
     family,
@@ -333,6 +337,12 @@ describe('FamilyPage', () => {
 
       expect(screen.queryByLabelText('Family rules')).not.toBeInTheDocument()
     })
+
+    it('family:manage を持たない親には入力欄を出さない（押せば必ず 403 になる）', () => {
+      renderPage(familyOf('parent', [member()]), () => Promise.resolve(), ['family:view'])
+
+      expect(screen.queryByLabelText('Family rules')).not.toBeInTheDocument()
+    })
   })
 
   describe('毎日のボーナス（ADR-0024・ADR-0027）', () => {
@@ -345,6 +355,15 @@ describe('FamilyPage', () => {
 
     it('子には出さない（自分の台帳でも決められない）', () => {
       renderPage(familyOf('child', [member({ is_me: true })]))
+
+      expect(screen.queryByLabelText('Points per day for ハナ')).not.toBeInTheDocument()
+    })
+
+    it('point:manage を持たない親には出さない（決める入口は台帳を書き換える操作）', () => {
+      renderPage(familyOf('parent', [member()]), () => Promise.resolve(), [
+        'family:view',
+        'family:manage',
+      ])
 
       expect(screen.queryByLabelText('Points per day for ハナ')).not.toBeInTheDocument()
     })

@@ -36,7 +36,7 @@ export function FamilyPage() {
   const { familyId } = useParams<{ familyId: string }>()
   const { t, locale } = useI18n()
   const { notify } = useToast()
-  const { logout } = useAuth()
+  const { hasScope, logout } = useAuth()
   const { family, loading, reload } = useFamily()
   const [childName, setChildName] = useState('')
   const [issued, setIssued] = useState<TemporaryPassword | null>(null)
@@ -85,6 +85,10 @@ export function FamilyPage() {
   const id = family.id
   const isGuardian = family.my_role === 'owner' || family.my_role === 'parent'
   const isOwner = family.my_role === 'owner'
+  // 毎日のボーナスを決める入口は台帳を書き換える操作（point:manage）。立場だけで
+  // 出すと、運用者がロールの権限を編集した後に必ず 403 になるボタンが並ぶ
+  // （ADR-0019 と同じ考え方）
+  const canManagePoints = hasScope('point:manage')
   // 未紐付けなのは、親が作ったばかりの子と、バックアップから戻した参加者（ADR-0026）
   const unlinkedMembers = family.memberships.filter((m) => !m.is_linked && m.role !== 'owner')
   const me = family.memberships.find((m) => m.is_me)
@@ -197,7 +201,7 @@ export function FamilyPage() {
 
       {/* 毎日のボーナス（ADR-0024）は家族の決めごとなので家族設定に置く
           （ADR-0027）。量は子ごとに違ってよく、入力欄も子の数だけ並ぶ */}
-      {isGuardian && <DailyBonusPanel family={family} onChanged={reload} />}
+      {isGuardian && canManagePoints && <DailyBonusPanel family={family} onChanged={reload} />}
 
       {isGuardian && <FamilyArchivePanel familyId={id} />}
 

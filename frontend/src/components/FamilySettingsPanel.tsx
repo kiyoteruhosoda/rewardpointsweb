@@ -20,6 +20,7 @@ import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families, type FamilyDetail } from '../services/families'
+import { useAuth } from '../store/AuthContext'
 import { ActionButton } from './ActionButton'
 import { useToast } from './ToastNotification'
 
@@ -31,6 +32,7 @@ interface Props {
 export function FamilySettingsPanel({ family, onChanged }: Props) {
   const { t } = useI18n()
   const { notify } = useToast()
+  const { hasScope } = useAuth()
   const navigate = useNavigate()
   const [name, setName] = useState(family.name)
   const [rules, setRules] = useState(family.rules ?? '')
@@ -136,24 +138,28 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
       )}
 
       {/* 家族で決めた約束ごと（ADR-0027）。親なら書ける（改名と違い owner 限定に
-          しない）。子どもの台帳にも同じ文面が出るので、ここが唯一の出所になる */}
-      <form className="card-inset family-rules-form" onSubmit={saveRules}>
-        <label>
-          {t('families.rules')}
-          <textarea
-            rows={5}
-            value={rules}
-            placeholder={t('families.rulesPlaceholder')}
-            onChange={(event) => {
-              setRules(event.target.value)
-            }}
-          />
-        </label>
-        <p className="field-hint">{t('families.rulesHint')}</p>
-        <ActionButton type="submit" pending={savingRules}>
-          {t('common.save')}
-        </ActionButton>
-      </form>
+          しない）。子どもの台帳にも同じ文面が出るので、ここが唯一の出所になる。
+          立場に加えて scope も見る — 運用者がロールの権限を編集した後に、押せば
+          必ず 403 になる入力欄を残さないため（ADR-0019 と同じ考え方） */}
+      {hasScope('family:manage') && (
+        <form className="card-inset family-rules-form" onSubmit={saveRules}>
+          <label>
+            {t('families.rules')}
+            <textarea
+              rows={5}
+              value={rules}
+              placeholder={t('families.rulesPlaceholder')}
+              onChange={(event) => {
+                setRules(event.target.value)
+              }}
+            />
+          </label>
+          <p className="field-hint">{t('families.rulesHint')}</p>
+          <ActionButton type="submit" pending={savingRules}>
+            {t('common.save')}
+          </ActionButton>
+        </form>
+      )}
 
       {children.length > 1 && (
         <div className="card-inset order-editor">
