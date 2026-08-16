@@ -21,6 +21,8 @@ import bounded_contexts.account_security.infrastructure.account_security_models
 import bounded_contexts.example.infrastructure.item_model
 import bounded_contexts.reward_points.infrastructure.reward_points_models  # noqa: F401 — メタデータ登録
 import shared.infrastructure.models  # noqa: F401 — メタデータ登録
+from bounded_contexts.email_sender.domain.email_message import EmailMessage
+from bounded_contexts.email_sender.infrastructure.smtp_email_sender import SmtpEmailSender
 from shared.domain.auth import master_data
 from shared.infrastructure.master_data_seeder import seed_master_data
 from shared.kernel.database import db as db_module
@@ -74,6 +76,24 @@ def app(engine: sa.Engine) -> FastAPI:
 def client(app: FastAPI) -> Iterator[TestClient]:
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def mail_outbox(monkeypatch: pytest.MonkeyPatch) -> list[EmailMessage]:
+    """メールを送れる状態にし、送られた本文を受け取る。
+
+    既定の ``MAIL_ENABLED`` は無効なので、これを使わないテストは「送信できない
+    運用」を検証していることになる。送ったつもりの経路を確かめたいときは、必ず
+    このフィクスチャを取ること。
+    """
+    sent: list[EmailMessage] = []
+    monkeypatch.setenv("MAIL_ENABLED", "true")
+    monkeypatch.setattr(
+        SmtpEmailSender,
+        "send",
+        lambda _self, message: sent.append(message),
+    )
+    return sent
 
 
 @pytest.fixture

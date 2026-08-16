@@ -68,12 +68,21 @@ def _find_by_username(db: Session, raw: str) -> User | None:
     return db.scalar(select(User).where(User.username == username))
 
 
-def _password_accepted(user: User, password: str) -> bool:
+def _rejection_reason(user: User, password: str) -> str | None:
+    """拒否の理由コード。``None`` なら受け入れる。
+
+    期限切れの一時パスワードは、正しく入力されても通さない（ADR-0011）。ただし
+    ``invalid_credentials`` に丸めると、本人には「合っているはずのものが通らない」
+    としか見えず、親へ再発行を頼めばよいと分からない。この枝に来られるのは
+    **正しい一時パスワードを知っている本人だけ**なので、理由を返しても、知らない
+    相手にアカウントの状態を教えることにはならない。
+    """
     if not check_password_hash(user.password_hash, password):
-        return False
+        return "invalid_credentials"
     expires_at = user.temporary_password_expires_at
-    # 期限切れの一時パスワードは、正しく入力されても通さない（ADR-0011）
-    return not (user.must_change_password and expires_at is not None and expires_at < utcnow())
+    if user.must_change_password and expires_at is not None and expires_at < utcnow():
+        return "temporary_password_expired"
+    return None
 
 
 def _token_response(pair: dict[str, object], user: User) -> TokenResponse:
@@ -100,16 +109,23 @@ async def login(
     パスワードは正しかったことを意味するが、この時点ではまだトークンを発行して
     いないため、コードを添えて再度ログインすればよい。
     """
-    user = _find_by_username(db, body.username)
-    if user is None or not user.is_active or not _password_accepted(user, body.password):
+
+    def _reject(reason: str) -> HTTPException:
         # 失敗したログインは WARNING で残す（既定では 401 = INFO）。試行が続いて
         # いないかは運用で見たい情報で、埋もれさせない。ユーザー名は書かない
         # （CLAUDE.md「ログ」）——追跡は requestId で行う。
-        logger.warning("login_failed: invalid_credentials")
-        raise HTTPException(
+        logger.warning("login_failed: %s", reason)
+        return HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "invalid_credentials"},
+            detail={"error": reason},
         )
+
+    user = _find_by_username(db, body.username)
+    if user is None or not user.is_active:
+        raise _reject("invalid_credentials")
+    rejection = _rejection_reason(user, body.password)
+    if rejection is not None:
+        raise _reject(rejection)
 
     try:
         second_factor.execute(user_id=user.id, code=body.totp_code)
@@ -228,6 +244,9 @@ async def forgot_password(body: ForgotPasswordRequest, db: DbDep) -> StatusRespo
     メールアドレスを持たないアカウント（子ども）にはリンクを送れないので、
     ``ask_guardian`` を返して親からの一時パスワード発行へ誘導する（ADR-0011）。
     存在しないユーザー名は ``accepted`` に丸める。
+
+    メール送信が無効・SMTP に届かない運用では ``mail_unavailable`` を返す。
+    送れないのに ``accepted`` を返すと、届かないメールを待つことになる。
     """
     outcome = PasswordResetService().request_reset(db, body.username)
     return StatusResponse(status=outcome.value)
