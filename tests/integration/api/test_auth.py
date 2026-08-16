@@ -1,7 +1,12 @@
+import logging
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from bounded_contexts.email_sender.domain.email_message import EmailMessage
+from bounded_contexts.email_sender.infrastructure.smtp_email_sender import SmtpEmailSender
 from shared.domain.auth import master_data
 from shared.infrastructure.models import PasswordResetToken, User
 
@@ -22,6 +27,40 @@ def test_login_wrong_password(client: TestClient) -> None:
     response = client.post("/api/auth/login", json={"username": "admin@example.com", "password": "wrong"})
     assert response.status_code == 401
     assert response.json()["detail"]["error"] == "invalid_credentials"
+
+
+def test_login_with_an_expired_temporary_password_says_so(client: TestClient, db_session: Session) -> None:
+    """期限切れの一時パスワードは通さないが、理由は伝える（ADR-0011）。
+
+    ``invalid_credentials`` に丸めていたため、本人には「合っているはずのものが
+    通らない」としか見えず、親へ再発行を頼めばよいと分からなかった。
+    """
+    from datetime import timedelta
+
+    from werkzeug.security import generate_password_hash
+
+    from shared.kernel.timestamps import utcnow
+
+    db_session.add(
+        User(
+            username="kid",
+            email=None,
+            display_name="こども",
+            password_hash=generate_password_hash("temp-pass-1"),
+            is_active=True,
+            must_change_password=True,
+            temporary_password_expires_at=utcnow() - timedelta(hours=1),
+        )
+    )
+    db_session.commit()
+
+    expired = client.post("/api/auth/login", json={"username": "kid", "password": "temp-pass-1"})
+    assert expired.status_code == 401
+    assert expired.json()["detail"]["error"] == "temporary_password_expired"
+
+    # 値を知らない相手には、これまでどおり何も明かさない
+    wrong = client.post("/api/auth/login", json={"username": "kid", "password": "not-the-password"})
+    assert wrong.json()["detail"]["error"] == "invalid_credentials"
 
 
 def test_me_requires_authentication(client: TestClient) -> None:
@@ -85,14 +124,75 @@ def test_change_password_wrong_current(client: TestClient, admin_headers: dict[s
     assert response.status_code == 400
 
 
-def test_forgot_password_does_not_leak_user_existence(client: TestClient) -> None:
+def test_forgot_password_does_not_leak_user_existence(client: TestClient, mail_outbox: list[EmailMessage]) -> None:
     known = client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
     unknown = client.post("/api/auth/forgot-password", json={"username": "nobody"})
     assert known.status_code == unknown.status_code == 200
     assert known.json() == unknown.json() == {"status": "accepted"}
+    # 応答は同じでも、実在するアカウントにだけ実際に送られている
+    assert len(mail_outbox) == 1
 
 
-def test_forgot_password_without_email_points_at_the_guardian(client: TestClient, db_session: Session) -> None:
+def test_forgot_password_reports_when_mail_cannot_be_sent(
+    client: TestClient, db_session: Session, caplog: pytest.LogCaptureFixture
+) -> None:
+    """送れないのに「送りました」と返さない。
+
+    ``MAIL_ENABLED`` が無効なまま ``accepted`` を返していたため、利用者は決して
+    届かないメールを待っていた。ログインできない状態からの回復手段が、そこで
+    事実上失われる。送信手段の有無は利用者に依らないので、実在しないユーザー名
+    でも同じ応答になる（実在は漏れない）。
+    """
+    with caplog.at_level(logging.WARNING):
+        known = client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
+        unknown = client.post("/api/auth/forgot-password", json={"username": "nobody"})
+
+    assert known.status_code == unknown.status_code == 200
+    assert known.json() == unknown.json() == {"status": "mail_unavailable"}
+    # メールで届かない代わりに、運用者が手渡せるようリンクがログに出ている
+    assert db_session.scalar(select(PasswordResetToken)) is not None
+    issued = [m for m in caplog.messages if m.startswith("password_reset_link_issued: ")]
+    assert len(issued) == 1
+    assert "/reset-password?token=" in issued[0]
+
+
+def test_forgot_password_logs_a_link_that_actually_works(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
+    """ログに出たリンクだけでパスワードを取り戻せる（メール無効時の回復経路）。"""
+    with caplog.at_level(logging.WARNING):
+        client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
+
+    issued = next(m for m in caplog.messages if m.startswith("password_reset_link_issued: "))
+    token = issued.split("token=", 1)[1]
+
+    reset = client.post("/api/auth/reset-password", json={"token": token, "new_password": "from-console-1"})
+    assert reset.status_code == 200, reset.text
+
+    signed_in = client.post(
+        "/api/auth/login",
+        json={"username": master_data.DEFAULT_ADMIN_USERNAME, "password": "from-console-1"},
+    )
+    assert signed_in.status_code == 200, signed_in.text
+
+
+def test_forgot_password_reports_when_the_smtp_server_is_unreachable(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SMTP に届かないときも案内を返す（以前は 500 になっていた）。"""
+    monkeypatch.setenv("MAIL_ENABLED", "true")
+
+    def _refuse(_self: SmtpEmailSender, _message: EmailMessage) -> None:
+        raise ConnectionRefusedError("smtp down")
+
+    monkeypatch.setattr(SmtpEmailSender, "send", _refuse)
+
+    response = client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
+    assert response.status_code == 200
+    assert response.json() == {"status": "mail_unavailable"}
+
+
+def test_forgot_password_without_email_points_at_the_guardian(
+    client: TestClient, db_session: Session, mail_outbox: list[EmailMessage]
+) -> None:
     """メールアドレスを持たないアカウントには送れない（ADR-0011）。"""
     db_session.add(User(username="kid", email=None, display_name="こども", password_hash="x", is_active=True))
     db_session.commit()
@@ -102,15 +202,19 @@ def test_forgot_password_without_email_points_at_the_guardian(client: TestClient
     assert response.json() == {"status": "ask_guardian"}
     # 送る先が無いので、トークンも発行しない
     assert db_session.scalar(select(PasswordResetToken)) is None
+    assert mail_outbox == []
 
 
-def test_reset_password_with_valid_token(client: TestClient, db_session: Session) -> None:
-    # メール送信は無効のためトークンは DB から直接取り出して検証する
+def test_reset_password_with_valid_token(
+    client: TestClient, db_session: Session, mail_outbox: list[EmailMessage]
+) -> None:
     client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
     row = db_session.scalar(select(PasswordResetToken))
     assert row is not None
+    # リンクは本文に載って実際に送られている
+    assert "/reset-password?token=" in mail_outbox[0].body
 
-    # 平文トークンはハッシュしか保存されないため、サービスを直接使って発行し直す
+    # 平文トークンはハッシュしか保存されないため、ここで発行し直して検証する
     import hashlib
     import secrets
 
