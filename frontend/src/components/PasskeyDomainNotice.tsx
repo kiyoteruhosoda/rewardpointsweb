@@ -33,7 +33,10 @@ function orPlaceholder(value: string): string {
 
 export function PasskeyDomainNotice({ settings, envLocked, location, onApply }: Props) {
   const { t } = useI18n()
-  if (matchesLocation(settings, location)) return null
+  // 値が噛み合っていても、その URL では**そもそも**パスキーが動かないことがある
+  // （http のドメイン名・IP アドレス）。噛み合わせだけを見ると、この場合に何も
+  // 出ないまま「パスキーを追加」だけが失敗する。URL 自体の可否も先に見る。
+  if (supportsPasskeys(location) && matchesLocation(settings, location)) return null
 
   const expected = relyingPartyForLocation(location)
   return (

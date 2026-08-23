@@ -84,6 +84,33 @@ describe('PasskeyDomainNotice', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
+  it('値が噛み合っていても、その URL でパスキーが動かなければ出す', () => {
+    // http のドメイン名は安全な文脈ではなく、サーバーもこのオリジンを弾く。
+    // 噛み合わせだけを見て黙ると、失敗するのは利用者の「パスキーを追加」になる。
+    renderWithProviders(
+      <PasskeyDomainNotice
+        settings={{ rpId: 'nas.local', origin: 'http://nas.local' }}
+        envLocked
+        location={{ hostname: 'nas.local', origin: 'http://nas.local', protocol: 'http:' }}
+        onApply={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(/cannot be used from this URL at all/)).toBeInTheDocument()
+  })
+
+  it('既定ポートが書かれているだけの設定は食い違いにしない', () => {
+    // サーバーは RP を組み立てるときに `:443` を落とす。この設定は動く。
+    renderWithProviders(
+      <PasskeyDomainNotice
+        settings={{ rpId: 'app.example.com', origin: 'https://app.example.com:443' }}
+        envLocked={false}
+        location={LOCATION}
+        onApply={vi.fn()}
+      />,
+    )
+    expect(screen.queryByText(/Passkeys cannot be used/)).not.toBeInTheDocument()
+  })
+
   it('未設定でも空白ではなく分かる形で出す', () => {
     renderWithProviders(
       <PasskeyDomainNotice

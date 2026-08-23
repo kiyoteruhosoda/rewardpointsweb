@@ -115,6 +115,15 @@ describe('matchesLocation', () => {
     ).toBe(false)
   })
 
+  it('既定ポート・末尾のドットは書き方の違いにすぎない（サーバーも落とす）', () => {
+    expect(
+      matchesLocation({ rpId: 'example.com', origin: 'https://app.example.com:443' }, location),
+    ).toBe(true)
+    expect(
+      matchesLocation({ rpId: 'example.com', origin: 'https://app.example.com./' }, location),
+    ).toBe(true)
+  })
+
   it('RP ID だけ違えば偽', () => {
     expect(
       matchesLocation({ rpId: 'localhost', origin: 'https://app.example.com' }, location),

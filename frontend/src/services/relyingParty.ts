@@ -33,14 +33,34 @@ const LABEL = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 // ブラウザが安全な文脈として例外的に扱うホスト（http でもパスキーが動く）。
 const HTTP_ALLOWED_HOSTS = ['localhost']
 
+// ブラウザの送るオリジンには既定ポートが付かない（`https://example.com:443` ではなく
+// `https://example.com`）。サーバー側の正規化と同じ落とし方をしないと、実際には
+// 動いている設定を「食い違っている」と誤って出してしまう。
+const DEFAULT_PORTS: Record<string, number> = { http: 80, https: 443 }
+
+// `scheme://host[:port]` の切り出し。ホストは IPv6 の `[...]` 表記も受ける。
+const ORIGIN = /^(https?):\/\/(\[[^\]]+\]|[^/:]+)(?::(\d+))?$/
+
 /** 比較のために揃える（前後の空白・大文字・末尾のドットを落とす）。 */
 export function normalizeDomain(value: string): string {
   return value.trim().replace(/\.+$/, '').toLowerCase()
 }
 
-/** 比較のために揃える（前後の空白・大文字・末尾のスラッシュを落とす）。 */
+/**
+ * 比較のために揃える（前後の空白・大文字・末尾のスラッシュを落とす）。
+ *
+ * 既定ポートとホスト末尾のドットも落とす。サーバーは保存された値をそのまま持ち、
+ * RP を組み立てるときに正規化する（`relying_party_configuration.py`）。ここで
+ * 揃えないと `https://example.com:443` のような**動く設定**を食い違いとして出す。
+ */
 export function normalizeOrigin(value: string): string {
-  return value.trim().replace(/\/+$/, '').toLowerCase()
+  const trimmed = value.trim().replace(/\/+$/, '').toLowerCase()
+  const parts = ORIGIN.exec(trimmed)
+  if (!parts) return trimmed
+  const [, scheme = '', host = '', port] = parts
+  const explicitPort =
+    port !== undefined && Number(port) !== DEFAULT_PORTS[scheme] ? `:${port}` : ''
+  return `${scheme}://${host.replace(/\.+$/, '')}${explicitPort}`
 }
 
 /**
