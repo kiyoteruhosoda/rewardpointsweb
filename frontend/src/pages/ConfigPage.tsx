@@ -2,10 +2,12 @@
 import { useEffect, useState } from 'react'
 
 import { ActionButton } from '../components/ActionButton'
+import { PasskeyDomainNotice } from '../components/PasskeyDomainNotice'
 import { useToast } from '../components/ToastNotification'
 import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
+import type { RelyingPartySettings } from '../services/relyingParty'
 import { useAuth } from '../store/AuthContext'
 
 interface SettingItem {
@@ -113,6 +115,25 @@ export function ConfigPage() {
 
   const categories = [...new Set(items.map((i) => i.category))]
 
+  // パスキーの 2 つは、値どうしが合っていても開いている URL と食い違えば使えない。
+  // 照らし合わせるために取り出す（編集中の値で見るので、直した先も即座に分かる）。
+  const rpIdItem = items.find((item) => item.key === 'WEBAUTHN_RP_ID')
+  const originItem = items.find((item) => item.key === 'WEBAUTHN_ORIGIN')
+  const passkeyDomain =
+    rpIdItem && originItem
+      ? {
+          settings: {
+            rpId: asText(currentValue(rpIdItem)),
+            origin: asText(currentValue(originItem)),
+          },
+          envLocked: rpIdItem.env_locked || originItem.env_locked,
+        }
+      : null
+
+  const applyPasskeyDomain = (next: RelyingPartySettings) => {
+    setEdits((prev) => ({ ...prev, WEBAUTHN_RP_ID: next.rpId, WEBAUTHN_ORIGIN: next.origin }))
+  }
+
   return (
     <div className="card">
       <h1>{t('config.title')}</h1>
@@ -133,6 +154,14 @@ export function ConfigPage() {
       {categories.map((category) => (
         <section key={category}>
           <h2>{t(`config.category.${category}`)}</h2>
+          {category === 'passkey' && passkeyDomain && (
+            <PasskeyDomainNotice
+              settings={passkeyDomain.settings}
+              envLocked={passkeyDomain.envLocked}
+              location={window.location}
+              onApply={applyPasskeyDomain}
+            />
+          )}
           {items
             .filter((item) => item.category === category)
             .map((item) => (

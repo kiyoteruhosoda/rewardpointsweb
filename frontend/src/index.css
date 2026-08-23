@@ -255,6 +255,25 @@ textarea:focus-visible {
   color: var(--accent);
 }
 
+/* アカウントへの入口。広い画面では利用者名、狭い画面では頭文字の丸だけを出す。 */
+.header-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 12rem;
+}
+
+.header-account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 頭文字の丸は狭い画面でだけ出す（広い画面では名前がそのまま読める）。 */
+.header-account-initial {
+  display: none;
+}
+
 /* 引き出しの開閉ボタン。広い画面ではナビゲーションが出たままなので出さない。 */
 .nav-toggle {
   display: none;
@@ -969,6 +988,37 @@ tr.reversed {
 
   .header-actions {
     gap: 0.5rem;
+  }
+
+  /* 利用者名は長さがまちまちで、長いほどタイトルを押し出す。丸に頭文字だけを
+   * 出し、名前は読み上げ用に `aria-label` へ残す（Header.tsx）。
+   * `.header-actions a` の丸い枠（余白・背景）を上書きするため、同じ高さの
+   * 詳しさで書く（クラス 1 つでは弱く、余白が残る）。 */
+  .header-actions .header-account {
+    gap: 0;
+    padding: 0;
+    background: none;
+    /* 指で押す的は 44px 四方を下回らないようにする（丸は 40px なので枠で足す） */
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    justify-content: center;
+  }
+
+  .header-account-name {
+    display: none;
+  }
+
+  .header-account-initial {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 700;
+    /* 頭文字が縦棒の多い文字でも丸の中で揺れないようにする */
+    line-height: 1;
   }
 
   .content {

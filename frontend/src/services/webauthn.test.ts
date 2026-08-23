@@ -1,10 +1,54 @@
 /** ブラウザ由来のパスキー失敗を、原因の分かる翻訳キーへ変換できること。 */
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import en from '../i18n/en.json'
 import ja from '../i18n/ja.json'
 import { ApiError, errorMessageKey } from './api'
-import { PASSKEY_CANCELLED, isPasskeyCancellation, passkeyErrorKey } from './webauthn'
+import {
+  PASSKEY_CANCELLED,
+  PasskeyRelyingPartyMismatchError,
+  assertPasskey,
+  createPasskey,
+  isPasskeyCancellation,
+  passkeyErrorKey,
+} from './webauthn'
+
+describe('パスキーを作る・使う前の噛み合わせ', () => {
+  // jsdom が開いている URL は localhost。RP ID がそれと合わない設定を渡す。
+  const credentials = { create: vi.fn(), get: vi.fn() }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    credentials.create.mockReset()
+    credentials.get.mockReset()
+  })
+
+  function stubCredentials(): void {
+    vi.stubGlobal('navigator', { credentials })
+  }
+
+  it('使えない RP ID なら、認証器を呼ばずに原因の分かる失敗にする', async () => {
+    stubCredentials()
+    await expect(createPasskey({ rp: { id: 'example.com' } })).rejects.toBeInstanceOf(
+      PasskeyRelyingPartyMismatchError,
+    )
+    expect(credentials.create).not.toHaveBeenCalled()
+  })
+
+  it('ログイン（認証）の側でも同じように見る', async () => {
+    stubCredentials()
+    await expect(assertPasskey({ rpId: 'example.com' })).rejects.toBeInstanceOf(
+      PasskeyRelyingPartyMismatchError,
+    )
+    expect(credentials.get).not.toHaveBeenCalled()
+  })
+
+  it('食い違いは設定の誤りとして訳される（取り消しにはしない）', () => {
+    const error = new PasskeyRelyingPartyMismatchError('example.com', 'localhost')
+    expect(passkeyErrorKey(error)).toBe('error.passkey_domain_mismatch')
+    expect(isPasskeyCancellation(error)).toBe(false)
+  })
+})
 
 describe('passkeyErrorKey', () => {
   it('RP ID がドメインと合わない場合（SecurityError）を見分ける', () => {
