@@ -6,6 +6,8 @@
  * `navigator.credentials` の呼び出しだけを行う。外部ライブラリは使わない。
  */
 
+import { isRelyingPartyIdUsable, relyingPartyIdOf } from './relyingParty'
+
 export interface PasskeyChallenge {
   challenge_id: string
   public_key: Record<string, unknown>
@@ -13,6 +15,33 @@ export interface PasskeyChallenge {
 
 /** 利用者が操作を取り消したときに投げる。エラー表示を分けるため。 */
 export const PASSKEY_CANCELLED = 'passkey_cancelled'
+
+/**
+ * RP ID がいま開いているドメインで使えないときに投げる。
+ *
+ * ブラウザに任せると失敗の伝わり方が実装ごとに違い（`SecurityError` を投げる
+ * ものもあれば、取り消しと同じ `NotAllowedError` にするものもある）、設定の誤りが
+ * 「取り消しました」と出てしまう。呼び出す前に確かめて、原因を残す。
+ */
+export class PasskeyRelyingPartyMismatchError extends Error {
+  constructor(
+    readonly relyingPartyId: string,
+    readonly domain: string,
+  ) {
+    super(`relying party id "${relyingPartyId}" cannot be used on "${domain}"`)
+    this.name = 'PasskeyRelyingPartyMismatchError'
+  }
+}
+
+/** サーバーの返した RP ID が、いま開いているドメインで使えることを確かめる。 */
+function assertRelyingParty(publicKey: Record<string, unknown>): void {
+  const relyingPartyId = relyingPartyIdOf(publicKey)
+  // 省略されていればブラウザが開いているドメインを使う。食い違いようがない。
+  if (!relyingPartyId) return
+  const { hostname } = window.location
+  if (isRelyingPartyIdUsable(relyingPartyId, hostname)) return
+  throw new PasskeyRelyingPartyMismatchError(relyingPartyId, hostname)
+}
 
 export function isPasskeySupported(): boolean {
   return (
@@ -78,6 +107,7 @@ function assertCredential(credential: Credential | null): PublicKeyCredential {
 export async function createPasskey(
   publicKey: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  assertRelyingParty(publicKey)
   const credential = assertCredential(
     await navigator.credentials.create({ publicKey: toCreationOptions(publicKey) }),
   )
@@ -100,6 +130,7 @@ export async function createPasskey(
 export async function assertPasskey(
   publicKey: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  assertRelyingParty(publicKey)
   const credential = assertCredential(
     await navigator.credentials.get({ publicKey: toRequestOptions(publicKey) }),
   )
@@ -143,6 +174,7 @@ const BROWSER_ERROR_KEYS: Record<string, string> = {
  * 呼び出し側は `passkeyErrorKey(err) ?? errorMessageKey(err)` と書く。
  */
 export function passkeyErrorKey(error: unknown): string | null {
+  if (error instanceof PasskeyRelyingPartyMismatchError) return 'error.passkey_domain_mismatch'
   if (isPasskeyCancellation(error)) return 'error.passkey_cancelled'
   if (!(error instanceof DOMException)) return null
   return BROWSER_ERROR_KEYS[error.name] ?? null

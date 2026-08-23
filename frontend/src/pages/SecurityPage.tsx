@@ -216,7 +216,11 @@ export function SecurityPage() {
 
       <section>
         <h2>{t('security.passkeys')}</h2>
-        {passkeyError && <p className="error">{t(passkeyError)}</p>}
+        {/* 設定の食い違いを伝えるメッセージだけが {domain} を使う（他のキーには
+            プレースホルダが無く、渡しても何も起きない）。 */}
+        {passkeyError && (
+          <p className="error">{t(passkeyError, { domain: window.location.hostname })}</p>
+        )}
         {!isPasskeySupported() ? (
           <p>{t('security.passkeyUnsupported')}</p>
         ) : (

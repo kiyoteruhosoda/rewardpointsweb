@@ -76,7 +76,8 @@ export function LoginPage() {
       <form className="card" onSubmit={submit}>
         <h1>{step === 'totp' ? t('login.totpTitle') : t('login.title')}</h1>
         {pendingCode && <p className="notice">{t('login.invitationPending')}</p>}
-        {error && <p className="error">{t(error)}</p>}
+        {/* パスキーの設定違いは、いま開いているドメインを添えて出す（{domain}）。 */}
+        {error && <p className="error">{t(error, { domain: window.location.hostname })}</p>}
 
         {step === 'credentials' ? (
           <>
