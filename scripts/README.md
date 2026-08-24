@@ -6,7 +6,7 @@
 | `run_db_migrations.py` | `alembic upgrade head` を実行する。entrypoint / deploy から共用。どこから呼んでもプロジェクトルートへ chdir して動く。 |
 | `seed_master_data.py` | ロール・権限・初期管理者を投入する（冪等）。値の正本は `shared/domain/auth/master_data.py`。`ADMIN_INITIAL_PASSWORD` 環境変数で初期管理者パスワードを上書きできる。既存の管理者のパスワードは変えないが、`--reset-admin-password` を付けたときだけ戻す（締め出されたときの復旧経路）。 |
 | `generate_app_icons.py` | アプリアイコン（`frontend/public/` の `favicon.svg`・`pwa-*.png`・`apple-touch-icon.png`）を書き出す。SVG と PNG を同じ座標から作るため、形は必ず一致する。図柄・色を変えるときはこのスクリプトを直して実行し、生成された 5 ファイルをコミットする（`favicon.svg` を手で編集しても PNG は追随しない）。 |
-| `generate_version.sh` | `shared/kernel/version.json` を Git 情報から生成する（ローカル確認用。Docker ビルドでは Dockerfile の ARG から生成される）。 |
+| `generate_version.sh` | `shared/kernel/version.json` を作る。**ビルドの前に**走らせる（Komodo Build の `pre_build` ／ `scripts/build.sh`）。優先順位は git > 既にある version.json > dev で、イメージの中（git が無い）では既存を上書きしない（ADR-0028）。 |
 | `build.sh` | ソース側でのビルド。アプリ + DB イメージをビルドし、`dist/` にデプロイバンドル（`image.tar`・`image-db.tar`・`deploy.sh`・`.env.example`・`manifest.env`・`manifest.sha256`）を書き出す。`make build` はこれを呼ぶだけ。`PLATFORM=linux/amd64` でクロスビルド（要 buildx）。 |
 | `deploy.sh` | 配置先サーバーでのデプロイ。配置ディレクトリ名（`stg` / `prod` 系）から環境を自動判定し、`app` / `migrate` / `reset` の3モードを持つ。`.env` が無ければテンプレートを自動生成する。compose と nginx 設定はロードしたイメージ内のコピーへ常に同期される。 |
 | `build-remote-container.sh` | git 非搭載のデプロイ先向けの一括デプロイ（SYNC → BUILD → PICK → DEPLOY）。同一ホスト上の dev コンテナ内で git pull と `build.sh` を実行し、生成された `dist/` をデプロイ先へ取り込んで `deploy.sh` を実行する。手置きのブートストラップだが、実行のたびに dev コンテナ内の最新版と比較して自分自身を自動更新する。設定はスクリプトと同じ場所の `build-remote-container.env`（雛形: `build-remote-container.env.example`）。 |

@@ -59,13 +59,12 @@ build_image() {
   fi
 }
 
+# バージョン情報はビルドの前に生成してコンテキストへ入れる（Komodo の pre_build と同じ手順）。
+log "バージョン情報を生成します..."
+bash "$repo_root/scripts/generate_version.sh"
+
 log "イメージをビルドします: $app_ref（commit=$git_commit_short branch=$git_branch）..."
 build_image "$app_ref" \
-  --build-arg "COMMIT_HASH=$git_commit_short" \
-  --build-arg "COMMIT_HASH_FULL=$git_commit" \
-  --build-arg "BRANCH=$git_branch" \
-  --build-arg "COMMIT_DATE=$git_commit_date" \
-  --build-arg "BUILD_DATE=$build_date" \
   --label "org.opencontainers.image.revision=$git_commit" \
   --label "org.opencontainers.image.version=$version" \
   -f Dockerfile .

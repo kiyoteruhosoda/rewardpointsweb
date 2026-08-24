@@ -33,17 +33,16 @@ COPY . /app
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Makefile から渡されるビルド情報で version.json を生成
-ARG COMMIT_HASH=dev
-ARG COMMIT_HASH_FULL=dev
-ARG BRANCH=unknown
-ARG COMMIT_DATE=unknown
-ARG BUILD_DATE=unknown
-
-RUN if [ "$BRANCH" = "main" ]; then VERSION="v${COMMIT_HASH}"; else VERSION="v${COMMIT_HASH}-${BRANCH}"; fi && \
-    printf '{\n  "version": "%s",\n  "commit_hash": "%s",\n  "commit_hash_full": "%s",\n  "branch": "%s",\n  "commit_date": "%s",\n  "build_date": "%s"\n}\n' \
-      "$VERSION" "$COMMIT_HASH" "$COMMIT_HASH_FULL" "$BRANCH" "$COMMIT_DATE" "$BUILD_DATE" \
-    > shared/kernel/version.json
+# バージョン情報（shared/kernel/version.json）は **ビルドの前に生成してコンテキストへ入れる**。
+#
+# ⚠ build-arg で渡す形はやめた。Komodo Build はコミット情報を build-arg で渡さず、
+#   .dockerignore が .git を除いているので Dockerfile の中から git も引けない。
+#   その結果 **ビルドは成功したまま** イメージが version=dev を名乗り、/info も
+#   システムステータス画面も「どのコミットが動いているか」を答えられなかった。
+#   Komodo Build の pre_build が scripts/generate_version.sh を実行し、その出力が
+#   ここへ COPY されてくる（deploy-repo resources/builds.toml）。
+# この RUN は「無かったときに dev として印を付ける」だけで、既にある内容は書き換えない。
+RUN bash scripts/generate_version.sh
 
 RUN chmod +x /app/scripts/entrypoint.sh
 RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
