@@ -220,3 +220,8 @@ __marimo__/
 
 # docker compose のホストマウント（HOST_DATA_ROOT の既定値）
 mnt/
+
+# ビルド情報。ビルドの直前に scripts/generate_version.sh が生成する。
+# ⚠ コミットしないこと。コミットするとイメージの中でその内容が優先され、
+#   どのイメージも同じ古い版を名乗り続ける。
+shared/kernel/version.json
