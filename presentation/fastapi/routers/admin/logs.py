@@ -12,6 +12,7 @@ from presentation.fastapi.dependencies.auth import require_permission
 from presentation.fastapi.schemas.admin import LogEntryResponse
 from shared.infrastructure.models import Log
 from shared.kernel.database.session import get_db
+from shared.kernel.timestamps import isoformat_utc
 
 router = APIRouter(
     prefix="/api/admin/logs",
@@ -38,7 +39,7 @@ async def list_logs(
     return [
         LogEntryResponse(
             id=row.id,
-            created_at=row.created_at.isoformat(),
+            created_at=isoformat_utc(row.created_at),
             level=row.level,
             logger=row.logger,
             message=row.message,

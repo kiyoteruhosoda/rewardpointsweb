@@ -332,8 +332,9 @@ def test_the_entry_says_nobody_recorded_it(client: TestClient, home: Home, db_se
 
     assert entry["granted_by"] is None
     assert entry["reason"] == "まいにちボーナス"
-    # 出来事はその日の始まりに置く（追いついた分もそれぞれの日付に収まる）
-    assert entry["occurred_at"] == f"{start.isoformat()}T00:00:00"
+    # 出来事はその日の始まりに置く（追いついた分もそれぞれの日付に収まる）。
+    # 末尾の Z は契約（HANDOVER §14）。付いていないとブラウザがローカル時刻として読む。
+    assert entry["occurred_at"] == f"{start.isoformat()}T00:00:00Z"
 
 
 def test_a_stopped_bonus_stops_arriving(client: TestClient, home: Home, db_session: Session) -> None:

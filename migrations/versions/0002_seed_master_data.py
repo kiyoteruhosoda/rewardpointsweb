@@ -17,7 +17,7 @@ Create Date: 2026-07-17
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from alembic import op
@@ -98,7 +98,7 @@ def _seed_admin(bind: Connection, roles: dict[str, int]) -> None:
     from werkzeug.security import generate_password_hash
 
     plain = os.environ.get("ADMIN_INITIAL_PASSWORD") or None
-    now = datetime.now()
+    now = datetime.now(UTC).replace(tzinfo=None)  # 契約: 保存値は naive な UTC
     bind.execute(
         _users.insert().values(
             id=master_data.DEFAULT_ADMIN_ID,
