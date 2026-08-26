@@ -41,6 +41,7 @@ from bounded_contexts.reward_points.domain.repositories.point_transaction_reposi
     IPointTransactionRepository,
     NewTransaction,
 )
+from shared.kernel.timestamps import as_naive_utc
 
 #: 取り込んだ行の冪等キーの頭。控えの ref がそのまま続く（``import-t1``）。
 #:
@@ -129,7 +130,9 @@ class ImportFamilyUseCase:
                     amount=entry.amount,
                     reason=entry.reason,
                     granted_by_membership_id=actor.id if actor else None,
-                    occurred_at=entry.occurred_at,
+                    # 控えは外から来る JSON。オフセット付き（書き出しは ``Z``）で
+                    # 載っているので、保存値と同じ UTC naive へ揃えてから書く
+                    occurred_at=as_naive_utc(entry.occurred_at),
                     idempotency_key=f"{IMPORT_KEY_PREFIX}{entry.ref}",
                     reversal_of_id=ids[entry.reverses] if entry.reverses else None,
                     corrects_id=ids[entry.corrects] if entry.corrects else None,

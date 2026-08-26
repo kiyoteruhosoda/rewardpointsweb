@@ -41,7 +41,7 @@ git_commit="$(git rev-parse HEAD 2>/dev/null || printf unknown)"
 git_commit_short="$(git rev-parse --short HEAD 2>/dev/null || printf unknown)"
 git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf unknown)"
 git_commit_date="$(git log -1 --format=%ci 2>/dev/null || printf unknown)"
-build_date="$(date -Iseconds)"
+build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"   # 契約: 時刻は UTC・末尾は Z（HANDOVER §14）
 version="${IMAGE_TAG:-latest}"
 
 app_ref="${app_name}:${version}"
