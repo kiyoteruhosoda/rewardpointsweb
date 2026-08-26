@@ -284,6 +284,26 @@ def test_the_restored_history_still_shows_what_was_undone(backup: Backup) -> Non
     assert sorted(entry["amount"] for entry in undone) == [10, 50]
 
 
+def test_an_offset_in_the_archive_is_stored_as_the_same_instant(backup: Backup) -> None:
+    """控えの時刻にオフセットが付いていても、入るのは同じ瞬間（HANDOVER §14）。
+
+    書き出しは末尾 ``Z`` で出すので、素直に読むと tz 付きの値になる。それを
+    tz を落とさずに書くと、``+09:00`` の行は 9 時間ずれた壁時計のまま入る。
+    取り込み口で ``as_naive_utc`` を通していることをここで固定する。
+    """
+    entries = _member(backup.archive, "はなこ")["ledger"]["transactions"]
+    hand_written = next(entry for entry in entries if entry["amount"] == 5)
+    hand_written["occurred_at"] = "2026-08-09T21:00:00+09:00"  # = 2026-08-09T12:00:00Z
+
+    family_id = backup.restore()["family_id"]
+    detail = backup.view(family_id)
+    hana = next(member for member in detail["memberships"] if member["display_name"] == "はなこ")
+    ledger = backup.client.get(f"/api/families/{family_id}/ledgers/{hana['ledger_id']}", headers=backup.headers).json()
+
+    restored = next(entry for entry in ledger["transactions"] if entry["amount"] == 5)
+    assert restored["occurred_at"] == "2026-08-09T12:00:00Z"
+
+
 def test_the_others_come_back_without_an_account(backup: Backup) -> None:
     """控えにアカウントは入らない。本人が入り直す道は招待コード（ADR-0011）。"""
     detail = backup.view(backup.restore()["family_id"])

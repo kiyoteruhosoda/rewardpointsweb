@@ -20,7 +20,9 @@ const issueInvitation =
   vi.fn<(familyId: number, role: FamilyRole, target: number | null) => Promise<Invitation>>()
 
 vi.mock('../services/families', () => ({
-  parseUtc: (value: string) => new Date(`${value}Z`),
+  // 本物と同じ判定にする。サーバは Z 付きで返すので、無条件に足すと `...ZZ` になる
+  parseUtc: (value: string) =>
+    new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`),
   families: {
     listInvitations: () => listInvitations(),
     issueInvitation: (familyId: number, role: FamilyRole, target: number | null) =>

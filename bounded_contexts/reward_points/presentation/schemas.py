@@ -34,6 +34,7 @@ from bounded_contexts.reward_points.domain.value_objects.point_amount import MAX
 from bounded_contexts.reward_points.domain.value_objects.transaction_reason import (
     MAX_LENGTH as REASON_MAX_LENGTH,
 )
+from presentation.fastapi.schemas.types import UtcDatetime
 from shared.domain.auth.username import MAX_LENGTH as USERNAME_MAX_LENGTH
 
 
@@ -187,7 +188,7 @@ class InvitationResponse(BaseModel):
     role: FamilyRole
     target_membership_id: int | None
     target_display_name: str | None
-    expires_at: datetime
+    expires_at: UtcDatetime
     # 平文のコードは発行の応答でだけ載る（保存はハッシュのみ）
     code: str | None
 
@@ -219,7 +220,7 @@ class TemporaryPasswordResponse(BaseModel):
     membership_id: int
     username: str
     password: str
-    expires_at: datetime
+    expires_at: UtcDatetime
 
 
 # --- 台帳 --------------------------------------------------------------------
@@ -252,8 +253,8 @@ class TransactionResponse(BaseModel):
     id: int
     amount: int
     reason: str
-    occurred_at: datetime
-    created_at: datetime
+    occurred_at: UtcDatetime
+    created_at: UtcDatetime
     reversal_of_id: int | None
     # 訂正後のレコードなら、言い直した相手の ID（ADR-0022）
     corrects_id: int | None
@@ -298,7 +299,7 @@ class ArchivedTransactionDocument(BaseModel):
     ref: ArchiveRefStr
     amount: Annotated[int, Field(ge=-AMOUNT_MAX, le=AMOUNT_MAX), AfterValidator(_non_zero)]
     reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
-    occurred_at: datetime
+    occurred_at: UtcDatetime
     # 記録した参加者の ref。毎日のボーナスと、家族を離れた人の行では null
     granted_by: ArchiveRefStr | None = None
     reverses: ArchiveRefStr | None = None
@@ -335,7 +336,7 @@ class FamilyArchiveDocument(BaseModel):
     # 別のアプリの JSON を取り違えて渡されたときに気付くための印
     format: str
     version: int
-    exported_at: datetime
+    exported_at: UtcDatetime
     family_name: Annotated[NonBlankStr, Field(max_length=FAMILY_NAME_MAX_LENGTH)]
     # 家族で決めた約束ごと（ADR-0027）。版 1 の控えには無いので既定は None
     family_rules: Annotated[str, Field(max_length=FAMILY_RULES_MAX_LENGTH)] | None = None
