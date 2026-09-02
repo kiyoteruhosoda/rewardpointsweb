@@ -8,33 +8,27 @@
 
 | 優先 | # | 概要 | 状態 | 影響度 | 工数 |
 |---|---|---|---|---|---|
-| 1 | T1 | 本番の `WEBAUTHN_RP_ID` を公開ドメインへ直す | ⬜未着手 | 中 | 小 |
-| 2 | T2 | prod / stg の SSO を有効にする（idp のクライアント登録は済み） | 🚧進行中 | 中 | 中 |
+| 1 | T1 | stg の SSO・パスキーを有効にする（prod は適用済み） | ⬜未着手 | 小 | 小 |
 
 ## 詳細
 
-1. **T1 — パスキーが本番で使えない。** `WEBAUTHN_RP_ID` が既定の `localhost` のまま
-   （デプロイの環境変数でも渡していない）で、`rewardpointsweb.nolumia.com` から
-   開くと必ず食い違う。直し方は `OPERATIONS.md`「二要素認証・パスキーを設定したい
-   とき」——**本番の URL を開いたまま** `/admin/config` のパスキーの節で
-   「いま開いている URL に合わせる」を押して保存する。DB を作り直しても戻らない
-   ようにするなら、代わりに deploy-repo の compose へ `WEBAUTHN_RP_ID` /
-   `WEBAUTHN_ORIGIN` を足す（そのときは画面から直せなくなる）。
-2. **T2 — SSO の受け入れ側は入ったが、まだ繋いでいない。** idp 側のクライアント登録は
-   2026-09-02 に済んでいる（`token_endpoint_auth_method` は `private_key_jwt`、
-   鍵は nolumialab 共通の `/srv/secrets/oidc/client.key`）。
+1. **T1 — prod は 2026-09-02 に適用済み。** SSO とパスキーの設定はどちらも
+   deploy-repo の compose で環境変数として渡している（`RPW_OIDC_*` /
+   `RPW_WEBAUTHN_*` / `RPW_SESSION_COOKIE_SECURE`）。**環境変数は管理画面より
+   優先されるので、`/admin/config` からは直せない**（env ロック表示になる）。
 
-   | 環境 | issuer | client_id |
+   | 環境 | SSO の client_id | 状態 |
    |---|---|---|
-   | prod | `https://identity.nolumia.com/01a00dfe-bffb-7f23-88b5-8bbef50d23f0` | `3819f1d0b2bb261cd080dd7ebe49ca7f` |
-   | stg | 同上（stg の idp は `private_key_jwt` 未対応のため prod のテナントを向く） | `5546b7c0f63a8ea10754495918603a78` |
+   | prod | `3819f1d0b2bb261cd080dd7ebe49ca7f` | 適用済み |
+   | stg | `5546b7c0f63a8ea10754495918603a78` | 設定は入っているが**スタックが停止中**のため未適用 |
 
-   残っているのは、この変更をデプロイしたうえで、
-   `/admin/config`（または deploy-repo の `RPW_OIDC_*`）へ上の値を入れることと、
-   `/srv/secrets/oidc/client.key` をコンテナへ read-only で渡すこと。起動ログに
-   `sso_ready` が出るところまで確かめる。手順は `OPERATIONS.md`
-   「外部 IdP（SSO）でログインできるようにしたいとき」。登録し直したくなったら
-   `/config/rewardpointsweb-idp/register-rewardpointsweb.mjs`（冪等）。
+   prod で確認したこと: マイグレーション適用、起動ログの `sso_ready`、
+   `/api/auth/sso/provider` の `enabled: true`、認可要求の送り出し（303 で idp の
+   `/authorize` へ）、`sso_binding` Cookie の `Secure` / `HttpOnly` / `SameSite=lax`。
+
+   残るのは stg で、`DeployStack rewardpointsweb-stg` を叩けば設定ごと立ち上がる。
+   ただし**いま止まっているものを起こすことになる**ので、要否を決めてから行う。
+   手順は `OPERATIONS.md`「外部 IdP（SSO）でログインできるようにしたいとき」。
 
 （テンプレート刷新の経緯は `history/2026-07-template-refresh.md`、
 品質ゲート導入の経緯は `history/2026-07-quality-gates.md`、
