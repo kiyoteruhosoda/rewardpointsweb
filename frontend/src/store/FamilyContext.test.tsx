@@ -52,6 +52,7 @@ function authValueOf(scopes: string[]): AuthValue {
     loading: false,
     login: () => Promise.resolve(),
     loginWithPasskey: () => Promise.resolve(),
+    loginWithSsoTicket: () => Promise.resolve('/'),
     logout: () => undefined,
     refreshMe: () => Promise.resolve(),
     hasScope: (...codes: string[]) => codes.every((code) => scopes.includes(code)),

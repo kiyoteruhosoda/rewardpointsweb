@@ -18,6 +18,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { RedeemInvitationPage } from './pages/RedeemInvitationPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { RolesPage } from './pages/RolesPage'
+import { SsoCallbackPage } from './pages/SsoCallbackPage'
 import { SecurityPage } from './pages/SecurityPage'
 import { SystemLogsPage } from './pages/SystemLogsPage'
 import { UsersPage } from './pages/UsersPage'
@@ -68,6 +69,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* IdP からの戻り。引き換え券をトークンへ換えるだけの中継（ADR-0029） */}
+      <Route path="/login/sso" element={<SsoCallbackPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/join" element={<RedeemInvitationPage />} />

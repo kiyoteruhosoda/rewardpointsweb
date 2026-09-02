@@ -19,6 +19,7 @@ from sqlalchemy.pool import ConnectionPoolEntry, StaticPool
 
 import bounded_contexts.account_security.infrastructure.account_security_models
 import bounded_contexts.example.infrastructure.item_model
+import bounded_contexts.identity_federation.infrastructure.identity_federation_models
 import bounded_contexts.reward_points.infrastructure.reward_points_models  # noqa: F401 — メタデータ登録
 import shared.infrastructure.models  # noqa: F401 — メタデータ登録
 from bounded_contexts.email_sender.domain.email_message import EmailMessage

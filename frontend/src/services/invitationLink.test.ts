@@ -5,7 +5,7 @@
  * **コードがクエリに出ないこと**（ADR-0025）。クエリへ戻ると、リバースプロキシの
  * アクセスログに平文のコードが残り、ログを読める人が誰でも家族へ入れてしまう。
  */
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   invitationAcceptPath,
@@ -13,6 +13,8 @@ import {
   invitationSignInPath,
   invitationUrl,
   readInvitationCode,
+  rememberInvitationCode,
+  takeRememberedInvitationCode,
 } from './invitationLink'
 
 describe('invitationLink', () => {
@@ -59,5 +61,29 @@ describe('invitationLink', () => {
     expect(readInvitationCode('#code=%20ABC123%20')).toBe('ABC123')
     expect(readInvitationCode('')).toBe('')
     expect(readInvitationCode('#other=1')).toBe('')
+  })
+
+  describe('IdP への往復のあいだの預かり', () => {
+    beforeEach(() => {
+      sessionStorage.clear()
+    })
+
+    it('預けたコードは 1 回だけ取り出せる', () => {
+      rememberInvitationCode(' ABC123 ')
+
+      expect(takeRememberedInvitationCode()).toBe('ABC123')
+      expect(takeRememberedInvitationCode()).toBe('')
+    })
+
+    it('空を預けたら、前の預かりも消す', () => {
+      rememberInvitationCode('ABC123')
+      rememberInvitationCode('')
+
+      expect(takeRememberedInvitationCode()).toBe('')
+    })
+
+    it('預けていなければ空（コードを持たないログインを止めない）', () => {
+      expect(takeRememberedInvitationCode()).toBe('')
+    })
   })
 })

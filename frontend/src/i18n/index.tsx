@@ -68,6 +68,16 @@ function initialLocale(locales: Locale[], settings: UiSettings): Locale {
   return locales[0] ?? FALLBACK_LOCALE
 }
 
+/**
+ * 辞書に無いキーを差し替える。
+ *
+ * サーバーから来たコードをそのまま `t()` へ渡すと、知らないコードのときに
+ * キーの文字列（`error.xxx`）が画面に出る。載せる前にここで倒す。
+ */
+export function knownMessageKey(key: string, fallback: string): string {
+  return key in DICTIONARIES[FALLBACK_LOCALE] ? key : fallback
+}
+
 function interpolate(template: string, params?: TranslationParams): string {
   if (!params) return template
   return template.replace(/\{(\w+)\}/g, (match, name: string) =>

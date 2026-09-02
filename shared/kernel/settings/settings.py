@@ -23,6 +23,10 @@ from shared.kernel.settings.system_settings_defaults import DEFAULT_APPLICATION_
 
 _logger = logging.getLogger(__name__)
 
+# IdP へ渡すリダイレクト URI の経路（``OIDC_REDIRECT_URI`` 未設定時に組み立てる）。
+# ルーター側の定義と対で合わせる（``bounded_contexts/identity_federation``）。
+OIDC_CALLBACK_PATH = "/api/auth/sso/callback"
+
 
 class _DatabaseOverrides:
     """優先順位「環境変数 > DB > デフォルト値」の DB 層。
@@ -333,6 +337,102 @@ class ApplicationSettings:
         return str(self._get("MAIL_DEFAULT_SENDER") or "")
 
     # ------------------------------------------------------------------
+    # 外部 IdP（OIDC / SSO）連携。ADR-0029
+    # ------------------------------------------------------------------
+
+    @property
+    def oidc_enabled(self) -> bool:
+        """SSO を使うか。**設定が揃っているかまでは見ない**（:attr:`oidc_configured`）。"""
+        return self.get_bool("OIDC_ENABLED", False)
+
+    @property
+    def oidc_configured(self) -> bool:
+        """SSO を実際に始められるか（有効かつ接続先が埋まっている）。
+
+        資格情報が揃っているかは方式ごとに違うので ``ClientCredential`` が判断する。
+        ここは接続先だけを見る。
+        """
+        return self.oidc_enabled and bool(self.oidc_issuer and self.oidc_client_id)
+
+    @property
+    def oidc_display_name(self) -> str:
+        return str(self._get("OIDC_DISPLAY_NAME") or "SSO")
+
+    @property
+    def oidc_issuer(self) -> str:
+        return str(self._get("OIDC_ISSUER") or "").rstrip("/")
+
+    @property
+    def oidc_client_id(self) -> str:
+        return str(self._get("OIDC_CLIENT_ID") or "")
+
+    @property
+    def oidc_client_secret(self) -> str:
+        return str(self._get("OIDC_CLIENT_SECRET") or "")
+
+    @property
+    def oidc_client_auth_method(self) -> str:
+        """トークンエンドポイントへの client 認証方式。
+
+        ``private_key_jwt`` にすると ``OIDC_CLIENT_SECRET`` を使わず、ホスト上の
+        秘密鍵で署名したアサーションを提示する。**秘密がデプロイの変数にも DB にも
+        載らない**のが利点。受け付ける値は ``ClientCredential`` 側の
+        ``CLIENT_AUTH_METHODS``。
+        """
+        return str(self._get("OIDC_CLIENT_AUTH_METHOD") or "").strip()
+
+    @property
+    def oidc_private_key_file(self) -> str:
+        """``private_key_jwt`` で使う秘密鍵（PEM）のパス。
+
+        nolumialab では ``/srv/secrets/oidc/client.key`` を read-only で渡している。
+        **ファイルの group をコンテナの実行 gid に合わせること**（0400 root だと
+        アプリが読めない）。ディレクトリ自身にも通り抜けの権限が要る。
+        """
+        return str(self._get("OIDC_PRIVATE_KEY_FILE") or "")
+
+    @property
+    def oidc_private_key_kid(self) -> str:
+        """アサーションのヘッダに入れる ``kid``。
+
+        IdP に鍵が複数登録されているとき、これが無いとどの鍵で検証するか決められない。
+        """
+        return str(self._get("OIDC_PRIVATE_KEY_KID") or "")
+
+    @property
+    def oidc_scopes(self) -> Sequence[str]:
+        return self.get_list("OIDC_SCOPES")
+
+    @property
+    def oidc_redirect_uri(self) -> str:
+        """IdP へ渡すリダイレクト URI。未設定なら :attr:`app_base_url` から組み立てる。"""
+        configured = str(self._get("OIDC_REDIRECT_URI") or "")
+        if configured:
+            return configured
+        base = self.app_base_url.rstrip("/")
+        return f"{base}{OIDC_CALLBACK_PATH}" if base else ""
+
+    @property
+    def oidc_email_claim(self) -> str:
+        return str(self._get("OIDC_EMAIL_CLAIM") or "email")
+
+    @property
+    def oidc_display_name_claim(self) -> str:
+        return str(self._get("OIDC_DISPLAY_NAME_CLAIM") or "name")
+
+    @property
+    def oidc_allowed_email_domains(self) -> Sequence[str]:
+        return self.get_list("OIDC_ALLOWED_EMAIL_DOMAINS")
+
+    @property
+    def oidc_login_session_ttl_seconds(self) -> int:
+        return self.get_int("OIDC_LOGIN_SESSION_TTL_SECONDS", 600)
+
+    @property
+    def oidc_login_ticket_ttl_seconds(self) -> int:
+        return self.get_int("OIDC_LOGIN_TICKET_TTL_SECONDS", 60)
+
+    # ------------------------------------------------------------------
     # ログ
     # ------------------------------------------------------------------
 
@@ -347,4 +447,4 @@ class ApplicationSettings:
 
 settings = ApplicationSettings()
 
-__all__ = ["ApplicationSettings", "settings"]
+__all__ = ["OIDC_CALLBACK_PATH", "ApplicationSettings", "settings"]

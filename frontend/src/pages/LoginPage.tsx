@@ -1,16 +1,18 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
 import { PasswordField } from '../components/PasswordField'
 import { usePendingAction } from '../hooks/usePendingAction'
-import { useI18n } from '../i18n'
+import { knownMessageKey, useI18n } from '../i18n'
 import { ApiError, errorMessageKey } from '../services/api'
 import {
   invitationAcceptPath,
   invitationJoinPath,
   readInvitationCode,
+  rememberInvitationCode,
 } from '../services/invitationLink'
+import { fetchSsoProvider, startSsoLogin, type SsoProvider } from '../services/sso'
 import { isPasskeySupported, passkeyErrorKey } from '../services/webauthn'
 import { useAuth } from '../store/AuthContext'
 
@@ -27,6 +29,8 @@ export function LoginPage() {
   const { hash } = useLocation()
   const pendingCode = readInvitationCode(hash)
   const destination = pendingCode ? invitationAcceptPath(pendingCode) : '/'
+  // SSO の戻り先はサーバーを経由するので、コードを含まない経路だけを渡す
+  const ssoDestination = pendingCode ? '/families' : '/'
   // 行き来してもコードを落とさない（ここで落とすと打ち直しになる）
   const joinPath = invitationJoinPath(pendingCode)
   const [step, setStep] = useState<Step>('credentials')
@@ -34,6 +38,20 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [totpCode, setTotpCode] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [sso, setSso] = useState<SsoProvider | null>(null)
+  // SSO の失敗は画面遷移で戻ってくるため、応答本文ではなく URL に載る
+  const [searchParams] = useSearchParams()
+  const ssoError = searchParams.get('sso_error')
+
+  useEffect(() => {
+    void fetchSsoProvider()
+      .then(setSso)
+      .catch(() => {
+        // 問い合わせに失敗したらボタンを出さない。SSO が使えるかどうかは
+        // ログインの前提ではないので、ここでは何も伝えない
+        setSso(null)
+      })
+  }, [])
 
   const [submit, submitting] = usePendingAction(async (e: FormEvent) => {
     e.preventDefault()
@@ -78,6 +96,10 @@ export function LoginPage() {
         {pendingCode && <p className="notice">{t('login.invitationPending')}</p>}
         {/* パスキーの設定違いは、いま開いているドメインを添えて出す（{domain}）。 */}
         {error && <p className="error">{t(error, { domain: window.location.hostname })}</p>}
+        {/* IdP から戻された失敗。知らないコードは一般的な文言へ倒す */}
+        {!error && ssoError !== null && (
+          <p className="error">{t(knownMessageKey(`error.${ssoError}`, 'error.sso_error'))}</p>
+        )}
 
         {step === 'credentials' ? (
           <>
@@ -107,6 +129,19 @@ export function LoginPage() {
               <ActionButton type="button" pending={passkeyPending} onClick={signInWithPasskey}>
                 {t('login.withPasskey')}
               </ActionButton>
+            )}
+            {sso?.enabled === true && (
+              <button
+                type="button"
+                onClick={() => {
+                  // 戻り先はサーバーに残る。招待コードは載せず、同じタブへ預ける
+                  // （断片はクエリへ移した時点でログに平文で残る。ADR-0025）
+                  rememberInvitationCode(pendingCode)
+                  startSsoLogin(ssoDestination)
+                }}
+              >
+                {t('login.withSso', { provider: sso.display_name })}
+              </button>
             )}
             <Link to="/forgot-password">{t('login.forgot')}</Link>
             <Link to={joinPath}>{t('login.withInvitation')}</Link>

@@ -42,6 +42,8 @@ interface Options {
   path?: string
   /** ログアウトの観測（再ログイン誘導を検証する画面で使う）。 */
   logout?: () => void
+  /** SSO の引き換え（IdP からの戻りを受ける画面で差し替える）。 */
+  loginWithSsoTicket?: (ticket: string) => Promise<string>
   /** 所属する家族。既定はどこにも所属していない状態。 */
   family?: FamilyDetail | null
   /** 家族を読み込めなかった状態（所属の有無は分からない）。 */
@@ -55,12 +57,17 @@ interface Options {
   extraRoutes?: ReactNode
 }
 
-function authValueOf(scopes: string[], logout: () => void): AuthValue {
+function authValueOf(
+  scopes: string[],
+  logout: () => void,
+  loginWithSsoTicket: (ticket: string) => Promise<string>,
+): AuthValue {
   return {
     user: { ...USER, scopes },
     loading: false,
     login: () => Promise.resolve(),
     loginWithPasskey: () => Promise.resolve(),
+    loginWithSsoTicket,
     logout,
     refreshMe: () => Promise.resolve(),
     hasScope: (...codes: string[]) => codes.every((code) => scopes.includes(code)),
@@ -81,6 +88,7 @@ export function renderWithProviders(ui: ReactElement, options: Options = {}): Re
     route = '/',
     path = '*',
     logout = () => undefined,
+    loginWithSsoTicket = () => Promise.resolve('/'),
     family = null,
     familyFailed = false,
     reloadFamily = () => Promise.resolve(),
@@ -92,7 +100,7 @@ export function renderWithProviders(ui: ReactElement, options: Options = {}): Re
   return render(
     <I18nProvider settings={SETTINGS}>
       <ThemeProvider settings={SETTINGS}>
-        <AuthContext.Provider value={authValueOf(scopes, logout)}>
+        <AuthContext.Provider value={authValueOf(scopes, logout, loginWithSsoTicket)}>
           <FamilyContext.Provider value={familyValueOf(family, familyFailed, reloadFamily)}>
             <ToastProvider>
               <MemoryRouter initialEntries={[route]}>
