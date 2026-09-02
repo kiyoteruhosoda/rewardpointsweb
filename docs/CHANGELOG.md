@@ -2,6 +2,19 @@
 
 新しいものを上に追記する。細かな進捗は書かない（Progress.md 完了時に要約を移す）。
 
+## 2026-09 本番イメージを焼く場所を Komodo だけにした
+
+`v*.*.*` タグで ghcr.io へイメージを push していた `release.yml` を削除した。
+
+- **本番が引くのは Komodo Build の成果物**（`hub.nolumia.com:5000/komodo/rewardpointsweb`）で、
+  ghcr のイメージはどのデプロイからも参照されていない。naso 時代の名残で、実行履歴は 0 件・
+  ghcr にパッケージも作られていなかった。
+- 焼く場所が 2 つあると、同じコミットから出たイメージのどちらが本番か答えられなくなる。
+  版の刻印（ADR-0028）も Komodo 側は `pre_build`、GitHub 側は build-arg と経路が違っていた。
+  入口を 1 つに畳んだ。
+- `release.yml` が持っていた lint / test は `ci.yml` が push と PR で同じ内容を回しており、
+  失われる検査は無い。
+
 ## 2026-09 外部 IdP（SSO）でログインできるようにした
 
 自前の idp（OpenID Connect）でログインできるようにした（ADR-0029）。
