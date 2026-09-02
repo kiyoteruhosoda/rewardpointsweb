@@ -17,6 +17,7 @@
   "common.loading": "Loading...",
   "common.password": "Password",
   "common.processing": "Processing...",
+  "common.reasonRequired": "Enter a reason.",
   "common.save": "Save",
   "common.saved": "Saved.",
   "common.showPassword": "Show password",

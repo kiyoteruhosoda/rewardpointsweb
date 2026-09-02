@@ -9,10 +9,14 @@
  * 途中で切れたときに利用者がもう一度押しても、サーバー側で同じ 1 行として
  * 扱われる（キーを毎回作り直すと、その再送が二重登録になる）。失敗したときは
  * 入力もそのまま残す（打ち直させない）。
+ *
+ * 未入力の検査はブラウザに任せる（`required` と `useRequiredText`）。JavaScript
+ * 側で黙って捨てると、押しても何も起きない画面になる。
  */
 import { useRef, useState } from 'react'
 
 import { useI18n } from '../i18n'
+import { useRequiredText } from '../hooks/useRequiredText'
 import { newIdempotencyKey } from '../services/families'
 import { ActionButton } from './ActionButton'
 
@@ -34,6 +38,16 @@ interface Props {
 
 const REASON_LIST_ID = 'point-entry-reasons'
 
+// 押されたボタンで符号を決める。両方 submit にしておかないと、消費の側だけ
+// ブラウザの必須チェックを通らずに送られる（`submit()` の中で黙って捨てられ、
+// 未入力のまま押しても何も起きない画面になる）。
+const CONSUME = 'consume'
+
+/** 送信したのがどちらのボタンか。Enter キーでの送信は既定のボタン（加算）になる。 */
+function signOf(event: SubmitEvent): 1 | -1 {
+  return event.submitter?.getAttribute('value') === CONSUME ? -1 : 1
+}
+
 export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) {
   const { t } = useI18n()
   const [points, setPoints] = useState(editing ? String(Math.abs(editing.amount)) : '')
@@ -42,6 +56,7 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
   const [submittingSign, setSubmittingSign] = useState<1 | -1 | null>(null)
   const busy = submittingSign !== null
   const pendingKey = useRef<string | null>(null)
+  const reasonRef = useRequiredText(reason, t('common.reasonRequired'))
 
   const submit = async (sign: 1 | -1) => {
     const amount = sign * Number(points)
@@ -65,9 +80,8 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
     <form
       className="inline-form"
       onSubmit={(event) => {
-        // Enter キーでの送信は加算として扱う（消費は明示的に押してもらう）
         event.preventDefault()
-        void submit(1)
+        void submit(signOf(event.nativeEvent as SubmitEvent))
       }}
     >
       <label>
@@ -85,6 +99,7 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
       <label>
         {t('points.reason')}
         <input
+          ref={reasonRef}
           value={reason}
           onChange={(event) => {
             setReason(event.target.value)
@@ -102,14 +117,7 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
       <ActionButton type="submit" pending={submittingSign === 1} disabled={busy}>
         {editing ? t('points.saveAsAdd') : t('points.add')}
       </ActionButton>
-      <ActionButton
-        type="button"
-        pending={submittingSign === -1}
-        disabled={busy}
-        onClick={() => {
-          void submit(-1)
-        }}
-      >
+      <ActionButton type="submit" value={CONSUME} pending={submittingSign === -1} disabled={busy}>
         {editing ? t('points.saveAsConsume') : t('points.consume')}
       </ActionButton>
       {editing && (
