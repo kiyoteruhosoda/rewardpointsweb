@@ -360,6 +360,49 @@ RP ID がオリジンのドメイン（またはその上位ドメイン）に�
 出るので、「いま開いている URL に合わせる」を押して保存する（RP ID とオリジンの
 両方が埋まる）。環境変数で固定されている場合はボタンを出さないので `.env` を直す。
 
+## 外部 IdP（SSO）でログインできるようにしたいとき
+
+`/admin/config` の「SSO（シングルサインオン）」で設定する（要 `system:manage`）。
+
+1. IdP 側にこのアプリをクライアントとして登録する。リダイレクト URI は
+   `https://<公開ドメイン>/api/auth/sso/callback`。
+2. `OIDC_ISSUER` に発行者の URL、`OIDC_CLIENT_ID` に登録したクライアント ID を入れる。
+3. 名乗り方を選ぶ。
+   - `OIDC_CLIENT_AUTH_METHOD` = `client_secret_basic` → `OIDC_CLIENT_SECRET` も入れる
+   - `OIDC_CLIENT_AUTH_METHOD` = `private_key_jwt` → `OIDC_PRIVATE_KEY_FILE` に
+     ホスト上の秘密鍵（PEM）のパスを入れる。IdP に鍵が複数あるなら
+     `OIDC_PRIVATE_KEY_KID` も
+4. `OIDC_ENABLED` を有効にして保存する。ログイン画面にボタンが出る。
+
+`OIDC_REDIRECT_URI` を空のままにすると `APP_BASE_URL` + `/api/auth/sso/callback` を
+使う。`APP_BASE_URL` も空なら SSO は始まらないので、どちらかを必ず入れる。
+
+**SSO では利用者を作らない**（ADR-0029）。入れるのは、IdP が返す**検証済みの**
+メールアドレスがこのアプリの利用者の `email` と一致する人だけ。入れない人が出たら、
+先に `/admin/users` でその利用者にメールアドレスを設定する。メールアドレスを持たない
+子どものアカウントは SSO では入れない（従来どおりパスワードかパスキー）。
+
+一度入れた人は `(発行者, IdP 内の識別子)` で覚えるので、以後は IdP 側で
+メールアドレスを変えても入れる。
+
+`private_key_jwt` を使うときは、**鍵ファイルをコンテナの実行ユーザーが読めること**を
+確かめる。ディレクトリ自身にも通り抜けの権限が要る。読めるかどうかは署名のときまで
+分からないため、起動時のログに `sso_ready` が出ることで確かめる
+（`sso_private_key_unreadable` なら権限を直す）。
+
+## ログインボタンは出るのに SSO で入れないとき
+
+失敗の理由はログイン画面に出る。コードは URL の `?sso_error=` にも載る。
+
+| 出るもの | 意味 | 直し方 |
+|---|---|---|
+| `sso_account_not_linked` | 一致する利用者がいない | `/admin/users` でその人にメールアドレスを設定する。IdP 側でアドレスが未検証でもこれになる |
+| `sso_email_missing` | IdP がメールアドレスを返していない | `OIDC_SCOPES` に `email` を入れる。クレーム名が違うなら `OIDC_EMAIL_CLAIM` |
+| `sso_account_inactive` | 利用者が無効化されている | `/admin/users` で有効に戻す |
+| `sso_provider_unavailable` | IdP と話せない | `OIDC_ISSUER` を確かめる（`<issuer>/.well-known/openid-configuration` が読めること） |
+| `sso_state_invalid` | 往復が期限切れ、または別のブラウザからの戻り | もう一度押す。頻発するなら `OIDC_LOGIN_SESSION_TTL_SECONDS` を延ばす |
+| `sso_not_configured` | 設定が埋まっていない | `/admin/config` の SSO の節を見直す。起動ログの `sso_disabled_by_configuration` も手掛かり |
+
 ## ログを確認したいとき
 
 - 画面: `/admin/logs`（要 `system:manage` 権限）

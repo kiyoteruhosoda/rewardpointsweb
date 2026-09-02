@@ -39,6 +39,39 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     "WEBAUTHN_RP_NAME": "rewardpointsweb",
     "WEBAUTHN_ORIGIN": "http://localhost:5173",
     "WEBAUTHN_CHALLENGE_TTL_SECONDS": 300,
+    # --- 外部 IdP（OIDC / SSO）連携。ADR-0029 ---
+    # 既定は無効。有効にするには ISSUER / CLIENT_ID と、方式に応じた資格情報
+    # （CLIENT_SECRET か PRIVATE_KEY_FILE）が揃っている必要がある（どれか欠けた
+    # ままでは「無効」として扱う）。
+    "OIDC_ENABLED": False,
+    "OIDC_DISPLAY_NAME": "SSO",  # ログイン画面のボタンに出る名前
+    # OpenID Provider の発行者 URL。末尾に /.well-known/openid-configuration を
+    # 付けた先が読める必要がある（discovery で各エンドポイントを引く）。
+    "OIDC_ISSUER": "",
+    "OIDC_CLIENT_ID": "",
+    "OIDC_CLIENT_SECRET": "",
+    # トークンエンドポイントへの client 認証方式。
+    # client_secret_basic = 上の CLIENT_SECRET を使う。
+    # private_key_jwt     = 下の PRIVATE_KEY_FILE の秘密鍵で署名する（秘密を
+    #                       デプロイの変数にも DB にも置かずに済む）。
+    "OIDC_CLIENT_AUTH_METHOD": "client_secret_basic",
+    # private_key_jwt のときだけ使う。ホスト上の PEM を read-only で渡す。
+    "OIDC_PRIVATE_KEY_FILE": "",
+    # IdP に鍵が複数登録されているときに、どれで検証するかを示す（RFC 7638 の
+    # サムプリント）。1 つしか無ければ空でよい。
+    "OIDC_PRIVATE_KEY_KID": "",
+    "OIDC_SCOPES": ["openid", "profile", "email"],
+    # IdP に登録するリダイレクト URI。空なら APP_BASE_URL + /api/auth/sso/callback。
+    "OIDC_REDIRECT_URI": "",
+    # クレーム名の対応付け（IdP ごとに異なる）
+    "OIDC_EMAIL_CLAIM": "email",
+    "OIDC_DISPLAY_NAME_CLAIM": "name",
+    # 受け入れるメールアドレスのドメイン（空 = 制限しない）
+    "OIDC_ALLOWED_EMAIL_DOMAINS": [],
+    # 認可要求 -> コールバックの往復に許す時間
+    "OIDC_LOGIN_SESSION_TTL_SECONDS": 600,
+    # コールバックが発行する引き換え券（SPA がトークンへ交換する）の寿命
+    "OIDC_LOGIN_TICKET_TTL_SECONDS": 60,
     # --- 一般 ---
     "APP_BASE_URL": "",  # パスワードリセットリンク等の生成元（例: https://app.example.com）
     "LANGUAGES": ["en", "ja"],

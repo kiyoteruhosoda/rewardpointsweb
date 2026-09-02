@@ -11,6 +11,7 @@
 import { useState, type FormEvent } from 'react'
 
 import { useI18n } from '../i18n'
+import { useRequiredText } from '../hooks/useRequiredText'
 import { errorMessageKey } from '../services/api'
 import { families, type DailyBonus } from '../services/families'
 import { usePendingAction } from '../hooks/usePendingAction'
@@ -35,6 +36,7 @@ export function DailyBonusForm({ familyId, ledgerId, childName, bonus, onChanged
   // （`key` に設定の有無を渡す。呼び出し側を参照）
   const [amount, setAmount] = useState(bonus ? String(bonus.amount) : '')
   const [reason, setReason] = useState(bonus?.reason ?? t('dailyBonus.defaultReason'))
+  const reasonRef = useRequiredText(reason, t('common.reasonRequired'))
 
   const [save, saving] = usePendingAction(async (event: FormEvent) => {
     event.preventDefault()
@@ -83,6 +85,7 @@ export function DailyBonusForm({ familyId, ledgerId, childName, bonus, onChanged
         <label>
           {t('dailyBonus.reason')}
           <input
+            ref={reasonRef}
             aria-label={t('dailyBonus.reasonFor', { name: childName })}
             value={reason}
             onChange={(event) => {

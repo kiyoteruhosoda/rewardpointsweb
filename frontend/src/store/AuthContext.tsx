@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
 import { api, clearOfflineViewCache, clearTokens, hasTokens, setTokens } from '../services/api'
+import { exchangeSsoTicket } from '../services/sso'
 import { assertPasskey, type PasskeyChallenge } from '../services/webauthn'
 
 export interface Me {
@@ -26,6 +27,8 @@ export interface AuthValue {
   /** 二要素認証が有効なアカウントでは totpCode が必要（未指定なら totp_required）。 */
   login: (username: string, password: string, totpCode?: string) => Promise<void>
   loginWithPasskey: () => Promise<void>
+  /** IdP からの戻りに付く引き換え券でログインする。返すのは戻り先の経路。 */
+  loginWithSsoTicket: (ticket: string) => Promise<string>
   logout: () => void
   refreshMe: () => Promise<void>
   hasScope: (...codes: string[]) => boolean
@@ -83,6 +86,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refreshMe()
   }
 
+  const loginWithSsoTicket = async (ticket: string) => {
+    const session = await exchangeSsoTicket(ticket)
+    // login と同じく、別アカウントでの入り直しに備えて消す（ADR-0015）
+    await clearOfflineViewCache()
+    setTokens(session.access_token, session.refresh_token)
+    await refreshMe()
+    return session.redirect_to
+  }
+
   const logout = () => {
     void api.post('/api/auth/logout').catch(() => undefined)
     clearTokens()
@@ -94,7 +106,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, loginWithPasskey, logout, refreshMe, hasScope }}
+      value={{
+        user,
+        loading,
+        login,
+        loginWithPasskey,
+        loginWithSsoTicket,
+        logout,
+        refreshMe,
+        hasScope,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -16,6 +16,11 @@
  * 差し出す URL の宛先は、発行した親がいま見ているのと同じ入口（`origin`）にする。
  * 設定の `APP_BASE_URL` はメール本文の生成元で、既定は空。空のまま使うと開けない
  * URL を渡すことになるので、ここでは参照しない。
+ *
+ * SSO は IdP の画面を挟むので断片が失われる。**そのぶんをクエリで補わない**——
+ * `redirect_to` に載せた時点でコードはサーバーへ届き、アクセスログにも
+ * `sso_login_sessions` にも平文で残る。往復のあいだは同じタブの
+ * `sessionStorage` に預ける（`rememberInvitationCode` / `takeRememberedInvitationCode`）。
  */
 
 /** アカウントを作って家族へ加わる画面（未認証で開ける）。 */
@@ -26,6 +31,9 @@ const SIGN_IN_PATH = '/login'
 const ACCEPT_PATH = '/families'
 
 const CODE_KEY = 'code'
+
+/** IdP への往復のあいだコードを預ける場所（同じタブ限り）。 */
+const PENDING_KEY = 'pendingInvitationCode'
 
 /** 断片へコードを載せる。空なら付けない（付けても行き先で拾うものが無い）。 */
 function withCode(path: string, code: string): string {
@@ -65,4 +73,33 @@ export function invitationUrl(code: string, origin: string): string {
  */
 export function readInvitationCode(hash: string): string {
   return new URLSearchParams(hash.replace(/^#/, '')).get(CODE_KEY)?.trim() ?? ''
+}
+
+/**
+ * IdP への往復のあいだコードを預ける（同じタブの中だけ）。
+ *
+ * 断片はブラウザが IdP へ送らないので、戻ってきたときには消えている。`localStorage`
+ * ではなく `sessionStorage` を使うのは、タブを閉じれば消えてほしいから（コードは
+ * capability そのもの）。書けない設定のブラウザでは黙って諦める——コードを失うと
+ * 参加の画面で打ち直しになるだけで、ログインそのものは進む。
+ */
+export function rememberInvitationCode(code: string): void {
+  const trimmed = code.trim()
+  try {
+    if (trimmed) sessionStorage.setItem(PENDING_KEY, trimmed)
+    else sessionStorage.removeItem(PENDING_KEY)
+  } catch {
+    // 保存できない設定のブラウザ（プライベートモード等）。諦める
+  }
+}
+
+/** 預けたコードを取り出す（1 回限り。取り出したら消す）。 */
+export function takeRememberedInvitationCode(): string {
+  try {
+    const stored = sessionStorage.getItem(PENDING_KEY)
+    sessionStorage.removeItem(PENDING_KEY)
+    return stored?.trim() ?? ''
+  } catch {
+    return ''
+  }
 }

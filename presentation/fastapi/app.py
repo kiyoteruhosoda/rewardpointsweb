@@ -20,6 +20,15 @@ from bounded_contexts.account_security.presentation.router import (
     router as account_security_router,
 )
 from bounded_contexts.example.presentation.router import router as items_router
+from bounded_contexts.identity_federation.presentation.error_handling import (
+    register_identity_federation_error_handler,
+)
+from bounded_contexts.identity_federation.presentation.router import (
+    router as sso_router,
+)
+from bounded_contexts.identity_federation.presentation.startup_check import (
+    report_sso_configuration,
+)
 from bounded_contexts.reward_points.presentation.daily_bonus_grants import (
     start_daily_bonus_grants,
 )
@@ -86,6 +95,11 @@ def create_app() -> FastAPI:
     app.state.build_info = build_info
     app.state.startup_time = datetime.now(UTC)
 
+    # SSO は設定が揃っていないと「有効にしたのに使えない」形で静かに外れる。
+    # 秘密鍵に至っては、利用者が IdP から戻ってきた瞬間まで読めるか分からない。
+    # 起動時に一度確かめてログへ残す（ADR-0029）。
+    report_sso_configuration()
+
     # Prometheus metrics at /metrics
     Instrumentator(excluded_handlers=["/metrics"]).instrument(app).expose(app, include_in_schema=False)
 
@@ -113,26 +127,36 @@ def create_app() -> FastAPI:
     register_error_handling(app)
     register_account_security_error_handler(app)
     register_reward_points_error_handler(app)
+    register_identity_federation_error_handler(app)
 
-    app.include_router(health_router)
-    app.include_router(ui_settings_router)
-    app.include_router(auth_router)
-    app.include_router(passkey_login_router)
-    app.include_router(account_security_router)
-    app.include_router(admin_users_router)
-    app.include_router(admin_roles_router)
-    app.include_router(admin_permissions_router)
-    app.include_router(admin_config_router)
-    app.include_router(admin_logs_router)
-    app.include_router(admin_system_router)
-    app.include_router(items_router)
-    app.include_router(families_router)
-
-    # SPA は最後（catch-all のため）。ビルド済みの場合のみ配信する。
-    if spa.dist_available():
-        app.include_router(spa.router)
+    _include_routers(app)
 
     return app
+
+
+def _include_routers(app: FastAPI) -> None:
+    """経路を登録する。**SPA は必ず最後**（catch-all のため）。"""
+    for router in (
+        health_router,
+        ui_settings_router,
+        auth_router,
+        passkey_login_router,
+        sso_router,
+        account_security_router,
+        admin_users_router,
+        admin_roles_router,
+        admin_permissions_router,
+        admin_config_router,
+        admin_logs_router,
+        admin_system_router,
+        items_router,
+        families_router,
+    ):
+        app.include_router(router)
+
+    # ビルド済みの場合のみ配信する。
+    if spa.dist_available():
+        app.include_router(spa.router)
 
 
 __all__ = ["create_app"]
