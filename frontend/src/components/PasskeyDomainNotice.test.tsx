@@ -16,7 +16,6 @@ describe('PasskeyDomainNotice', () => {
     renderWithProviders(
       <PasskeyDomainNotice
         settings={{ rpId: 'app.example.com', origin: 'https://app.example.com' }}
-        envLocked={false}
         location={LOCATION}
         onApply={vi.fn()}
       />,
@@ -29,7 +28,6 @@ describe('PasskeyDomainNotice', () => {
     renderWithProviders(
       <PasskeyDomainNotice
         settings={{ rpId: 'localhost', origin: 'http://localhost:5173' }}
-        envLocked={false}
         location={LOCATION}
         onApply={vi.fn()}
       />,
@@ -45,7 +43,6 @@ describe('PasskeyDomainNotice', () => {
     renderWithProviders(
       <PasskeyDomainNotice
         settings={{ rpId: 'localhost', origin: 'http://localhost:5173' }}
-        envLocked={false}
         location={LOCATION}
         onApply={onApply}
       />,
@@ -57,25 +54,15 @@ describe('PasskeyDomainNotice', () => {
     })
   })
 
-  it('環境変数で固定されていれば、直し方だけを出す（ボタンは出さない）', () => {
-    renderWithProviders(
-      <PasskeyDomainNotice
-        settings={{ rpId: 'localhost', origin: 'http://localhost:5173' }}
-        envLocked
-        location={LOCATION}
-        onApply={vi.fn()}
-      />,
-    )
-    expect(screen.getByText(/environment variables/)).toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-  })
+  // ⚠ **「環境変数で固定されていればボタンを出さない」試験は消した。**
+  //   画面の値のほうが強くなったので（ADR-0031）、compose に値があっても
+  //   ここで合わせて保存すればそちらが勝つ ——出さない理由が無くなった。
 
   it('IP アドレスで開いていれば、合わせるボタンではなく開き直し方を出す', () => {
     // その URL に合わせた値は保存できない（RP ID にドメイン名しか使えない）
     renderWithProviders(
       <PasskeyDomainNotice
         settings={{ rpId: 'localhost', origin: 'http://localhost:5173' }}
-        envLocked={false}
         location={{ hostname: '192.168.1.5', origin: 'http://192.168.1.5', protocol: 'http:' }}
         onApply={vi.fn()}
       />,
@@ -90,7 +77,6 @@ describe('PasskeyDomainNotice', () => {
     renderWithProviders(
       <PasskeyDomainNotice
         settings={{ rpId: 'nas.local', origin: 'http://nas.local' }}
-        envLocked
         location={{ hostname: 'nas.local', origin: 'http://nas.local', protocol: 'http:' }}
         onApply={vi.fn()}
       />,
@@ -103,7 +89,6 @@ describe('PasskeyDomainNotice', () => {
     renderWithProviders(
       <PasskeyDomainNotice
         settings={{ rpId: 'app.example.com', origin: 'https://app.example.com:443' }}
-        envLocked={false}
         location={LOCATION}
         onApply={vi.fn()}
       />,
@@ -115,7 +100,6 @@ describe('PasskeyDomainNotice', () => {
     renderWithProviders(
       <PasskeyDomainNotice
         settings={{ rpId: '', origin: '' }}
-        envLocked={false}
         location={LOCATION}
         onApply={vi.fn()}
       />,

@@ -163,7 +163,8 @@ os.getenv("SOME_KEY")
 SystemSetting.query.get("some_key")
 ```
 
-優先順位: 環境変数 > DB（system_settings テーブル）> デフォルト値
+優先順位: **DB（system_settings テーブル）> 環境変数 > デフォルト値**（ADR-0031）
+⚠ **環境変数は配るときの初期値。** 画面で保存した値のほうが強い。
 
 新しい設定キーを追加する場合は以下の3ファイルすべてを更新する:
 

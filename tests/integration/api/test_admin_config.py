@@ -13,7 +13,7 @@ def test_get_config_returns_definitions(client: TestClient, admin_headers: dict[
     assert response.status_code == 200
     items = {item["key"]: item for item in response.json()}
     assert "MAIL_SERVER" in items
-    assert items["MAIL_SERVER"]["env_locked"] is False
+    assert items["MAIL_SERVER"]["env_fallback"] is False
     # secret 項目は値をそのまま返さない
     assert items["MAIL_PASSWORD"]["value"] in (None, "", "********")
 

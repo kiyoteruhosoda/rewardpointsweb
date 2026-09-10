@@ -21,7 +21,7 @@ interface SettingItem {
   restart_scopes: string[]
   value: unknown
   default: unknown
-  env_locked: boolean
+  env_fallback: boolean
   stored: boolean
 }
 
@@ -126,7 +126,6 @@ export function ConfigPage() {
             rpId: asText(currentValue(rpIdItem)),
             origin: asText(currentValue(originItem)),
           },
-          envLocked: rpIdItem.env_locked || originItem.env_locked,
         }
       : null
 
@@ -157,7 +156,6 @@ export function ConfigPage() {
           {category === 'passkey' && passkeyDomain && (
             <PasskeyDomainNotice
               settings={passkeyDomain.settings}
-              envLocked={passkeyDomain.envLocked}
               location={window.location}
               onApply={applyPasskeyDomain}
             />
@@ -168,13 +166,12 @@ export function ConfigPage() {
               <label key={item.key} className="config-row">
                 <span>
                   {labelFor(item)} <code>{item.key}</code>
-                  {item.env_locked && <em> ({t('config.envLocked')})</em>}
+                  {item.env_fallback && <em> ({t('config.envFallback')})</em>}
                   {item.restart_scopes.length > 0 && <em> ({t('config.needsRestart')})</em>}
                 </span>
                 {item.value_type === 'boolean' ? (
                   <input
                     type="checkbox"
-                    disabled={item.env_locked}
                     checked={Boolean(currentValue(item))}
                     onChange={(e) => {
                       setValue(item.key, e.target.checked)
@@ -182,7 +179,6 @@ export function ConfigPage() {
                   />
                 ) : item.choices ? (
                   <select
-                    disabled={item.env_locked}
                     value={asText(currentValue(item))}
                     onChange={(e) => {
                       setValue(item.key, e.target.value)
@@ -199,7 +195,6 @@ export function ConfigPage() {
                     type={
                       item.secret ? 'password' : item.value_type === 'integer' ? 'number' : 'text'
                     }
-                    disabled={item.env_locked}
                     value={asText(currentValue(item))}
                     onChange={(e) => {
                       setValue(item.key, parseValue(item, e.target.value))

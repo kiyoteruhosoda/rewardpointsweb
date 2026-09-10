@@ -18,8 +18,6 @@ import {
 interface Props {
   /** いま画面に入っている値（保存前の編集も含む）。 */
   settings: RelyingPartySettings
-  /** 環境変数で固定されていて、画面からは直せない。 */
-  envLocked: boolean
   /** 照らし合わせる相手。画面からは `window.location` を渡す。 */
   location: BrowsingLocation
   /** 「合わせる」を押されたとき。入力欄へ差し込むだけで、保存はしない。 */
@@ -31,7 +29,7 @@ function orPlaceholder(value: string): string {
   return value.trim() || '—'
 }
 
-export function PasskeyDomainNotice({ settings, envLocked, location, onApply }: Props) {
+export function PasskeyDomainNotice({ settings, location, onApply }: Props) {
   const { t } = useI18n()
   // 値が噛み合っていても、その URL では**そもそも**パスキーが動かないことがある
   // （http のドメイン名・IP アドレス）。噛み合わせだけを見ると、この場合に何も
@@ -48,24 +46,17 @@ export function PasskeyDomainNotice({ settings, envLocked, location, onApply }: 
           origin: orPlaceholder(settings.origin),
         })}
       </p>
-      <PasskeyDomainRemedy
-        envLocked={envLocked}
-        location={location}
-        expected={expected}
-        onApply={onApply}
-      />
+      <PasskeyDomainRemedy location={location} expected={expected} onApply={onApply} />
     </div>
   )
 }
 
 /** 直し方。この URL に合わせられるか・どこで直すかで変わる。 */
 function PasskeyDomainRemedy({
-  envLocked,
   location,
   expected,
   onApply,
 }: {
-  envLocked: boolean
   location: BrowsingLocation
   expected: RelyingPartySettings
   onApply: (settings: RelyingPartySettings) => void
@@ -74,7 +65,8 @@ function PasskeyDomainRemedy({
   // IP アドレスや http で開いている URL には合わせられない（保存が弾かれる）。
   // 押せば直るように見えるボタンは出さず、開き直す先を伝える。
   if (!supportsPasskeys(location)) return <p>{t('config.passkeyDomainUnusableUrl')}</p>
-  if (envLocked) return <p>{t('config.passkeyDomainEnvLocked')}</p>
+  // ⚠ **環境変数で固定される枝は無くなった**（ADR: 画面の値のほうが強い）。
+  //   compose に値があっても、ここで合わせて保存すればそちらが勝つ。
   return (
     <button
       type="button"
