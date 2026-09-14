@@ -15,8 +15,17 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from bounded_contexts.identity_federation.application.use_cases.complete_sso_link import (
+    CompleteSsoLink,
+)
 from bounded_contexts.identity_federation.application.use_cases.complete_sso_login import (
     CompleteSsoLogin,
+)
+from bounded_contexts.identity_federation.application.use_cases.describe_federated_link import (
+    DescribeFederatedLink,
+)
+from bounded_contexts.identity_federation.application.use_cases.describe_round_trip import (
+    DescribeRoundTrip,
 )
 from bounded_contexts.identity_federation.application.use_cases.describe_sso_provider import (
     DescribeSsoProvider,
@@ -30,8 +39,14 @@ from bounded_contexts.identity_federation.application.use_cases.receive_backchan
 from bounded_contexts.identity_federation.application.use_cases.resolve_federated_account import (
     ResolveFederatedAccount,
 )
+from bounded_contexts.identity_federation.application.use_cases.start_sso_link import (
+    StartSsoLink,
+)
 from bounded_contexts.identity_federation.application.use_cases.start_sso_login import (
     StartSsoLogin,
+)
+from bounded_contexts.identity_federation.application.use_cases.unlink_federated_identity import (
+    UnlinkFederatedIdentity,
 )
 from bounded_contexts.identity_federation.domain.services.oidc_provider_gateway import (
     OidcProviderGateway,
@@ -132,6 +147,41 @@ def start_sso_login(db: DbDep, gateway: GatewayDep) -> StartSsoLogin:
     )
 
 
+def start_sso_link(db: DbDep, gateway: GatewayDep) -> StartSsoLink:
+    """連携の往復の開始（ADR-0036）。控えの寿命はログインと同じ。"""
+    return StartSsoLink(
+        provider=identity_provider(),
+        gateway=gateway,
+        sessions=SqlSsoLoginSessionRepository(db),
+        session_ttl_seconds=settings.oidc_login_session_ttl_seconds,
+    )
+
+
+def complete_sso_link(db: DbDep, gateway: GatewayDep) -> CompleteSsoLink:
+    return CompleteSsoLink(
+        provider=identity_provider(),
+        gateway=gateway,
+        sessions=SqlSsoLoginSessionRepository(db),
+        identities=SqlFederatedIdentityRepository(db),
+        claims=claims_mapping(),
+    )
+
+
+def describe_round_trip(db: DbDep) -> DescribeRoundTrip:
+    return DescribeRoundTrip(sessions=SqlSsoLoginSessionRepository(db))
+
+
+def describe_federated_link(db: DbDep) -> DescribeFederatedLink:
+    return DescribeFederatedLink(
+        identities=SqlFederatedIdentityRepository(db),
+        provider=identity_provider(),
+    )
+
+
+def unlink_federated_identity(db: DbDep) -> UnlinkFederatedIdentity:
+    return UnlinkFederatedIdentity(identities=SqlFederatedIdentityRepository(db))
+
+
 def resolve_federated_account(db: DbDep) -> ResolveFederatedAccount:
     return ResolveFederatedAccount(
         identities=SqlFederatedIdentityRepository(db),
@@ -176,12 +226,17 @@ __all__ = [
     "account_linking_policy",
     "claims_mapping",
     "client_credential",
+    "complete_sso_link",
     "complete_sso_login",
+    "describe_federated_link",
+    "describe_round_trip",
     "describe_sso_provider",
     "exchange_sso_ticket",
     "identity_provider",
     "oidc_gateway",
     "receive_backchannel_logout",
     "resolve_federated_account",
+    "start_sso_link",
     "start_sso_login",
+    "unlink_federated_identity",
 ]

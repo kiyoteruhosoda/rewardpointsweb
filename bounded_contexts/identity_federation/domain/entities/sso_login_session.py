@@ -29,6 +29,15 @@ class SsoLoginSession:
     redirect_to: str
     expires_at: datetime
     binding_hash: str = ""
+    #: 連携の往復（ADR-0036）を始めた利用者。ログインの往復では ``None``。
+    #:
+    #: ⚠ **この 1 つが「何のための往復か」と「誰のものか」を兼ねる。** 入って
+    #:   いれば連携、入っていなければログインである。目的だけを別に持たせると、
+    #:   「連携だが誰のものか分からない往復」という有り得ない状態が表せてしまう。
+    #:
+    #: ⚠ **戻ってきたときのセッションでは代用できない。** 往復の途中でサイン
+    #:   アウトして別の利用者で入り直せば、結び付け先がその人にすり替わる。
+    link_user_id: int | None = None
 
     def is_expired(self, now: datetime) -> bool:
         return now >= self.expires_at
@@ -39,6 +48,10 @@ class SsoLoginSession:
         突き合わせはハッシュ同士で行う（生の値は保存していない）。
         """
         return bool(binding_hash) and binding_hash == self.binding_hash
+
+    def started_by(self, user_id: int) -> bool:
+        """連携の往復を始めたのが、いま入っているこの利用者か（ADR-0036）。"""
+        return self.link_user_id is not None and self.link_user_id == user_id
 
 
 __all__ = ["SsoLoginSession"]

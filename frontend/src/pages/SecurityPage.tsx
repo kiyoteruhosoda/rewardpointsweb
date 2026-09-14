@@ -1,7 +1,8 @@
-/** アカウントのセキュリティ設定（二要素認証・パスキー）。 */
+/** アカウントのセキュリティ設定（二要素認証・パスキー・IdP との連携）。 */
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 
 import { ActionButton } from '../components/ActionButton'
+import { FederatedIdentityControls } from '../components/FederatedIdentityControls'
 import { useToast } from '../components/ToastNotification'
 import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
@@ -281,6 +282,11 @@ export function SecurityPage() {
             </table>
           </div>
         )}
+      </section>
+
+      <section className="settings-section">
+        <h2>{t('security.federation')}</h2>
+        <FederatedIdentityControls />
       </section>
     </div>
   )

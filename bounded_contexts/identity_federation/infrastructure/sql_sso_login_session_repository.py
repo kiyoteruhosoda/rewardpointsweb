@@ -37,24 +37,26 @@ class SqlSsoLoginSessionRepository:
                 binding_hash=session.binding_hash,
                 redirect_to=session.redirect_to,
                 expires_at=session.expires_at,
+                link_user_id=session.link_user_id,
             )
         )
         self.session.flush()
         return session
+
+    def peek(self, state: str) -> SsoLoginSession | None:
+        """控えを**消さずに**読む（ADR-0036）。期限切れは無いものとして扱う。"""
+        record = self.session.get(SsoLoginSessionRecord, state)
+        if record is None:
+            return None
+        found = _to_session(record)
+        return None if found.is_expired(utcnow()) else found
 
     def consume(self, state: str) -> SsoLoginSession:
         record = self.session.get(SsoLoginSessionRecord, state)
         if record is None:
             raise SsoLoginSessionNotFoundError
 
-        consumed = SsoLoginSession(
-            state=record.state,
-            nonce=record.nonce,
-            code_verifier=record.code_verifier,
-            binding_hash=record.binding_hash,
-            redirect_to=record.redirect_to,
-            expires_at=record.expires_at,
-        )
+        consumed = _to_session(record)
 
         # 消費は**削除の成否**で決める（「読んでから消す」だと同じ ``state`` を
         # 同時に 2 本送られたとき両方が読み終えてしまう）。DELETE は行ロックを
@@ -72,6 +74,18 @@ class SqlSsoLoginSessionRepository:
         if consumed.is_expired(utcnow()):
             raise SsoLoginSessionNotFoundError
         return consumed
+
+
+def _to_session(record: SsoLoginSessionRecord) -> SsoLoginSession:
+    return SsoLoginSession(
+        state=record.state,
+        nonce=record.nonce,
+        code_verifier=record.code_verifier,
+        binding_hash=record.binding_hash,
+        redirect_to=record.redirect_to,
+        expires_at=record.expires_at,
+        link_user_id=record.link_user_id,
+    )
 
 
 __all__ = ["SqlSsoLoginSessionRepository"]

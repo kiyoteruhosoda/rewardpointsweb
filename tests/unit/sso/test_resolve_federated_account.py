@@ -46,6 +46,15 @@ class FakeIdentities:
         self.linked[(identity.issuer, identity.subject)] = identity.user_id
         return identity
 
+    def find_for_user(self, issuer: str, user_id: int) -> FederatedIdentity | None:
+        for (row_issuer, subject), owner in self.linked.items():
+            if row_issuer == issuer and owner == user_id:
+                return FederatedIdentity(row_issuer, subject, owner)
+        return None
+
+    def unlink(self, identity: FederatedIdentity) -> None:
+        self.linked.pop((identity.issuer, identity.subject), None)
+
     def touch(self, identity: FederatedIdentity) -> None:
         self.touched.append((identity.issuer, identity.subject))
 
