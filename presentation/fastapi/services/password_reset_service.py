@@ -83,6 +83,13 @@ class PasswordResetService:
             logger.info("password_reset_requested_unknown_account")
             # 応答は実在するアカウントと揃える（送信可否だけで決める）
             return ResetOutcome.ACCEPTED if settings.mail_enabled else ResetOutcome.MAIL_UNAVAILABLE
+        if not user.has_local_password:
+            # ⚠ **リセットでローカル認証を生やさない**（ADR-0034）。パスワードを
+            # 持たない利用者にここで新しい値を設定させると、「この利用者は SSO でしか
+            # 入れない」が黙って崩れる。持たせるなら管理者が明示的に設定する。
+            # 応答は不在のときと同じ（存在を漏らさない）。
+            logger.info("password_reset_requested_without_local_password")
+            return ResetOutcome.ACCEPTED if settings.mail_enabled else ResetOutcome.MAIL_UNAVAILABLE
         if user.email is None:
             # 送る先が無い。メール送信は試みず、親への依頼を促す（ADR-0011）
             logger.info("password_reset_requested_without_email")
@@ -149,6 +156,10 @@ class PasswordResetService:
             return False
         user = session.get(User, row.user_id)
         if user is None or not user.is_active:
+            return False
+        if not user.has_local_password:
+            # 発行のあとでパスワードを取り上げられた場合（ADR-0034）。券が残っていても
+            # 通さない。
             return False
         user.password_hash = generate_password_hash(new_password)
         # 親が発行した一時パスワードの途中でも、本人がメールから再設定できる。

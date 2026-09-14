@@ -55,6 +55,8 @@ def sso_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OIDC_CLIENT_ID", CLIENT_ID)
     monkeypatch.setenv("OIDC_CLIENT_SECRET", "client-secret")
     monkeypatch.setenv("OIDC_REDIRECT_URI", "https://app.example/api/auth/sso/callback")
+    # ⚠ 寄せるのは既定ではない（ADR-0033）。ここは往復そのものを見たいので開ける。
+    monkeypatch.setenv("OIDC_LINK_BY_EMAIL", "true")
 
 
 @pytest.fixture

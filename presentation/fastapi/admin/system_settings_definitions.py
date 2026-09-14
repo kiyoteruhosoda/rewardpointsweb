@@ -137,6 +137,12 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
     {"key": "OIDC_EMAIL_CLAIM", "category": "sso", "label": "Email claim", "value_type": "string"},
     {"key": "OIDC_DISPLAY_NAME_CLAIM", "category": "sso", "label": "Display name claim", "value_type": "string"},
     {
+        "key": "OIDC_LINK_BY_EMAIL",
+        "category": "sso",
+        "label": "Link to an existing account by verified email (check what the IdP means by verified)",
+        "value_type": "boolean",
+    },
+    {
         "key": "OIDC_ALLOWED_EMAIL_DOMAINS",
         "category": "sso",
         "label": "Allowed email domains (blank = any)",

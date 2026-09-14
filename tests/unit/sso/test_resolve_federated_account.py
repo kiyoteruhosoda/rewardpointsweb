@@ -68,10 +68,11 @@ def _user(*, subject: str = "idp-1", email: str = "parent@example.com", verified
 
 
 def _resolve(identities: FakeIdentities, directory: FakeDirectory) -> ResolveFederatedAccount:
+    """⚠ **寄せるのは既定ではない**（ADR-0033）。ここは結び付けの筋道を見たいので開ける。"""
     return ResolveFederatedAccount(
         identities=identities,
         directory=directory,
-        policy=AccountLinkingPolicy(),
+        policy=AccountLinkingPolicy(link_by_email=True),
     )
 
 
@@ -133,3 +134,21 @@ def test_a_link_to_a_deleted_user_is_rebuilt_not_trusted() -> None:
 
     assert resolved.user_id == 7
     assert identities.linked[(ISSUER, "idp-1")] == 7
+
+
+def test_by_default_an_existing_user_is_not_linked() -> None:
+    """⚠ 既定は寄せない（ADR-0033）。
+
+    ⚠ **このアプリは SSO で利用者を作らない**ので、これが偽のあいだ
+    **まだ結び付いていない人は SSO で入れない**（パスワードでは入れる）。
+    """
+    identities = FakeIdentities()
+    directory = FakeDirectory({"parent@example.com": FederatedAccount(user_id=7, is_active=True)})
+    use_case = ResolveFederatedAccount(
+        identities=identities,
+        directory=directory,
+        policy=AccountLinkingPolicy(),
+    )
+
+    with pytest.raises(SsoAccountNotLinkedError):
+        use_case.execute(issuer=ISSUER, user=_user())

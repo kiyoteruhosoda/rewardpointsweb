@@ -5,11 +5,17 @@
 **識別子は本文に入れる**——``log`` テーブルへ入るのは列にある項目だけで、
 ``extra`` の残りは stdout の JSON にしか出ない。ユーザー名・メールアドレスは
 書かない（CLAUDE.md「ログ」）。
+
+一覧は **「この利用者が入れる手段」**（``entrances``）も返す（ADR-0035）。認証系が
+2 つある以上、開いている口の数は並べて見ないと分からない。材料は
+**それぞれのコンテキストに聞く** ——パスワードは ``users`` の列、TOTP と
+パスキーは account_security、IdP との結び付きは identity_federation。
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,6 +23,21 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from werkzeug.security import generate_password_hash
 
+from bounded_contexts.account_security.application.use_cases.count_local_factors import (
+    CountLocalFactors,
+)
+from bounded_contexts.account_security.domain.value_objects.local_factors import (
+    LocalFactors,
+)
+from bounded_contexts.account_security.infrastructure.sql_local_factor_directory import (
+    SqlLocalFactorDirectory,
+)
+from bounded_contexts.identity_federation.application.use_cases.list_federated_issuers import (
+    ListFederatedIssuers,
+)
+from bounded_contexts.identity_federation.infrastructure.sql_federated_issuer_directory import (
+    SqlFederatedIssuerDirectory,
+)
 from bounded_contexts.reward_points.application.use_cases.ensure_user_can_be_deleted import (
     EnsureUserCanBeDeletedUseCase,
 )
@@ -26,6 +47,7 @@ from bounded_contexts.reward_points.presentation.dependencies import (
 )
 from presentation.fastapi.dependencies.auth import require_permission
 from presentation.fastapi.schemas.admin import (
+    SignInEntrances,
     UserCreateRequest,
     UserResponse,
     UserUpdateRequest,
@@ -51,7 +73,36 @@ DeletableDep = Annotated[EnsureUserCanBeDeletedUseCase, Depends(get_ensure_user_
 UserManagerDep = Annotated[AuthenticatedPrincipal, Depends(require_permission(MANAGE_USERS))]
 
 
-def _to_response(user: User) -> UserResponse:
+@dataclass(frozen=True)
+class _Inventory:
+    """棚卸しの材料。全員分をまとめて引き、利用者ごとに引き直さない。"""
+
+    factors: dict[int, LocalFactors]
+    issuers: dict[int, tuple[str, ...]]
+
+    @classmethod
+    def of(cls, db: Session) -> _Inventory:
+        return cls(
+            factors=CountLocalFactors(SqlLocalFactorDirectory(db)).execute(),
+            issuers=ListFederatedIssuers(SqlFederatedIssuerDirectory(db)).execute(),
+        )
+
+    @classmethod
+    def none(cls) -> _Inventory:
+        """作った直後の利用者。第二要素も結び付きもまだ無い。"""
+        return cls(factors={}, issuers={})
+
+    def entrances_of(self, user: User) -> SignInEntrances:
+        factors = self.factors.get(user.id, LocalFactors())
+        return SignInEntrances(
+            password=user.has_local_password,
+            totp=factors.totp,
+            passkeys=factors.passkeys,
+            identity_providers=list(self.issuers.get(user.id, ())),
+        )
+
+
+def _to_response(user: User, inventory: _Inventory) -> UserResponse:
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -61,6 +112,7 @@ def _to_response(user: User) -> UserResponse:
         must_change_password=user.must_change_password,
         roles=sorted(r.name for r in user.roles),
         permissions=sorted(user.permission_codes),
+        entrances=inventory.entrances_of(user),
     )
 
 
@@ -107,7 +159,8 @@ def _reject_self_lockout(principal: AuthenticatedPrincipal, user: User, roles: l
 @router.get("", response_model=list[UserResponse])
 async def list_users(db: DbDep) -> list[UserResponse]:
     users = db.scalars(select(User).order_by(User.id)).all()
-    return [_to_response(u) for u in users]
+    inventory = _Inventory.of(db)
+    return [_to_response(u, inventory) for u in users]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=UserResponse)
@@ -140,7 +193,7 @@ async def create_user(body: UserCreateRequest, db: DbDep) -> UserResponse:
     db.add(user)
     db.flush()
     logger.info("admin_user_created: user_id=%s", user.id)
-    return _to_response(user)
+    return _to_response(user, _Inventory.none())
 
 
 @router.put("/{user_id}", response_model=UserResponse)
@@ -174,7 +227,7 @@ async def update_user(user_id: int, body: UserUpdateRequest, db: DbDep, *, princ
             user_id,
             ",".join(sorted(r.name for r in user.roles)) or "none",
         )
-    return _to_response(user)
+    return _to_response(user, _Inventory.of(db))
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

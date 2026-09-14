@@ -48,6 +48,7 @@ function authValueOf(scopes: string[]): AuthValue {
       email: null,
       scopes,
       must_change_password: false,
+      has_password: true,
     },
     loading: false,
     login: () => Promise.resolve(),

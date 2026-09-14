@@ -38,6 +38,17 @@ export function ChangePasswordPage() {
     }
   })
 
+  // パスワードを持たない利用者にはフォームを出さない（ADR-0034）。出すと、
+  // 「現在のパスワード」を入力できない相手に、絶対に通らない入力欄を見せることになる。
+  if (user && !user.has_password) {
+    return (
+      <div className="card">
+        <h1>{t('changePassword.title')}</h1>
+        <p>{t('changePassword.notSet')}</p>
+      </div>
+    )
+  }
+
   return (
     <form className="card" onSubmit={submit}>
       <h1>{t('changePassword.title')}</h1>

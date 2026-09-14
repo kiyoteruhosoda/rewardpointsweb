@@ -431,6 +431,18 @@ class ApplicationSettings:
         return str(self._get("OIDC_DISPLAY_NAME_CLAIM") or "name")
 
     @property
+    def oidc_link_by_email(self) -> bool:
+        """初回ログインで、同じメールアドレスの既存の利用者へ寄せるか（ADR-0033）。
+
+        ⚠ **既定は寄せない。** 条件の ``email_verified`` の意味が IdP 側と食い違って
+        いると、相手のアドレスを名乗るだけで他人のアカウントへ入れる経路になる。
+
+        ⚠ **このアプリは SSO で利用者を作らない**（ADR-0029）ので、これが偽のあいだ
+        **まだ結び付いていない人は SSO で入れない**（パスワードでは入れる）。
+        """
+        return self.get_bool("OIDC_LINK_BY_EMAIL", False)
+
+    @property
     def oidc_allowed_email_domains(self) -> Sequence[str]:
         return self.get_list("OIDC_ALLOWED_EMAIL_DOMAINS")
 

@@ -40,6 +40,10 @@ class MeResponse(BaseModel):
     email: str | None
     scopes: list[str]
     must_change_password: bool
+    # パスワードという入り口を持っているか（ADR-0034）。⚠ **偽のとき、画面は
+    # パスワード変更の導線を出さない**——出すと「今のパスワード」を入力できない
+    # 利用者に、絶対に通らないフォームを見せることになる。
+    has_password: bool = True
 
 
 class ProfileUpdateRequest(BaseModel):

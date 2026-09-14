@@ -31,6 +31,7 @@ const USER: Me = {
   email: 'manager@example.com',
   scopes: [],
   must_change_password: false,
+  has_password: true,
 }
 
 interface Options {

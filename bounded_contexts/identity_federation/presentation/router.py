@@ -1,11 +1,12 @@
 """SSO（OpenID Connect）ログイン API。
 
-経路は 4 つ。
+経路は 5 つ。
 
 - ``GET /provider`` — ログイン画面が「SSO で入る」ボタンを出すかを問い合わせる
 - ``GET /login`` — IdP の認可エンドポイントへブラウザを送り出す
 - ``GET /callback`` — IdP からの戻り。引き換え券を付けて SPA へ戻す
 - ``POST /token`` — 引き換え券をトークンへ換える（Cookie もここで載せる）
+- ``POST /backchannel-logout`` — IdP からの停止の通知を受ける（ADR-0032）
 
 ``/login`` は**ブラウザに合言葉の Cookie を持たせてから**送り出す。控えの表は
 全員で共有するので、``state`` を知っているだけの相手でも戻りを完了できてしまう
@@ -24,11 +25,12 @@ from __future__ import annotations
 import logging
 import re
 from typing import Annotated
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from bounded_contexts.identity_federation.application.use_cases.complete_sso_login import (
     CompleteSsoLogin,
@@ -39,11 +41,15 @@ from bounded_contexts.identity_federation.application.use_cases.describe_sso_pro
 from bounded_contexts.identity_federation.application.use_cases.exchange_sso_ticket import (
     ExchangeSsoTicket,
 )
+from bounded_contexts.identity_federation.application.use_cases.receive_backchannel_logout import (
+    ReceiveBackchannelLogout,
+)
 from bounded_contexts.identity_federation.application.use_cases.start_sso_login import (
     StartSsoLogin,
 )
 from bounded_contexts.identity_federation.domain.exceptions import (
     IdentityFederationError,
+    InvalidLogoutTokenError,
 )
 from bounded_contexts.identity_federation.presentation import dependencies
 from bounded_contexts.identity_federation.presentation.schemas import (
@@ -52,6 +58,7 @@ from bounded_contexts.identity_federation.presentation.schemas import (
     SsoTicketRequest,
 )
 from presentation.fastapi.dependencies.auth import set_access_token_cookie
+from presentation.fastapi.schemas.auth import StatusResponse
 from presentation.fastapi.services.token_service import TokenService
 from shared.infrastructure.models import User
 from shared.kernel.database.session import get_db
@@ -172,7 +179,7 @@ async def exchange_ticket(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_credentials"},
         )
-    pair = TokenService.create_token_pair(user)
+    pair = TokenService.create_token_pair(user, federated_login=session.login)
     set_access_token_cookie(response, str(pair["access_token"]))
     logger.info("sso_login_succeeded")
     return SsoSessionResponse(
@@ -208,3 +215,54 @@ def _failed(reason: str) -> RedirectResponse:
 
 
 __all__ = ["HANDOFF_SCREEN", "LOGIN_SCREEN", "SSO_BINDING_COOKIE", "router"]
+
+
+# 通知の本体は ``application/x-www-form-urlencoded`` の 1 フィールドだけ。**``Form()`` を
+# 使わない**——FastAPI の ``Form`` は ``python-multipart`` を要求するので、この 1 か所の
+# ために依存を 1 つ増やすことになる。
+#: 受け取る本文の上限。``logout_token`` 1 本しか入らないので、これで充分に広い。
+_LOGOUT_BODY_MAX_BYTES = 16 * 1024
+
+
+@router.post("/backchannel-logout", include_in_schema=False)
+async def receive_backchannel_logout(
+    request: Request,
+    use_case: Annotated[ReceiveBackchannelLogout, Depends(dependencies.receive_backchannel_logout)],
+) -> StatusResponse:
+    """IdP からの停止の通知を受ける（OpenID Connect Back-Channel Logout 1.0。ADR-0032）。
+
+    ⚠ **この口は未認証で叩ける。** 相手の証明は ``logout_token`` の署名だけなので、
+    検証を通らないものは理由を返さずに 400 で落とす（どこまで通ったかを教えない）。
+
+    ⚠ **応答は「受け取った」だけを意味する。** 実際にセッションが終わるのは、次に
+    そのトークンが提示されたときである（サーバーにセッションの控えが無いため）。
+
+    検証では discovery と JWKS の同期 HTTP が出るので、処理はスレッドプールへ逃がす
+    （``/login`` や ``/callback`` を ``def`` にしているのと同じ理由）。
+    """
+    logout_token = _logout_token_of(await _bounded_body(request))
+    notice = await run_in_threadpool(use_case.execute, logout_token=logout_token)
+    logger.info(
+        "sso_backchannel_logout_received: scope=%s",
+        "session" if notice.session.session_id else "subject",
+    )
+    return StatusResponse(status="ok")
+
+
+async def _bounded_body(request: Request) -> bytes:
+    """本文を読む。**大きすぎるものは読まずに断る**（未認証で叩ける口のため）。"""
+    declared = request.headers.get("Content-Length")
+    if declared is not None and declared.isdigit() and int(declared) > _LOGOUT_BODY_MAX_BYTES:
+        raise InvalidLogoutTokenError
+    body = await request.body()
+    if len(body) > _LOGOUT_BODY_MAX_BYTES:
+        raise InvalidLogoutTokenError
+    return body
+
+
+def _logout_token_of(body: bytes) -> str:
+    """``logout_token=<JWT>`` を取り出す。無い・空・複数あるものは受け取らない。"""
+    values = [value for name, value in parse_qsl(body.decode("ascii", "replace")) if name == "logout_token"]
+    if len(values) != 1 or not values[0]:
+        raise InvalidLogoutTokenError
+    return values[0]

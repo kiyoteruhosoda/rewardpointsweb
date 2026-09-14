@@ -33,7 +33,9 @@ class User(Base):
     # 任意項目。設定されていれば通知・パスワードリセットに使う
     email: Mapped[str | None] = mapped_column(sa.String(255), unique=True, nullable=True)
     display_name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
-    password_hash: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    #: ⚠ **NULL は「ローカルのパスワードが無い」**（ADR-0034）。「空のパスワード」でも
+    #: 「誰も知らない値が入っている」でもない。判定は :attr:`has_local_password` を通す。
+    password_hash: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False, default=True, server_default=sa.true())
     # 一時パスワードでログインした状態。変更を終えるまで他の操作を許可しない
     must_change_password: Mapped[bool] = mapped_column(
@@ -45,6 +47,16 @@ class User(Base):
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 
     roles = relationship("Role", secondary=user_roles, lazy="selectin")
+
+    @property
+    def has_local_password(self) -> bool:
+        """パスワードでこのアプリへ入れるか（ADR-0034）。
+
+        ⚠ **偽を「まだ決めていない」と読まないこと。** 偽は「この利用者に
+        パスワードという入り口は無い」であり、リセットでも生やさない。持たせるのは
+        管理者が明示的にパスワードを設定したときだけ。
+        """
+        return self.password_hash is not None
 
     @property
     def permission_codes(self) -> frozenset[str]:
