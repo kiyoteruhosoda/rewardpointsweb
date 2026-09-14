@@ -180,6 +180,7 @@ class _CallbackTools:
 
     def __init__(
         self,
+        *,
         login: Annotated[CompleteSsoLogin, Depends(dependencies.complete_sso_login)],
         link: Annotated[CompleteSsoLink, Depends(dependencies.complete_sso_link)],
         purpose: Annotated[DescribeRoundTrip, Depends(dependencies.describe_round_trip)],
@@ -193,6 +194,7 @@ class _CallbackTools:
 
 @router.get("/callback", include_in_schema=False)
 def complete_callback(
+    *,
     query: Annotated[SsoCallbackQuery, Depends()],
     tools: Annotated[_CallbackTools, Depends()],
     binding: Annotated[str | None, Cookie(alias=SSO_BINDING_COOKIE)] = None,
@@ -248,6 +250,7 @@ def _complete_link(callback: SsoCallback, tools: _CallbackTools) -> RedirectResp
 
 @router.post("/link/start", response_model=SsoLinkStartResponse)
 def start_link(
+    *,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_active_principal)],
     use_case: Annotated[StartSsoLink, Depends(dependencies.start_sso_link)],
     response: Response,
@@ -276,6 +279,7 @@ def start_link(
 
 @router.get("/link", response_model=FederatedLinkResponse)
 def describe_link(
+    *,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_active_principal)],
     use_case: Annotated[DescribeFederatedLink, Depends(dependencies.describe_federated_link)],
     db: DbDep,
@@ -293,6 +297,7 @@ def describe_link(
 
 @router.delete("/link", response_model=StatusResponse)
 def remove_link(
+    *,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_active_principal)],
     use_case: Annotated[UnlinkFederatedIdentity, Depends(dependencies.unlink_federated_identity)],
     db: DbDep,
