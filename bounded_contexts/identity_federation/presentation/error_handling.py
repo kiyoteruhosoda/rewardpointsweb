@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from bounded_contexts.identity_federation.domain.exceptions import (
     IdentityFederationError,
     IdentityProviderUnavailableError,
+    InvalidLogoutTokenError,
     SsoNotConfiguredError,
     SsoTicketNotFoundError,
 )
@@ -22,6 +23,9 @@ _STATUS_BY_ERROR: dict[type[IdentityFederationError], int] = {
     IdentityProviderUnavailableError: status.HTTP_502_BAD_GATEWAY,
     SsoNotConfiguredError: status.HTTP_404_NOT_FOUND,
     SsoTicketNotFoundError: status.HTTP_401_UNAUTHORIZED,
+    # 停止の通知を送るのは IdP であって利用者ではない。401 で返すと「認証し直せ」に
+    # 読めてしまうので、仕様どおり「要求が不正」として返す（Back-Channel Logout 1.0 §2.8）。
+    InvalidLogoutTokenError: status.HTTP_400_BAD_REQUEST,
 }
 
 

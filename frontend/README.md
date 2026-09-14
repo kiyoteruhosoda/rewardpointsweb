@@ -83,9 +83,9 @@ manifest の `icons` が指す URL には、`vite.config.ts` がビルド時に�
 | `/families/:familyId/ledgers/:ledgerId` | `pages/LedgerPage.tsx`         | `point:view`            | **ポイント台帳。** 残高・履歴・加算・消費・訂正                                         |
 | `/items`                                | `pages/ItemsPage.tsx`          | `item:view`             | 見本のアイテム CRUD（`bounded_contexts/example`）                                       |
 | `/profile`                              | `pages/ProfilePage.tsx`        | —                       | 表示名とメールアドレスの変更・表示設定（言語 / テーマ）・セキュリティ設定               |
-| `/change-password`                      | `pages/ChangePasswordPage.tsx` | —                       | パスワード変更                                                                          |
+| `/change-password`                      | `pages/ChangePasswordPage.tsx` | —                       | パスワード変更（⚠ パスワードを持たない利用者には案内文だけ出す。ADR-0034）              |
 | `/security`                             | `pages/SecurityPage.tsx`       | —                       | 二要素認証とパスキーの登録・解除                                                        |
-| `/admin/users`                          | `pages/UsersPage.tsx`          | `user:manage`           | ユーザー管理                                                                            |
+| `/admin/users`                          | `pages/UsersPage.tsx`          | `user:manage`           | ユーザー管理（「入れる手段」の棚卸しつき。ADR-0035）                                    |
 | `/admin/roles`                          | `pages/RolesPage.tsx`          | `role:manage`           | ロール管理                                                                              |
 | `/admin/permissions`                    | `pages/PermissionsPage.tsx`    | `permission:manage`     | 権限一覧                                                                                |
 | `/admin/config`                         | `pages/ConfigPage.tsx`         | `admin:system-settings` | システム設定                                                                            |

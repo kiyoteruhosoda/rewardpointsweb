@@ -37,6 +37,7 @@ function respondWith(user: { roles: string[]; permissions: string[] }) {
               display_name: 'こども',
               email: null,
               is_active: true,
+              entrances: { password: true, totp: false, passkeys: 0, identity_providers: [] },
               ...user,
             },
           ],
@@ -144,6 +145,7 @@ describe('UsersPage', () => {
               display_name: 'こども',
               email: null,
               is_active: true,
+              entrances: { password: true, totp: false, passkeys: 0, identity_providers: [] },
               roles: ['member'],
               permissions: ['item:view'],
             },
@@ -153,5 +155,36 @@ describe('UsersPage', () => {
 
     expect(await screen.findByText('member')).toBeInTheDocument()
     expect(screen.queryByLabelText('kid: member')).not.toBeInTheDocument()
+  })
+
+  it('入れる手段を並べて出す（認証系が 2 つあることを読み取れるようにする）', async () => {
+    // ⚠ IdP 側の多要素はここに出ない。出せるのはこのアプリが知っている口だけで、
+    //   それがまさに「認証系が 2 つある」ということ（ADR-0035）。
+    get.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === '/api/admin/roles'
+          ? ROLES
+          : [
+              {
+                id: 2,
+                username: 'kid',
+                display_name: 'こども',
+                email: null,
+                is_active: true,
+                roles: ['member'],
+                permissions: ['item:view'],
+                entrances: {
+                  password: false,
+                  totp: false,
+                  passkeys: 2,
+                  identity_providers: ['https://idp.example'],
+                },
+              },
+            ],
+      ),
+    )
+    renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
+
+    expect(await screen.findByText('Passkey ×2 / SSO')).toBeInTheDocument()
   })
 })

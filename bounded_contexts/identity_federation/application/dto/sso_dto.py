@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from bounded_contexts.identity_federation.domain.value_objects.federated_login import (
+    FederatedLogin,
+)
+
 
 @dataclass(frozen=True)
 class SsoProviderDto:
@@ -48,10 +52,15 @@ class SsoHandoffDto:
 
 @dataclass(frozen=True)
 class SsoSessionDto:
-    """引き換え券から取り出したログイン結果。"""
+    """引き換え券から取り出したログイン結果。
+
+    ``login`` は発行するトークンへ刻む（ADR-0032）。刻んでおかないと、停止の通知が
+    届いても**どのトークンを無効にすればよいかが分からない**。
+    """
 
     user_id: int
     redirect_to: str
+    login: FederatedLogin
 
 
 __all__ = [

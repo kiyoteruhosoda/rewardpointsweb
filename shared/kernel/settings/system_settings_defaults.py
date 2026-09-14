@@ -67,6 +67,12 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     "OIDC_EMAIL_CLAIM": "email",
     "OIDC_DISPLAY_NAME_CLAIM": "name",
     # 受け入れるメールアドレスのドメイン（空 = 制限しない）
+    # ⚠ **初回ログインで既存の利用者へ寄せるか。既定は false**（ADR-0033）。
+    #   条件の email_verified は、自前 idp (assay) では「テナント管理者がそう主張して
+    #   いる」であって本人の証明ではない。
+    #   ⚠ このアプリは SSO で利用者を作らないので、偽のあいだ「まだ結び付いていない
+    #   人は SSO で入れない」になる（パスワードでは入れる）。
+    "OIDC_LINK_BY_EMAIL": False,
     "OIDC_ALLOWED_EMAIL_DOMAINS": [],
     # 認可要求 -> コールバックの往復に許す時間
     "OIDC_LOGIN_SESSION_TTL_SECONDS": 600,

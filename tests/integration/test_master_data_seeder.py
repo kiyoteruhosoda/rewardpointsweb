@@ -16,6 +16,12 @@ def _session(engine: sa.Engine) -> Session:
     return sessionmaker(bind=engine, expire_on_commit=False)()
 
 
+def _hash_of(user: User) -> str:
+    """パスワードのハッシュ。**NULL は想定外**（ADR-0034）——据え付けは必ず設定する。"""
+    assert user.password_hash is not None
+    return user.password_hash
+
+
 def _admin(session: Session) -> User:
     admin = session.scalar(select(User).where(User.email == master_data.DEFAULT_ADMIN_EMAIL))
     assert admin is not None
@@ -23,7 +29,7 @@ def _admin(session: Session) -> User:
 
 
 def test_seeded_admin_can_be_authenticated_with_the_documented_password(db_session: Session) -> None:
-    assert check_password_hash(_admin(db_session).password_hash, master_data.DEFAULT_ADMIN_PASSWORD)
+    assert check_password_hash(_hash_of(_admin(db_session)), master_data.DEFAULT_ADMIN_PASSWORD)
 
 
 def test_admin_left_on_a_superseded_default_follows_the_new_default(engine: sa.Engine) -> None:
@@ -35,7 +41,7 @@ def test_admin_left_on_a_superseded_default_follows_the_new_default(engine: sa.E
 
     assert reconcile_default_admin(session) is True
     session.commit()
-    assert check_password_hash(_admin(session).password_hash, master_data.DEFAULT_ADMIN_PASSWORD)
+    assert check_password_hash(_hash_of(_admin(session)), master_data.DEFAULT_ADMIN_PASSWORD)
     session.close()
 
 
@@ -59,7 +65,7 @@ def test_explicit_reset_restores_the_default_password(engine: sa.Engine) -> None
 
     seed_master_data(session, reset_admin_password=True)
     session.commit()
-    assert check_password_hash(_admin(session).password_hash, master_data.DEFAULT_ADMIN_PASSWORD)
+    assert check_password_hash(_hash_of(_admin(session)), master_data.DEFAULT_ADMIN_PASSWORD)
     session.close()
 
 
@@ -68,7 +74,7 @@ def test_explicit_reset_applies_the_configured_password(engine: sa.Engine) -> No
     seed_master_data(session, admin_password="from-the-environment", reset_admin_password=True)
     session.commit()
 
-    assert check_password_hash(_admin(session).password_hash, "from-the-environment")
+    assert check_password_hash(_hash_of(_admin(session)), "from-the-environment")
     session.close()
 
 

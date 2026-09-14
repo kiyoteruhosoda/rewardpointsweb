@@ -77,6 +77,10 @@ def _rejection_reason(user: User, password: str) -> str | None:
     **正しい一時パスワードを知っている本人だけ**なので、理由を返しても、知らない
     相手にアカウントの状態を教えることにはならない。
     """
+    if user.password_hash is None:
+        # パスワードという入り口を持たない利用者（ADR-0034）。照合する相手が
+        # 無いので、ここで断る。理由は分けない。
+        return "invalid_credentials"
     if not check_password_hash(user.password_hash, password):
         return "invalid_credentials"
     expires_at = user.temporary_password_expires_at
@@ -145,13 +149,14 @@ async def login(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(body: RefreshRequest, response: Response, db: DbDep) -> TokenResponse:
-    user = TokenService.verify_refresh_token(body.refresh_token, session=db)
-    if user is None:
+    refreshed = TokenService.verify_refresh_token(body.refresh_token, session=db)
+    if refreshed is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_token"},
         )
-    pair = TokenService.create_token_pair(user)
+    user = refreshed.user
+    pair = TokenService.create_token_pair(user, federated_login=refreshed.federated_login)
     set_access_token_cookie(response, str(pair["access_token"]))
     return _token_response(pair, user)
 
@@ -163,7 +168,8 @@ async def logout(response: Response) -> StatusResponse:
 
 
 @router.get("/me", response_model=MeResponse)
-async def me(principal: PrincipalDep) -> MeResponse:
+async def me(principal: PrincipalDep, db: DbDep) -> MeResponse:
+    user = db.get(User, principal.user_id)
     return MeResponse(
         user_id=principal.user_id,
         username=principal.username,
@@ -171,6 +177,9 @@ async def me(principal: PrincipalDep) -> MeResponse:
         email=principal.email,
         scopes=sorted(principal.permissions),
         must_change_password=principal.must_change_password,
+        # 行を引けないのは削除と入れ違ったときだけ。そのときは「持っている」側へ
+        # 倒す（画面の見た目が変わるだけで、通らないものは通らない）。
+        has_password=user.has_local_password if user is not None else True,
     )
 
 
@@ -214,6 +223,7 @@ async def update_profile(body: ProfileUpdateRequest, principal: ActivePrincipalD
         email=user.email,
         scopes=sorted(principal.permissions),
         must_change_password=user.must_change_password,
+        has_password=user.has_local_password,
     )
 
 
@@ -225,7 +235,9 @@ async def change_password(body: ChangePasswordRequest, principal: PrincipalDep, 
     終えた時点で他の操作の関門が外れる（ADR-0011）。
     """
     user = db.get(User, principal.user_id)
-    if user is None or not check_password_hash(user.password_hash, body.current_password):
+    if user is None or user.password_hash is None or not check_password_hash(user.password_hash, body.current_password):
+        # ⚠ **パスワードを持たない利用者もここで断る**（ADR-0034）。理由は分けない
+        # ——「持っていない」を教えると、入り口の有無を外から数えられる。
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": "invalid_current_password"},

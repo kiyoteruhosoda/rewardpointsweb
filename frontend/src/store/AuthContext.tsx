@@ -14,6 +14,11 @@ export interface Me {
   scopes: string[]
   /** 一時パスワードでのログイン中。変更を終えるまで他の操作は通らない。 */
   must_change_password: boolean
+  /**
+   * パスワードという入り口を持っているか（ADR-0034）。
+   * 偽 = SSO でしか入れない利用者。画面はパスワード変更の導線を出さない。
+   */
+  has_password: boolean
 }
 
 interface TokenPair {

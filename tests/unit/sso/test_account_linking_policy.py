@@ -35,9 +35,25 @@ def test_rejects_a_domain_that_is_not_listed() -> None:
         policy.ensure_accepted(_user("a@other.example"))
 
 
+def test_by_default_nothing_is_linked() -> None:
+    """⚠ 既定は寄せない（ADR-0033）。
+
+    条件の ``email_verified`` は、自前 idp (assay) では「テナント管理者がそう
+    主張している」であって本人の証明ではない。既定で開けておくと、意味の食い違いが
+    そのまま乗っ取りの経路になる。
+
+    ⚠ **このアプリは SSO で利用者を作らない**ので、倒すと「まだ結び付いていない人は
+    SSO で入れない」になる（パスワードでは入れる）。開けるかは運用で決める。
+    """
+    assert AccountLinkingPolicy().may_link(_user("a@example.com")) is False
+
+
 def test_links_only_on_a_verified_address() -> None:
-    """未検証のアドレスで寄せると、名乗るだけで他人のアカウントへ入れてしまう。"""
-    policy = AccountLinkingPolicy()
+    """開けていても、未検証のアドレスでは寄せない。
+
+    名乗るだけで他人のアカウントへ入れてしまうため。
+    """
+    policy = AccountLinkingPolicy(link_by_email=True)
 
     assert policy.may_link(_user("a@example.com")) is True
     assert policy.may_link(_user("a@example.com", verified=False)) is False

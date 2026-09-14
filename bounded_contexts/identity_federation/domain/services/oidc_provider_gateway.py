@@ -28,6 +28,14 @@ class AuthorizationRequest:
 
 
 @dataclass(frozen=True)
+class LogoutTokenVerification:
+    """IdP から届いた ``logout_token`` を確かめるための材料（ADR-0032）。"""
+
+    provider: IdentityProvider
+    logout_token: str
+
+
+@dataclass(frozen=True)
 class CodeExchange:
     """戻ってきた認可コードを引き換えるための材料。"""
 
@@ -50,6 +58,15 @@ class OidcProviderGateway(Protocol):
 
         ID トークンの署名・発行者・対象者・``nonce`` まで確かめたうえで返す。
         失敗は ``InvalidIdTokenError`` / ``IdentityProviderUnavailableError``。
+        """
+
+    def verify_logout_token(self, verification: LogoutTokenVerification) -> Mapping[str, Any]:
+        """``logout_token`` の署名・発行者・対象者・期限を確かめてクレームを返す。
+
+        ID トークンと同じ鍵・同じ発行者・同じ対象者なので、**JWT として確かめられる
+        ことはここまで**。「ログアウトの通知であること」の判断は
+        :class:`~bounded_contexts.identity_federation.domain.value_objects.logout_notice.LogoutNotice`
+        が行う。失敗は ``InvalidLogoutTokenError`` / ``IdentityProviderUnavailableError``。
         """
 
 

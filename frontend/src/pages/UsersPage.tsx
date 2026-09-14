@@ -18,6 +18,29 @@ import { usePendingRows } from '../hooks/usePendingRows'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 
+/** この利用者が**このアプリへ入れる手段**（ADR-0035）。 */
+interface SignInEntrances {
+  password: boolean
+  totp: boolean
+  passkeys: number
+  identity_providers: string[]
+}
+
+/**
+ * 入れる手段を短い並びにする（ADR-0035）。
+ *
+ * ⚠ **IdP 側の多要素はここに出ない。** 出せるのはこのアプリが知っている口だけで、
+ * それがまさに「認証系が 2 つある」ということである。
+ */
+function entranceLabels(entrances: SignInEntrances, t: (key: string) => string): string[] {
+  const labels: string[] = []
+  if (entrances.password) labels.push(t('users.entrance.password'))
+  if (entrances.totp) labels.push(t('users.entrance.totp'))
+  if (entrances.passkeys > 0) labels.push(`${t('users.entrance.passkey')} ×${entrances.passkeys}`)
+  if (entrances.identity_providers.length > 0) labels.push(t('users.entrance.sso'))
+  return labels
+}
+
 interface User {
   id: number
   email: string | null
@@ -27,6 +50,8 @@ interface User {
   roles: string[]
   /** 所属ロールの権限の和集合（サーバーが計算する。ここでは変更できない）。 */
   permissions: string[]
+  /** 入れる手段の棚卸し（ADR-0035）。表示だけで、ここからは取り上げられない。 */
+  entrances: SignInEntrances
 }
 
 interface Role {
@@ -217,6 +242,7 @@ export function UsersPage() {
               <th>{t('users.roles')}</th>
               <th>{t('users.effectivePermissions')}</th>
               <th>{t('common.active')}</th>
+              <th>{t('users.entrances')}</th>
               <th>{t('common.actions')}</th>
             </tr>
           </thead>
@@ -261,6 +287,11 @@ export function UsersPage() {
                         void toggleActive(user)
                       }}
                     />
+                  </td>
+                  <td>
+                    {/* 入れる手段は変えられない（ここは棚卸しのための表示）。
+                        取り上げ方はそれぞれの口の側にある。 */}
+                    {entranceLabels(user.entrances, t).join(' / ') || t('users.entrance.none')}
                   </td>
                   <td>
                     <ActionButton
