@@ -28,5 +28,20 @@ class FederatedUserDirectory(Protocol):
         （ADR-0011）。
         """
 
+    def refresh_profile(self, user_id: int, *, email: str | None, display_name: str) -> None:
+        """IdP が名乗った名前とメールアドレスを写しへ上書きする（ADR-0038）。
+
+        ⚠ **写しは IdP を正とする**（idp の ADR-0049 I5）。書かないと、向こうで
+        改名・メール変更をしても**こちらの表示は永久に古いまま**になる。
+
+        ⚠ **他の利用者とぶつかる値は書かない。** ``users.email`` は一意なので、
+        ぶつかったまま書くと**ログインが 500 で落ちる** ——写しの更新でログインを
+        壊してはいけないので、その項目だけ黙って見送る。
+
+        ⚠ **名乗っていない項目は消さない。** ``email`` が ``None`` なのは
+        「空にしてほしい」ではなく「今回は分からない」である（ADR-0011 の、
+        メールアドレスを持たない利用者をここで壊さないためでもある）。
+        """
+
 
 __all__ = ["FederatedUserDirectory"]

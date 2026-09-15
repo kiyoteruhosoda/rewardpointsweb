@@ -136,6 +136,12 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "label": "Redirect URI (blank = base URL + callback path)",
         "value_type": "string",
     },
+    {
+        "key": "OIDC_ACR_VALUES",
+        "category": "sso",
+        "label": "Required authentication context (acr_values, empty = do not request)",
+        "value_type": "list",
+    },
     {"key": "OIDC_EMAIL_CLAIM", "category": "sso", "label": "Email claim", "value_type": "string"},
     {"key": "OIDC_DISPLAY_NAME_CLAIM", "category": "sso", "label": "Display name claim", "value_type": "string"},
     {

@@ -54,10 +54,14 @@ class InvalidLogoutTokenError(IdentityFederationError):
     code = "sso_invalid_logout_token"
 
 
-class SsoEmailMissingError(IdentityFederationError):
-    """メールアドレスのクレームが無い（アカウントを結び付けられない）。"""
+class SsoAcrNotSatisfiedError(IdentityFederationError):
+    """要求した認証の強度（``acr_values``）が満たされていない（ADR-0039）。
 
-    code = "sso_email_missing"
+    ``acr`` が返ってこない場合もこれになる。要求したのに保証が得られていない以上、
+    通してはいけない。
+    """
+
+    code = "sso_acr_not_satisfied"
 
 
 class SsoEmailNotAllowedError(IdentityFederationError):
@@ -135,8 +139,8 @@ __all__ = [
     "InvalidLogoutTokenError",
     "SsoAccountInactiveError",
     "SsoAccountNotLinkedError",
+    "SsoAcrNotSatisfiedError",
     "SsoAlreadyLinkedError",
-    "SsoEmailMissingError",
     "SsoEmailNotAllowedError",
     "SsoIdentityNotLinkedError",
     "SsoIdentityTakenError",

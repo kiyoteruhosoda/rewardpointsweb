@@ -6,7 +6,6 @@ import pytest
 
 from bounded_contexts.identity_federation.domain.exceptions import (
     InvalidIdTokenError,
-    SsoEmailMissingError,
 )
 from bounded_contexts.identity_federation.domain.value_objects.claims_mapping import (
     ClaimsMapping,
@@ -53,7 +52,21 @@ def test_rejects_a_token_without_a_subject() -> None:
         ClaimsMapping().apply({"email": "a@example.com"})
 
 
-def test_rejects_a_token_without_an_email() -> None:
-    """メールアドレスは既存の利用者と突き合わせる唯一の手掛かり（ADR-0029）。"""
-    with pytest.raises(SsoEmailMissingError):
-        ClaimsMapping().apply({"sub": "s", "email": "   "})
+def test_an_absent_email_is_not_a_failure() -> None:
+    """⚠ **メールアドレスは鍵ではない**（ADR-0038）。
+
+    結び付きの鍵は ``sub`` なので、既に結び付いている相手はメールが無くても入れる。
+    断るのは「初回に既存の利用者を探す」ときだけで、その判断は
+    :class:`ResolveFederatedAccount` が持つ。
+    """
+    user = ClaimsMapping().apply({"sub": "s", "email": "   "})
+
+    assert user.email is None
+    assert user.email_domain == ""
+
+
+def test_falls_back_to_the_subject_when_there_is_no_email_either() -> None:
+    """名乗りの空いた利用者を作らないための最後の手（ADR-0038）。"""
+    user = ClaimsMapping().apply({"sub": "idp-1"})
+
+    assert user.display_name == "idp-1"

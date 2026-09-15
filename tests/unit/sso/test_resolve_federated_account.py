@@ -64,6 +64,7 @@ class FakeDirectory:
     """メールアドレスを持つ利用者だけを並べた名簿（``users`` の代わり）。"""
 
     by_email: dict[str, FederatedAccount] = field(default_factory=dict)
+    refreshed: list[tuple[int, str | None, str]] = field(default_factory=list)
 
     def find_by_id(self, user_id: int) -> FederatedAccount | None:
         return next((a for a in self.by_email.values() if a.user_id == user_id), None)
@@ -71,9 +72,18 @@ class FakeDirectory:
     def find_by_email(self, email: str) -> FederatedAccount | None:
         return self.by_email.get(email)
 
+    def refresh_profile(self, user_id: int, *, email: str | None, display_name: str) -> None:
+        self.refreshed.append((user_id, email, display_name))
 
-def _user(*, subject: str = "idp-1", email: str = "parent@example.com", verified: bool = True) -> FederatedUser:
-    return FederatedUser(subject=subject, email=email, display_name="親", email_verified=verified)
+
+def _user(
+    *,
+    subject: str = "idp-1",
+    email: str | None = "parent@example.com",
+    verified: bool = True,
+    display_name: str = "親",
+) -> FederatedUser:
+    return FederatedUser(subject=subject, email=email, display_name=display_name, email_verified=verified)
 
 
 def _resolve(identities: FakeIdentities, directory: FakeDirectory) -> ResolveFederatedAccount:
@@ -161,3 +171,40 @@ def test_by_default_an_existing_user_is_not_linked() -> None:
 
     with pytest.raises(SsoAccountNotLinkedError):
         use_case.execute(issuer=ISSUER, user=_user())
+
+
+def test_the_profile_copy_is_rewritten_on_every_sign_in() -> None:
+    """⚠ **写しは IdP を正とする**（ADR-0038）。
+
+    上書きしないと、向こうで改名・メール変更をしても表示が永久に古いままになる。
+    ぶつかる値を書かない判断は名簿（実装）の側が持つ。
+    """
+    identities = FakeIdentities({(ISSUER, "idp-1"): 7})
+    directory = FakeDirectory({"parent@example.com": FederatedAccount(user_id=7, is_active=True)})
+
+    _resolve(identities, directory).execute(issuer=ISSUER, user=_user(email="new@example.com", display_name="新"))
+
+    assert directory.refreshed == [(7, "new@example.com", "新")]
+
+
+def test_a_linked_user_signs_in_without_an_email_at_all() -> None:
+    """鍵は ``(issuer, subject)`` なので、メールアドレスが無くても通る（ADR-0038）。"""
+    identities = FakeIdentities({(ISSUER, "idp-1"): 7})
+    directory = FakeDirectory({"parent@example.com": FederatedAccount(user_id=7, is_active=True)})
+
+    resolved = _resolve(identities, directory).execute(issuer=ISSUER, user=_user(email=None))
+
+    assert (resolved.user_id, resolved.linked) == (7, False)
+    # ⚠ **名乗っていない項目は消さない。** ``None`` は「空にしてほしい」ではない。
+    assert directory.refreshed == [(7, None, "親")]
+
+
+def test_a_first_visit_without_an_email_is_refused() -> None:
+    """初回は寄せる先を探せない。⚠ **理由は結び付く利用者が無いときと同じにする。**"""
+    identities = FakeIdentities()
+    directory = FakeDirectory({"parent@example.com": FederatedAccount(user_id=7, is_active=True)})
+
+    with pytest.raises(SsoAccountNotLinkedError):
+        _resolve(identities, directory).execute(issuer=ISSUER, user=_user(email=None))
+
+    assert identities.linked == {}

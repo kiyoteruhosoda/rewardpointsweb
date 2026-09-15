@@ -39,8 +39,10 @@ class FakeGateway:
 
     claims: dict[str, Any]
     seen: list[CodeExchange] = field(default_factory=list)
+    sent: list[AuthorizationRequest] = field(default_factory=list)
 
     def authorization_url(self, request: AuthorizationRequest) -> str:
+        self.sent.append(request)
         return f"{ISSUER}/authorize?state={request.state}&nonce={request.nonce}"
 
     def exchange_code(self, exchange: CodeExchange) -> Mapping[str, Any]:
@@ -62,6 +64,12 @@ def sso_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def gateway() -> FakeGateway:
     return FakeGateway(claims={"email": EMAIL, "email_verified": True, "name": "親"})
+
+
+@pytest.fixture
+def required_acr(monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠ **要求したら確かめる**（ADR-0039）。要求する運用へ切り替える。"""
+    monkeypatch.setenv("OIDC_ACR_VALUES", '["urn:assay:ac:mfa"]')
 
 
 @pytest.fixture
@@ -255,6 +263,134 @@ def test_a_disabled_user_cannot_get_in_through_the_idp(
     assert response.headers["location"] == "/login?sso_error=sso_account_inactive"
 
 
+def _user(engine: sa.Engine, user_id: int) -> User:
+    session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
+    user = session.get(User, user_id)
+    assert user is not None
+    session.close()
+    return user
+
+
+def _other_user(engine: sa.Engine, *, username: str, email: str) -> None:
+    """写しの更新がぶつかる相手（``users.email`` は一意）。"""
+    session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
+    session.add(User(username=username, email=email, display_name=username, password_hash=None))
+    session.commit()
+    session.close()
+
+
 def _user_count(engine: sa.Engine) -> int:
     with engine.connect() as connection:
         return int(connection.execute(sa.select(sa.func.count()).select_from(User.__table__)).scalar_one())
+
+
+def test_the_profile_copy_follows_the_idp(
+    *,
+    sso_client: TestClient,
+    gateway: FakeGateway,
+    parent: int,
+    engine: sa.Engine,
+) -> None:
+    """⚠ **写しは IdP を正とする**（ADR-0038）。
+
+    書き直さないと、向こうで改名・メール変更をしても**こちらの表示は永久に古いまま**
+    になる。⚠ ``username``（ログインの識別子）は動かさない。
+    """
+    sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))})
+    gateway.claims = {"email": "renamed@example.com", "email_verified": True, "name": "改名した親"}
+
+    _callback(sso_client, _start(sso_client))
+
+    user = _user(engine, parent)
+    assert (user.email, user.display_name, user.username) == ("renamed@example.com", "改名した親", "parent")
+
+
+def test_a_name_another_user_already_has_is_not_written(
+    *,
+    sso_client: TestClient,
+    gateway: FakeGateway,
+    parent: int,
+    engine: sa.Engine,
+) -> None:
+    """⚠ **ぶつかる値は書かない。** 写しの更新でログインを壊してはいけない。"""
+    sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))})
+    _other_user(engine, username="sibling", email="taken@example.com")
+    gateway.claims = {"email": "taken@example.com", "email_verified": True, "name": "親"}
+
+    _callback(sso_client, _start(sso_client))
+
+    assert _user(engine, parent).email == EMAIL
+
+
+def test_a_linked_user_signs_in_without_an_email_claim(
+    sso_client: TestClient,
+    gateway: FakeGateway,
+    parent: int,
+) -> None:
+    """鍵は ``(issuer, subject)``。⚠ **メールが無くても、結び付いていれば入れる**（ADR-0038）。"""
+    sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))})
+    gateway.claims = {"name": "親"}
+
+    body = sso_client.post(
+        "/api/auth/sso/token",
+        json={"ticket": _callback(sso_client, _start(sso_client))},
+    ).json()
+
+    me = sso_client.get("/api/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"})
+    assert me.json()["user_id"] == parent
+
+
+def test_a_first_visit_without_an_email_claim_is_refused(sso_client: TestClient, gateway: FakeGateway) -> None:
+    gateway.claims = {"name": "親"}
+
+    response = sso_client.get(
+        "/api/auth/sso/callback",
+        params={"code": "authorization-code", "state": _start(sso_client)},
+    )
+
+    assert response.headers["location"] == "/login?sso_error=sso_account_not_linked"
+
+
+def test_nothing_is_requested_of_the_idp_by_default(sso_client: TestClient, gateway: FakeGateway) -> None:
+    """⚠ 既定は要求しない（ADR-0039）。予約語を持たない IdP でも従来どおり動く。"""
+    _start(sso_client)
+
+    assert gateway.sent[0].acr_values == ()
+
+
+@pytest.mark.usefixtures("required_acr")
+def test_the_requested_strength_is_sent_and_checked(
+    sso_client: TestClient,
+    gateway: FakeGateway,
+    parent: int,
+) -> None:
+    gateway.claims = {"email": EMAIL, "email_verified": True, "name": "親", "acr": "urn:assay:ac:mfa"}
+
+    ticket = _callback(sso_client, _start(sso_client))
+
+    assert gateway.sent[0].acr_values == ("urn:assay:ac:mfa",)
+    assert sso_client.post("/api/auth/sso/token", json={"ticket": ticket}).status_code == 200
+
+
+@pytest.mark.usefixtures("required_acr")
+def test_a_weaker_sign_in_is_refused(sso_client: TestClient, gateway: FakeGateway, parent: int) -> None:
+    """⚠ **ここが肝。** 送るだけでは何の保証にもならない（ADR-0039）。"""
+    gateway.claims = {"email": EMAIL, "email_verified": True, "acr": "urn:assay:ac:single"}
+
+    response = sso_client.get(
+        "/api/auth/sso/callback",
+        params={"code": "authorization-code", "state": _start(sso_client)},
+    )
+
+    assert response.headers["location"] == "/login?sso_error=sso_acr_not_satisfied"
+
+
+@pytest.mark.usefixtures("required_acr")
+def test_an_absent_acr_is_refused_too(sso_client: TestClient, gateway: FakeGateway, parent: int) -> None:
+    """返ってこないものを「満たした」と読むと、要求は送っただけになる。"""
+    response = sso_client.get(
+        "/api/auth/sso/callback",
+        params={"code": "authorization-code", "state": _start(sso_client)},
+    )
+
+    assert response.headers["location"] == "/login?sso_error=sso_acr_not_satisfied"

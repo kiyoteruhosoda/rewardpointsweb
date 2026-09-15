@@ -69,6 +69,10 @@ class HttpxOidcProviderGateway:
             "code_challenge": request.code_challenge,
             "code_challenge_method": "S256",
         }
+        if request.acr_values:
+            # 空白区切り（OIDC Core §3.1.2.1）。要求しないときはパラメータごと出さない
+            # ——空文字を送ると「空の要求」として扱う IdP がある。
+            parameters["acr_values"] = " ".join(request.acr_values)
         separator = "&" if "?" in metadata.authorization_endpoint else "?"
         return f"{metadata.authorization_endpoint}{separator}{urlencode(parameters)}"
 

@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 
 from bounded_contexts.identity_federation.application.dto.sso_dto import SsoHandoffDto
@@ -35,6 +35,9 @@ from bounded_contexts.identity_federation.domain.services.oidc_provider_gateway 
     CodeExchange,
     OidcProviderGateway,
 )
+from bounded_contexts.identity_federation.domain.value_objects.authentication_context import (
+    RequestedAuthenticationContext,
+)
 from bounded_contexts.identity_federation.domain.value_objects.claims_mapping import (
     ClaimsMapping,
 )
@@ -60,6 +63,8 @@ class CompleteSsoLogin:
     claims: ClaimsMapping
     accounts: ResolveFederatedAccount
     ticket_ttl_seconds: int
+    #: 要求した ``acr_values`` と、返ってきた ``acr`` の突き合わせ（ADR-0039）。
+    requested_context: RequestedAuthenticationContext = field(default_factory=RequestedAuthenticationContext)
 
     def execute(self, *, code: str, state: str, browser_binding: str | None) -> SsoHandoffDto:
         provider = require_usable(self.provider)
@@ -76,6 +81,8 @@ class CompleteSsoLogin:
                 nonce=session.nonce,
             )
         )
+        # ⚠ **要求したら確かめる**（ADR-0039）。送るだけでは何の保証にもならない。
+        self.requested_context.ensure_satisfied(claims.get("acr"))
         federated_user = self.claims.apply(claims)
         account = self.accounts.execute(issuer=provider.issuer, user=federated_user)
         ticket = new_secret()

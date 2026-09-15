@@ -63,6 +63,11 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     "OIDC_SCOPES": ["openid", "profile", "email"],
     # IdP に登録するリダイレクト URI。空なら APP_BASE_URL + /api/auth/sso/callback。
     "OIDC_REDIRECT_URI": "",
+    # 要求する認証の強度（``acr_values``）。空 = 要求しない（ADR-0039）。
+    # ⚠ **入れたら fail closed になる。** 返ってきた acr が要求と一致しなければ
+    #   （返ってこない場合も）ログインを断る。予約語を持たない IdP へつなぐときは
+    #   空のままにする。自前 idp（assay）なら urn:assay:ac:mfa が使える。
+    "OIDC_ACR_VALUES": [],
     # クレーム名の対応付け（IdP ごとに異なる）
     "OIDC_EMAIL_CLAIM": "email",
     "OIDC_DISPLAY_NAME_CLAIM": "name",

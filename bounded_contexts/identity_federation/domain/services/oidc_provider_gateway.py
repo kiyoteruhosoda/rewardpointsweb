@@ -25,6 +25,8 @@ class AuthorizationRequest:
     state: str
     nonce: str
     code_challenge: str
+    #: 要求する認証の強度（``acr_values``）。空 = 要求しない（ADR-0039）。
+    acr_values: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
