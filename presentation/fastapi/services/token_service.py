@@ -87,6 +87,11 @@ class TokenService:
                 "type": TYPE_ACCESS,
                 "scope": effective,
                 "username": user.username,
+                # ⚠ **検証が DB を引かないので、principal の材料は全部ここに載せる**
+                #   （ADR-0037）。載せ忘れた項目は、その経路でだけ空になる。
+                "email": user.email,
+                "display_name": user.display_name,
+                "must_change_password": user.must_change_password,
                 "exp": now + timedelta(seconds=settings.access_token_expires_seconds),
             },
             settings.jwt_secret_key,
@@ -125,29 +130,34 @@ class TokenService:
             return None, "token_invalid"
 
     @classmethod
-    def verify_access_token_with_reason(
-        cls, token: str, *, session: Session
-    ) -> tuple[AuthenticatedPrincipal | None, str | None]:
+    def verify_access_token_with_reason(cls, token: str) -> tuple[AuthenticatedPrincipal | None, str | None]:
+        """アクセストークンを**署名とクレームだけ**で検証する（ADR-0037）。
+
+        ⚠ **DB を引かない。** 止まっている利用者・外された権限・IdP からの停止・
+        親が立てた一時パスワードの印は、ここでは分からない。**分かるのは次に新しい
+        トークンを出すとき**で、それまでの上限が寿命（既定 5 分）になる。
+
+        ⚠ **資格情報を変える経路だけは別である**（ADR-0011）。
+        :func:`get_settled_principal` が行を読み直す ——一時パスワードを立てた直後に
+        二要素やパスキーを差し替えられては、立てた意味が無い。
+        """
         claims, reason = cls._decode(token)
         if claims is None:
             return None, reason
         if claims.get("type") != TYPE_ACCESS:
             return None, "not_access_token"
-        user = cls._load_active_user(claims, session)
-        if user is None:
-            return None, "user_not_found_or_inactive"
-        if _session_revoked(claims, session):
-            return None, "session_revoked"
-        # scope はユーザーの現在の保有権限との積集合（失効した権限を無効化する）
-        scope = frozenset(claims.get("scope") or ()) & user.permission_codes
+        try:
+            user_id = int(claims.get("sub", ""))
+        except ValueError:
+            return None, "token_invalid"
         return (
             AuthenticatedPrincipal(
-                user_id=user.id,
-                username=user.username,
-                display_name=user.display_name,
-                email=user.email,
-                permissions=scope,
-                must_change_password=user.must_change_password,
+                user_id=user_id,
+                username=str(claims.get("username") or ""),
+                display_name=str(claims.get("display_name") or ""),
+                email=claims.get("email"),
+                permissions=frozenset(claims.get("scope") or ()),
+                must_change_password=bool(claims.get("must_change_password")),
             ),
             None,
         )
@@ -175,6 +185,14 @@ class TokenService:
         if claims is None or claims.get("type") != TYPE_ACCESS:
             return None
         return _federated_login_of(claims)
+
+    @classmethod
+    def load_active_user(cls, user_id: int, *, session: Session) -> User | None:
+        """止まっていない利用者の行。⚠ **出し直す経路・資格情報を変える経路だけで使う。**"""
+        user = session.get(User, user_id)
+        if user is None or not user.is_active:
+            return None
+        return user
 
     @staticmethod
     def _load_active_user(claims: dict[str, Any], session: Session) -> User | None:

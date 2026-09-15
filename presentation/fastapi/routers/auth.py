@@ -169,14 +169,20 @@ async def logout(response: Response) -> StatusResponse:
 
 @router.get("/me", response_model=MeResponse)
 async def me(principal: PrincipalDep, db: DbDep) -> MeResponse:
+    """自分が誰か。
+
+    ⚠ **名前とメールは行から読む**（ADR-0037）。トークンのクレームは発行の時点の
+    写しなので、直した直後に古い値を返してしまう ——**この経路は行を持っている**
+    のだから、そちらを使う。
+    """
     user = db.get(User, principal.user_id)
     return MeResponse(
         user_id=principal.user_id,
-        username=principal.username,
-        display_name=principal.display_name,
-        email=principal.email,
+        username=user.username if user is not None else principal.username,
+        display_name=user.display_name if user is not None else principal.display_name,
+        email=user.email if user is not None else principal.email,
         scopes=sorted(principal.permissions),
-        must_change_password=principal.must_change_password,
+        must_change_password=user.must_change_password if user is not None else principal.must_change_password,
         # 行を引けないのは削除と入れ違ったときだけ。そのときは「持っている」側へ
         # 倒す（画面の見た目が変わるだけで、通らないものは通らない）。
         has_password=user.has_local_password if user is not None else True,
@@ -227,12 +233,18 @@ async def update_profile(body: ProfileUpdateRequest, principal: ActivePrincipalD
     )
 
 
-@router.post("/change-password", response_model=StatusResponse)
-async def change_password(body: ChangePasswordRequest, principal: PrincipalDep, db: DbDep) -> StatusResponse:
-    """パスワードを変える。
+@router.post("/change-password", response_model=TokenResponse)
+async def change_password(
+    *, body: ChangePasswordRequest, principal: PrincipalDep, db: DbDep, response: Response
+) -> TokenResponse:
+    """パスワードを変える。**終わったら新しいトークンを出す。**
 
     一時パスワードでログインしている場合はこの経路だけが開いており、変更を
     終えた時点で他の操作の関門が外れる（ADR-0011）。
+
+    ⚠ **トークンを出し直さないと関門が外れない**（ADR-0037）。一時パスワードの印は
+    アクセストークンに焼かれているので、行を書き換えるだけでは手元のトークンは
+    「まだ変えていない」と言い続ける。
     """
     user = db.get(User, principal.user_id)
     if user is None or user.password_hash is None or not check_password_hash(user.password_hash, body.current_password):
@@ -245,8 +257,11 @@ async def change_password(body: ChangePasswordRequest, principal: PrincipalDep, 
     user.password_hash = generate_password_hash(body.new_password)
     user.must_change_password = False
     user.temporary_password_expires_at = None
+    db.flush()
     logger.info("password_changed")
-    return StatusResponse(status="ok")
+    pair = TokenService.create_token_pair(user)
+    set_access_token_cookie(response, str(pair["access_token"]))
+    return _token_response(pair, user)
 
 
 @router.post("/forgot-password", response_model=StatusResponse)

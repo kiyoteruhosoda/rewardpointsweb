@@ -292,7 +292,10 @@ def test_parent_issues_a_temporary_password_and_child_must_change_it(client: Tes
         json={"current_password": issued["password"], "new_password": "taro-new-pass-1"},
     )
     assert changed.status_code == 200
-    assert client.get("/api/families", headers=headers).status_code == 200
+    # ⚠ **出し直したトークンを使うこと**（ADR-0037）。一時パスワードの印はアクセス
+    #   トークンに焼かれているので、古いトークンは「まだ変えていない」と言い続ける。
+    settled = {"Authorization": f"Bearer {changed.json()['access_token']}"}
+    assert client.get("/api/families", headers=settled).status_code == 200
 
 
 def test_expired_temporary_password_is_refused(client: TestClient, parent: Account, db_session: Session) -> None:
@@ -351,13 +354,20 @@ def test_temporary_password_blocks_profile_and_security_changes(client: TestClie
         assert response.status_code == 403, response.text
         assert response.json()["detail"]["error"] == "password_change_required"
 
-    # 変更を終えれば通る
-    client.post(
+    # 変更を終えれば通る。
+    # ⚠ **出し直したトークンを使うこと**（ADR-0037）。一時パスワードの印はアクセス
+    #   トークンに焼かれているので、古いトークンは「まだ変えていない」と言い続ける。
+    changed = client.post(
         "/api/auth/change-password",
         headers=headers,
         json={"current_password": issued["password"], "new_password": "taro-new-pass-1"},
     )
-    assert client.get("/api/account/security/passkeys", headers=headers).status_code == 200
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["must_change_password"] is False
+    settled = {"Authorization": f"Bearer {changed.json()['access_token']}"}
+    assert client.get("/api/account/security/passkeys", headers=settled).status_code == 200
+    # ⚠ 古いトークンは、寿命が切れるまで関門に掛かったままである。
+    assert client.get("/api/account/security/passkeys", headers=headers).status_code == 403
 
 
 def test_reset_needs_a_linked_account(client: TestClient, parent: Account) -> None:

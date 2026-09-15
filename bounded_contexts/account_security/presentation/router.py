@@ -40,7 +40,7 @@ from bounded_contexts.account_security.presentation.schemas import (
     TotpEnrollmentResponse,
     TwoFactorStatusResponse,
 )
-from presentation.fastapi.dependencies.auth import get_active_principal
+from presentation.fastapi.dependencies.auth import get_settled_principal
 from presentation.fastapi.schemas.auth import StatusResponse
 from shared.application.authenticated_principal import AuthenticatedPrincipal
 from shared.kernel.timestamps import isoformat_utc
@@ -49,7 +49,10 @@ router = APIRouter(prefix="/api/account/security", tags=["account-security"])
 
 # 一時パスワードでのログイン中は通さない。第二の要素を本人より先に
 # 差し替えられないようにする（ADR-0011）。
-PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_active_principal)]
+#: ⚠ **資格情報を変える経路の関門**（ADR-0037）。ここだけは行を読み直す ——一時
+#: パスワードの印はトークンに焼かれた値なので、立てた直後に二要素やパスキーを
+#: 差し替えられては意味が無い（ADR-0011）。
+PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_settled_principal)]
 
 
 def _to_passkey_response(summary: PasskeySummaryDto) -> PasskeyResponse:
