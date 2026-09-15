@@ -106,6 +106,25 @@ async def get_active_principal(
     return principal
 
 
+async def get_current_principal_or_none(
+    access_token_cookie: str | None = Cookie(default=None, alias=ACCESS_TOKEN_COOKIE),
+    db: Session = Depends(get_db),
+) -> AuthenticatedPrincipal | None:
+    """入っていれば主体を、入っていなければ ``None`` を返す（401 にしない）。
+
+    ⚠ **これを認可に使わない。** 用があるのは**ブラウザの画面遷移**で戻ってくる
+    経路だけである（ADR-0036 の連携の戻り）。そこで 401 を返すと、利用者には
+    JSON の生文字列が見えるだけで、やり直す導線も出せない。認可が要る口は
+    :func:`get_active_principal` を使う。
+    """
+    from presentation.fastapi.services.token_service import TokenService
+
+    if not access_token_cookie:
+        return None
+    principal, _ = TokenService.verify_access_token_with_reason(access_token_cookie, session=db)
+    return principal
+
+
 def require_permission(*codes: str) -> Callable[..., Awaitable[AuthenticatedPrincipal]]:
     """指定された権限を全て保持している場合のみアクセスを許可する依存関数ファクトリ。
 

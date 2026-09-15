@@ -51,6 +51,11 @@ class SsoLoginSessionRecord(Base):
     redirect_to: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     expires_at = mapped_column(sa.DateTime(), nullable=False, index=True)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
+    # 連携の往復（ADR-0036）を始めた利用者。ログインの往復では NULL。
+    #
+    # ⚠ **外部キーを張らない。** この表は短命な控えで、利用者を消したときに
+    #   道連れにする対象ではない（消えた利用者の控えは期限で消える）。
+    link_user_id: Mapped[int | None] = mapped_column(BigIntPk, nullable=True)
 
 
 class SsoLoginTicketRecord(Base):
