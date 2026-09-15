@@ -13,7 +13,6 @@ from typing import Any
 
 from bounded_contexts.identity_federation.domain.exceptions import (
     InvalidIdTokenError,
-    SsoEmailMissingError,
 )
 from bounded_contexts.identity_federation.domain.value_objects.federated_user import (
     FederatedUser,
@@ -31,29 +30,34 @@ class ClaimsMapping:
     def apply(self, claims: Mapping[str, Any]) -> FederatedUser:
         """クレームを利用者の情報へ写す。
 
-        ``sub`` が無いものは ID トークンとして成立していない。メールアドレスは
-        既存の利用者と突き合わせる唯一の手掛かりなので、無ければ失敗として扱う。
+        ``sub`` が無いものは ID トークンとして成立していない。
+
+        ⚠ **メールアドレスが無くても通す**（ADR-0038）。結び付きの鍵は ``sub`` なので、
+        既に結び付いている相手はメールが無くても入れる。**無いと困る場面で断る**
+        ——初回に既存の利用者を探すときだけである。
         """
         subject = _text(claims.get("sub"))
         if not subject:
             raise InvalidIdTokenError
         email = _text(claims.get(self.email_claim))
-        if not email:
-            raise SsoEmailMissingError
         return FederatedUser(
             subject=subject,
-            email=email.lower(),
-            display_name=self._display_name(claims, email),
+            email=email.lower() if email else None,
+            display_name=self._display_name(claims, email, subject),
             email_verified=claims.get("email_verified") is True,
         )
 
-    def _display_name(self, claims: Mapping[str, Any], email: str) -> str:
-        """名乗り。対応付け先が空なら別名のクレーム、それも無ければメールの左側。"""
+    def _display_name(self, claims: Mapping[str, Any], email: str, subject: str) -> str:
+        """名乗り。対応付け先が空なら別名のクレーム、それも無ければメールの左側。
+
+        ⚠ **メールも無ければ ``sub`` を使う。** 読みにくい値になるが、**名乗りの
+        空いた利用者を作るよりはよい** ——後から画面で直せる。
+        """
         for claim in (self.display_name_claim, *_DISPLAY_NAME_FALLBACK_CLAIMS):
             value = _text(claims.get(claim))
             if value:
                 return value
-        return email.partition("@")[0]
+        return email.partition("@")[0] if email else subject
 
 
 def _text(value: object) -> str:

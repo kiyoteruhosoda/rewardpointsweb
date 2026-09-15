@@ -48,6 +48,8 @@ class StartSsoLogin:
     gateway: OidcProviderGateway
     sessions: SsoLoginSessionRepository
     session_ttl_seconds: int
+    #: 認可要求に載せる ``acr_values``（空 = 要求しない）。ADR-0039。
+    acr_values: tuple[str, ...] = ()
 
     def execute(self, *, redirect_to: str | None = None) -> SsoAuthorizationDto:
         """IdP へ送り出す URL と、ブラウザへ持たせる合言葉を返す。"""
@@ -72,6 +74,7 @@ class StartSsoLogin:
                 state=state,
                 nonce=nonce,
                 code_challenge=code_challenge_of(code_verifier),
+                acr_values=self.acr_values,
             )
         )
         return SsoAuthorizationDto(authorization_url=authorization_url, browser_binding=binding)

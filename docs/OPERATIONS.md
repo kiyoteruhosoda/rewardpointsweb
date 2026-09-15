@@ -397,7 +397,27 @@ OIDC_LINK_BY_EMAIL=true
 既に結び付いている人はこの設定の影響を受けない。
 
 一度入れた人は `(発行者, IdP 内の識別子)` で覚えるので、以後は IdP 側で
-メールアドレスを変えても入れる。
+メールアドレスを変えても入れる。**メールアドレスのクレームが来なくても入れる**
+（ADR-0038）。⚠ **まだ結び付いていない人は、メールアドレスが無いと入れない** ——
+寄せる先を探せないため。
+
+⚠ **名前とメールアドレスは、ログインのたびに IdP の値で上書きされる**（ADR-0038）。
+`/admin/users` で直しても、次の SSO ログインで IdP の値へ戻る。直したい値は IdP 側で
+直す。ログインの識別子（`username`）は上書きしない。他の利用者が既に使っている
+メールアドレスは書かない（その項目だけ見送り、`federated_profile_conflict` を記録する）。
+
+### 多要素で入ったことを確かめたいとき
+
+`OIDC_ACR_VALUES` に要求する `acr` を入れる（空 = 要求しない。既定）。自前 idp (assay)
+なら `urn:assay:ac:mfa`。
+
+```
+OIDC_ACR_VALUES=["urn:assay:ac:mfa"]
+```
+
+⚠ **入れたら fail closed になる。** 戻ってきた `acr` が要求と一致しなければ
+——**返ってこない場合も**——ログインを断る（`sso_acr_not_satisfied`）。予約語を
+持たない IdP へつないでいるあいだは空のままにする。
 
 `private_key_jwt` を使うときは、**鍵ファイルをコンテナの実行ユーザーが読めること**を
 確かめる。ディレクトリ自身にも通り抜けの権限が要る。読めるかどうかは署名のときまで
@@ -447,10 +467,10 @@ curl -X PATCH "<発行者 URL>/admin/clients/<client_id>" \
 | 出るもの | 意味 | 直し方 |
 |---|---|---|
 | `sso_account_not_linked` | 一致する利用者がいない | `/admin/users` でその人にメールアドレスを設定する。IdP 側でアドレスが未検証でもこれになる |
-| `sso_email_missing` | IdP がメールアドレスを返していない | `OIDC_SCOPES` に `email` を入れる。クレーム名が違うなら `OIDC_EMAIL_CLAIM` |
 | `sso_account_inactive` | 利用者が無効化されている | `/admin/users` で有効に戻す |
 | `sso_provider_unavailable` | IdP と話せない | `OIDC_ISSUER` を確かめる（`<issuer>/.well-known/openid-configuration` が読めること） |
 | `sso_state_invalid` | 往復が期限切れ、または別のブラウザからの戻り | もう一度押す。頻発するなら `OIDC_LOGIN_SESSION_TTL_SECONDS` を延ばす |
+| `sso_acr_not_satisfied` | 要求した認証の強度が満たされていない（`acr` が返らない場合も） | IdP 側のポリシーと `OIDC_ACR_VALUES` の綴りを突き合わせる。要求そのものをやめるなら空にする |
 | `sso_not_configured` | 設定が埋まっていない | `/admin/config` の SSO の節を見直す。起動ログの `sso_disabled_by_configuration` も手掛かり |
 
 ## ログを確認したいとき

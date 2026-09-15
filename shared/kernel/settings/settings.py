@@ -423,6 +423,11 @@ class ApplicationSettings:
         return f"{base}{OIDC_CALLBACK_PATH}" if base else ""
 
     @property
+    def oidc_acr_values(self) -> Sequence[str]:
+        """要求する認証の強度。空 = 要求しない（ADR-0039）。"""
+        return self.get_list("OIDC_ACR_VALUES")
+
+    @property
     def oidc_email_claim(self) -> str:
         return str(self._get("OIDC_EMAIL_CLAIM") or "email")
 

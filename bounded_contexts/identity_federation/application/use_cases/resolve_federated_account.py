@@ -53,6 +53,9 @@ class ResolveFederatedAccount:
         known = self._known_account(issuer, user.subject)
         if known is not None:
             _ensure_active(known)
+            # ⚠ **写しは IdP を正とする**（ADR-0038）。ここで上書きしないと、
+            #   向こうで改名・メール変更をしても表示が永久に古いままになる。
+            self.directory.refresh_profile(known.user_id, email=user.email, display_name=user.display_name)
             return ResolvedAccountDto(user_id=known.user_id)
         return self._link_existing(issuer, user)
 
@@ -68,8 +71,14 @@ class ResolveFederatedAccount:
         return account
 
     def _link_existing(self, issuer: str, user: FederatedUser) -> ResolvedAccountDto:
-        """初めての相手。検証済みのメールアドレスが一致する利用者へ寄せる。"""
-        if not self.policy.may_link(user):
+        """初めての相手。検証済みのメールアドレスが一致する利用者へ寄せる。
+
+        ⚠ **メールアドレスが要るのはここだけである**（ADR-0038）。既に結び付いて
+        いる相手は ``sub`` で引けるので、無くても入れる。
+        """
+        if not self.policy.may_link(user) or user.email is None:
+            # ⚠ **理由を分けない** ——このアプリは SSO で利用者を作らないので、
+            #   本人にできることは「管理者に頼む」でどちらも同じである。
             raise SsoAccountNotLinkedError
         existing = self.directory.find_by_email(user.email)
         if existing is None:

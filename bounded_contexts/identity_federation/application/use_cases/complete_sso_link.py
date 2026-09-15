@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from bounded_contexts.identity_federation.domain.entities.federated_identity import (
     FederatedIdentity,
@@ -36,6 +36,9 @@ from bounded_contexts.identity_federation.domain.services.oidc_provider_gateway 
     CodeExchange,
     OidcProviderGateway,
 )
+from bounded_contexts.identity_federation.domain.value_objects.authentication_context import (
+    RequestedAuthenticationContext,
+)
 from bounded_contexts.identity_federation.domain.value_objects.claims_mapping import (
     ClaimsMapping,
 )
@@ -55,6 +58,8 @@ class CompleteSsoLink:
     sessions: SsoLoginSessionRepository
     identities: FederatedIdentityRepository
     claims: ClaimsMapping
+    #: 要求した ``acr_values`` と、返ってきた ``acr`` の突き合わせ（ADR-0039）。
+    requested_context: RequestedAuthenticationContext = field(default_factory=RequestedAuthenticationContext)
 
     def execute(self, *, callback: SsoCallback, user_id: int) -> FederatedIdentity:
         provider = require_usable(self.provider)
@@ -73,6 +78,9 @@ class CompleteSsoLink:
                 nonce=session.nonce,
             )
         )
+        # ⚠ **連携でも確かめる**（ADR-0039）。ここを素通しにすると、弱い認証で
+        #   通った往復がそのまま新しい入り口になる。
+        self.requested_context.ensure_satisfied(claims.get("acr"))
         subject = self.claims.apply(claims).subject
         self._ensure_free(provider.issuer, subject, user_id)
         return self.identities.link(FederatedIdentity(issuer=provider.issuer, subject=subject, user_id=user_id))

@@ -54,6 +54,9 @@ from bounded_contexts.identity_federation.domain.services.oidc_provider_gateway 
 from bounded_contexts.identity_federation.domain.value_objects.account_linking_policy import (
     AccountLinkingPolicy,
 )
+from bounded_contexts.identity_federation.domain.value_objects.authentication_context import (
+    RequestedAuthenticationContext,
+)
 from bounded_contexts.identity_federation.domain.value_objects.claims_mapping import (
     ClaimsMapping,
 )
@@ -127,6 +130,11 @@ def claims_mapping() -> ClaimsMapping:
     )
 
 
+def requested_authentication_context() -> RequestedAuthenticationContext:
+    """要求した認証の強度の突き合わせ（ADR-0039）。空 = 要求しない。"""
+    return RequestedAuthenticationContext(values=tuple(settings.oidc_acr_values))
+
+
 def account_linking_policy() -> AccountLinkingPolicy:
     return AccountLinkingPolicy(
         link_by_email=settings.oidc_link_by_email,
@@ -144,6 +152,7 @@ def start_sso_login(db: DbDep, gateway: GatewayDep) -> StartSsoLogin:
         gateway=gateway,
         sessions=SqlSsoLoginSessionRepository(db),
         session_ttl_seconds=settings.oidc_login_session_ttl_seconds,
+        acr_values=tuple(settings.oidc_acr_values),
     )
 
 
@@ -154,6 +163,7 @@ def start_sso_link(db: DbDep, gateway: GatewayDep) -> StartSsoLink:
         gateway=gateway,
         sessions=SqlSsoLoginSessionRepository(db),
         session_ttl_seconds=settings.oidc_login_session_ttl_seconds,
+        acr_values=tuple(settings.oidc_acr_values),
     )
 
 
@@ -164,6 +174,7 @@ def complete_sso_link(db: DbDep, gateway: GatewayDep) -> CompleteSsoLink:
         sessions=SqlSsoLoginSessionRepository(db),
         identities=SqlFederatedIdentityRepository(db),
         claims=claims_mapping(),
+        requested_context=requested_authentication_context(),
     )
 
 
@@ -199,6 +210,7 @@ def complete_sso_login(db: DbDep, gateway: GatewayDep) -> CompleteSsoLogin:
         claims=claims_mapping(),
         accounts=resolve_federated_account(db),
         ticket_ttl_seconds=settings.oidc_login_ticket_ttl_seconds,
+        requested_context=requested_authentication_context(),
     )
 
 
@@ -235,6 +247,7 @@ __all__ = [
     "identity_provider",
     "oidc_gateway",
     "receive_backchannel_logout",
+    "requested_authentication_context",
     "resolve_federated_account",
     "start_sso_link",
     "start_sso_login",
