@@ -197,10 +197,15 @@ def test_removing_a_linked_child_deletes_the_account(client: TestClient, parent:
     removed = client.delete(f"/api/families/{family_id}/memberships/{membership_id}", headers=parent.headers)
     assert removed.status_code == 204, removed.text
 
-    # アカウントごと消えている: 古いトークンは無効、再ログインもできない
-    assert client.get("/api/families", headers=child_headers).status_code == 401
+    # アカウントごと消えている: 再ログインはできない
     failed = client.post("/api/auth/login", json={"username": "taro", "password": "taro-pass-123"})
     assert failed.status_code == 401
+    # ⚠ **古いトークンは寿命まで読める**（ADR-0037。検証は DB を引かない）。
+    #   家族はもう引けないので、見えるものは無い。
+    assert client.get("/api/families", headers=child_headers).json() == []
+    # 出し直す経路は通らない ——消えた利用者に新しいトークンは出ない。
+    settled = client.post("/api/auth/login", json={"username": "taro", "password": "taro-pass-123"})
+    assert settled.status_code == 401
 
 
 def test_removing_an_unlinked_child_keeps_other_accounts(client: TestClient, parent: Account) -> None:

@@ -31,6 +31,7 @@ from bounded_contexts.identity_federation.domain.value_objects.logout_notice imp
 )
 from bounded_contexts.identity_federation.presentation import dependencies
 from shared.infrastructure.models import User
+from shared.kernel.settings.settings import settings
 
 ISSUER = "https://idp.example"
 CLIENT_ID = "rewardpointsweb"
@@ -142,15 +143,29 @@ def _post_logout(client: TestClient, logout_token: str) -> int:
     return client.post(LOGOUT, data={"logout_token": logout_token}).status_code
 
 
-def test_a_stop_from_the_idp_ends_the_session(sso_client: TestClient, parent: int) -> None:
+def _refresh(client: TestClient, session: dict[str, Any]) -> int:
+    """更新を 1 回通す。⚠ **止める判定はここに集約してある**（ADR-0037）。"""
+    return client.post("/api/auth/refresh", json={"refresh_token": session["refresh_token"]}).status_code
+
+
+def test_a_stop_from_the_idp_ends_the_session_at_the_next_refresh(sso_client: TestClient, parent: int) -> None:
     session = _sign_in_with_sso(sso_client)
     assert sso_client.get("/api/auth/me", headers=_bearer(session)).status_code == 200
 
     assert _post_logout(sso_client, "session-1|delivery-1") == 200
 
-    # トークンは手元に残っているが、もう通らない（サーバー側に控えが無いので、
-    # 効くのは次に提示されたとき）。
-    assert sso_client.get("/api/auth/me", headers=_bearer(session)).status_code == 401
+    # ⚠ **手元のアクセストークンは寿命まで通る**（ADR-0037。検証は DB を引かない）。
+    assert sso_client.get("/api/auth/me", headers=_bearer(session)).status_code == 200
+    # 終わるのは更新のとき。
+    assert _refresh(sso_client, session) == 401
+
+
+def test_the_access_token_outlives_the_stop_only_until_it_expires(sso_client: TestClient, parent: int) -> None:
+    """⚠ **これが引き受けた緩さである**（ADR-0037）。"""
+    session = _sign_in_with_sso(sso_client)
+    assert _post_logout(sso_client, "session-1|delivery-1") == 200
+    assert sso_client.get("/api/auth/me", headers=_bearer(session)).status_code == 200
+    assert settings.access_token_expires_seconds <= 300
 
 
 def test_a_stopped_session_cannot_be_refreshed(sso_client: TestClient, parent: int) -> None:
@@ -170,7 +185,7 @@ def test_a_stop_for_another_session_leaves_this_one_alone(sso_client: TestClient
 def test_a_stop_without_a_sid_ends_every_session_of_that_user(sso_client: TestClient, parent: int) -> None:
     session = _sign_in_with_sso(sso_client)
     assert _post_logout(sso_client, "|delivery-1") == 200
-    assert sso_client.get("/api/auth/me", headers=_bearer(session)).status_code == 401
+    assert _refresh(sso_client, session) == 401
 
 
 def test_signing_in_again_after_a_stop_works(sso_client: TestClient, gateway: FakeGateway, parent: int) -> None:

@@ -60,7 +60,6 @@ def _extract_token(
 async def get_current_principal(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     access_token_cookie: str | None = Cookie(default=None, alias=ACCESS_TOKEN_COOKIE),
-    db: Session = Depends(get_db),
 ) -> AuthenticatedPrincipal:
     """JWT を検証して ``AuthenticatedPrincipal`` を返す。失敗時は 401。"""
     from presentation.fastapi.services.token_service import TokenService
@@ -73,7 +72,7 @@ async def get_current_principal(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    principal, reason = TokenService.verify_access_token_with_reason(token, session=db)
+    principal, reason = TokenService.verify_access_token_with_reason(token)
     if not principal:
         logger.debug("JWT 認証失敗: %s", reason)
         raise HTTPException(
@@ -108,7 +107,6 @@ async def get_active_principal(
 
 async def get_current_principal_or_none(
     access_token_cookie: str | None = Cookie(default=None, alias=ACCESS_TOKEN_COOKIE),
-    db: Session = Depends(get_db),
 ) -> AuthenticatedPrincipal | None:
     """入っていれば主体を、入っていなければ ``None`` を返す（401 にしない）。
 
@@ -121,7 +119,36 @@ async def get_current_principal_or_none(
 
     if not access_token_cookie:
         return None
-    principal, _ = TokenService.verify_access_token_with_reason(access_token_cookie, session=db)
+    principal, _ = TokenService.verify_access_token_with_reason(access_token_cookie)
+    return principal
+
+
+async def get_settled_principal(
+    principal: AuthenticatedPrincipal = Depends(get_active_principal),
+    db: Session = Depends(get_db),
+) -> AuthenticatedPrincipal:
+    """**資格情報を変える経路**のための関門（ADR-0037）。
+
+    ⚠ **ここだけは行を読み直す。** アクセストークンの検証が DB を引かなくなったので
+    （ADR-0037）、一時パスワードの印はトークンに焼かれた値になる。親が一時パスワードを
+    立てた直後に、子が手元のトークンで**二要素やパスキーを差し替えられては、立てた
+    意味が無い**（ADR-0011）。
+
+    ⚠ **止められた利用者もここで弾く。** 新しい資格情報を作らせないためである。
+    """
+    from presentation.fastapi.services.token_service import TokenService
+
+    user = TokenService.load_active_user(principal.user_id, session=db)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "invalid_token"},
+        )
+    if user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "password_change_required"},
+        )
     return principal
 
 
