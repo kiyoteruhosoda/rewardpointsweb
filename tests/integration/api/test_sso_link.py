@@ -38,20 +38,27 @@ ISSUER = "https://idp.example"
 @dataclass
 class FakeGateway:
     subject: str = "idp-subject-1"
+    #: 返す ``acr``。⚠ **既定は返さない** ——要求していないときの姿である（ADR-0039）。
+    acr: str | None = None
     seen: list[CodeExchange] = field(default_factory=list)
+    sent: list[AuthorizationRequest] = field(default_factory=list)
 
     def authorization_url(self, request: AuthorizationRequest) -> str:
+        self.sent.append(request)
         return f"{ISSUER}/authorize?state={request.state}&nonce={request.nonce}"
 
     def exchange_code(self, exchange: CodeExchange) -> Mapping[str, Any]:
         self.seen.append(exchange)
-        return {
+        claims: dict[str, Any] = {
             "sub": self.subject,
             "nonce": exchange.nonce,
             "email": "admin@example.com",
             "email_verified": True,
             "name": "管理者",
         }
+        if self.acr is not None:
+            claims["acr"] = self.acr
+        return claims
 
 
 @pytest.fixture
@@ -66,6 +73,12 @@ def sso_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def gateway() -> FakeGateway:
     return FakeGateway()
+
+
+@pytest.fixture
+def required_acr(monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠ **要求したら確かめる**（ADR-0039）。要求する運用へ切り替える。"""
+    monkeypatch.setenv("OIDC_ACR_VALUES", '["urn:assay:ac:mfa"]')
 
 
 @pytest.fixture
@@ -166,3 +179,50 @@ def _drop_password(engine: sa.Engine) -> None:
     user.password_hash = None
     session.commit()
     session.close()
+
+
+def test_nothing_is_requested_of_the_idp_by_default(sso_client: TestClient, gateway: FakeGateway) -> None:
+    """⚠ 既定は要求しない（ADR-0039）。予約語を持たない IdP でも従来どおり動く。"""
+    _start_link(sso_client, _sign_in(sso_client))
+
+    assert gateway.sent[0].acr_values == ()
+
+
+@pytest.mark.usefixtures("required_acr")
+def test_the_requested_strength_is_sent_on_the_link_round_trip(
+    sso_client: TestClient,
+    gateway: FakeGateway,
+) -> None:
+    gateway.acr = "urn:assay:ac:mfa"
+    headers = _sign_in(sso_client)
+
+    assert _callback(sso_client, _start_link(sso_client, headers)) == "/security?sso_link=linked"
+    assert gateway.sent[0].acr_values == ("urn:assay:ac:mfa",)
+
+
+@pytest.mark.usefixtures("required_acr")
+def test_a_weak_round_trip_does_not_become_a_new_entrance(
+    sso_client: TestClient,
+    gateway: FakeGateway,
+) -> None:
+    """⚠ **連携でも強度を確かめる**（ADR-0039）。
+
+    ここを素通しにすると、**弱い認証で通った往復がそのまま新しい入り口になる。**
+    ログイン側だけ確かめても、入り口を増やす操作が緩いままでは意味が無い。
+    """
+    gateway.acr = "urn:assay:ac:single"
+    headers = _sign_in(sso_client)
+
+    assert _callback(sso_client, _start_link(sso_client, headers)) == ("/security?sso_link_error=sso_acr_not_satisfied")
+    assert sso_client.get("/api/auth/sso/link", headers=headers).json()["linked"] is False
+
+
+@pytest.mark.usefixtures("required_acr")
+def test_an_absent_acr_does_not_become_a_new_entrance_either(
+    sso_client: TestClient,
+    gateway: FakeGateway,
+) -> None:
+    """返ってこないものを「満たした」と読むと、要求は送っただけになる。"""
+    headers = _sign_in(sso_client)
+
+    assert _callback(sso_client, _start_link(sso_client, headers)) == ("/security?sso_link_error=sso_acr_not_satisfied")
