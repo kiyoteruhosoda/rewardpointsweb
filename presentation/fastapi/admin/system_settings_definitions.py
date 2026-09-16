@@ -129,6 +129,12 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "label": "Private key ID (blank = the IdP has only one key)",
         "value_type": "string",
     },
+    {
+        "key": "MACHINE_CLIENT_ID",
+        "category": "sso",
+        "label": "Service account client ID (empty = do not reconcile with the identity provider)",
+        "value_type": "string",
+    },
     {"key": "OIDC_SCOPES", "category": "sso", "label": "Requested scopes", "value_type": "list"},
     {
         "key": "OIDC_REDIRECT_URI",
