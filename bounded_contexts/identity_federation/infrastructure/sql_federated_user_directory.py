@@ -3,8 +3,7 @@
 ``shared`` の ``User`` モデルへ触れるのはここだけで、ID 連携の Domain / Application
 層はこの実装を知らない。
 
-**利用者を作る操作は持たない。** SSO は既に居る人の入り口で、アカウントを増やす
-経路ではない（ADR-0029）。
+**作るのは、初めての相手の口座だけ**（ADR-0041）。形は管理画面で作るときの既定に揃える。
 """
 
 from __future__ import annotations
@@ -13,18 +12,23 @@ import logging
 from dataclasses import dataclass
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from bounded_contexts.identity_federation.domain.entities.federated_account import (
     FederatedAccount,
 )
-from shared.infrastructure.models import User
+from shared.infrastructure.models import Role, User
 
 logger = logging.getLogger(__name__)
 
 #: ``users.display_name`` の桁数。⚠ **長い名乗りは切る。** MySQL は厳格モードで
 #: 溢れた値を通さないので、切らないと**写しの更新でログインが落ちる**。
 _DISPLAY_NAME_LIMIT = 100
+
+#: 作る口座のロール。⚠ **管理画面で作るときの既定と同じ親（``member``）**（ADR-0018）。
+#: 家族にはまだ属さず、家族を作るか、招待を受けて加わる。
+_ROLE_FOR_NEW_ACCOUNT = "member"
 
 
 @dataclass(frozen=True)
@@ -45,6 +49,34 @@ class SqlFederatedUserDirectory:
         if not email:
             return None
         return _as_account(self.session.scalar(select(User).where(User.email == email)))
+
+    def find_by_username(self, username: str) -> FederatedAccount | None:
+        return _as_account(self.session.scalar(select(User).where(User.username == username)))
+
+    def provision(self, *, username: str, email: str | None, display_name: str) -> FederatedAccount | None:
+        """初めての相手の口座を作る（ADR-0041）。
+
+        ⚠ **一意の列がぶつかったら ``None``。** 確かめてから作るまでのあいだに、同じ相手の
+        往復がもう 1 本戻ることがある。巻き戻すのは作りかけの 1 行だけにしたいので、
+        セーブポイントの中で書く（外側の往復の控えは消費済みのまま残す）。
+        """
+        roles = list(self.session.scalars(select(Role).where(Role.name == _ROLE_FOR_NEW_ACCOUNT)))
+        user = User(
+            username=username,
+            email=email,
+            display_name=display_name[:_DISPLAY_NAME_LIMIT],
+            # ⚠ **NULL は「ローカルのパスワードが無い」**（ADR-0034）。入り口は IdP だけ。
+            password_hash=None,
+            is_active=True,
+        )
+        try:
+            with self.session.begin_nested():
+                user.roles = roles
+                self.session.add(user)
+                self.session.flush()
+        except IntegrityError:
+            return None
+        return _as_account(user)
 
     def refresh_profile(self, user_id: int, *, email: str | None, display_name: str) -> None:
         """名乗りとメールアドレスを写しへ上書きする（ADR-0038）。

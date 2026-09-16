@@ -45,6 +45,10 @@ class ClaimsMapping:
             email=email.lower() if email else None,
             display_name=self._display_name(claims, email, subject),
             email_verified=claims.get("email_verified") is True,
+            # ⚠ **クレーム名は設定にしない。** OIDC Core の標準クレームで、口座を作るときの
+            #   ``username`` の元になる（ADR-0041）。読み替えられると、作る口座の識別子が
+            #   設定 1 つで変わる。
+            preferred_username=_text(claims.get("preferred_username")) or None,
         )
 
     def _display_name(self, claims: Mapping[str, Any], email: str, subject: str) -> str:

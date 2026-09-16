@@ -1,8 +1,8 @@
 """SSO ログインの往復（ADR-0029）。
 
 IdP との通信はゲートウェイを差し替えて止める。ここで確かめるのは**このアプリ側の
-組み立て**——控えの往復、ブラウザの結び付け、引き換え券、そして「利用者を作らない」
-という一点。
+組み立て**——控えの往復、ブラウザの結び付け、引き換え券、そして初めての相手の口座を
+「作れるときだけ作る」こと（ADR-0041）。
 """
 
 from __future__ import annotations
@@ -169,9 +169,102 @@ def test_the_second_sign_in_goes_through_the_stored_link(
     assert me.json()["user_id"] == parent
 
 
-def test_an_unknown_address_does_not_create_a_user(sso_client: TestClient, engine: sa.Engine) -> None:
-    """SSO は既に居る人の入り口。名乗られただけでアカウントは増えない。"""
+def test_a_first_visit_creates_the_account(sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine) -> None:
+    """assay から戻ってきた相手＝割り当てられた人。初めてなら口座を作って迎える（ADR-0041）。
+
+    ⚠ 作る口座は管理画面の既定と同じ**親（``member``）・家族なし**で、**パスワードを持たない**。
+    """
     before = _user_count(engine)
+    gateway.claims = {
+        "email": "new@example.com",
+        "email_verified": True,
+        "name": "新しい親",
+        "preferred_username": "Newcomer",
+    }
+
+    body = sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))}).json()
+
+    assert _user_count(engine) == before + 1
+    me = sso_client.get("/api/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"}).json()
+    user = _user(engine, me["user_id"])
+    assert (user.username, user.email, user.display_name) == ("newcomer", "new@example.com", "新しい親")
+    assert user.password_hash is None
+    assert [role.name for role in user.roles] == ["member"]
+    assert body["must_change_password"] is False
+
+
+def test_the_created_account_is_found_by_its_link_next_time(
+    sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine
+) -> None:
+    """2 回目は ``(issuer, subject)`` で決まる。⚠ 2 つ目の口座を作らない。"""
+    gateway.claims = {
+        "email": "new@example.com",
+        "email_verified": True,
+        "name": "新しい親",
+        "preferred_username": "newcomer",
+    }
+    first = sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))}).json()
+    before = _user_count(engine)
+
+    second = sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))}).json()
+
+    assert _user_count(engine) == before
+    headers = [{"Authorization": f"Bearer {body['access_token']}"} for body in (first, second)]
+    assert (
+        sso_client.get("/api/auth/me", headers=headers[0]).json()["user_id"]
+        == (sso_client.get("/api/auth/me", headers=headers[1]).json()["user_id"])
+    )
+
+
+def test_a_taken_username_is_refused_instead_of_renamed(
+    sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine
+) -> None:
+    """⚠ **衝突したら作らずに断る**（ADR-0041）。黙って連番を付けると、本人の知らない識別子になる。"""
+    _other_user(engine, username="newcomer", email="someone-else@example.com")
+    before = _user_count(engine)
+    gateway.claims = {"email": "new@example.com", "email_verified": True, "preferred_username": "NewComer"}
+
+    response = sso_client.get(
+        "/api/auth/sso/callback",
+        params={"code": "authorization-code", "state": _start(sso_client)},
+    )
+
+    assert response.headers["location"] == "/login?sso_error=sso_username_unavailable"
+    assert _user_count(engine) == before
+
+
+@pytest.mark.parametrize("claims", [{"email": "new@example.com"}, {"preferred_username": "日本語の名前"}])
+def test_an_unusable_username_is_refused(
+    *, sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine, claims: dict[str, Any]
+) -> None:
+    """``preferred_username`` が無い・識別子の規則に合わない。どちらも作らない。"""
+    before = _user_count(engine)
+    gateway.claims = claims
+
+    response = sso_client.get(
+        "/api/auth/sso/callback",
+        params={"code": "authorization-code", "state": _start(sso_client)},
+    )
+
+    assert response.headers["location"] == "/login?sso_error=sso_username_unavailable"
+    assert _user_count(engine) == before
+
+
+def test_an_address_an_unlinked_account_already_has_is_refused(
+    *,
+    monkeypatch: pytest.MonkeyPatch,
+    sso_client: TestClient,
+    gateway: FakeGateway,
+    parent: int,
+    engine: sa.Engine,
+) -> None:
+    """⚠ **意図して断る**（ADR-0041）。作ると同じ人の口座が 2 つになる。
+
+    寄せる設定は既定で閉じている（ADR-0033）。本人がその口座へ入って結び付ける（ADR-0036）。
+    """
+    monkeypatch.setenv("OIDC_LINK_BY_EMAIL", "false")
+    before = _user_count(engine)
+    gateway.claims = {"email": EMAIL, "email_verified": True, "preferred_username": "someone"}
 
     response = sso_client.get(
         "/api/auth/sso/callback",
@@ -340,15 +433,16 @@ def test_a_linked_user_signs_in_without_an_email_claim(
     assert me.json()["user_id"] == parent
 
 
-def test_a_first_visit_without_an_email_claim_is_refused(sso_client: TestClient, gateway: FakeGateway) -> None:
-    gateway.claims = {"name": "親"}
+def test_a_first_visit_without_an_email_claim_still_creates_the_account(
+    sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine
+) -> None:
+    """メールアドレスは鍵ではない（ADR-0038）。無くても作れる ——要るのは ``username`` である。"""
+    gateway.claims = {"name": "親", "preferred_username": "no-mail"}
 
-    response = sso_client.get(
-        "/api/auth/sso/callback",
-        params={"code": "authorization-code", "state": _start(sso_client)},
-    )
+    body = sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))}).json()
 
-    assert response.headers["location"] == "/login?sso_error=sso_account_not_linked"
+    me = sso_client.get("/api/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"}).json()
+    assert (_user(engine, me["user_id"]).username, _user(engine, me["user_id"]).email) == ("no-mail", None)
 
 
 def test_nothing_is_requested_of_the_idp_by_default(sso_client: TestClient, gateway: FakeGateway) -> None:

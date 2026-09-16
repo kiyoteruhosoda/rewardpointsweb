@@ -4,8 +4,8 @@ ID 連携から見ると、利用者を引くのは「外の仕組み」に当�
 のモデルへ触れないよう、必要な操作だけをここで宣言し、実装（Infrastructure 層）が
 ``shared`` のモデルへ橋渡しする。
 
-**作る操作は置かない。** SSO は既に居る利用者への入り口で、アカウントを増やす経路
-ではない（``domain/value_objects/account_linking_policy.py``）。
+**作るのは、初めての相手の口座 1 種類だけ**（ADR-0041）。誰に作ってよいかは assay の
+アプリの割り当てが決めていて、こちらは code を持って戻ってきた相手を迎えるだけである。
 """
 
 from __future__ import annotations
@@ -26,6 +26,20 @@ class FederatedUserDirectory(Protocol):
 
         メールアドレスは任意項目なので、持っていない利用者は決して当たらない
         （ADR-0011）。
+        """
+
+    def find_by_username(self, username: str) -> FederatedAccount | None:
+        """利用者をログイン識別子で引く（正規化済みの値を渡す）。無ければ ``None``。"""
+
+    def provision(self, *, username: str, email: str | None, display_name: str) -> FederatedAccount | None:
+        """初めての相手の口座を作る（ADR-0041）。
+
+        作る口座は、管理画面で作るときの既定と同じ **親（``member``）・家族なし**
+        （ADR-0018）。⚠ **ローカルのパスワードは持たせない**（ADR-0034 の NULL）
+        ——入り口は IdP だけである。
+
+        ⚠ **一意の列がぶつかったら作らずに ``None`` を返す。** 直前に確かめていても、
+        同じ相手の往復が 2 本同時に戻ると追い越される。
         """
 
     def refresh_profile(self, user_id: int, *, email: str | None, display_name: str) -> None:

@@ -70,3 +70,11 @@ def test_falls_back_to_the_subject_when_there_is_no_email_either() -> None:
     user = ClaimsMapping().apply({"sub": "idp-1"})
 
     assert user.display_name == "idp-1"
+
+
+def test_reads_the_login_name_the_idp_uses() -> None:
+    """口座を作るときの ``username`` の元（ADR-0041）。空白だけの値は「無い」と読む。"""
+    named = ClaimsMapping().apply({"sub": "s", "preferred_username": " kyon "})
+    blank = ClaimsMapping().apply({"sub": "s", "preferred_username": "  "})
+
+    assert (named.preferred_username, blank.preferred_username) == ("kyon", None)
