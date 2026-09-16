@@ -23,6 +23,9 @@ from bounded_contexts.example.presentation.router import router as items_router
 from bounded_contexts.identity_federation.presentation.error_handling import (
     register_identity_federation_error_handler,
 )
+from bounded_contexts.identity_federation.presentation.reconciliation import (
+    start_sso_reconciliation,
+)
 from bounded_contexts.identity_federation.presentation.router import (
     router as sso_router,
 )
@@ -72,6 +75,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # 日付の変わり目に子の台帳へボーナスを配る（ADR-0024）。止まっていたあいだの
     # 日は起動直後の 1 周でまとめて追いつく
     start_daily_bonus_grants()
+    # IdP で止まった人の SSO のセッションを、毎時聞き直して止める
+    # （MACHINE_CLIENT_ID が空なら何もしない。ADR-0040）
+    start_sso_reconciliation()
     try:
         yield
     finally:

@@ -58,6 +58,9 @@ class FakeIdentities:
     def touch(self, identity: FederatedIdentity) -> None:
         self.touched.append((identity.issuer, identity.subject))
 
+    def list_for_issuer(self, issuer: str) -> list[FederatedIdentity]:
+        return [FederatedIdentity(i, s, u) for (i, s), u in self.linked.items() if i == issuer]
+
 
 @dataclass
 class FakeDirectory:
