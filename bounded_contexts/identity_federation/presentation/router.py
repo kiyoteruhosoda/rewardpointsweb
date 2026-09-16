@@ -222,7 +222,10 @@ def _complete_login(callback: SsoCallback, tools: _CallbackTools) -> RedirectRes
         )
     except IdentityFederationError as error:
         return _failed(error.code)
-    if handoff.account.linked:
+    if handoff.account.provisioned:
+        # 口座を作った往復は別の名前で残す（ADR-0041）。利用者が増えた記録になる。
+        logger.info("sso_account_provisioned")
+    elif handoff.account.linked:
         # 初めて結び付いた往復だけ 1 行残す（誰かは requestId から辿る。
         # CLAUDE.md「ログ」）。
         logger.info("sso_identity_linked")

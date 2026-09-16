@@ -22,6 +22,10 @@ class FederatedUser:
     email: str | None
     display_name: str
     email_verified: bool = False
+    #: IdP でのログイン識別子（``preferred_username``）。初めての相手の口座を作るとき、
+    #: このアプリの ``username`` の元にする（ADR-0041）。⚠ **任意である** ——IdP が
+    #: 出さない（``profile`` scope を求めていない）こともあり、そのときは作れない。
+    preferred_username: str | None = None
 
     @property
     def email_domain(self) -> str:

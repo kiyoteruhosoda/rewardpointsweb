@@ -80,8 +80,8 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     # ⚠ **初回ログインで既存の利用者へ寄せるか。既定は false**（ADR-0033）。
     #   条件の email_verified は、自前 idp (assay) では「テナント管理者がそう主張して
     #   いる」であって本人の証明ではない。
-    #   ⚠ このアプリは SSO で利用者を作らないので、偽のあいだ「まだ結び付いていない
-    #   人は SSO で入れない」になる（パスワードでは入れる）。
+    #   ⚠ 偽のあいだ、同じメールアドレスの口座を持つ人は初回の SSO で断られる
+    #   （口座を 2 つ作らない。ADR-0041）。その口座へ入って設定画面から結び付ける。
     "OIDC_LINK_BY_EMAIL": False,
     "OIDC_ALLOWED_EMAIL_DOMAINS": [],
     # 認可要求 -> コールバックの往復に許す時間

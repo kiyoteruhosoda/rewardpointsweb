@@ -35,11 +35,13 @@ class ResolvedAccountDto:
     """IdP の名乗りを、このアプリの利用者へ落とした結果。
 
     ``linked`` は「この往復で初めて結び付いた」ことを示す（ログの区別に使う）。
-    2 回目以降は ``(issuer, subject)`` で決まるので偽になる。
+    2 回目以降は ``(issuer, subject)`` で決まるので偽になる。``provisioned`` は
+    「結び付けた口座を、この往復で作った」（ADR-0041）。
     """
 
     user_id: int
     linked: bool = False
+    provisioned: bool = False
 
 
 @dataclass(frozen=True)

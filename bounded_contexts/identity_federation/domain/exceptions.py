@@ -71,13 +71,25 @@ class SsoEmailNotAllowedError(IdentityFederationError):
 
 
 class SsoAccountNotLinkedError(IdentityFederationError):
-    """結び付く利用者が無い。
+    """同じメールアドレスの口座が既にあるが、この IdP とはまだ結び付いていない（ADR-0041）。
 
-    このアプリは SSO で利用者を**作らない**（ADR-0029）。検証済みのメールアドレス
-    が既存の利用者と一致しなければ、ここで断る。
+    ⚠ **作らずに断る。** 作ると同じ人の口座が 2 つになる（``users.email`` は一意なので、
+    メールアドレス無しの 2 つ目になる）。メールで寄せる設定（ADR-0033）は既定で閉じて
+    いるので、本人がその口座へパスワードで入り、設定画面から結び付ける（ADR-0036）。
     """
 
     code = "sso_account_not_linked"
+
+
+class SsoUsernameUnavailableError(IdentityFederationError):
+    """初めての相手の口座を作ろうとしたが、``username`` を決められない（ADR-0041）。
+
+    IdP の ``preferred_username`` が無い・このアプリの識別子の規則に合わない・
+    既に別の利用者が使っている、のいずれか。⚠ **黙って連番や別の値を付けない**
+    ——ログインの識別子が、本人の知らない値になる。
+    """
+
+    code = "sso_username_unavailable"
 
 
 class SsoIdentityTakenError(IdentityFederationError):
@@ -160,4 +172,5 @@ __all__ = [
     "SsoLoginSessionNotFoundError",
     "SsoNotConfiguredError",
     "SsoTicketNotFoundError",
+    "SsoUsernameUnavailableError",
 ]

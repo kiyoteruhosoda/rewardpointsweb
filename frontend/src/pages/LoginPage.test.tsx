@@ -120,7 +120,7 @@ describe('LoginPage', () => {
 
       expect(
         screen.getByText(
-          'No account here matches that sign-in. An administrator has to add the email address to your account first.',
+          'An account with this email address already exists but is not linked yet. Sign in to it with your password, then link it from “Two-factor authentication & passkeys” in your profile.',
         ),
       ).toBeInTheDocument()
     })
