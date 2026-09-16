@@ -56,7 +56,7 @@ def _user(session: Session, name: str) -> int:
     return user.id
 
 
-def _link(session: Session, user_id: int, subject: str, issuer: str = _ISSUER) -> None:
+def _link(session: Session, user_id: int, subject: str, *, issuer: str = _ISSUER) -> None:
     session.add(
         FederatedIdentityRecord(
             issuer=issuer, subject=subject, user_id=user_id, last_login_at=utcnow() - timedelta(minutes=5)
@@ -142,9 +142,8 @@ def test_the_job_does_not_ask_assay_while_sso_is_off(
     [MachineNotBoundToApplicationError(), IdentityProviderUnavailableError()],
     ids=["not-bound", "unavailable"],
 )
-def test_a_roster_we_could_not_read_changes_nothing(
-    engine: sa.Engine, db_session: Session, configured: None, failure: Exception
-) -> None:
+@pytest.mark.usefixtures("configured")
+def test_a_roster_we_could_not_read_changes_nothing(engine: sa.Engine, db_session: Session, failure: Exception) -> None:
     carol = _user(db_session, "carol")
     _link(db_session, carol, "sub-carol")
 

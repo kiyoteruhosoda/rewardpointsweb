@@ -77,13 +77,14 @@ class ReconcileFederatedUsers:
             return replace(outcome, held_back=True)
         now = utcnow()
         for link in links:
-            outcome = self._apply(link, answers.state_of(link.subject), now, outcome)
+            outcome = self._apply(link, answers.state_of(link.subject), now=now, outcome=outcome)
         return outcome
 
     def _apply(
         self,
         link: FederatedIdentity,
         state: RosterState,
+        *,
         now: datetime,
         outcome: ReconciliationOutcome,
     ) -> ReconciliationOutcome:
