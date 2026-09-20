@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx2 import Response
 from sqlalchemy.orm import Session
 
 from bounded_contexts.reward_points.application.use_cases.grant_due_daily_bonuses import (

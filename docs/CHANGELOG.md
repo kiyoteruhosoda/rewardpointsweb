@@ -1,3 +1,17 @@
+## 2026-09-20（試験の HTTP クライアントを httpx2 へ移した）
+
+- **starlette 1.6.0 で `TestClient` が httpx2 へ移り、httpx は非推奨になった。** 入れないままだと
+  非推奨の経路で動き続け、⚠ **`TestClient` のメソッドの戻り型が丸ごと `Any` に落ちる**
+  （starlette が `if TYPE_CHECKING: import httpx2 as httpx` と書くため）。`no-any-return` が
+  6 ファイル 8 箇所で出て、CI の MyPy が赤になっていた。
+- **httpx2 を試験用の依存に足し、`TestClient` の戻りを受ける 5 ファイルの注釈を `httpx2.Response`
+  へ移した。** 型が戻るので、呼び出し側に `cast` を撒かずに済む。
+- ⚠ **本番コードは httpx のまま**（`identity_federation` の `httpx_roster_gateway` /
+  `httpx_oidc_provider_gateway` / `assay_admin_token` / `oidc_metadata`）。⚠ **これらの試験
+  （`test_httpx_roster_gateway.py`）も httpx のまま**で、移すと試験の対象と食い違う。
+- 併せてロックを更新した。新しい ruff が Markdown 内のコード片も整形するため、`CLAUDE.md` と
+  `.claude/agents/tester.md` の空行が 1 行ずつ増えている。
+
 ## 2026-09-16（割り当てられた人は、初めての SSO ログインで口座を作って迎える。ADR-0041）
 
 - ⚠ **新しい人は SSO で一切入れなかった。** 「SSO で利用者を作らない」（ADR-0029）と
