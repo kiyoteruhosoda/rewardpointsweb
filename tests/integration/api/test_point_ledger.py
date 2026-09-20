@@ -13,6 +13,7 @@ from tests.integration.api.family_support import (
     add_child,
     create_account,
     create_family,
+    issue_invitation,
 )
 
 
@@ -26,6 +27,20 @@ def ledger(client: TestClient, parent: Account) -> Ledger:
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
     return Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"])))
+
+
+@pytest.fixture
+def co_parent(*, client: TestClient, admin_headers: dict[str, str], parent: Account, ledger: Ledger) -> Account:
+    """招待で加わった、owner ではない親（`role = parent`）。"""
+    joined = create_account(client, admin_headers, username="mom", role="member", display_name="おかあさん")
+    invitation = issue_invitation(client, parent.headers, ledger.family_id, role="parent")
+    response = client.post(
+        "/api/families/invitations/accept",
+        headers=joined.headers,
+        json={"code": invitation["code"]},
+    )
+    assert response.status_code == 200, response.text
+    return joined
 
 
 def _view(client: TestClient, headers: dict[str, str], ledger: Ledger) -> dict[str, Any]:
@@ -92,6 +107,31 @@ def test_reversal_adds_an_opposite_row_and_keeps_the_original(
     # 元のレコードは消えず、「取り消された」印が付く
     assert len(transactions) == 2
     assert transactions[original["id"]]["is_reversed"] is True
+
+
+def test_a_parent_who_joined_by_invitation_reverses_the_owners_record(
+    *, client: TestClient, parent: Account, co_parent: Account, ledger: Ledger
+) -> None:
+    """取り消しは owner の特権ではない（ADR-0009 の認可表）。
+
+    記録を付けた本人でなくても、同じ家族の親なら取り消せる。日々の記録は
+    どちらの親も付けるので、間違いを直すのに付けた本人の帰りを待たせない。
+    """
+    original = ledger.record(client, parent.headers, amount=100, reason="まちがい", key="k1")
+
+    # 画面の出し分けもこの値だけで決まるので、取り消しボタンが出ることまで含めて確かめる
+    assert _view(client, co_parent.headers, ledger)["can_modify"] is True
+
+    response = client.post(
+        f"{ledger.path()}/transactions/{original['id']}/reversals",
+        headers=co_parent.headers,
+        json={"idempotency_key": "k2"},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["amount"] == -100
+    # 打ち消しの行に残るのは取り消した側の親（記録を付けた親ではない）
+    assert response.json()["granted_by"] == "おかあさん"
+    assert _view(client, co_parent.headers, ledger)["balance"] == 0
 
 
 def test_double_reversal_is_rejected(client: TestClient, parent: Account, ledger: Ledger) -> None:
