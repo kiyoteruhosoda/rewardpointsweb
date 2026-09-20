@@ -24,6 +24,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    # starlette 1.6.0 以降、TestClient は httpx2 を使う（httpx は非推奨）。
+    # ⚠ 本番コード（identity_federation の httpx_* / oidc_metadata）は httpx のまま。
+    #    TestClient を使う試験だけが httpx2 の型を見る。
+    "httpx2>=2.13.0",
     "mypy>=1.14",
     "pillow>=12.3.0",
     "pytest>=9.0.3",

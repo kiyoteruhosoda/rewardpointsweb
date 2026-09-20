@@ -10,7 +10,7 @@ import json
 import logging
 from dataclasses import dataclass
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, select
@@ -139,7 +139,7 @@ class LedgerCall:
     suffix: str
     body: dict[str, object] | None = None
 
-    def send(self, client: TestClient, ledger: Ledger, headers: dict[str, str]) -> httpx.Response:
+    def send(self, client: TestClient, ledger: Ledger, headers: dict[str, str]) -> httpx2.Response:
         url = f"{ledger.path()}{self.suffix}"
         if self.body is None:
             return client.get(url, headers=headers)
