@@ -48,7 +48,7 @@ def test_deleting_a_user_removes_their_reset_tokens(migrated_url: str) -> None:
                 )
             )
             connection.execute(sa.text("DELETE FROM users WHERE id = 9001"))
-            remaining = connection.execute(
+            remaining: int = connection.execute(
                 sa.text("SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = 9001")
             ).scalar_one()
         assert remaining == 0

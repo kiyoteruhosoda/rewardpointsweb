@@ -81,7 +81,7 @@ def test_existing_account_keeps_its_email_as_the_identifier(migrated_engine: sa.
 
 def test_default_admin_matches_the_master_data(migrated_engine: sa.Engine) -> None:
     with migrated_engine.connect() as connection:
-        username = connection.execute(
+        username: str = connection.execute(
             sa.text("SELECT username FROM users WHERE id = :id"),
             {"id": master_data.DEFAULT_ADMIN_ID},
         ).scalar_one()
