@@ -1,8 +1,12 @@
 name: CI
 
 on:
+  # ⚠ **push で走らせるのは main だけ**（2026-09-30）。枝の検査は pull_request の側で足りる。
+  #   全部の枝で走らせていたころは、PR のある枝（Renovate の枝など）で 1 commit ごとに
+  #   同じ検査が 2 本走り、ランナーの台を 2 倍食ううえ、main の保護が全部の検査の緑を
+  #   求めるため、push 側が 1 度揺らいだだけで PR が赤くなっていた（#20）。
   push:
-    branches: ["**"]
+    branches: ["main"]
     tags-ignore: ["v*"]
   pull_request:
 
