@@ -27,6 +27,9 @@ jobs:
     name: Backend (Python ${{ matrix.python-version }})
     # ⚠ **自前の台で回す**（forge へ移したとき変えた）。
     runs-on: [self-hosted, nolumialab]
+    env:
+      # Python も forge の置き場から取る（task #171。置いてあるのは cpython 3.12.14 の x86_64 Linux だけ）。
+      UV_PYTHON_INSTALL_MIRROR: "https://git.nolumia.com/astral-sh/python-build-standalone/releases/download"
     # ⚠ 既定は 6 時間。ぶら下がったジョブが枠と台を食い潰すので上限を置く。
     timeout-minutes: 20
     strategy:
@@ -44,6 +47,11 @@ jobs:
         # ⚠ **鏡に無いので自前の鏡を完全な URL で指す**（forge へ移したため）。
         uses: https://git.nolumia.com/astral-sh/setup-uv@v10.0.1
         with:
+          # ⚠ **版を固定し、一覧も uv 本体も forge の置き場から取る**（task #171）。版を省くと
+          #   最新版を GitHub の API へ匿名で聞きに行き、レート制限（60 回/時・IP ごと）で落ちる。
+          version: "0.12.5"
+          manifest-file: "https://git.nolumia.com/astral-sh/uv/raw/branch/main/uv.ndjson"
+          download-from-astral-mirror: false
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
@@ -82,14 +90,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # 名前の表示用。Node の版は像で決まる（setup-node へは渡さない。下を参照）。
         node-version: ["24"]
 
     steps:
       - uses: actions/checkout@v6
 
+      # ⚠ **node-version は渡さない**（task #171）。渡すと mirror を指定しても先に api.github.com の
+      #   一覧を引く。ジョブの像（node:24-bookworm）の Node 24 をそのまま使う。
       - uses: actions/setup-node@v6
         with:
-          node-version: ${{ matrix.node-version }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
