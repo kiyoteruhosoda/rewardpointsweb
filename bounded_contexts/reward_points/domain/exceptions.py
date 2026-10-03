@@ -267,6 +267,32 @@ class UserStillOwnsFamiliesError(RewardPointsError):
     code = "user_still_owns_families"
 
 
+class RewardEventNotFoundError(RewardPointsError):
+    """イベントが存在しない（他の台帳のものを指した場合も含む。ADR-0042）。"""
+
+    code = "reward_event_not_found"
+
+
+class RewardEventCompletedError(RewardPointsError):
+    """達成したイベントのシールを貼る・はがそうとした。
+
+    達成した時点でポイントは台帳に入っている。シールを動かしても台帳は戻らない
+    ので、カードは達成の姿のまま止める。ポイントを戻したいときは台帳の記録を
+    取り消す。
+    """
+
+    code = "reward_event_already_completed"
+
+
+class StickerOutOfOrderError(RewardPointsError):
+    """次の番号ではないシールを貼る・最後の 1 枚ではないシールをはがそうとした。
+
+    画面が古い姿を見ている（別の端末で貼られた等）。読み直せば正しい番号が分かる。
+    """
+
+    code = "sticker_out_of_order"
+
+
 __all__ = [
     "AccountAlreadyInFamilyError",
     "AlreadyBelongsToFamilyError",
@@ -291,8 +317,11 @@ __all__ = [
     "MembershipNotFoundError",
     "MembershipNotLinkedError",
     "ReversalOfReversalError",
+    "RewardEventCompletedError",
+    "RewardEventNotFoundError",
     "RewardPointsError",
     "RoleNotInvitableError",
+    "StickerOutOfOrderError",
     "TransactionAlreadyReversedError",
     "TransactionNotFoundError",
     "UnsupportedArchiveVersionError",

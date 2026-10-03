@@ -23,6 +23,12 @@
   --success: #2e7d32;
   --shadow-card: 0 1px 2px rgb(23 26 48 / 5%), 0 4px 16px rgb(23 26 48 / 6%);
   --shadow-card-hover: 0 2px 4px rgb(23 26 48 / 7%), 0 8px 24px rgb(23 26 48 / 10%);
+  /* イベント（ADR-0042）: ごほうびの札・マスの点線・達成の判子 */
+  --reward-soft: #fff0c7;
+  --reward-ink: #7a4f00;
+  --slot-line: #c3c8d8;
+  --hanko: #d0362b;
+  --hanko-blend: multiply;
 }
 
 :root[data-theme='dark'] {
@@ -40,6 +46,11 @@
   --success: #5cb85c;
   --shadow-card: 0 1px 2px rgb(0 0 0 / 25%), 0 4px 16px rgb(0 0 0 / 25%);
   --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 30%), 0 8px 24px rgb(0 0 0 / 35%);
+  --reward-soft: #3b3014;
+  --reward-ink: #ffd27a;
+  --slot-line: #4a5164;
+  --hanko: #ff6a55;
+  --hanko-blend: normal;
 }
 
 :root {
@@ -49,6 +60,9 @@
     'Segoe UI',
     sans-serif;
   line-height: 1.5;
+  /* 丸みのある見出し（イベントのカード）。入っていない端末では本文と同じ字になる */
+  --font-round:
+    'Hiragino Maru Gothic ProN', 'Zen Maru Gothic', 'BIZ UDPGothic', system-ui, sans-serif;
 
   /* 端末のセーフエリア（ノッチ・ホームインジケータ）。index.html の
    * viewport-fit=cover で画面いっぱいに描く代わりに、避けたい余白をここで持つ。
@@ -905,6 +919,433 @@ tr.reversed {
   background: var(--danger);
 }
 
+/* ポイントの推移（BalanceTrend.tsx）。線は 1 本なので凡例は持たず、見出しが名前を
+ * 兼ねる。目盛りと補助線は控えめにし、0 の線だけ少し濃くする（マイナスの残高が
+ * あるときに境目が読めるように）。 */
+.trend-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.trend-heading h2 {
+  margin: 0;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.segmented button {
+  padding: 0.25rem 0.8rem;
+  background: none;
+  border: none;
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--surface-raised);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.trend-frame {
+  position: relative;
+  width: 100%;
+  border-radius: 0.5rem;
+}
+
+.trend-frame:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.trend-frame svg {
+  display: block;
+  /* 横になぞって記録を選ぶあいだも、縦のスクロールは止めない */
+  touch-action: pan-y;
+}
+
+.trend-grid line {
+  stroke: var(--border);
+}
+
+.trend-grid-zero line {
+  stroke: var(--text-muted);
+}
+
+.trend-grid text,
+.trend-axis {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-area {
+  fill: var(--accent);
+  opacity: 0.12;
+}
+
+.trend-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.trend-marker,
+.trend-focus circle {
+  fill: var(--accent);
+  stroke: var(--surface-raised);
+  stroke-width: 2;
+}
+
+.trend-focus line {
+  stroke: var(--text-muted);
+  stroke-dasharray: 3 3;
+}
+
+.trend-tooltip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  max-width: 14rem;
+  padding: 0.35rem 0.6rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-card-hover);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.trend-tooltip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trend-tooltip-date,
+.trend-empty {
+  color: var(--text-muted);
+}
+
+.trend-empty {
+  margin: 0;
+}
+
+/* 見出しの横に添える入口（台帳 ⇄ イベント）。 */
+.page-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.page-heading-link {
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.page-heading-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* イベントの一覧は 1 画面で見渡したいので、ほかのページより横に広げる。 */
+.page-wide {
+  max-width: 90rem;
+}
+
+.page-wide .card {
+  max-width: none;
+}
+
+/* --- イベント（がんばりカード。ADR-0042） ---------------------------------- */
+
+.event-create summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.event-create-hint {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.event-form {
+  display: grid;
+  grid-template-columns: minmax(12rem, 2fr) minmax(8rem, 1fr) minmax(8rem, 1fr) auto;
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.event-form-shape {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.event-empty,
+.event-note {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.event-section-title {
+  margin: 0.4rem 0 0.8rem;
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+/* カードは指 1 本で押せる大きさを保ったまま、画面の幅いっぱいに詰める。 */
+.event-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.event-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1rem 1.1rem 1.1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 1.1rem;
+  box-shadow: var(--shadow-card);
+}
+
+.event-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.event-card-title {
+  margin: 0;
+  font-family: var(--font-round);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.event-card .event-card-remove {
+  flex: none;
+  padding: 0.2rem 0.5rem;
+  background: none;
+  border-color: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.event-card-reward {
+  margin: 0;
+  align-self: flex-start;
+  padding: 0.1rem 0.65rem;
+  border-radius: 999px;
+  background: var(--reward-soft);
+  color: var(--reward-ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* シール帳。マスは点線の丸で、番号を薄く刷っておく。貼ったシールはマスより
+ * 少し大きく、1 枚ずつ傾けて「手で貼った」ように見せる。 */
+.sticker-sheet-frame {
+  position: relative;
+  padding: 0.75rem;
+  background: var(--surface-inset);
+  border-radius: 0.8rem;
+}
+
+.sticker-sheet {
+  display: grid;
+  /* マスは大きくしすぎない（回数の多いカードが縦に伸びて、一覧が 1 画面に収まらない） */
+  grid-template-columns: repeat(var(--sheet-columns), minmax(0, 3.2rem));
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sticker-slot {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 2px dashed var(--slot-line);
+  border-radius: 50%;
+  container-type: inline-size;
+}
+
+.sticker-slot-filled {
+  border-color: transparent;
+}
+
+.sticker-slot-number {
+  color: var(--text-muted);
+  font-size: clamp(0.6rem, 34cqi, 1rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.sticker {
+  display: block;
+  width: 122%;
+  height: 122%;
+  transform: rotate(var(--tilt));
+  filter: drop-shadow(0 1px 1.5px rgb(40 30 20 / 35%));
+}
+
+.sticker-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sticker-fresh {
+  animation: sticker-slap 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes sticker-slap {
+  0% {
+    opacity: 0;
+    transform: translateY(-30%) scale(1.7) rotate(calc(var(--tilt) - 25deg));
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(0.92) rotate(var(--tilt));
+  }
+
+  100% {
+    transform: rotate(var(--tilt));
+  }
+}
+
+/* 達成の判子。シールの上から押す（下のシールが透けて見えるよう、乗算で重ねる）。 */
+.hanko-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+/* 判子が読めるよう、達成したカードのシールは一段沈める */
+.event-card-completed .sticker-sheet {
+  opacity: 0.55;
+}
+
+.hanko {
+  width: min(72%, 10rem);
+  /* 1 行だけのカードでは枠からはみ出して見出しや日付に掛からないよう、高さでも抑える */
+  max-height: calc(100% + 1rem);
+  color: var(--hanko);
+  opacity: 0.9;
+  transform: rotate(-14deg);
+  mix-blend-mode: var(--hanko-blend);
+}
+
+.hanko-label {
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', YuMincho, 'Noto Serif JP', serif;
+  font-size: 38px;
+  font-weight: 900;
+}
+
+.hanko-fresh .hanko {
+  animation: hanko-press 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) 0.15s both;
+}
+
+@keyframes hanko-press {
+  0% {
+    opacity: 0;
+    transform: rotate(-14deg) scale(2.2);
+  }
+
+  60% {
+    opacity: 0.95;
+    transform: rotate(-14deg) scale(0.94);
+  }
+
+  100% {
+    opacity: 0.9;
+    transform: rotate(-14deg);
+  }
+}
+
+.event-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.event-card-progress {
+  margin: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-card-progress strong {
+  color: var(--text);
+  font-family: var(--font-round);
+  font-size: 1.4rem;
+}
+
+.event-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.event-card .event-card-quiet {
+  background: none;
+  border-color: transparent;
+  color: var(--text-muted);
+}
+
+.event-card .event-card-achieve {
+  padding: 0.55rem 1.3rem;
+  background: var(--accent);
+  border-color: var(--accent);
+  border-radius: 999px;
+  color: var(--on-accent);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.event-card .event-card-achieve:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.event-card button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ここから狭い画面（スマートフォン）向け。
  *
  * 48rem を境に、左に固定していたナビゲーションを画面外から滑り出す引き出しへ
@@ -1059,12 +1500,27 @@ tr.reversed {
     width: min(12rem, 60vw);
     height: auto;
   }
+
+  .event-form {
+    grid-template-columns: 1fr;
+  }
+
+  /* 期間の切り替えは 3 つが 1 本の枠に並ぶので、枠の高さで押す的を確保する */
+  .segmented button {
+    min-height: 2.25rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
   .member-card {
     transition: none;
+  }
+
+  /* シールと判子は「現れた」ことが伝われば足りる。動きは付けない */
+  .sticker-fresh,
+  .hanko-fresh .hanko {
+    animation: none;
   }
 
   /* スピナーは装飾ではなく「実行中」を伝える唯一の目印なので、止めずに遅くする。 */
