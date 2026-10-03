@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from bounded_contexts.reward_points.domain.entities.reward_event import RewardEvent
 
@@ -26,6 +26,10 @@ class RewardEventDTO:
     #: マスが埋まった日時。まだなら ``None``
     completed_at: datetime | None
     created_at: datetime
+    #: この日のうちに埋めれば達成。決めていなければ ``None``
+    deadline: date | None
+    #: 期限を過ぎても埋まっていない（家族の 1 日の区切りで判定済み）
+    is_expired: bool
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -38,7 +42,8 @@ class RewardEventBoardDTO:
     events: tuple[RewardEventDTO, ...]
 
 
-def to_dto(event: RewardEvent) -> RewardEventDTO:
+def to_dto(event: RewardEvent, *, today: date) -> RewardEventDTO:
+    """*today* は家族の 1 日の区切りでの今日。期限切れの判定に使う。"""
     return RewardEventDTO(
         id=event.id,
         ledger_id=event.ledger_id,
@@ -48,6 +53,8 @@ def to_dto(event: RewardEvent) -> RewardEventDTO:
         stickers=tuple(StickerDTO(number=s.number, stuck_at=s.stuck_at) for s in event.stickers),
         completed_at=event.completed_at,
         created_at=event.created_at,
+        deadline=event.deadline,
+        is_expired=event.is_expired(today),
     )
 
 

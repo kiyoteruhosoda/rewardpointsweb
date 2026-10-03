@@ -6,11 +6,15 @@
 
 最後の 1 枚を貼ると、同じトランザクションで台帳へ達成の 1 行を足す。理由は
 イベントの目標そのもの、記録した人は最後の 1 枚を貼った親。
+
+期限（ADR-0043）の「今日」は家族の 1 日の区切り（毎日のボーナスと同じ
+:class:`DayBoundary`）で決める。UTC の日付で切ると、日本の家族では朝 9 時に期限が切れる。
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 from bounded_contexts.reward_points.application.dto.reward_event_dto import (
     RewardEventBoardDTO,
@@ -19,7 +23,12 @@ from bounded_contexts.reward_points.application.dto.reward_event_dto import (
 )
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
 from bounded_contexts.reward_points.domain.entities.reward_event import RewardEvent
-from bounded_contexts.reward_points.domain.exceptions import MembershipNotFoundError, RewardEventNotFoundError
+from bounded_contexts.reward_points.domain.exceptions import (
+    MembershipNotFoundError,
+    RewardEventCompletedError,
+    RewardEventDeadlinePassedError,
+    RewardEventNotFoundError,
+)
 from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
     IFamilyMembershipRepository,
 )
@@ -32,6 +41,7 @@ from bounded_contexts.reward_points.domain.repositories.reward_event_repository 
     NewRewardEvent,
 )
 from bounded_contexts.reward_points.domain.services import family_access_policy
+from bounded_contexts.reward_points.domain.services.day_boundary import DayBoundary
 from shared.kernel.timestamps import utcnow
 
 
@@ -42,21 +52,24 @@ class ViewRewardEventsUseCase:
         access: FamilyAccessResolver,
         events: IRewardEventRepository,
         memberships: IFamilyMembershipRepository,
+        boundary: DayBoundary,
     ) -> None:
         self._access = access
         self._events = events
         self._memberships = memberships
+        self._boundary = boundary
 
     def execute(self, *, ledger_id: int, account_id: int) -> RewardEventBoardDTO:
         found = self._access.viewable_ledger(ledger_id=ledger_id, account_id=account_id)
         owner = self._memberships.find_by_id(found.ledger.membership_id)
         if owner is None:
             raise MembershipNotFoundError
+        today = _today(self._boundary)
         return RewardEventBoardDTO(
             ledger_id=found.ledger.id,
             display_name=owner.display_name_value,
             can_modify=family_access_policy.can_modify_ledger(found.membership, found.ledger),
-            events=tuple(to_dto(event) for event in self._events.list_by_ledger(found.ledger.id)),
+            events=tuple(to_dto(event, today=today) for event in self._events.list_by_ledger(found.ledger.id)),
         )
 
 
@@ -67,24 +80,60 @@ class CreateRewardEventCommand:
     title: str
     reward_points: int
     goal_count: int
+    deadline: date | None
 
 
 class CreateRewardEventUseCase:
-    def __init__(self, access: FamilyAccessResolver, events: IRewardEventRepository) -> None:
+    def __init__(self, access: FamilyAccessResolver, events: IRewardEventRepository, boundary: DayBoundary) -> None:
         self._access = access
         self._events = events
+        self._boundary = boundary
 
     def execute(self, command: CreateRewardEventCommand) -> RewardEventDTO:
         found = self._access.modifiable_ledger(ledger_id=command.ledger_id, account_id=command.account_id)
+        today = _today(self._boundary)
+        _ensure_not_passed(command.deadline, today=today)
         event = self._events.add(
             NewRewardEvent(
                 ledger_id=found.ledger.id,
                 title=command.title,
                 reward=command.reward_points,
                 goal_count=command.goal_count,
+                deadline=command.deadline,
             )
         )
-        return to_dto(event)
+        return to_dto(event, today=today)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ChangeDeadlineCommand:
+    ledger_id: int
+    event_id: int
+    account_id: int
+    #: ``None`` で期限なし
+    deadline: date | None
+
+
+class ChangeRewardEventDeadlineUseCase:
+    """期限を決め直す・外す。期限切れのカードも、延ばせばまた貼れる。
+
+    達成したカードの期限は動かさない（もう期限の意味が無い）。
+    """
+
+    def __init__(self, access: FamilyAccessResolver, events: IRewardEventRepository, boundary: DayBoundary) -> None:
+        self._access = access
+        self._events = events
+        self._boundary = boundary
+
+    def execute(self, command: ChangeDeadlineCommand) -> RewardEventDTO:
+        found = self._access.modifiable_ledger(ledger_id=command.ledger_id, account_id=command.account_id)
+        event = _find(self._events, ledger_id=found.ledger.id, event_id=command.event_id)
+        if event.is_completed:
+            raise RewardEventCompletedError
+        today = _today(self._boundary)
+        _ensure_not_passed(command.deadline, today=today)
+        self._events.change_deadline(event_id=event.id, deadline=command.deadline)
+        return to_dto(_find(self._events, ledger_id=found.ledger.id, event_id=event.id), today=today)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -108,17 +157,20 @@ class StickRewardEventStickerUseCase:
         access: FamilyAccessResolver,
         events: IRewardEventRepository,
         transactions: IPointTransactionRepository,
+        boundary: DayBoundary,
     ) -> None:
         self._access = access
         self._events = events
         self._transactions = transactions
+        self._boundary = boundary
 
     def execute(self, command: StickerCommand) -> RewardEventDTO:
         found = self._access.modifiable_ledger(ledger_id=command.ledger_id, account_id=command.account_id)
         event = _find(self._events, ledger_id=found.ledger.id, event_id=command.event_id)
-        if not event.should_stick(command.number):
-            return to_dto(event)
         now = utcnow()
+        today = self._boundary.day_of(now)
+        if not event.should_stick(command.number, today=today):
+            return to_dto(event, today=today)
         stuck = self._events.stick(
             event_id=event.id,
             number=command.number,
@@ -138,15 +190,16 @@ class StickRewardEventStickerUseCase:
                 )
             )
             self._events.mark_completed(event_id=event.id, completed_at=now, awarded_transaction_id=awarded.id)
-        return to_dto(_find(self._events, ledger_id=found.ledger.id, event_id=event.id))
+        return to_dto(_find(self._events, ledger_id=found.ledger.id, event_id=event.id), today=today)
 
 
 class PeelRewardEventStickerUseCase:
     """最後の 1 枚をはがす（押し間違いを戻す）。もう無い番号なら何もしない。"""
 
-    def __init__(self, access: FamilyAccessResolver, events: IRewardEventRepository) -> None:
+    def __init__(self, access: FamilyAccessResolver, events: IRewardEventRepository, boundary: DayBoundary) -> None:
         self._access = access
         self._events = events
+        self._boundary = boundary
 
     def execute(self, command: StickerCommand) -> RewardEventDTO:
         found = self._access.modifiable_ledger(ledger_id=command.ledger_id, account_id=command.account_id)
@@ -154,7 +207,7 @@ class PeelRewardEventStickerUseCase:
         if event.should_peel(command.number):
             self._events.peel(event_id=event.id, number=command.number)
             event = _find(self._events, ledger_id=found.ledger.id, event_id=event.id)
-        return to_dto(event)
+        return to_dto(event, today=_today(self._boundary))
 
 
 class DeleteRewardEventUseCase:
@@ -173,6 +226,16 @@ class DeleteRewardEventUseCase:
             self._events.delete(event_id)
 
 
+def _today(boundary: DayBoundary) -> date:
+    return boundary.day_of(utcnow())
+
+
+def _ensure_not_passed(deadline: date | None, *, today: date) -> None:
+    """過ぎた日は期限にできない（作った瞬間に期限切れのカードになる）。今日は良い。"""
+    if deadline is not None and deadline < today:
+        raise RewardEventDeadlinePassedError
+
+
 def _find(events: IRewardEventRepository, *, ledger_id: int, event_id: int) -> RewardEvent:
     event = events.find_in_ledger(ledger_id=ledger_id, event_id=event_id)
     if event is None:
@@ -181,6 +244,8 @@ def _find(events: IRewardEventRepository, *, ledger_id: int, event_id: int) -> R
 
 
 __all__ = [
+    "ChangeDeadlineCommand",
+    "ChangeRewardEventDeadlineUseCase",
     "CreateRewardEventCommand",
     "CreateRewardEventUseCase",
     "DeleteRewardEventUseCase",

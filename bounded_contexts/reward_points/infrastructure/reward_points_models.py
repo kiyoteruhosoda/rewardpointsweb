@@ -167,6 +167,8 @@ class RewardEventModel(Base):
     title: Mapped[str] = mapped_column(sa.String(100), nullable=False)
     reward_points: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
     goal_count: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
+    # この日のうちに埋めれば達成（家族の 1 日の区切りで数える）。無ければ NULL
+    deadline: Mapped[date | None] = mapped_column(sa.Date(), nullable=True)
     completed_at = mapped_column(sa.DateTime(), nullable=True)
     # 達成で足した台帳の行。独立の成立では台帳の行が先に消えるので SET NULL
     awarded_transaction_id: Mapped[int | None] = mapped_column(

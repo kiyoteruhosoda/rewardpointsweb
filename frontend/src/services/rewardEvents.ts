@@ -28,6 +28,10 @@ export interface RewardEvent {
   /** マスが埋まった日時。まだなら null。 */
   completed_at: string | null
   created_at: string
+  /** この日のうちに埋めれば達成（YYYY-MM-DD）。決めていなければ null。ADR-0043 */
+  deadline: string | null
+  /** 期限を過ぎても埋まっていない。判定はサーバー（家族の 1 日の区切り）。 */
+  is_expired: boolean
 }
 
 export interface RewardEventBoard {
@@ -43,6 +47,8 @@ export interface NewRewardEvent {
   title: string
   reward_points: number
   goal_count: number
+  /** YYYY-MM-DD。null で期限なし。 */
+  deadline: string | null
 }
 
 /** 達成回数の上限（サーバーの MAX_GOAL_COUNT と同じ）。 */
@@ -67,6 +73,10 @@ export const rewardEvents = {
   /** *number* 枚目を貼る。最後のマスならポイントが台帳に入る。 */
   stick: (familyId: number, ledgerId: number, eventId: number, number: number) =>
     api.put<RewardEvent>(stickerPath(familyId, ledgerId, eventId, number)),
+
+  /** 期限を決め直す（null で期限なし）。期限切れのカードも、延ばせばまた貼れる。 */
+  changeDeadline: (familyId: number, ledgerId: number, eventId: number, deadline: string | null) =>
+    api.put<RewardEvent>(`${eventsPath(familyId, ledgerId)}/${eventId}/deadline`, { deadline }),
 
   /** 最後の 1 枚をはがす（押し間違いを戻す）。達成した後ははがせない。 */
   peel: (familyId: number, ledgerId: number, eventId: number, number: number) =>

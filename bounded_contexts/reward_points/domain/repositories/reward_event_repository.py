@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from bounded_contexts.reward_points.domain.entities.reward_event import RewardEvent
 
@@ -21,6 +21,7 @@ class NewRewardEvent:
     title: str
     reward: int
     goal_count: int
+    deadline: date | None = None
 
 
 class IRewardEventRepository(ABC):
@@ -50,6 +51,10 @@ class IRewardEventRepository(ABC):
     @abstractmethod
     def mark_completed(self, *, event_id: int, completed_at: datetime, awarded_transaction_id: int) -> None:
         """マスが埋まり、台帳へ *awarded_transaction_id* を足したことを記録する。"""
+
+    @abstractmethod
+    def change_deadline(self, *, event_id: int, deadline: date | None) -> None:
+        """期限を決め直す（``None`` で期限なし）。"""
 
     @abstractmethod
     def delete(self, event_id: int) -> None:

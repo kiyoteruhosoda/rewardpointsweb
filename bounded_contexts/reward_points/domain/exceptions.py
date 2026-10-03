@@ -284,6 +284,21 @@ class RewardEventCompletedError(RewardPointsError):
     code = "reward_event_already_completed"
 
 
+class RewardEventExpiredError(RewardPointsError):
+    """期限を過ぎたイベントにシールを貼ろうとした。
+
+    続けたいときは、親が期限を延ばす（延ばせば、また貼れる）。
+    """
+
+    code = "reward_event_expired"
+
+
+class RewardEventDeadlinePassedError(RewardPointsError):
+    """期限に、もう過ぎた日を決めようとした（今日は期限にできる）。"""
+
+    code = "reward_event_deadline_passed"
+
+
 class StickerOutOfOrderError(RewardPointsError):
     """次の番号ではないシールを貼る・最後の 1 枚ではないシールをはがそうとした。
 
@@ -318,6 +333,8 @@ __all__ = [
     "MembershipNotLinkedError",
     "ReversalOfReversalError",
     "RewardEventCompletedError",
+    "RewardEventDeadlinePassedError",
+    "RewardEventExpiredError",
     "RewardEventNotFoundError",
     "RewardPointsError",
     "RoleNotInvitableError",

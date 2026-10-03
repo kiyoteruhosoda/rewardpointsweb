@@ -7,11 +7,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import update
+from sqlalchemy.orm import Session
 
+from bounded_contexts.reward_points.infrastructure.reward_points_models import RewardEventModel
+from bounded_contexts.reward_points.presentation.dependencies import resolve_day_boundary
+from shared.kernel.timestamps import utcnow
 from tests.integration.api.family_support import (
     Account,
     Ledger,
@@ -52,19 +58,12 @@ def _events_path(ledger: Ledger) -> str:
     return f"{ledger.path()}/events"
 
 
-def _create(
-    client: TestClient,
-    home: Home,
-    *,
-    title: str = "はみがき",
-    reward_points: int = 50,
-    goal_count: int = 3,
-) -> dict[str, Any]:
-    response = client.post(
-        _events_path(home.ledger),
-        headers=home.headers,
-        json={"title": title, "reward_points": reward_points, "goal_count": goal_count},
-    )
+def _create(client: TestClient, home: Home, **fields: object) -> dict[str, Any]:
+    """カードを作る。省いた欄は「はみがき・50 pt・3 回・期限なし」。"""
+    payload: dict[str, object] = {"title": "はみがき", "reward_points": 50, "goal_count": 3} | fields
+    if isinstance(payload.get("deadline"), date):
+        payload["deadline"] = str(payload["deadline"])
+    response = client.post(_events_path(home.ledger), headers=home.headers, json=payload)
     assert response.status_code == 201, response.text
     body: dict[str, Any] = response.json()
     return body
@@ -355,3 +354,139 @@ def test_independence_takes_completed_cards_with_the_ledger(client: TestClient, 
 
     assert approved.status_code == 204, approved.text
     assert client.get(_events_path(home.ledger), headers=home.headers).status_code == 404
+
+
+# --- 期限（ADR-0043） ---------------------------------------------------------
+
+
+def _today() -> date:
+    """家族の 1 日の区切りでの今日（サーバーと同じ決め方）。"""
+    return resolve_day_boundary().day_of(utcnow())
+
+
+def _deadline_path(home: Home, event: dict[str, Any]) -> str:
+    return f"{_events_path(home.ledger)}/{event['id']}/deadline"
+
+
+def _expire(db_session: Session, event: dict[str, Any]) -> None:
+    """期限を昨日へずらす（日付が変わったのと同じ）。"""
+    db_session.execute(
+        update(RewardEventModel).where(RewardEventModel.id == event["id"]).values(deadline=_today() - timedelta(days=1))
+    )
+    db_session.commit()
+
+
+def test_a_card_can_have_a_deadline(client: TestClient, home: Home) -> None:
+    deadline = _today() + timedelta(days=7)
+
+    event = _create(client, home, deadline=deadline)
+
+    assert event["deadline"] == deadline.isoformat()
+    assert event["is_expired"] is False
+
+
+def test_a_card_without_a_deadline_never_expires(client: TestClient, home: Home) -> None:
+    event = _create(client, home)
+
+    assert event["deadline"] is None
+    assert event["is_expired"] is False
+
+
+def test_today_can_be_the_deadline(client: TestClient, home: Home) -> None:
+    event = _create(client, home, deadline=_today(), goal_count=2)
+
+    assert _stick(client, home, event, number=1)["is_expired"] is False
+
+
+def test_a_deadline_in_the_past_is_refused(client: TestClient, home: Home) -> None:
+    response = client.post(
+        _events_path(home.ledger),
+        headers=home.headers,
+        json={
+            "title": "はみがき",
+            "reward_points": 10,
+            "goal_count": 3,
+            "deadline": (_today() - timedelta(days=1)).isoformat(),
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "reward_event_deadline_passed"
+
+
+def test_an_expired_card_takes_no_stickers_and_pays_nothing(
+    client: TestClient, home: Home, db_session: Session
+) -> None:
+    event = _create(client, home, goal_count=1, deadline=_today())
+    _expire(db_session, event)
+
+    response = client.put(_sticker_path(home, event, 1), headers=home.headers)
+    board = client.get(_events_path(home.ledger), headers=home.headers).json()
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "reward_event_expired"
+    assert board["events"][0]["is_expired"] is True
+    assert _ledger(client, home)["balance"] == 0
+
+
+def test_extending_the_deadline_reopens_the_card(client: TestClient, home: Home, db_session: Session) -> None:
+    event = _create(client, home, goal_count=1, reward_points=20, deadline=_today())
+    _expire(db_session, event)
+
+    extended = client.put(
+        _deadline_path(home, event),
+        headers=home.headers,
+        json={"deadline": (_today() + timedelta(days=3)).isoformat()},
+    )
+
+    assert extended.status_code == 200, extended.text
+    assert extended.json()["is_expired"] is False
+    assert _stick(client, home, event, number=1)["completed_at"] is not None
+    assert _ledger(client, home)["balance"] == 20
+
+
+def test_the_deadline_can_be_removed(client: TestClient, home: Home, db_session: Session) -> None:
+    event = _create(client, home, deadline=_today())
+    _expire(db_session, event)
+
+    cleared = client.put(_deadline_path(home, event), headers=home.headers, json={"deadline": None})
+
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["deadline"] is None
+    assert cleared.json()["is_expired"] is False
+
+
+def test_the_deadline_cannot_be_moved_into_the_past(client: TestClient, home: Home) -> None:
+    event = _create(client, home)
+
+    response = client.put(
+        _deadline_path(home, event),
+        headers=home.headers,
+        json={"deadline": (_today() - timedelta(days=1)).isoformat()},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "reward_event_deadline_passed"
+
+
+def test_a_completed_cards_deadline_does_not_move(client: TestClient, home: Home) -> None:
+    event = _create(client, home, goal_count=1)
+    _stick(client, home, event, number=1)
+
+    response = client.put(_deadline_path(home, event), headers=home.headers, json={"deadline": None})
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "reward_event_already_completed"
+
+
+def test_a_child_cannot_change_the_deadline(client: TestClient, home: Home) -> None:
+    event = _create(client, home, deadline=_today())
+    child_headers = _child_headers(client, home)
+
+    response = client.put(
+        _deadline_path(home, event),
+        headers=child_headers,
+        json={"deadline": (_today() + timedelta(days=30)).isoformat()},
+    )
+
+    assert response.status_code == 403

@@ -1,7 +1,7 @@
 /**
  * イベントを作る入力欄（ADR-0042）。
  *
- * 目標・達成でもらえるポイント・達成回数の 3 つだけ。達成回数を打つと、できあがる
+ * 目標・達成でもらえるポイント・達成回数と、任意の期限（ADR-0043）。達成回数を打つと、できあがる
  * カードのマスの並び（何列 × 何行）を添える — 「1 画面で見渡せるか」を作る前に
  * 確かめられるように。
  *
@@ -19,15 +19,19 @@ import { ActionButton } from './ActionButton'
 interface Props {
   /** 送る。失敗したら投げ直す（入力を残すため）。 */
   onCreate: (event: NewRewardEvent) => Promise<void>
+  /** 端末の暦での今日（YYYY-MM-DD）。過ぎた日を期限に選ばせない。 */
+  today: string
 }
 
 const DEFAULT_GOAL = '10'
 
-export function RewardEventForm({ onCreate }: Props) {
+export function RewardEventForm({ onCreate, today }: Props) {
   const { t } = useI18n()
   const [title, setTitle] = useState('')
   const [reward, setReward] = useState('')
   const [goal, setGoal] = useState(DEFAULT_GOAL)
+  // 空なら期限なし
+  const [deadline, setDeadline] = useState('')
   const titleRef = useRequiredText(title, t('events.titleRequired'))
 
   const goalCount = Number(goal)
@@ -41,6 +45,7 @@ export function RewardEventForm({ onCreate }: Props) {
         title: title.trim(),
         reward_points: Number(reward),
         goal_count: goalCount,
+        deadline: deadline === '' ? null : deadline,
       })
     } catch {
       // 伝えるのは呼び出し側。入力はそのまま残す
@@ -49,6 +54,7 @@ export function RewardEventForm({ onCreate }: Props) {
     setTitle('')
     setReward('')
     setGoal(DEFAULT_GOAL)
+    setDeadline('')
   })
 
   return (
@@ -91,6 +97,17 @@ export function RewardEventForm({ onCreate }: Props) {
             setGoal(event.target.value)
           }}
           required
+        />
+      </label>
+      <label>
+        {t('events.fieldDeadline')}
+        <input
+          type="date"
+          min={today}
+          value={deadline}
+          onChange={(event) => {
+            setDeadline(event.target.value)
+          }}
         />
       </label>
       <ActionButton type="submit" pending={submitting}>

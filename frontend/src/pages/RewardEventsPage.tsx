@@ -7,6 +7,9 @@
  *
  * 最後の 1 枚で台帳にポイントが入るので、達成したら家族（ナビゲーションと
  * ダッシュボードの残高の出所。ADR-0021）も読み直す。
+ *
+ * 期限（ADR-0043）のあるカードは期限の近い順に先へ出し、期限切れは挑戦中と達成の
+ * あいだの棚に分ける（延ばせば挑戦中へ戻る）。
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -18,6 +21,7 @@ import { usePendingRows } from '../hooks/usePendingRows'
 import { useRefreshOnReturn } from '../hooks/useRefreshOnReturn'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
+import { localDate } from '../services/eventDeadline'
 import {
   rewardEvents,
   type NewRewardEvent,
@@ -36,6 +40,16 @@ function byCompletion(a: RewardEvent, b: RewardEvent): number {
   return (b.completed_at ?? '').localeCompare(a.completed_at ?? '')
 }
 
+/** 期限の近い順。期限の無いカードは後ろに、作った順で並べる。 */
+function byDeadline(a: RewardEvent, b: RewardEvent): number {
+  if (a.deadline !== b.deadline) {
+    if (a.deadline === null) return 1
+    if (b.deadline === null) return -1
+    return a.deadline.localeCompare(b.deadline)
+  }
+  return a.id - b.id
+}
+
 export function RewardEventsPage() {
   const { familyId, ledgerId } = useParams<{ familyId: string; ledgerId: string }>()
   const { t } = useI18n()
@@ -43,6 +57,8 @@ export function RewardEventsPage() {
   const { reload: reloadFamily } = useFamily()
   const [board, setBoard] = useState<RewardEventBoard | null>(null)
   const [failed, setFailed] = useState(false)
+  // 残り日数を数える「今日」。読んだときの端末の暦で、読み直すたびに進める
+  const [today, setToday] = useState('')
   const [fresh, setFresh] = useState<FreshSticker | null>(null)
   const [justCompleted, setJustCompleted] = useState<ReadonlySet<number>>(new Set())
   const { pendingActionOf, runForRow } = usePendingRows<RewardEventAction>()
@@ -56,6 +72,7 @@ export function RewardEventsPage() {
         .board(family, ledger)
         .then((result) => {
           setBoard(result)
+          setToday(localDate(new Date()))
           setFailed(false)
         })
         .catch((error: unknown) => {
@@ -125,6 +142,17 @@ export function RewardEventsPage() {
     })
   }
 
+  /** 期限を決め直す。失敗したら投げ直す（入力欄を開いたまま残す）。 */
+  const changeDeadline = (event: RewardEvent, deadline: string | null) =>
+    runForRow(event.id, 'deadline', async () => {
+      try {
+        replace(await rewardEvents.changeDeadline(family, ledger, event.id, deadline))
+      } catch (error) {
+        await recover(error)
+        throw error
+      }
+    })
+
   const remove = (event: RewardEvent) => {
     if (!window.confirm(t('events.confirmRemove', { title: event.title }))) return
     void runForRow(event.id, 'remove', async () => {
@@ -158,7 +186,9 @@ export function RewardEventsPage() {
     )
   }
 
-  const inProgress = board.events.filter((event) => event.completed_at === null)
+  const open = board.events.filter((event) => event.completed_at === null)
+  const inProgress = open.filter((event) => !event.is_expired).sort(byDeadline)
+  const expired = open.filter((event) => event.is_expired).sort(byDeadline)
   const completed = board.events.filter((event) => event.completed_at !== null).sort(byCompletion)
 
   const card = (event: RewardEvent) => (
@@ -169,9 +199,11 @@ export function RewardEventsPage() {
       pending={pendingActionOf(event.id)}
       freshNumber={fresh?.eventId === event.id ? fresh.number : null}
       freshlyCompleted={justCompleted.has(event.id)}
+      today={today}
       onStick={() => {
         stick(event)
       }}
+      onChangeDeadline={(deadline) => changeDeadline(event, deadline)}
       onPeel={() => {
         peel(event)
       }}
@@ -195,7 +227,7 @@ export function RewardEventsPage() {
         <details className="card event-create" open={board.events.length === 0}>
           <summary>{t('events.createTitle')}</summary>
           <p className="event-create-hint">{t('events.createHint')}</p>
-          <RewardEventForm onCreate={create} />
+          <RewardEventForm onCreate={create} today={today} />
         </details>
       )}
 
@@ -209,6 +241,12 @@ export function RewardEventsPage() {
           {inProgress.length > 0 && (
             <section aria-label={t('events.inProgressSection')} className="event-board">
               {inProgress.map(card)}
+            </section>
+          )}
+          {expired.length > 0 && (
+            <section className="event-section">
+              <h2 className="event-section-title">{t('events.expiredSection')}</h2>
+              <div className="event-board">{expired.map(card)}</div>
             </section>
           )}
           {completed.length > 0 && (
