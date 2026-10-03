@@ -10,6 +10,11 @@
 はがせるのは最後の 1 枚だけ（押し間違いを戻すため）。達成した後は貼るのも
 はがすのもできない — ポイントはもう台帳に入っている。
 
+期限（``deadline``）は任意の日付。期限の日が終わるまでに埋まらなければ **期限切れ** で、
+それ以上は貼れない（ポイントも入らない）。日付の区切りは家族の暮らしの 1 日
+（:class:`~...day_boundary.DayBoundary`）で、判定に使う「今日」は呼び出し側が渡す。
+親が期限を延ばせば、また貼れるようになる。
+
 達成の 1 行は **イベントごとに 1 つ** の冪等キー（``reward-event#<id>``）で書く。
 2 人の親が同時に最後の 1 枚を貼っても、台帳には 1 行しか入らない。``#`` は
 利用者の送る鍵には現れない（:func:`~...idempotency_key.is_derived`）ので、
@@ -19,10 +24,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from bounded_contexts.reward_points.domain.exceptions import (
     RewardEventCompletedError,
+    RewardEventExpiredError,
     StickerOutOfOrderError,
 )
 from bounded_contexts.reward_points.domain.value_objects.idempotency_key import STEP_SEPARATOR, IdempotencyKey
@@ -59,6 +65,8 @@ class RewardEvent:
     #: マスが埋まった日時。まだなら ``None``
     completed_at: datetime | None
     created_at: datetime
+    #: この日のうちに埋めれば達成。決めていなければ ``None``（いつまでも貼れる）
+    deadline: date | None = None
 
     def __post_init__(self) -> None:
         # 達成で減るイベントは無い（消費は手で記録する）
@@ -77,21 +85,27 @@ class RewardEvent:
     def is_completed(self) -> bool:
         return self.completed_at is not None
 
+    def is_expired(self, today: date) -> bool:
+        """期限の日を過ぎても埋まっていないか。達成したカードは期限切れにならない。"""
+        return not self.is_completed and self.deadline is not None and today > self.deadline
+
     @property
     def award_key(self) -> str:
         """達成の 1 行の冪等キー。同じイベントからは必ず同じ値が出る。"""
         return IdempotencyKey(f"{IDEMPOTENCY_BASE}{STEP_SEPARATOR}{self.id}").value
 
-    def should_stick(self, number: int) -> bool:
+    def should_stick(self, number: int, *, today: date) -> bool:
         """*number* 枚目を **いま貼るべきか**。
 
         すでに貼ってある番号なら偽（同じ押下の再送。何もせずに今の姿を返す）。
-        飛ばした番号・マスの外・達成済みは例外にする — 画面が古い姿を見ている。
+        飛ばした番号・マスの外・達成済み・期限切れは例外にする — 画面が古い姿を見ている。
         """
         if number <= self.sticker_count:
             return False
         if self.is_completed:
             raise RewardEventCompletedError
+        if self.is_expired(today):
+            raise RewardEventExpiredError
         if number != self.sticker_count + 1 or number > self.goal_count:
             raise StickerOutOfOrderError
         return True

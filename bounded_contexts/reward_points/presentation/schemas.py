@@ -118,6 +118,14 @@ class RewardEventCreateRequest(BaseModel):
     title: Annotated[NonBlankStr, Field(max_length=EVENT_TITLE_MAX_LENGTH)]
     reward_points: Annotated[int, Field(ge=1, le=AMOUNT_MAX)]
     goal_count: Annotated[int, Field(ge=1, le=EVENT_GOAL_COUNT_MAX)]
+    # この日のうちに埋めれば達成（家族の 1 日の区切り）。省略で期限なし
+    deadline: date | None = None
+
+
+class RewardEventDeadlineRequest(BaseModel):
+    """期限を決め直す。null で期限なし。"""
+
+    deadline: date | None
 
 
 class StickerResponse(BaseModel):
@@ -136,6 +144,10 @@ class RewardEventResponse(BaseModel):
     # マスが埋まった日時。まだなら null
     completed_at: UtcDatetime | None
     created_at: UtcDatetime
+    # この日のうちに埋めれば達成。決めていなければ null
+    deadline: date | None
+    # 期限を過ぎても埋まっていない（サーバーが家族の 1 日の区切りで判定する）
+    is_expired: bool
 
 
 class RewardEventBoardResponse(BaseModel):
@@ -438,6 +450,7 @@ __all__ = [
     "ReversalCreateRequest",
     "RewardEventBoardResponse",
     "RewardEventCreateRequest",
+    "RewardEventDeadlineRequest",
     "RewardEventResponse",
     "StickerResponse",
     "TemporaryPasswordResponse",

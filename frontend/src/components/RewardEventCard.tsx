@@ -7,6 +7,9 @@
  *
  * 貼る・はがす・消すの入口は `canModify` のときだけ出す。子ども本人は同じカードを
  * 見るだけ。
+ *
+ * 期限（ADR-0043）を過ぎたカードは「達成」を出さず、シールを沈めて見せる。親が期限を
+ * 延ばせば、また貼れる。
  */
 import type { CSSProperties } from 'react'
 
@@ -15,10 +18,11 @@ import { parseUtc } from '../services/families'
 import type { RewardEvent } from '../services/rewardEvents'
 import { gridColumns, stickerLook } from '../services/stickerSheet'
 import { ActionButton } from './ActionButton'
+import { EventDeadline } from './EventDeadline'
 import { Hanko, Sticker } from './StickerArt'
 
 /** いま押されている操作。押したボタンにだけスピナーを出す。 */
-export type RewardEventAction = 'stick' | 'peel' | 'remove'
+export type RewardEventAction = 'stick' | 'peel' | 'remove' | 'deadline'
 
 interface Props {
   event: RewardEvent
@@ -28,7 +32,11 @@ interface Props {
   freshNumber: number | null
   /** この画面で達成したばかりか。判子を押す動きを付ける。 */
   freshlyCompleted: boolean
+  /** 端末の暦での今日（YYYY-MM-DD）。期限の残り日数を数える。 */
+  today: string
   onStick: () => void
+  /** 期限を決め直す。失敗したら投げ直す。 */
+  onChangeDeadline: (deadline: string | null) => Promise<void>
   onPeel: () => void
   onRemove: () => void
 }
@@ -39,19 +47,30 @@ export function RewardEventCard({
   pending,
   freshNumber,
   freshlyCompleted,
+  today,
   onStick,
+  onChangeDeadline,
   onPeel,
   onRemove,
 }: Props) {
   const { t, locale } = useI18n()
   const count = event.stickers.length
   const completed = event.completed_at !== null
+  const expired = event.is_expired
   const busy = pending !== null
   const squares = Array.from({ length: event.goal_count }, (_, index) => index + 1)
   const sheetStyle = { '--sheet-columns': gridColumns(event.goal_count) } as CSSProperties
 
   return (
-    <article className={completed ? 'event-card event-card-completed' : 'event-card'}>
+    <article
+      className={
+        completed
+          ? 'event-card event-card-completed'
+          : expired
+            ? 'event-card event-card-expired'
+            : 'event-card'
+      }
+    >
       <header className="event-card-header">
         <h3 className="event-card-title">{event.title}</h3>
         {canModify && (
@@ -67,7 +86,23 @@ export function RewardEventCard({
           </ActionButton>
         )}
       </header>
-      <p className="event-card-reward">{t('events.reward', { points: event.reward_points })}</p>
+      <div className="event-card-tags">
+        <span className="event-card-reward">
+          {t('events.reward', { points: event.reward_points })}
+        </span>
+        {!completed && (
+          <EventDeadline
+            // 読み直して期限が変わったら、入力欄を閉じた姿から作り直す
+            key={event.deadline ?? 'none'}
+            event={event}
+            today={today}
+            canModify={canModify}
+            pending={pending === 'deadline'}
+            disabled={busy}
+            onChange={onChangeDeadline}
+          />
+        )}
+      </div>
 
       <div className="sticker-sheet-frame">
         <ol
@@ -117,7 +152,7 @@ export function RewardEventCard({
             <strong>{count}</strong> / {event.goal_count}
           </p>
         )}
-        {canModify && !completed && (
+        {canModify && !completed && !expired && (
           <div className="event-card-actions">
             {count > 0 && (
               <ActionButton

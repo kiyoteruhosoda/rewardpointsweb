@@ -45,6 +45,7 @@ from bounded_contexts.reward_points.application.use_cases.leave_family import Le
 from bounded_contexts.reward_points.application.use_cases.list_families import ListFamiliesUseCase
 from bounded_contexts.reward_points.application.use_cases.list_invitations import ListInvitationsUseCase
 from bounded_contexts.reward_points.application.use_cases.manage_reward_events import (
+    ChangeRewardEventDeadlineUseCase,
     CreateRewardEventUseCase,
     DeleteRewardEventUseCase,
     PeelRewardEventStickerUseCase,
@@ -418,23 +419,33 @@ def get_stop_daily_bonus_use_case(access: AccessDep, bonuses: DailyBonusRepoDep)
 def get_view_reward_events_use_case(
     access: AccessDep, events: RewardEventRepoDep, memberships: MembershipRepoDep
 ) -> ViewRewardEventsUseCase:
-    return ViewRewardEventsUseCase(access=access, events=events, memberships=memberships)
+    return ViewRewardEventsUseCase(
+        access=access, events=events, memberships=memberships, boundary=resolve_day_boundary()
+    )
 
 
 def get_create_reward_event_use_case(access: AccessDep, events: RewardEventRepoDep) -> CreateRewardEventUseCase:
-    return CreateRewardEventUseCase(access, events)
+    return CreateRewardEventUseCase(access, events, resolve_day_boundary())
+
+
+def get_change_reward_event_deadline_use_case(
+    access: AccessDep, events: RewardEventRepoDep
+) -> ChangeRewardEventDeadlineUseCase:
+    return ChangeRewardEventDeadlineUseCase(access, events, resolve_day_boundary())
 
 
 def get_stick_reward_event_sticker_use_case(
     access: AccessDep, events: RewardEventRepoDep, transactions: TransactionRepoDep
 ) -> StickRewardEventStickerUseCase:
-    return StickRewardEventStickerUseCase(access=access, events=events, transactions=transactions)
+    return StickRewardEventStickerUseCase(
+        access=access, events=events, transactions=transactions, boundary=resolve_day_boundary()
+    )
 
 
 def get_peel_reward_event_sticker_use_case(
     access: AccessDep, events: RewardEventRepoDep
 ) -> PeelRewardEventStickerUseCase:
-    return PeelRewardEventStickerUseCase(access, events)
+    return PeelRewardEventStickerUseCase(access, events, resolve_day_boundary())
 
 
 def get_delete_reward_event_use_case(access: AccessDep, events: RewardEventRepoDep) -> DeleteRewardEventUseCase:
@@ -498,6 +509,9 @@ SuggestReasonsDep = Annotated[SuggestTransactionReasonsUseCase, Depends(get_sugg
 ConfigureDailyBonusDep = Annotated[ConfigureDailyBonusUseCase, Depends(get_configure_daily_bonus_use_case)]
 StopDailyBonusDep = Annotated[StopDailyBonusUseCase, Depends(get_stop_daily_bonus_use_case)]
 ViewRewardEventsDep = Annotated[ViewRewardEventsUseCase, Depends(get_view_reward_events_use_case)]
+ChangeRewardEventDeadlineDep = Annotated[
+    ChangeRewardEventDeadlineUseCase, Depends(get_change_reward_event_deadline_use_case)
+]
 CreateRewardEventDep = Annotated[CreateRewardEventUseCase, Depends(get_create_reward_event_use_case)]
 StickRewardEventStickerDep = Annotated[StickRewardEventStickerUseCase, Depends(get_stick_reward_event_sticker_use_case)]
 PeelRewardEventStickerDep = Annotated[PeelRewardEventStickerUseCase, Depends(get_peel_reward_event_sticker_use_case)]
@@ -510,6 +524,7 @@ __all__ = [
     "AddChildDep",
     "ApproveIndependenceDep",
     "ArchiveWriterDep",
+    "ChangeRewardEventDeadlineDep",
     "ConfigureDailyBonusDep",
     "CorrectTransactionDep",
     "CreateFamilyDep",

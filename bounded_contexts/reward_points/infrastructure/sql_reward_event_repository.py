@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -51,6 +51,7 @@ class SqlRewardEventRepository(IRewardEventRepository):
             title=new_event.title,
             reward_points=new_event.reward,
             goal_count=new_event.goal_count,
+            deadline=new_event.deadline,
         )
         self._session.add(row)
         self._session.flush()
@@ -88,6 +89,13 @@ class SqlRewardEventRepository(IRewardEventRepository):
         row.awarded_transaction_id = awarded_transaction_id
         self._session.flush()
 
+    def change_deadline(self, *, event_id: int, deadline: date | None) -> None:
+        row = self._session.get(RewardEventModel, event_id)
+        if row is None:
+            return
+        row.deadline = deadline
+        self._session.flush()
+
     def delete(self, event_id: int) -> None:
         self._session.execute(delete(RewardEventModel).where(RewardEventModel.id == event_id))
 
@@ -111,6 +119,7 @@ class SqlRewardEventRepository(IRewardEventRepository):
                 stickers=tuple(stickers[row.id]),
                 completed_at=row.completed_at,
                 created_at=row.created_at,
+                deadline=row.deadline,
             )
             for row in rows
         ]

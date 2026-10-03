@@ -29,6 +29,8 @@
   --slot-line: #c3c8d8;
   --hanko: #d0362b;
   --hanko-blend: multiply;
+  --deadline-soon-soft: #ffe2d6;
+  --deadline-soon-ink: #a33a12;
 }
 
 :root[data-theme='dark'] {
@@ -51,6 +53,8 @@
   --slot-line: #4a5164;
   --hanko: #ff6a55;
   --hanko-blend: normal;
+  --deadline-soon-soft: #4a2418;
+  --deadline-soon-ink: #ffb08f;
 }
 
 :root {
@@ -1090,7 +1094,7 @@ tr.reversed {
 
 .event-form {
   display: grid;
-  grid-template-columns: minmax(12rem, 2fr) minmax(8rem, 1fr) minmax(8rem, 1fr) auto;
+  grid-template-columns: minmax(12rem, 2fr) repeat(3, minmax(8rem, 1fr)) auto;
   gap: 0.8rem;
   align-items: end;
 }
@@ -1157,8 +1161,6 @@ tr.reversed {
 }
 
 .event-card-reward {
-  margin: 0;
-  align-self: flex-start;
   padding: 0.1rem 0.65rem;
   border-radius: 999px;
   background: var(--reward-soft);
@@ -1166,6 +1168,56 @@ tr.reversed {
   font-size: 0.85rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* ごほうびと期限の札を 1 行に並べる（狭いカードでは折り返す）。 */
+.event-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+
+.event-deadline {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 期限が近い。急かしすぎない程度に、ごほうびの札と同じ暖色の系統で知らせる */
+.event-deadline-soon {
+  background: var(--deadline-soon-soft);
+  color: var(--deadline-soon-ink);
+}
+
+.event-deadline-expired {
+  background: none;
+  border: 1px solid var(--border);
+}
+
+.event-card .event-deadline-edit {
+  padding: 0.1rem 0.4rem;
+  background: none;
+  border-color: transparent;
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.event-deadline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* 期限切れのカードはシールを沈め、続けられないことを形で見せる */
+.event-card-expired .sticker-sheet {
+  opacity: 0.45;
+  filter: grayscale(0.8);
 }
 
 /* シール帳。マスは点線の丸で、番号を薄く刷っておく。貼ったシールはマスより

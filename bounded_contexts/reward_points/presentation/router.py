@@ -43,6 +43,7 @@ from bounded_contexts.reward_points.application.use_cases.create_family import C
 from bounded_contexts.reward_points.application.use_cases.import_family import ImportFamilyCommand
 from bounded_contexts.reward_points.application.use_cases.issue_invitation import IssueInvitationCommand
 from bounded_contexts.reward_points.application.use_cases.manage_reward_events import (
+    ChangeDeadlineCommand,
     CreateRewardEventCommand,
     StickerCommand,
 )
@@ -58,6 +59,7 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     AcceptInvitationDep,
     AddChildDep,
     ApproveIndependenceDep,
+    ChangeRewardEventDeadlineDep,
     ConfigureDailyBonusDep,
     CorrectTransactionDep,
     CreateFamilyDep,
@@ -113,6 +115,7 @@ from bounded_contexts.reward_points.presentation.schemas import (
     ReversalCreateRequest,
     RewardEventBoardResponse,
     RewardEventCreateRequest,
+    RewardEventDeadlineRequest,
     RewardEventResponse,
     StickerResponse,
     TemporaryPasswordResponse,
@@ -225,6 +228,8 @@ def _to_reward_event(dto: RewardEventDTO) -> RewardEventResponse:
         stickers=[StickerResponse(number=s.number, stuck_at=s.stuck_at) for s in dto.stickers],
         completed_at=dto.completed_at,
         created_at=dto.created_at,
+        deadline=dto.deadline,
+        is_expired=dto.is_expired,
     )
 
 
@@ -847,7 +852,10 @@ async def create_reward_event(
     use_case: CreateRewardEventDep,
     principal: PointManager,
 ) -> RewardEventResponse:
-    """イベントを作る。``goal_count`` だけマスが並び、全部埋まると ``reward_points`` が台帳に入る。"""
+    """イベントを作る。``goal_count`` だけマスが並び、全部埋まると ``reward_points`` が台帳に入る。
+
+    ``deadline`` を決めると、その日のうちに埋まらなければ期限切れになる（過ぎた日は 400）。
+    """
     dto = use_case.execute(
         CreateRewardEventCommand(
             ledger_id=ledger_id,
@@ -855,9 +863,29 @@ async def create_reward_event(
             title=body.title,
             reward_points=body.reward_points,
             goal_count=body.goal_count,
+            deadline=body.deadline,
         )
     )
     logger.info("reward_event_created", extra={"ledger_id": ledger_id, "event_id": dto.id})
+    return _to_reward_event(dto)
+
+
+@router.put(_event_path("/{event_id}/deadline"), response_model=RewardEventResponse)
+async def change_reward_event_deadline(
+    *,
+    ledger_id: int,
+    event_id: int,
+    body: RewardEventDeadlineRequest,
+    use_case: ChangeRewardEventDeadlineDep,
+    principal: PointManager,
+) -> RewardEventResponse:
+    """期限を決め直す（null で期限なし）。期限切れのカードも、延ばせばまた貼れる。"""
+    dto = use_case.execute(
+        ChangeDeadlineCommand(
+            ledger_id=ledger_id, event_id=event_id, account_id=principal.user_id, deadline=body.deadline
+        )
+    )
+    logger.info("reward_event_deadline_changed", extra={"ledger_id": ledger_id, "event_id": event_id})
     return _to_reward_event(dto)
 
 

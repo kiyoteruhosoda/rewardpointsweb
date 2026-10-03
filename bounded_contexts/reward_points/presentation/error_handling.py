@@ -39,6 +39,8 @@ from bounded_contexts.reward_points.domain.exceptions import (
     MembershipNotLinkedError,
     ReversalOfReversalError,
     RewardEventCompletedError,
+    RewardEventDeadlinePassedError,
+    RewardEventExpiredError,
     RewardEventNotFoundError,
     RewardPointsError,
     RoleNotInvitableError,
@@ -61,6 +63,8 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     # 画面が古い姿を見ている（ADR-0042）。読み直せば正しい番号が分かる
     RewardEventCompletedError: status.HTTP_409_CONFLICT,
     StickerOutOfOrderError: status.HTTP_409_CONFLICT,
+    RewardEventExpiredError: status.HTTP_409_CONFLICT,
+    RewardEventDeadlinePassedError: status.HTTP_400_BAD_REQUEST,
     TransactionAlreadyReversedError: status.HTTP_409_CONFLICT,
     AccountAlreadyInFamilyError: status.HTTP_409_CONFLICT,
     AlreadyBelongsToFamilyError: status.HTTP_409_CONFLICT,
