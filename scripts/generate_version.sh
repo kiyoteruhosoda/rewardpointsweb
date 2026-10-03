@@ -39,9 +39,9 @@ if command -v git >/dev/null 2>&1 && [ -d "$PROJECT_ROOT/.git" ]; then
     fi
 
     if [ "$BRANCH" = "main" ]; then
-        VERSION="v$COMMIT_HASH"
+        VERSION="$COMMIT_HASH"
     else
-        VERSION="v$COMMIT_HASH-$BRANCH"
+        VERSION="$COMMIT_HASH-$BRANCH"
     fi
     SOURCE="git"
 elif [ -s "$VERSION_FILE" ] && grep -q '"commit_hash"' "$VERSION_FILE"; then

@@ -450,6 +450,8 @@
   "users.entrance.password": "Password",
   "users.entrance.sso": "SSO",
   "users.entrance.totp": "2FA",
+  "update.available": "A new version is available.",
+  "update.reload": "Reload",
   "users.entrances": "Sign-in",
   "users.role": "Role",
   "users.roles": "Roles",
