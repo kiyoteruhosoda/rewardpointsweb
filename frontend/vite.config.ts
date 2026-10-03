@@ -74,7 +74,10 @@ export default defineConfig({
         // precache の登録名とは一致しないため、置いても使われないまま SW の更新の
         // たびに 110KB を落とすだけになる。圏外で取れなくても、ブラウザとランチャーは
         // インストール時のアイコンを使うので画面には影響しない。
-        globIgnores: ['favicon.svg', 'apple-touch-icon.png', 'pwa-*.png'],
+        globIgnores: ['favicon.svg', 'apple-touch-icon.png', 'pwa-*.png', 'sw-migration.js'],
+        // 前の作り（autoUpdate）から移るときだけ待たずに入れ替わる一度きりの処理（ADR-0044）。
+        // 無いと、前の作りの画面は待機した新しい版を入れ替えられず、古いまま止まる
+        importScripts: ['sw-migration.js'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [
           /^\/api\//,

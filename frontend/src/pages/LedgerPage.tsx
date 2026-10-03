@@ -22,9 +22,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
+import { Pager } from '../components/Pager'
 import { BalanceTrend } from '../components/BalanceTrend'
 import { PointEntryForm } from '../components/PointEntryForm'
 import { useToast } from '../components/ToastNotification'
+import { usePaged } from '../hooks/usePaged'
 import { usePendingRows } from '../hooks/usePendingRows'
 import { useRefreshOnReturn } from '../hooks/useRefreshOnReturn'
 import { useI18n } from '../i18n'
@@ -37,6 +39,9 @@ import {
   type Transaction,
 } from '../services/families'
 import { useFamily } from '../store/FamilyContext'
+
+/** 履歴の 1 ページの件数。スマートフォンでも 2〜3 回送れば 1 ページを読み切れる量。 */
+const HISTORY_PAGE_SIZE = 20
 
 /** 増減が読み取れるよう、加算には符号を付ける（消費は元から `-`）。 */
 function withSign(amount: number): string {
@@ -58,6 +63,9 @@ export function LedgerPage() {
   const [editing, setEditing] = useState<Transaction | null>(null)
   // 取り消し中の記録（押した行のボタンにだけスピナーを出す）
   const { pendingActionOf, runForRow } = usePendingRows<'reversal'>()
+  // 履歴はページに分ける（新しい順なので、1 ページ目が最新）。推移のグラフは全件を使う
+  const history = usePaged(ledger?.transactions ?? [], HISTORY_PAGE_SIZE)
+  const { setPage: setHistoryPage } = history
 
   const family = Number(familyId)
   const id = Number(ledgerId)
@@ -85,8 +93,9 @@ export function LedgerPage() {
     setLedger(null)
     setFetchedAt(null)
     setEditing(null)
+    setHistoryPage(1)
     void reload()
-  }, [reload])
+  }, [reload, setHistoryPage])
 
   // 手元に戻ってきたら読み直す（別の端末からの記録はこの画面には届かない）
   useRefreshOnReturn(reload)
@@ -128,8 +137,11 @@ export function LedgerPage() {
     await Promise.all([reload(), reloadFamily(), loadReasons()])
   }
 
-  const record = (amount: number, reason: string, idempotencyKey: string) =>
-    run(families.record(family, id, { amount, reason, idempotencyKey }))
+  // 書いた行は 1 ページ目の先頭に並ぶ。別のページを見ていたら戻す
+  const record = async (amount: number, reason: string, idempotencyKey: string) => {
+    await run(families.record(family, id, { amount, reason, idempotencyKey }))
+    setHistoryPage(1)
+  }
 
   /** 訂正が通ったときだけ入力欄を閉じる（失敗したら直した内容を残す）。 */
   const correct = async (
@@ -249,7 +261,7 @@ export function LedgerPage() {
                 </tr>
               </thead>
               <tbody>
-                {ledger.transactions.map((transaction) => (
+                {history.rows.map((transaction) => (
                   <tr key={transaction.id} className={transaction.is_reversed ? 'reversed' : ''}>
                     <td>{parseUtc(transaction.occurred_at).toLocaleString(locale)}</td>
                     <td>
@@ -292,6 +304,7 @@ export function LedgerPage() {
             </table>
           </div>
         )}
+        <Pager page={history.page} pageCount={history.pageCount} onChange={setHistoryPage} />
       </section>
 
       <p>

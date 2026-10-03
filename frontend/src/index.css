@@ -1438,6 +1438,19 @@ tr.reversed {
   border-color: var(--accent-strong);
 }
 
+/* 長い一覧のページ送り（Pager.tsx）。表の下の中央に置く。 */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+}
+
+.pager-position {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ここから狭い画面（スマートフォン）向け。
  *
  * 48rem を境に、左に固定していたナビゲーションを画面外から滑り出す引き出しへ
