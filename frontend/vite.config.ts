@@ -37,9 +37,7 @@ export default defineConfig({
     react(),
     versionIconUrls(),
     VitePWA({
-      // 新しい版は配られたらすぐ有効にする（ADR-0045）。'autoUpdate' は sw.js に
-      // skipWaiting と clientsClaim を入れる——待機させないので、リロードすれば新しい版になる。
-      // 登録は自前で行う（services/appUpdate.ts）。プラグインの登録コードは
+      // 登録は自前で行う（services/appUpdate.ts。ADR-0045）。プラグインの登録コードは
       // 有効になった瞬間に黙って再読み込みし、入力の途中の内容を消すので使わない
       registerType: 'autoUpdate',
       injectRegister: false,
@@ -68,6 +66,11 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // 新しい版は配られたらすぐ有効にする（ADR-0045）。待機させないので、リロードすれば
+        // 新しい版になる。⚠ プラグインは injectRegister: false のときこの 2 つを自動では
+        // 付けない（付くのは自前の登録をしないときだけ）ので、ここで明示する
+        skipWaiting: true,
+        clientsClaim: true,
         // SPA のシェル（ビルド成果物）だけを precache する。API・自動生成ドキュメント・
         // 運用エンドポイントはナビゲーションフォールバックの対象外にし、SW が
         // index.html を返して JSON 応答を壊さないようにする。
