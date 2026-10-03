@@ -32,5 +32,9 @@ ADR-0044 で「新しい Service Worker は待機させ、知らせを押した�
 
 ## 影響
 
+- ⚠ **`skipWaiting` / `clientsClaim` は `workbox` に明示する。** vite-plugin-pwa は
+  `registerType: 'autoUpdate'` でも、`injectRegister: false`（自前の登録）のときはこの 2 つを
+  付けない。最初の版（`0fa3806`）はこれを踏み、新しい版がまた待機したままになった。
+
 - 初めて開いた画面が制御されるときの合図は知らせない（新しい版ではないため）。
 - ADR-0044 のときに付けた印（Cache Storage の `rewardpoints-update-prompt-v1`）は空のまま残るが、使わない。
