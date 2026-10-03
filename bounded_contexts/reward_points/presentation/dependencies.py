@@ -44,6 +44,13 @@ from bounded_contexts.reward_points.application.use_cases.issue_invitation impor
 from bounded_contexts.reward_points.application.use_cases.leave_family import LeaveFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.list_families import ListFamiliesUseCase
 from bounded_contexts.reward_points.application.use_cases.list_invitations import ListInvitationsUseCase
+from bounded_contexts.reward_points.application.use_cases.manage_reward_events import (
+    CreateRewardEventUseCase,
+    DeleteRewardEventUseCase,
+    PeelRewardEventStickerUseCase,
+    StickRewardEventStickerUseCase,
+    ViewRewardEventsUseCase,
+)
 from bounded_contexts.reward_points.application.use_cases.propose_independence import (
     ProposeIndependenceUseCase,
     RevokeIndependenceProposalUseCase,
@@ -87,6 +94,9 @@ from bounded_contexts.reward_points.infrastructure.sql_point_ledger_repository i
 )
 from bounded_contexts.reward_points.infrastructure.sql_point_transaction_repository import (
     SqlPointTransactionRepository,
+)
+from bounded_contexts.reward_points.infrastructure.sql_reward_event_repository import (
+    SqlRewardEventRepository,
 )
 from shared.kernel.database.session import get_db
 from shared.kernel.settings.settings import settings
@@ -138,6 +148,10 @@ def get_daily_bonus_repository(db: DbDep) -> SqlDailyBonusRepository:
     return SqlDailyBonusRepository(db)
 
 
+def get_reward_event_repository(db: DbDep) -> SqlRewardEventRepository:
+    return SqlRewardEventRepository(db)
+
+
 def get_account_directory(db: DbDep) -> SqlAccountDirectory:
     return SqlAccountDirectory(db)
 
@@ -152,6 +166,7 @@ LedgerRepoDep = Annotated[SqlPointLedgerRepository, Depends(get_ledger_repositor
 TransactionRepoDep = Annotated[SqlPointTransactionRepository, Depends(get_transaction_repository)]
 InvitationRepoDep = Annotated[SqlFamilyInvitationRepository, Depends(get_invitation_repository)]
 DailyBonusRepoDep = Annotated[SqlDailyBonusRepository, Depends(get_daily_bonus_repository)]
+RewardEventRepoDep = Annotated[SqlRewardEventRepository, Depends(get_reward_event_repository)]
 DirectoryDep = Annotated[SqlAccountDirectory, Depends(get_account_directory)]
 ProvisioningDep = Annotated[SqlAccountProvisioning, Depends(get_account_provisioning)]
 
@@ -400,6 +415,32 @@ def get_stop_daily_bonus_use_case(access: AccessDep, bonuses: DailyBonusRepoDep)
     return StopDailyBonusUseCase(access, bonuses)
 
 
+def get_view_reward_events_use_case(
+    access: AccessDep, events: RewardEventRepoDep, memberships: MembershipRepoDep
+) -> ViewRewardEventsUseCase:
+    return ViewRewardEventsUseCase(access=access, events=events, memberships=memberships)
+
+
+def get_create_reward_event_use_case(access: AccessDep, events: RewardEventRepoDep) -> CreateRewardEventUseCase:
+    return CreateRewardEventUseCase(access, events)
+
+
+def get_stick_reward_event_sticker_use_case(
+    access: AccessDep, events: RewardEventRepoDep, transactions: TransactionRepoDep
+) -> StickRewardEventStickerUseCase:
+    return StickRewardEventStickerUseCase(access=access, events=events, transactions=transactions)
+
+
+def get_peel_reward_event_sticker_use_case(
+    access: AccessDep, events: RewardEventRepoDep
+) -> PeelRewardEventStickerUseCase:
+    return PeelRewardEventStickerUseCase(access, events)
+
+
+def get_delete_reward_event_use_case(access: AccessDep, events: RewardEventRepoDep) -> DeleteRewardEventUseCase:
+    return DeleteRewardEventUseCase(access, events)
+
+
 def get_record_transaction_use_case(
     access: AccessDep, transactions: TransactionRepoDep
 ) -> RecordPointTransactionUseCase:
@@ -456,6 +497,11 @@ CorrectTransactionDep = Annotated[CorrectPointTransactionUseCase, Depends(get_co
 SuggestReasonsDep = Annotated[SuggestTransactionReasonsUseCase, Depends(get_suggest_reasons_use_case)]
 ConfigureDailyBonusDep = Annotated[ConfigureDailyBonusUseCase, Depends(get_configure_daily_bonus_use_case)]
 StopDailyBonusDep = Annotated[StopDailyBonusUseCase, Depends(get_stop_daily_bonus_use_case)]
+ViewRewardEventsDep = Annotated[ViewRewardEventsUseCase, Depends(get_view_reward_events_use_case)]
+CreateRewardEventDep = Annotated[CreateRewardEventUseCase, Depends(get_create_reward_event_use_case)]
+StickRewardEventStickerDep = Annotated[StickRewardEventStickerUseCase, Depends(get_stick_reward_event_sticker_use_case)]
+PeelRewardEventStickerDep = Annotated[PeelRewardEventStickerUseCase, Depends(get_peel_reward_event_sticker_use_case)]
+DeleteRewardEventDep = Annotated[DeleteRewardEventUseCase, Depends(get_delete_reward_event_use_case)]
 
 
 __all__ = [
@@ -467,6 +513,8 @@ __all__ = [
     "ConfigureDailyBonusDep",
     "CorrectTransactionDep",
     "CreateFamilyDep",
+    "CreateRewardEventDep",
+    "DeleteRewardEventDep",
     "DissolveFamilyDep",
     "EditFamilyRulesDep",
     "ExportFamilyDep",
@@ -475,6 +523,7 @@ __all__ = [
     "LeaveFamilyDep",
     "ListFamiliesDep",
     "ListInvitationsDep",
+    "PeelRewardEventStickerDep",
     "ProposeIndependenceDep",
     "RecordTransactionDep",
     "RedeemInvitationDep",
@@ -485,10 +534,12 @@ __all__ = [
     "ReverseTransactionDep",
     "RevokeIndependenceDep",
     "RevokeInvitationDep",
+    "StickRewardEventStickerDep",
     "StopDailyBonusDep",
     "SuggestReasonsDep",
     "ViewFamilyDep",
     "ViewLedgerDep",
+    "ViewRewardEventsDep",
     "get_ensure_user_can_be_deleted_use_case",
     "resolve_day_boundary",
 ]

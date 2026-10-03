@@ -22,6 +22,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
+import { BalanceTrend } from '../components/BalanceTrend'
 import { PointEntryForm } from '../components/PointEntryForm'
 import { useToast } from '../components/ToastNotification'
 import { usePendingRows } from '../hooks/usePendingRows'
@@ -49,6 +50,8 @@ export function LedgerPage() {
   const { family: myFamily, reload: reloadFamily } = useFamily()
   const [ledger, setLedger] = useState<Ledger | null>(null)
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null)
+  // 推移の線を伸ばす先。応答に時刻が無いときは受け取った時刻で代える
+  const [asOf, setAsOf] = useState<Date>(() => new Date())
   const [reasons, setReasons] = useState<string[]>([])
   const [failed, setFailed] = useState(false)
   // 訂正の対象。null なら入力欄はいつもの記録用
@@ -66,6 +69,7 @@ export function LedgerPage() {
         .then((result) => {
           setLedger(result.data)
           setFetchedAt(result.fetchedAt)
+          setAsOf(result.fetchedAt ?? new Date())
           setFailed(false)
         })
         .catch((error: unknown) => {
@@ -190,8 +194,12 @@ export function LedgerPage() {
 
   return (
     <div className="page">
-      <div className="page-heading">
+      <div className="page-heading page-heading-row">
         <h1>{t('points.title', { name: ledger.display_name })}</h1>
+        {/* イベント（がんばりカード。ADR-0042）は子ごとに持つので、台帳から入る */}
+        <Link className="page-heading-link" to={`/families/${family}/ledgers/${id}/events`}>
+          {t('events.open')}
+        </Link>
       </div>
 
       <section className="card">
@@ -221,6 +229,8 @@ export function LedgerPage() {
           </div>
         )}
       </section>
+
+      <BalanceTrend transactions={ledger.transactions} asOf={asOf} />
 
       <section className="card">
         <h2>{t('points.history')}</h2>

@@ -17,6 +17,7 @@ import { PermissionsPage } from './pages/PermissionsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { RedeemInvitationPage } from './pages/RedeemInvitationPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
+import { RewardEventsPage } from './pages/RewardEventsPage'
 import { RolesPage } from './pages/RolesPage'
 import { SsoCallbackPage } from './pages/SsoCallbackPage'
 import { SecurityPage } from './pages/SecurityPage'
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/families" element={<FamiliesPage />} />
         <Route path="/families/:familyId" element={<FamilyPage />} />
         <Route path="/families/:familyId/ledgers/:ledgerId" element={<LedgerPage />} />
+        <Route path="/families/:familyId/ledgers/:ledgerId/events" element={<RewardEventsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
         <Route path="/security" element={<SecurityPage />} />

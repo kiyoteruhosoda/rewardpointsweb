@@ -147,6 +147,59 @@ class DailyBonusModel(Base):
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 
 
+class RewardEventModel(Base):
+    """がんばりカード（ADR-0042）。
+
+    台帳に何枚でも持てる。台帳が消えれば一緒に消える（家族の解散・参加者の削除・
+    独立の成立）。マスが埋まったら ``completed_at`` と、台帳へ足した行を持つ。
+    """
+
+    __tablename__ = "reward_events"
+    __table_args__ = (
+        sa.CheckConstraint("reward_points > 0", name="ck_reward_events_reward_positive"),
+        sa.CheckConstraint("goal_count >= 1", name="ck_reward_events_goal_count_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    ledger_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("point_ledgers.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(sa.String(100), nullable=False)
+    reward_points: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
+    goal_count: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
+    completed_at = mapped_column(sa.DateTime(), nullable=True)
+    # 達成で足した台帳の行。独立の成立では台帳の行が先に消えるので SET NULL
+    awarded_transaction_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("point_transactions.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
+
+
+class RewardEventStickerModel(Base):
+    """イベントに貼られた 1 枚（ADR-0042）。
+
+    ``number`` は 1 から始まる通し番号。同じ番号は 2 枚貼れないので、同じ押下が
+    2 度届いても 1 枚にしかならない。
+    """
+
+    __tablename__ = "reward_event_stickers"
+    __table_args__ = (
+        sa.UniqueConstraint("event_id", "number", name="uq_reward_event_stickers_number"),
+        sa.CheckConstraint("number >= 1", name="ck_reward_event_stickers_number_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    event_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("reward_events.id", ondelete="CASCADE"), nullable=False
+    )
+    number: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
+    stuck_at = mapped_column(sa.DateTime(), nullable=False)
+    # 貼った参加者が家族を離れてもシールは残す
+    stuck_by_membership_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("family_memberships.id", ondelete="SET NULL"), nullable=True
+    )
+
+
 class FamilyInvitationModel(Base):
     __tablename__ = "family_invitations"
 
@@ -174,4 +227,6 @@ __all__ = [
     "FamilyModel",
     "PointLedgerModel",
     "PointTransactionModel",
+    "RewardEventModel",
+    "RewardEventStickerModel",
 ]

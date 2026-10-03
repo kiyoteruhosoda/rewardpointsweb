@@ -28,6 +28,7 @@ from bounded_contexts.reward_points.application.dto.family_dto import (
     RedeemedInvitationDTO,
 )
 from bounded_contexts.reward_points.application.dto.ledger_dto import CorrectionDTO, TransactionDTO
+from bounded_contexts.reward_points.application.dto.reward_event_dto import RewardEventDTO
 from bounded_contexts.reward_points.application.use_cases.accept_invitation import AcceptInvitationCommand
 from bounded_contexts.reward_points.application.use_cases.add_child_membership import (
     AddChildMembershipCommand,
@@ -41,6 +42,10 @@ from bounded_contexts.reward_points.application.use_cases.correct_point_transact
 from bounded_contexts.reward_points.application.use_cases.create_family import CreateFamilyCommand
 from bounded_contexts.reward_points.application.use_cases.import_family import ImportFamilyCommand
 from bounded_contexts.reward_points.application.use_cases.issue_invitation import IssueInvitationCommand
+from bounded_contexts.reward_points.application.use_cases.manage_reward_events import (
+    CreateRewardEventCommand,
+    StickerCommand,
+)
 from bounded_contexts.reward_points.application.use_cases.record_point_transaction import (
     RecordTransactionCommand,
 )
@@ -56,6 +61,8 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     ConfigureDailyBonusDep,
     CorrectTransactionDep,
     CreateFamilyDep,
+    CreateRewardEventDep,
+    DeleteRewardEventDep,
     DissolveFamilyDep,
     EditFamilyRulesDep,
     ExportFamilyDep,
@@ -64,6 +71,7 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     LeaveFamilyDep,
     ListFamiliesDep,
     ListInvitationsDep,
+    PeelRewardEventStickerDep,
     ProposeIndependenceDep,
     RecordTransactionDep,
     RedeemInvitationDep,
@@ -74,10 +82,12 @@ from bounded_contexts.reward_points.presentation.dependencies import (
     ReverseTransactionDep,
     RevokeIndependenceDep,
     RevokeInvitationDep,
+    StickRewardEventStickerDep,
     StopDailyBonusDep,
     SuggestReasonsDep,
     ViewFamilyDep,
     ViewLedgerDep,
+    ViewRewardEventsDep,
 )
 from bounded_contexts.reward_points.presentation.schemas import (
     ChildCreateRequest,
@@ -101,6 +111,10 @@ from bounded_contexts.reward_points.presentation.schemas import (
     MembershipResponse,
     RedeemedInvitationResponse,
     ReversalCreateRequest,
+    RewardEventBoardResponse,
+    RewardEventCreateRequest,
+    RewardEventResponse,
+    StickerResponse,
     TemporaryPasswordResponse,
     TransactionCreateRequest,
     TransactionResponse,
@@ -198,6 +212,19 @@ def _to_daily_bonus(dto: DailyBonusDTO) -> DailyBonusResponse:
         reason=dto.reason,
         starts_on=dto.starts_on,
         granted_through=dto.granted_through,
+    )
+
+
+def _to_reward_event(dto: RewardEventDTO) -> RewardEventResponse:
+    return RewardEventResponse(
+        id=dto.id,
+        ledger_id=dto.ledger_id,
+        title=dto.title,
+        reward_points=dto.reward_points,
+        goal_count=dto.goal_count,
+        stickers=[StickerResponse(number=s.number, stuck_at=s.stuck_at) for s in dto.stickers],
+        completed_at=dto.completed_at,
+        created_at=dto.created_at,
     )
 
 
@@ -786,3 +813,109 @@ async def stop_daily_bonus(
     """
     use_case.execute(ledger_id=ledger_id, account_id=principal.user_id)
     logger.info("daily_bonus_stopped", extra={"ledger_id": ledger_id})
+
+
+# --- イベント（ADR-0042） ----------------------------------------------------
+
+
+def _event_path(suffix: str = "") -> str:
+    return "/{family_id}/ledgers/{ledger_id}/events" + suffix
+
+
+@router.get(_event_path(), response_model=RewardEventBoardResponse)
+async def view_reward_events(
+    ledger_id: int, use_case: ViewRewardEventsDep, principal: PointViewer
+) -> RewardEventBoardResponse:
+    """その子のイベント（がんばりカード）を作った順に返す。
+
+    子ども本人も自分のカードを見られる。``can_modify`` が偽なら貼る・作る入口を出さない。
+    """
+    dto = use_case.execute(ledger_id=ledger_id, account_id=principal.user_id)
+    return RewardEventBoardResponse(
+        ledger_id=dto.ledger_id,
+        display_name=dto.display_name,
+        can_modify=dto.can_modify,
+        events=[_to_reward_event(event) for event in dto.events],
+    )
+
+
+@router.post(_event_path(), status_code=status.HTTP_201_CREATED, response_model=RewardEventResponse)
+async def create_reward_event(
+    *,
+    ledger_id: int,
+    body: RewardEventCreateRequest,
+    use_case: CreateRewardEventDep,
+    principal: PointManager,
+) -> RewardEventResponse:
+    """イベントを作る。``goal_count`` だけマスが並び、全部埋まると ``reward_points`` が台帳に入る。"""
+    dto = use_case.execute(
+        CreateRewardEventCommand(
+            ledger_id=ledger_id,
+            account_id=principal.user_id,
+            title=body.title,
+            reward_points=body.reward_points,
+            goal_count=body.goal_count,
+        )
+    )
+    logger.info("reward_event_created", extra={"ledger_id": ledger_id, "event_id": dto.id})
+    return _to_reward_event(dto)
+
+
+@router.put(_event_path("/{event_id}/stickers/{number}"), response_model=RewardEventResponse)
+async def stick_reward_event_sticker(
+    *,
+    ledger_id: int,
+    event_id: int,
+    number: int,
+    use_case: StickRewardEventStickerDep,
+    principal: PointManager,
+) -> RewardEventResponse:
+    """*number* 枚目のシールを貼る（1 回達成した）。
+
+    ``number`` は次に貼る番号（今の枚数 + 1）。もう貼ってある番号なら何もせず今の姿を
+    返すので、同じ押下を送り直しても 2 枚にはならない。最後のマスが埋まると台帳へ
+    ``reward_points`` が足され、``completed_at`` が入る。
+    """
+    dto = use_case.execute(
+        StickerCommand(ledger_id=ledger_id, event_id=event_id, account_id=principal.user_id, number=number)
+    )
+    logger.info(
+        "reward_event_sticker_stuck",
+        extra={
+            "ledger_id": ledger_id,
+            "event_id": event_id,
+            "number": number,
+            "completed": dto.completed_at is not None,
+        },
+    )
+    return _to_reward_event(dto)
+
+
+@router.delete(_event_path("/{event_id}/stickers/{number}"), response_model=RewardEventResponse)
+async def peel_reward_event_sticker(
+    *,
+    ledger_id: int,
+    event_id: int,
+    number: int,
+    use_case: PeelRewardEventStickerDep,
+    principal: PointManager,
+) -> RewardEventResponse:
+    """最後に貼った 1 枚をはがす（押し間違いを戻す）。達成した後ははがせない。"""
+    dto = use_case.execute(
+        StickerCommand(ledger_id=ledger_id, event_id=event_id, account_id=principal.user_id, number=number)
+    )
+    logger.info("reward_event_sticker_peeled", extra={"ledger_id": ledger_id, "event_id": event_id, "number": number})
+    return _to_reward_event(dto)
+
+
+@router.delete(_event_path("/{event_id}"), status_code=status.HTTP_204_NO_CONTENT)
+async def delete_reward_event(
+    *,
+    ledger_id: int,
+    event_id: int,
+    use_case: DeleteRewardEventDep,
+    principal: PointManager,
+) -> None:
+    """イベントを消す。達成で足したポイントは台帳に残る。"""
+    use_case.execute(ledger_id=ledger_id, event_id=event_id, account_id=principal.user_id)
+    logger.info("reward_event_deleted", extra={"ledger_id": ledger_id, "event_id": event_id})

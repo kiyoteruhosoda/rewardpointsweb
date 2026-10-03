@@ -12,6 +12,12 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, Field, model_validator
 
+from bounded_contexts.reward_points.domain.entities.reward_event import (
+    MAX_GOAL_COUNT as EVENT_GOAL_COUNT_MAX,
+)
+from bounded_contexts.reward_points.domain.entities.reward_event import (
+    TITLE_MAX_LENGTH as EVENT_TITLE_MAX_LENGTH,
+)
 from bounded_contexts.reward_points.domain.value_objects.display_name import (
     MAX_LENGTH as DISPLAY_NAME_MAX_LENGTH,
 )
@@ -101,6 +107,42 @@ class DailyBonusResponse(BaseModel):
     starts_on: date
     # 渡し終えた最後の日。まだ 1 日も渡していなければ null
     granted_through: date | None
+
+
+# --- イベント（ADR-0042） ----------------------------------------------------
+
+
+class RewardEventCreateRequest(BaseModel):
+    """目標・達成でもらえるポイント・達成回数（＝マスの数）。"""
+
+    title: Annotated[NonBlankStr, Field(max_length=EVENT_TITLE_MAX_LENGTH)]
+    reward_points: Annotated[int, Field(ge=1, le=AMOUNT_MAX)]
+    goal_count: Annotated[int, Field(ge=1, le=EVENT_GOAL_COUNT_MAX)]
+
+
+class StickerResponse(BaseModel):
+    number: int
+    stuck_at: UtcDatetime
+
+
+class RewardEventResponse(BaseModel):
+    id: int
+    ledger_id: int
+    title: str
+    reward_points: int
+    goal_count: int
+    # 番号の小さい順
+    stickers: list[StickerResponse]
+    # マスが埋まった日時。まだなら null
+    completed_at: UtcDatetime | None
+    created_at: UtcDatetime
+
+
+class RewardEventBoardResponse(BaseModel):
+    ledger_id: int
+    display_name: str
+    can_modify: bool
+    events: list[RewardEventResponse]
 
 
 # --- 家族 --------------------------------------------------------------------
@@ -394,6 +436,10 @@ __all__ = [
     "NonBlankStr",
     "RedeemedInvitationResponse",
     "ReversalCreateRequest",
+    "RewardEventBoardResponse",
+    "RewardEventCreateRequest",
+    "RewardEventResponse",
+    "StickerResponse",
     "TemporaryPasswordResponse",
     "TransactionCreateRequest",
     "TransactionResponse",
