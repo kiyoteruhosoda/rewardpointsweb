@@ -25,7 +25,7 @@ function render(settings: UiSettings) {
               <BrowserRouter>
                 <App />
               </BrowserRouter>
-              {/* 新しい版の知らせは画面に関わらず出す（ADR-0044）。 */}
+              {/* 新しい版の知らせは画面に関わらず出す（ADR-0045）。 */}
               <AppUpdatePrompt watch={watchForUpdate} />
             </ToastProvider>
           </AuthProvider>

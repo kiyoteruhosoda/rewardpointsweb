@@ -6,8 +6,7 @@ import tseslint from 'typescript-eslint'
 export default tseslint.config(
   // ビルド成果物・依存は解析対象外
   {
-    // sw-migration.js は Service Worker の中で動く素の JavaScript（型検査の対象外）
-    ignores: ['dist/**', 'coverage/**', 'dev-dist/**', 'node_modules/**', 'public/sw-migration.js'],
+    ignores: ['dist/**', 'coverage/**', 'dev-dist/**', 'node_modules/**'],
   },
 
   js.configs.recommended,
