@@ -37,10 +37,12 @@ export default defineConfig({
     react(),
     versionIconUrls(),
     VitePWA({
-      // 入れ替えるのは利用者が押したときだけ（ADR-0044）。'autoUpdate' は新しい
-      // Service Worker を黙って有効にするが、**既に開いている画面は古い JavaScript の
-      // まま動き続ける**。新しい版が待機したら知らせ（AppUpdatePrompt）を出す。
-      registerType: 'prompt',
+      // 新しい版は配られたらすぐ有効にする（ADR-0045）。'autoUpdate' は sw.js に
+      // skipWaiting と clientsClaim を入れる——待機させないので、リロードすれば新しい版になる。
+      // 登録は自前で行う（services/appUpdate.ts）。プラグインの登録コードは
+      // 有効になった瞬間に黙って再読み込みし、入力の途中の内容を消すので使わない
+      registerType: 'autoUpdate',
+      injectRegister: false,
       manifest: {
         name: 'RewardPoints',
         short_name: 'RewardPoints',
@@ -74,10 +76,7 @@ export default defineConfig({
         // precache の登録名とは一致しないため、置いても使われないまま SW の更新の
         // たびに 110KB を落とすだけになる。圏外で取れなくても、ブラウザとランチャーは
         // インストール時のアイコンを使うので画面には影響しない。
-        globIgnores: ['favicon.svg', 'apple-touch-icon.png', 'pwa-*.png', 'sw-migration.js'],
-        // 前の作り（autoUpdate）から移るときだけ待たずに入れ替わる一度きりの処理（ADR-0044）。
-        // 無いと、前の作りの画面は待機した新しい版を入れ替えられず、古いまま止まる
-        importScripts: ['sw-migration.js'],
+        globIgnores: ['favicon.svg', 'apple-touch-icon.png', 'pwa-*.png'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [
           /^\/api\//,
