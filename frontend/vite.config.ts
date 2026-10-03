@@ -37,7 +37,10 @@ export default defineConfig({
     react(),
     versionIconUrls(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 入れ替えるのは利用者が押したときだけ（ADR-0044）。'autoUpdate' は新しい
+      // Service Worker を黙って有効にするが、**既に開いている画面は古い JavaScript の
+      // まま動き続ける**。新しい版が待機したら知らせ（AppUpdatePrompt）を出す。
+      registerType: 'prompt',
       manifest: {
         name: 'RewardPoints',
         short_name: 'RewardPoints',

@@ -450,6 +450,8 @@
   "users.entrance.password": "パスワード",
   "users.entrance.sso": "SSO",
   "users.entrance.totp": "二要素認証",
+  "update.available": "新しい版があります。",
+  "update.reload": "再読み込み",
   "users.entrances": "入れる手段",
   "users.role": "ロール",
   "users.roles": "ロール",

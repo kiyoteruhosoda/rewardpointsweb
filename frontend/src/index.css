@@ -1398,6 +1398,46 @@ tr.reversed {
   outline-offset: 2px;
 }
 
+/* 新しい版の知らせ（AppUpdatePrompt.tsx。ADR-0044）。トーストと違って押すまで消えない。
+ * 画面の下の中央に浮かせ、トースト（右下）と重ならない高さにする。 */
+.update-prompt {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: calc(1rem + var(--safe-bottom));
+  z-index: 90;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin-inline: auto;
+  padding: 0.6rem 0.8rem 0.6rem 1.1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-card-hover);
+}
+
+.update-prompt-text {
+  font-weight: 600;
+}
+
+.update-prompt .update-prompt-button {
+  background: var(--accent);
+  border-color: var(--accent);
+  border-radius: 999px;
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.update-prompt .update-prompt-button:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
 /* ここから狭い画面（スマートフォン）向け。
  *
  * 48rem を境に、左に固定していたナビゲーションを画面外から滑り出す引き出しへ
