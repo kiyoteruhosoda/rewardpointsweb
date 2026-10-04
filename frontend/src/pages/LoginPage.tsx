@@ -14,7 +14,7 @@ import {
 } from '../services/invitationLink'
 import { fetchSsoProvider, startSsoLogin, type SsoProvider } from '../services/sso'
 import { isPasskeySupported, passkeyErrorKey } from '../services/webauthn'
-import { useAuth } from '../store/AuthContext'
+import { RECONNECT_INTERVAL_MS, useAuth } from '../store/AuthContext'
 
 /** 資格情報の入力 → （二要素認証が有効なら）ワンタイムコードの入力。 */
 type Step = 'credentials' | 'totp'
@@ -39,18 +39,35 @@ export function LoginPage() {
   const [totpCode, setTotpCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [sso, setSso] = useState<SsoProvider | null>(null)
+  const [ssoUnreachable, setSsoUnreachable] = useState(false)
   // SSO の失敗は画面遷移で戻ってくるため、応答本文ではなく URL に載る
   const [searchParams] = useSearchParams()
   const ssoError = searchParams.get('sso_error')
 
+  // 問い合わせに失敗するのはサーバーに届かないとき（リリース中など）。⚠ **一度で諦めない**
+  // ——諦めると、サーバーが戻っても SSO のボタンの無い画面に取り残される。届かないことを
+  // 伝え、つながるまで聞き直す（ADR-0046）。パスワードの欄は主な入口なので出したままにする。
   useEffect(() => {
-    void fetchSsoProvider()
-      .then(setSso)
-      .catch(() => {
-        // 問い合わせに失敗したらボタンを出さない。SSO が使えるかどうかは
-        // ログインの前提ではないので、ここでは何も伝えない
-        setSso(null)
-      })
+    let timer: number | undefined
+    let cancelled = false
+    const ask = () => {
+      fetchSsoProvider()
+        .then((provider) => {
+          if (cancelled) return
+          setSso(provider)
+          setSsoUnreachable(false)
+        })
+        .catch(() => {
+          if (cancelled) return
+          setSsoUnreachable(true)
+          timer = window.setTimeout(ask, RECONNECT_INTERVAL_MS)
+        })
+    }
+    ask()
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
   }, [])
 
   const [submit, submitting] = usePendingAction(async (e: FormEvent) => {
@@ -96,6 +113,7 @@ export function LoginPage() {
         {pendingCode && <p className="notice">{t('login.invitationPending')}</p>}
         {/* パスキーの設定違いは、いま開いているドメインを添えて出す（{domain}）。 */}
         {error && <p className="error">{t(error, { domain: window.location.hostname })}</p>}
+        {ssoUnreachable && <p className="notice">{t('common.unreachable')}</p>}
         {/* IdP から戻された失敗。知らないコードは一般的な文言へ倒す */}
         {!error && ssoError !== null && (
           <p className="error">{t(knownMessageKey(`error.${ssoError}`, 'error.sso_error'))}</p>

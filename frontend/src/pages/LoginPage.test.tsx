@@ -96,12 +96,25 @@ describe('LoginPage', () => {
       expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument()
     })
 
-    it('問い合わせに失敗しても、パスワードでのログインは邪魔しない', async () => {
-      fetchSsoProvider.mockRejectedValue(new Error('offline'))
+    it('問い合わせが届かなければ伝えて聞き直し、つながったらボタンを出す', async () => {
+      // リリース中はサーバーに届かない。一度で諦めると、戻っても SSO のボタンが出ない（ADR-0046）
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      fetchSsoProvider
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({ enabled: true, display_name: 'Nolumia' })
       renderLogin('/login')
 
-      expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+      expect(await screen.findByText(/Cannot reach the server/)).toBeInTheDocument()
+      // パスワードでのログインは邪魔しない
+      expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument()
+
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(
+        await screen.findByRole('button', { name: 'Sign in with Nolumia' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/Cannot reach the server/)).not.toBeInTheDocument()
+      vi.useRealTimers()
     })
 
     it('押したら、ログイン後の行き先を添えて IdP へ送り出す', async () => {

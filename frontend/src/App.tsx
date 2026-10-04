@@ -27,7 +27,7 @@ import { useAuth } from './store/AuthContext'
 import { FamilyProvider } from './store/FamilyContext'
 
 function RequireAuth() {
-  const { user, loading } = useAuth()
+  const { user, loading, unreachable } = useAuth()
   const { t } = useI18n()
   const location = useLocation()
   // 狭い画面でナビゲーションを引き出しにするための開閉状態。広い画面では
@@ -41,6 +41,8 @@ function RequireAuth() {
   }, [])
 
   if (loading) return <p className="loading">{t('common.loading')}</p>
+  // 届かないだけならログイン画面へ送らない（リリース中など。つながれば自動で戻る。ADR-0046）
+  if (!user && unreachable) return <p className="loading">{t('common.unreachable')}</p>
   if (!user) return <Navigate to="/login" replace />
   // 一時パスワードでのログイン中は、変更を終えるまで他の画面へ行かせない
   // （サーバー側も同じ関門を持つ。ADR-0011）
