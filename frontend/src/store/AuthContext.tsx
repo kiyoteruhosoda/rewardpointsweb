@@ -1,7 +1,14 @@
 /** 認証状態（ログイン中ユーザーと scope）。認可判定は hasScope で行う。 */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
-import { api, clearOfflineViewCache, clearTokens, hasTokens, setTokens } from '../services/api'
+import {
+  ApiError,
+  api,
+  clearOfflineViewCache,
+  clearTokens,
+  hasTokens,
+  setTokens,
+} from '../services/api'
 import { exchangeSsoTicket } from '../services/sso'
 import { assertPasskey, type PasskeyChallenge } from '../services/webauthn'
 
@@ -29,6 +36,12 @@ interface TokenPair {
 export interface AuthValue {
   user: Me | null
   loading: boolean
+  /**
+   * サーバーに届かない（5xx・通信の失敗）。新しい版を配っている最中など。
+   * ⚠ **このとき user を null にせず、トークン（とオフライン閲覧のキャッシュ）も消さない**——ログアウトしたのではないので、ログイン画面へ
+   * 送ると、戻ってきたあとも IdP の入口の無い画面に取り残される。つながるまで自動で聞き直す。
+   */
+  unreachable: boolean
   /** 二要素認証が有効なアカウントでは totpCode が必要（未指定なら totp_required）。 */
   login: (username: string, password: string, totpCode?: string) => Promise<void>
   loginWithPasskey: () => Promise<void>
@@ -42,9 +55,14 @@ export interface AuthValue {
 /** テストが scope を差し替えて描画できるよう公開する（本番の生成は AuthProvider）。 */
 export const AuthContext = createContext<AuthValue | null>(null)
 
+const SERVER_ERROR = 500
+/** サーバーに届かないとき、聞き直す間隔 */
+export const RECONNECT_INTERVAL_MS = 5000
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Me | null>(null)
   const [loading, setLoading] = useState(true)
+  const [unreachable, setUnreachable] = useState(false)
 
   const refreshMe = useCallback(async () => {
     if (!hasTokens()) {
@@ -53,11 +71,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       setUser(await api.get<Me>('/api/auth/me'))
-    } catch {
-      clearTokens()
-      setUser(null)
+      setUnreachable(false)
+    } catch (e) {
+      // 4xx（401 など）はサーバーが「ログインしていない」と答えたもの。それ以外は届いていない
+      if (e instanceof ApiError && e.status < SERVER_ERROR) {
+        clearTokens()
+        setUser(null)
+        setUnreachable(false)
+      } else {
+        setUnreachable(true)
+      }
     }
   }, [])
+
+  useEffect(() => {
+    if (!unreachable) return
+    const timer = window.setInterval(() => {
+      void refreshMe()
+    }, RECONNECT_INTERVAL_MS)
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [unreachable, refreshMe])
 
   useEffect(() => {
     void refreshMe().finally(() => {
@@ -114,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
+        unreachable,
         login,
         loginWithPasskey,
         loginWithSsoTicket,

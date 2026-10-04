@@ -51,6 +51,7 @@ function authValueOf(scopes: string[]): AuthValue {
       has_password: true,
     },
     loading: false,
+    unreachable: false,
     login: () => Promise.resolve(),
     loginWithPasskey: () => Promise.resolve(),
     loginWithSsoTicket: () => Promise.resolve('/'),

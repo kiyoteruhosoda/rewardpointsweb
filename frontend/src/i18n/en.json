@@ -16,6 +16,7 @@
   "common.hidePassword": "Hide password",
   "common.language": "Language",
   "common.loading": "Loading...",
+  "common.unreachable": "Cannot reach the server (a new version may be rolling out). Reconnecting automatically…",
   "common.password": "Password",
   "common.processing": "Processing...",
   "common.reasonRequired": "Enter a reason.",

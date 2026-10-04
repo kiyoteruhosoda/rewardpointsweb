@@ -66,6 +66,7 @@ function authValueOf(
   return {
     user: { ...USER, scopes },
     loading: false,
+    unreachable: false,
     login: () => Promise.resolve(),
     loginWithPasskey: () => Promise.resolve(),
     loginWithSsoTicket,
