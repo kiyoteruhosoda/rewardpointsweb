@@ -42,7 +42,12 @@ function RequireAuth() {
 
   if (loading) return <p className="loading">{t('common.loading')}</p>
   // 届かないだけならログイン画面へ送らない（リリース中など。つながれば自動で戻る。ADR-0046）
-  if (!user && unreachable) return <p className="loading">{t('common.unreachable')}</p>
+  if (!user && unreachable)
+    return (
+      <p className="loading">
+        <span className="spinner" aria-hidden="true" /> {t('common.unreachable')}
+      </p>
+    )
   if (!user) return <Navigate to="/login" replace />
   // 一時パスワードでのログイン中は、変更を終えるまで他の画面へ行かせない
   // （サーバー側も同じ関門を持つ。ADR-0011）

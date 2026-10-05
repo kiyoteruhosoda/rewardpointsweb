@@ -113,7 +113,11 @@ export function LoginPage() {
         {pendingCode && <p className="notice">{t('login.invitationPending')}</p>}
         {/* パスキーの設定違いは、いま開いているドメインを添えて出す（{domain}）。 */}
         {error && <p className="error">{t(error, { domain: window.location.hostname })}</p>}
-        {ssoUnreachable && <p className="notice">{t('common.unreachable')}</p>}
+        {ssoUnreachable && (
+          <p className="notice">
+            <span className="spinner" aria-hidden="true" /> {t('common.unreachable')}
+          </p>
+        )}
         {/* IdP から戻された失敗。知らないコードは一般的な文言へ倒す */}
         {!error && ssoError !== null && (
           <p className="error">{t(knownMessageKey(`error.${ssoError}`, 'error.sso_error'))}</p>
