@@ -384,7 +384,14 @@ def get_redeem_invitation_use_case(
     families: FamilyRepoDep,
     provisioning: ProvisioningDep,
 ) -> RedeemInvitationUseCase:
-    return RedeemInvitationUseCase(binder=binder, invitations=invitations, families=families, provisioning=provisioning)
+    return RedeemInvitationUseCase(
+        binder=binder,
+        invitations=invitations,
+        families=families,
+        provisioning=provisioning,
+        # ログイン画面に SSO のボタンが出るのと同じ条件（ADR-0048）
+        adults_sign_in_through_idp=settings.oidc_enabled,
+    )
 
 
 def get_reset_child_password_use_case(

@@ -198,6 +198,17 @@ class ChildInvitationRequiresSignupError(RewardPointsError):
     code = "child_invitation_requires_signup"
 
 
+class GuardianInvitationRequiresSignInError(RewardPointsError):
+    """親の招待を、新しいアカウントの作成（redeem）で使おうとした（IdP があるとき）。
+
+    IdP（SSO）があるなら、大人の口座は IdP で入ったときに作る 1 つだけにする
+    （ADR-0048）。ここで別に作ると、IdP の口座と結び付ける手掛かりが無く、
+    同じ人の口座が 2 つになる。親はログインしてから受諾（accept）で加わる。
+    """
+
+    code = "guardian_invitation_requires_sign_in"
+
+
 class DisplayNameRequiredError(RewardPointsError):
     """呼び名の要る招待（参加者を指していない招待）に、呼び名が渡されなかった。"""
 
@@ -327,6 +338,7 @@ __all__ = [
     "FamilyNotEmptyError",
     "FamilyNotFoundError",
     "GuardianAccountRequiredError",
+    "GuardianInvitationRequiresSignInError",
     "IdempotencyKeyReusedError",
     "IndependenceNotProposedError",
     "InvalidFamilyArchiveError",

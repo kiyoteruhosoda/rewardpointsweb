@@ -5,6 +5,11 @@
 
 作成後はログインしていない。呼び出し側（画面）は、設定した ``username`` と
 パスワードで通常どおりログインする。
+
+⚠ **IdP（SSO）があるとき、親の招待はここで使えない**（ADR-0048）。大人の口座は
+IdP で入ったときに作る 1 つだけにし、親はログインしてから受諾（accept）で加わる。
+ここで作るとメールアドレスを持たない別の口座になり、IdP の口座と結び付ける手掛かりが
+無いので、初めて SSO で入ったときに同じ人の口座が 2 つになる。
 """
 
 from __future__ import annotations
@@ -15,6 +20,7 @@ from bounded_contexts.reward_points.application.dto.family_dto import RedeemedIn
 from bounded_contexts.reward_points.application.invitation_binder import InvitationBinder
 from bounded_contexts.reward_points.domain.exceptions import (
     FamilyNotFoundError,
+    GuardianInvitationRequiresSignInError,
     InvitationNotFoundError,
     UsernameAlreadyTakenError,
 )
@@ -42,11 +48,13 @@ class RedeemInvitationUseCase:
         invitations: IFamilyInvitationRepository,
         families: IFamilyRepository,
         provisioning: IAccountProvisioning,
+        adults_sign_in_through_idp: bool,
     ) -> None:
         self._binder = binder
         self._invitations = invitations
         self._families = families
         self._provisioning = provisioning
+        self._adults_sign_in_through_idp = adults_sign_in_through_idp
 
     def execute(self, command: RedeemInvitationCommand) -> RedeemedInvitationDTO:
         invitation = self._invitations.find_by_code(command.code)
@@ -54,6 +62,8 @@ class RedeemInvitationUseCase:
         # ログイン ID を消費できてしまう
         if invitation is None or not invitation.is_usable_at(utcnow()):
             raise InvitationNotFoundError
+        if invitation.role.is_guardian and self._adults_sign_in_through_idp:
+            raise GuardianInvitationRequiresSignInError
         if self._provisioning.is_username_taken(command.username):
             raise UsernameAlreadyTakenError
 

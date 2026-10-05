@@ -105,7 +105,7 @@ export function InvitationPanel({ familyId, unlinkedMembers, canInviteParent, on
   // 出す URL は「いま見ている入口」から作る。別の宛先を持ち出すと、手元では
   // 開けるのに配った先で届かない URL になり得る。
   const issuedLink = issued?.code
-    ? { code: issued.code, url: invitationUrl(issued.code, window.location.origin) }
+    ? { code: issued.code, url: invitationUrl(issued.code, issued.role, window.location.origin) }
     : null
 
   const [copyUrl, copying] = usePendingAction(async (url: string) => {

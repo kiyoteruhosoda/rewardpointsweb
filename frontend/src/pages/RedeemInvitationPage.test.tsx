@@ -7,6 +7,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from '../services/api'
 import type { RedeemedInvitation } from '../services/families'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { RedeemInvitationPage } from './RedeemInvitationPage'
@@ -81,6 +82,27 @@ describe('RedeemInvitationPage', () => {
     expect(screen.getByRole('link', { name: 'Sign in and join' })).toHaveAttribute(
       'href',
       '/login#code=CODE%201234',
+    )
+  })
+
+  it('親の招待で断られたら、ログインして参加するよう伝える（ADR-0048）', async () => {
+    redeemInvitation.mockReset()
+    redeemInvitation.mockRejectedValue(new ApiError(400, 'guardian_invitation_requires_sign_in'))
+    renderWithProviders(<RedeemInvitationPage />, { route: '/join#code=CODE1234' })
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'はなこ' } })
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'hanako' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create my account' }))
+
+    expect(
+      await screen.findByText(
+        'A parent invitation cannot create a new account here. Use "Sign in and join" below.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sign in and join' })).toHaveAttribute(
+      'href',
+      '/login#code=CODE1234',
     )
   })
 
