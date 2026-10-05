@@ -205,6 +205,36 @@ def test_by_default_an_existing_user_is_neither_linked_nor_duplicated() -> None:
     assert (identities.linked, directory.created) == ({}, [])
 
 
+def test_an_account_whose_username_is_the_address_is_not_duplicated() -> None:
+    """⚠ 招待で作った口座は ``email`` を持たず、識別子がメールアドレスのことが多い（ADR-0011）。
+
+    ``email`` の列だけで探すと見落として 2 つ目の口座を作り、本人が家族から外れる。
+    """
+    identities = FakeIdentities()
+    directory = FakeDirectory(usernames={"parent@example.com"})
+    use_case = ResolveFederatedAccount(
+        identities=identities,
+        directory=directory,
+        policy=AccountLinkingPolicy(),
+    )
+
+    with pytest.raises(SsoAccountNotLinkedError):
+        use_case.execute(issuer=ISSUER, user=_user(email="Parent@example.com"))
+
+    assert (identities.linked, directory.created) == ({}, [])
+
+
+def test_an_account_whose_username_is_the_address_can_be_linked() -> None:
+    """寄せる設定を開けていれば、識別子がそのアドレスの口座へ寄せる（ADR-0033）。"""
+    identities = FakeIdentities()
+    directory = FakeDirectory(usernames={"parent@example.com"})
+
+    resolved = _resolve(identities, directory).execute(issuer=ISSUER, user=_user())
+
+    assert (resolved.user_id, directory.created) == (1, [])
+    assert identities.linked[(ISSUER, "idp-1")] == 1
+
+
 def test_the_profile_copy_is_rewritten_on_every_sign_in() -> None:
     """⚠ **写しは IdP を正とする**（ADR-0038）。
 

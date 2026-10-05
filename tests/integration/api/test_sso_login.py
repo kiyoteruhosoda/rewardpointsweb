@@ -275,6 +275,34 @@ def test_an_address_an_unlinked_account_already_has_is_refused(
     assert _user_count(engine) == before
 
 
+def test_an_address_an_invited_account_holds_as_its_username_is_refused(
+    *,
+    monkeypatch: pytest.MonkeyPatch,
+    sso_client: TestClient,
+    gateway: FakeGateway,
+    engine: sa.Engine,
+) -> None:
+    """⚠ 招待で作った口座は ``email`` を持たない（ADR-0011）。識別子がそのアドレスなら同じ人である。
+
+    見落とすと 2 つ目の口座ができ、本人が家族から外れる（2026-10-05 に本番で起きた）。
+    """
+    monkeypatch.setenv("OIDC_LINK_BY_EMAIL", "false")
+    session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
+    session.add(User(username=EMAIL, email=None, display_name="親", password_hash=generate_password_hash("password")))
+    session.commit()
+    session.close()
+    before = _user_count(engine)
+    gateway.claims = {"email": EMAIL, "email_verified": True, "preferred_username": "someone"}
+
+    response = sso_client.get(
+        "/api/auth/sso/callback",
+        params={"code": "authorization-code", "state": _start(sso_client)},
+    )
+
+    assert response.headers["location"] == "/login?sso_error=sso_account_not_linked"
+    assert _user_count(engine) == before
+
+
 def test_an_unverified_address_is_refused(
     sso_client: TestClient,
     gateway: FakeGateway,
