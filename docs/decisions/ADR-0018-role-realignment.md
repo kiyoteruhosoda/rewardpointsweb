@@ -5,6 +5,7 @@
 - 関連: ADR-0017（家族作成時の昇格）を置き換える。ADR-0013 の「除名後のアカウント」、
   ADR-0014 の「昇格先のロール」を改める。ADR-0009 の認可表・二段構えの認可は不変。
 - 対象: `shared/domain/auth/`、`bounded_contexts/reward_points/`
+- 追記: ロール `operator`（運用管理者）と `display`（表示端末）を ADR-0047 で足した
 
 ## コンテキスト
 

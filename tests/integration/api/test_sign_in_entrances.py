@@ -44,6 +44,7 @@ def test_a_password_only_user_shows_one_entrance(client: TestClient, admin_heade
         "totp": False,
         "passkeys": 0,
         "identity_providers": [],
+        "display_device": False,
     }
 
 
@@ -68,6 +69,7 @@ def test_every_entrance_is_listed(client: TestClient, db_session: Session, admin
         "totp": True,
         "passkeys": 1,
         "identity_providers": [_ISSUER],
+        "display_device": False,
     }
 
 
@@ -95,4 +97,5 @@ def test_a_user_without_a_password_shows_only_what_is_left(
         "totp": False,
         "passkeys": 0,
         "identity_providers": [_ISSUER],
+        "display_device": False,
     }

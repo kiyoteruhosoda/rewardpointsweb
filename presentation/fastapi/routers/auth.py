@@ -26,8 +26,8 @@ from bounded_contexts.account_security.domain.exceptions import (
 from bounded_contexts.account_security.presentation import dependencies as security
 from presentation.fastapi.dependencies.auth import (
     clear_access_token_cookie,
-    get_active_principal,
     get_current_principal,
+    get_person_principal,
     set_access_token_cookie,
 )
 from presentation.fastapi.schemas.auth import (
@@ -55,7 +55,8 @@ logger = logging.getLogger(__name__)
 DbDep = Annotated[Session, Depends(get_db)]
 # 一時パスワードでのログイン中でも通す経路（自分を知る・ログアウト・変更）に限って使う
 PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
-ActivePrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_active_principal)]
+# プロフィールを変える経路。表示端末は通さない（ADR-0047）
+PersonPrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_person_principal)]
 SecondFactorDep = Annotated[VerifySecondFactor, Depends(security.verify_second_factor)]
 
 
@@ -186,6 +187,7 @@ async def me(principal: PrincipalDep, db: DbDep) -> MeResponse:
         # 行を引けないのは削除と入れ違ったときだけ。そのときは「持っている」側へ
         # 倒す（画面の見た目が変わるだけで、通らないものは通らない）。
         has_password=user.has_local_password if user is not None else True,
+        display_device=principal.via_display_device,
     )
 
 
@@ -204,14 +206,15 @@ def _resolved_email(db: Session, email: str | None, *, user_id: int) -> str | No
 
 
 @router.put("/me", response_model=MeResponse)
-async def update_profile(body: ProfileUpdateRequest, principal: ActivePrincipalDep, db: DbDep) -> MeResponse:
+async def update_profile(body: ProfileUpdateRequest, principal: PersonPrincipalDep, db: DbDep) -> MeResponse:
     """自分の表示名とメールアドレスを変える。
 
     ログイン識別子（``username``）はここでは変えない。変えるとログインの手順が
     変わり、家族から本人へ伝えた ID とも食い違う。
 
     一時パスワードでのログイン中は通さない。メールアドレスを差し替えられると、
-    本人が取り戻す前にリセットの宛先を奪える（ADR-0011）。
+    本人が取り戻す前にリセットの宛先を奪える（ADR-0011）。表示端末も通さない
+    （ADR-0047。メールアドレスを足せると、外された後も入れる口を作れる）。
     """
     user = db.get(User, principal.user_id)
     if user is None:

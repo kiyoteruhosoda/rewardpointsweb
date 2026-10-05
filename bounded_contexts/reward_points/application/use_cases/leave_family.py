@@ -18,6 +18,7 @@ from bounded_contexts.reward_points.application.family_access_resolver import Fa
 from bounded_contexts.reward_points.domain.entities.family_membership import FamilyMembership
 from bounded_contexts.reward_points.domain.exceptions import (
     ChildCannotLeaveFamilyError,
+    FamilyAccessDeniedError,
     LastGuardianCannotLeaveError,
 )
 from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
@@ -35,6 +36,9 @@ class LeaveFamilyUseCase:
         me = self._access.membership_in(family_id=family_id, account_id=account_id)
         if me.role.has_own_ledger:
             raise ChildCannotLeaveFamilyError
+        if not me.role.is_guardian:
+            # 表示端末は自分では抜けない。外すのは親か運用管理者（ADR-0047）
+            raise FamilyAccessDeniedError
         remaining = [m for m in self._memberships.list_for_family(family_id) if m.id != me.id]
         guardians = [m for m in remaining if m.role.is_guardian and m.is_linked]
         if not guardians:

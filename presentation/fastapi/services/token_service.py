@@ -44,6 +44,9 @@ CLAIM_SESSION_ID = "sid"
 # セッションが始まった時刻（エポックからのマイクロ秒）。``iat`` は秒までしか持たず、
 # 止めた直後の同じ秒に入り直した利用者を巻き添えにするため、別に持つ。
 CLAIM_FEDERATED_ISSUED_AT = "fed_iat"
+# 入り口が表示端末（ADR-0047）のときだけ載る。値は :data:`VIA_DISPLAY_DEVICE`
+CLAIM_VIA = "via"
+VIA_DISPLAY_DEVICE = "display_device"
 
 
 @dataclass(frozen=True)
@@ -114,6 +117,34 @@ class TokenService:
         }
 
     @staticmethod
+    def create_display_access_token(user: User) -> dict[str, object]:
+        """表示端末のアクセストークン（ADR-0047）。**リフレッシュトークンは出さない。**
+
+        端末の資格情報（``/api/display/session``）がリフレッシュトークンの役をする。
+        ``via`` のクレームで、資格情報を変える経路を断る（:func:`get_person_principal`）。
+        """
+        now = datetime.now(UTC)
+        access = jwt.encode(
+            {
+                "sub": str(user.id),
+                "iss": settings.access_token_issuer,
+                "aud": settings.access_token_audience,
+                "iat": now,
+                "type": TYPE_ACCESS,
+                "scope": sorted(user.permission_codes),
+                "username": user.username,
+                "email": user.email,
+                "display_name": user.display_name,
+                "must_change_password": False,
+                CLAIM_VIA: VIA_DISPLAY_DEVICE,
+                "exp": now + timedelta(seconds=settings.access_token_expires_seconds),
+            },
+            settings.jwt_secret_key,
+            algorithm=_ALGORITHM,
+        )
+        return {"access_token": access, "expires_in": settings.access_token_expires_seconds}
+
+    @staticmethod
     def _decode(token: str) -> tuple[dict[str, Any] | None, str | None]:
         try:
             claims = jwt.decode(
@@ -158,6 +189,7 @@ class TokenService:
                 email=claims.get("email"),
                 permissions=frozenset(claims.get("scope") or ()),
                 must_change_password=bool(claims.get("must_change_password")),
+                via_display_device=claims.get(CLAIM_VIA) == VIA_DISPLAY_DEVICE,
             ),
             None,
         )
@@ -258,8 +290,10 @@ __all__ = [
     "CLAIM_FEDERATED_ISSUER",
     "CLAIM_FEDERATED_SUBJECT",
     "CLAIM_SESSION_ID",
+    "CLAIM_VIA",
     "TYPE_ACCESS",
     "TYPE_REFRESH",
+    "VIA_DISPLAY_DEVICE",
     "RefreshedSession",
     "TokenService",
 ]

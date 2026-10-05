@@ -17,9 +17,14 @@ from bounded_contexts.reward_points.domain.value_objects.display_name import Dis
 from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
 from bounded_contexts.reward_points.infrastructure.reward_points_models import FamilyMembershipModel
 
-# 一覧の並びは「親が先、次に子、同じ立場なら家族が決めた並び順、それも同じなら
-# 作られた順」。並びは 1 か所で決めるので、どの画面でも家族の見え方が揃う。
-_ROLE_ORDER = {FamilyRole.OWNER.value: 0, FamilyRole.PARENT.value: 1, FamilyRole.CHILD.value: 2}
+# 一覧の並びは「親が先、次に子、最後に表示端末、同じ立場なら家族が決めた並び順、それも
+# 同じなら作られた順」。並びは 1 か所で決めるので、どの画面でも家族の見え方が揃う。
+_ROLE_ORDER = {
+    FamilyRole.OWNER.value: 0,
+    FamilyRole.PARENT.value: 1,
+    FamilyRole.CHILD.value: 2,
+    FamilyRole.DISPLAY.value: 3,
+}
 
 
 class SqlFamilyMembershipRepository(IFamilyMembershipRepository):
@@ -77,6 +82,14 @@ class SqlFamilyMembershipRepository(IFamilyMembershipRepository):
             select(FamilyMembershipModel).where(FamilyMembershipModel.id.in_(membership_ids))
         ).all()
         return _sorted([_to_membership(row) for row in rows])
+
+    def list_displays(self) -> list[FamilyMembership]:
+        rows = self._session.scalars(
+            select(FamilyMembershipModel)
+            .where(FamilyMembershipModel.role == FamilyRole.DISPLAY.value)
+            .order_by(FamilyMembershipModel.family_id, FamilyMembershipModel.id)
+        ).all()
+        return [_to_membership(row) for row in rows]
 
     def link_account(self, *, membership_id: int, account_id: int) -> FamilyMembership:
         row = self._require(membership_id)

@@ -23,6 +23,8 @@ class AuthenticatedPrincipal:
     permissions: frozenset[str] = field(default_factory=frozenset)
     # 一時パスワードでログインした状態。変更を終えるまで他の操作を許可しない
     must_change_password: bool = False
+    # 表示端末（サイネージ）のセッションか（ADR-0047）。資格情報を変える経路は通さない
+    via_display_device: bool = False
 
     @property
     def id_hash(self) -> str:

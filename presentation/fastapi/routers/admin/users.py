@@ -9,12 +9,14 @@
 一覧は **「この利用者が入れる手段」**（``entrances``）も返す（ADR-0035）。認証系が
 2 つある以上、開いている口の数は並べて見ないと分からない。材料は
 **それぞれのコンテキストに聞く** ——パスワードは ``users`` の列、TOTP と
-パスキーは account_security、IdP との結び付きは identity_federation。
+パスキーは account_security、IdP との結び付きは identity_federation、表示端末の
+資格情報は display_devices（ADR-0047）。
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Set
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -31,6 +33,12 @@ from bounded_contexts.account_security.domain.value_objects.local_factors import
 )
 from bounded_contexts.account_security.infrastructure.sql_local_factor_directory import (
     SqlLocalFactorDirectory,
+)
+from bounded_contexts.display_devices.application.use_cases.open_display_session import (
+    DescribeDisplayCredentialsUseCase,
+)
+from bounded_contexts.display_devices.infrastructure.sql_display_repositories import (
+    SqlDisplayCredentialRepository,
 )
 from bounded_contexts.identity_federation.application.use_cases.list_federated_issuers import (
     ListFederatedIssuers,
@@ -79,17 +87,19 @@ class _Inventory:
 
     factors: dict[int, LocalFactors]
     issuers: dict[int, tuple[str, ...]]
+    display_devices: Set[int] = frozenset()
 
     @classmethod
     def of(cls, db: Session) -> _Inventory:
         return cls(
             factors=CountLocalFactors(SqlLocalFactorDirectory(db)).execute(),
             issuers=ListFederatedIssuers(SqlFederatedIssuerDirectory(db)).execute(),
+            display_devices=DescribeDisplayCredentialsUseCase(SqlDisplayCredentialRepository(db)).holders(),
         )
 
     @classmethod
     def none(cls) -> _Inventory:
-        """作った直後の利用者。第二要素も結び付きもまだ無い。"""
+        """作った直後の利用者。第二要素も結び付きも端末もまだ無い。"""
         return cls(factors={}, issuers={})
 
     def entrances_of(self, user: User) -> SignInEntrances:
@@ -99,6 +109,7 @@ class _Inventory:
             totp=factors.totp,
             passkeys=factors.passkeys,
             identity_providers=list(self.issuers.get(user.id, ())),
+            display_device=user.id in self.display_devices,
         )
 
 

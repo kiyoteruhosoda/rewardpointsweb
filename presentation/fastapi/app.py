@@ -19,6 +19,10 @@ from bounded_contexts.account_security.presentation.passkey_login_router import 
 from bounded_contexts.account_security.presentation.router import (
     router as account_security_router,
 )
+from bounded_contexts.display_devices.presentation.error_handling import (
+    register_display_devices_error_handler,
+)
+from bounded_contexts.display_devices.presentation.router import router as display_router
 from bounded_contexts.example.presentation.router import router as items_router
 from bounded_contexts.identity_federation.presentation.error_handling import (
     register_identity_federation_error_handler,
@@ -134,6 +138,7 @@ def create_app() -> FastAPI:
     register_account_security_error_handler(app)
     register_reward_points_error_handler(app)
     register_identity_federation_error_handler(app)
+    register_display_devices_error_handler(app)
 
     _include_routers(app)
 
@@ -157,6 +162,7 @@ def _include_routers(app: FastAPI) -> None:
         admin_system_router,
         items_router,
         families_router,
+        display_router,
     ):
         app.include_router(router)
 

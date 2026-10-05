@@ -1,3 +1,12 @@
+## 2026-10-05（表示端末をペアリングで入れる・サーバー側。ADR-0047）
+
+- 家族の中の立場 `display`（表示端末）と、ロール `display`・`operator`（運用管理者）、scope `display:approve` を足した。
+  admin には `display:approve` を付けない。
+- 新しいコンテキスト `display_devices`: 確認コードでのペアリング（`/api/display/pairings`）と、端末の資格情報から
+  5 分のアクセストークンへの取り直し（`/api/display/session`）。外す口は運用管理者（`/api/display/devices`）と、
+  家族の親（家族の画面の「外す」）。使われないまま 90 日で失効する。
+- 表示端末のトークンでは、二要素・パスキー・SSO の結び付け・プロフィールの変更を断る（`display_device_not_allowed`）。
+
 ## 2026-10-04（サーバーに届かないことをログアウトとして扱わない。ADR-0046）
 
 - `/api/auth/me` が 5xx・通信の失敗なら、未ログインとみなさずログイン画面へも送らない。「サーバーに

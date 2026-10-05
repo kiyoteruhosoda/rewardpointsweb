@@ -21,6 +21,10 @@ class IFamilyRepository(ABC):
         """一覧表示のためにまとめて読む（1 件ずつ引かない）。"""
 
     @abstractmethod
+    def list_all(self) -> list[Family]:
+        """全ての家族（名前の順）。運用管理者が映す家族を選ぶときだけ使う（ADR-0047）。"""
+
+    @abstractmethod
     def count_owned_by(self, account_id: int) -> int:
         """*account_id* が owner として参加している家族の数。
 

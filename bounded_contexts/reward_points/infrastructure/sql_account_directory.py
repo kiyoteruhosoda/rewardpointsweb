@@ -36,7 +36,11 @@ _ROLE_FOR_FAMILY_ROLE = {
     FamilyRole.OWNER: "member",
     FamilyRole.PARENT: "member",
     FamilyRole.CHILD: "guest",
+    FamilyRole.DISPLAY: "display",
 }
+
+# 表示端末のログイン識別子の頭。人が打たないので、見て端末と分かれば足りる
+_DISPLAY_USERNAME_PREFIX = "display-"
 
 # 保護者に必要な scope の全部。これらが全て揃っているアカウントに昇格は不要
 _GUARDIAN_SCOPES = frozenset({"family:view", "family:manage", "point:view", "point:manage"})
@@ -80,6 +84,22 @@ class SqlAccountProvisioning(IAccountProvisioning):
             is_active=True,
         )
         granted = self._session.scalar(select(Role).where(Role.name == _ROLE_FOR_FAMILY_ROLE[role]))
+        if granted is not None:
+            user.roles.append(granted)
+        self._session.add(user)
+        self._session.flush()
+        return _to_ref(user)
+
+    def create_display_account(self, *, display_name: str) -> AccountRef:
+        user = User(
+            username=f"{_DISPLAY_USERNAME_PREFIX}{secrets.token_hex(8)}",
+            email=None,
+            display_name=display_name,
+            # ⚠ パスワードという入口を持たない（ADR-0034・ADR-0047）
+            password_hash=None,
+            is_active=True,
+        )
+        granted = self._session.scalar(select(Role).where(Role.name == _ROLE_FOR_FAMILY_ROLE[FamilyRole.DISPLAY]))
         if granted is not None:
             user.roles.append(granted)
         self._session.add(user)

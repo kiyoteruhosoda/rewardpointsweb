@@ -32,6 +32,7 @@ API 仕様は Swagger UI（`/docs`）・`/openapi.json` を参照（手書きし
 | owner | ○ | ○ | 全ての子 | 全ての子 |
 | parent | × | ○ | 全ての子 | 全ての子 |
 | child | × | × | × | 自分の台帳のみ |
+| display | × | × | × | 全ての子（表示端末。ADR-0047） |
 
 兄弟の残高・履歴は相互に参照できない。1 つのアカウントが複数の家族へ所属できるが、
 同一家族では 1 アカウント 1 参加（`UNIQUE (family_id, account_id)`。DB 制約に頼らず

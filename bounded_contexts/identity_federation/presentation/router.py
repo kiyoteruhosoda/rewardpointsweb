@@ -88,6 +88,7 @@ from bounded_contexts.identity_federation.presentation.schemas import (
 from presentation.fastapi.dependencies.auth import (
     get_active_principal,
     get_current_principal_or_none,
+    get_person_principal,
     set_access_token_cookie,
 )
 from presentation.fastapi.schemas.auth import StatusResponse
@@ -254,7 +255,7 @@ def _complete_link(callback: SsoCallback, tools: _CallbackTools) -> RedirectResp
 @router.post("/link/start", response_model=SsoLinkStartResponse)
 def start_link(
     *,
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_active_principal)],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_person_principal)],
     use_case: Annotated[StartSsoLink, Depends(dependencies.start_sso_link)],
     response: Response,
 ) -> SsoLinkStartResponse:
@@ -301,7 +302,7 @@ def describe_link(
 @router.delete("/link", response_model=StatusResponse)
 def remove_link(
     *,
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_active_principal)],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_person_principal)],
     use_case: Annotated[UnlinkFederatedIdentity, Depends(dependencies.unlink_federated_identity)],
     db: DbDep,
 ) -> StatusResponse:

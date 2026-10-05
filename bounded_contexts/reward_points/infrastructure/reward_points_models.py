@@ -20,7 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from shared.infrastructure.models.base import BigIntPk, utcnow
 from shared.kernel.database.db import Base
 
-FAMILY_ROLE = sa.Enum("owner", "parent", "child", name="family_role", native_enum=False)
+FAMILY_ROLE = sa.Enum("owner", "parent", "child", "display", name="family_role", native_enum=False)
 
 
 class FamilyModel(Base):
