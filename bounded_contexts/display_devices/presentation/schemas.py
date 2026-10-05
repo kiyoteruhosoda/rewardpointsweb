@@ -7,6 +7,12 @@ from pydantic import BaseModel, Field
 from presentation.fastapi.schemas.types import UtcDatetime
 
 
+class PairingStartRequest(BaseModel):
+    #: 端末が開いている入口（``https://…``）。承認の画面を指す QR コードの宛先に使う。
+    #: 省くと QR コードを返さない（確認コードを打てば承認できる）
+    origin: str | None = Field(default=None, max_length=200, pattern=r"^https?://[^/\s#?]+$")
+
+
 class PairingStartResponse(BaseModel):
     #: 画面に出す確認コード（``KQ7M-3XPA``）。運用管理者が承認の画面で打つ
     user_code: str
@@ -15,6 +21,8 @@ class PairingStartResponse(BaseModel):
     expires_in: int
     #: 受け取りを問い合わせる間隔（秒）
     interval: int
+    #: 承認の画面（確認コード入り）を指す QR コード（SVG の data URI）。``origin`` を送らなければ ``None``
+    qr_code: str | None = None
 
 
 class PairingClaimRequest(BaseModel):
@@ -66,5 +74,6 @@ __all__ = [
     "PairingApproveRequest",
     "PairingClaimRequest",
     "PairingClaimResponse",
+    "PairingStartRequest",
     "PairingStartResponse",
 ]

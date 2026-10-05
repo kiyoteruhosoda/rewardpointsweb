@@ -187,6 +187,7 @@ async def me(principal: PrincipalDep, db: DbDep) -> MeResponse:
         # 行を引けないのは削除と入れ違ったときだけ。そのときは「持っている」側へ
         # 倒す（画面の見た目が変わるだけで、通らないものは通らない）。
         has_password=user.has_local_password if user is not None else True,
+        display_device=principal.via_display_device,
     )
 
 

@@ -134,6 +134,20 @@ def test_a_display_is_paired_by_the_operator_and_claims_its_credential_once(
     assert (status_code, body["detail"]) == (400, {"error": "expired_token"})
 
 
+def test_the_qr_code_points_at_the_approval_page_when_the_origin_is_given(client: TestClient) -> None:
+    with_origin = client.post("/api/display/pairings", json={"origin": "https://rewardpointsweb.nolumia.com"})
+    assert with_origin.status_code == 201
+    assert str(with_origin.json()["qr_code"]).startswith("data:image/svg+xml;base64,")
+    assert _start(client)["qr_code"] is None
+    assert client.post("/api/display/pairings", json={"origin": "javascript:alert(1)"}).status_code == 422
+
+
+def test_me_tells_a_display_apart(client: TestClient, operator: Account, household: Household) -> None:
+    headers = _pair(client, operator, household).headers(client)
+    assert client.get("/api/auth/me", headers=headers).json()["display_device"] is True
+    assert client.get("/api/auth/me", headers=household.owner.headers).json()["display_device"] is False
+
+
 def test_the_user_code_alone_cannot_claim(client: TestClient, operator: Account, household: Household) -> None:
     started = _start(client)
     _approve(client, operator, user_code=started["user_code"], family_id=household.family_id)

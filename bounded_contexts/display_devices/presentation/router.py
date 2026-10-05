@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from bounded_contexts.account_security.presentation.qr_code import render_qr_code_data_uri
 from bounded_contexts.display_devices.domain.exceptions import (
     DeviceCredentialExpiredError,
     InvalidDeviceCredentialError,
@@ -47,6 +48,7 @@ from bounded_contexts.display_devices.presentation.schemas import (
     PairingApproveRequest,
     PairingClaimRequest,
     PairingClaimResponse,
+    PairingStartRequest,
     PairingStartResponse,
 )
 from bounded_contexts.reward_points.application.dto.display_dto import DisplayDTO
@@ -58,6 +60,8 @@ from shared.application.authenticated_principal import AuthenticatedPrincipal
 from shared.kernel.database.session import get_db
 
 router = APIRouter(prefix="/api/display", tags=["display"])
+# 承認の画面（フロントエンド）。QR コードはここを指す
+APPROVE_PATH = "/admin/displays/approve"
 logger = logging.getLogger(__name__)
 
 DbDep = Annotated[Session, Depends(get_db)]
@@ -69,14 +73,20 @@ DisplayApprover = Annotated[AuthenticatedPrincipal, Depends(require_permission("
 
 
 @router.post("/pairings", status_code=status.HTTP_201_CREATED, response_model=PairingStartResponse)
-async def start_pairing(use_case: StartPairingDep) -> PairingStartResponse:
-    """ペアリングを始める。確認コードを画面に出し、端末の秘密で受け取りを問い合わせる。"""
+async def start_pairing(use_case: StartPairingDep, body: PairingStartRequest | None = None) -> PairingStartResponse:
+    """ペアリングを始める。確認コードを画面に出し、端末の秘密で受け取りを問い合わせる。
+
+    ``origin`` を送ると、承認の画面を指す QR コードも返す。確認コードは URL の ``#`` の後ろに
+    置く（ADR-0025 と同じ理由。サーバーのログ・Referer に載せない）。
+    """
     started = use_case.execute()
+    origin = body.origin if body is not None else None
     return PairingStartResponse(
         user_code=started.user_code,
         device_code=started.device_code,
         expires_in=started.expires_in,
         interval=started.interval,
+        qr_code=None if origin is None else render_qr_code_data_uri(f"{origin}{APPROVE_PATH}#{started.user_code}"),
     )
 
 

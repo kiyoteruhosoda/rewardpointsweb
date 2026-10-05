@@ -44,6 +44,8 @@ class MeResponse(BaseModel):
     # パスワード変更の導線を出さない**——出すと「今のパスワード」を入力できない
     # 利用者に、絶対に通らないフォームを見せることになる。
     has_password: bool = True
+    # 表示端末（サイネージ）のセッションか（ADR-0047）。真なら画面は表示の画面（/display）だけを出す
+    display_device: bool = False
 
 
 class ProfileUpdateRequest(BaseModel):
