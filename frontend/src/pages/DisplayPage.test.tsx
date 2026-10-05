@@ -4,6 +4,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type * as ApiModule from '../services/api'
 import type { DisplaySessionOutcome, Fetched } from '../services/api'
 import type { ClaimOutcome, StartedPairing } from '../services/display'
 import type { FamilyDetail, FamilySummary, Ledger } from '../services/families'
@@ -24,7 +25,7 @@ vi.mock('../services/display', () => ({
 }))
 
 vi.mock('../services/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/api')>()),
+  ...(await importOriginal<typeof ApiModule>()),
   openDisplaySession: () => openDisplaySession(),
 }))
 

@@ -79,8 +79,8 @@ export function listDisplayDevices(): Promise<DisplayDevice[]> {
   return api.get<DisplayDevice[]>('/api/display/devices')
 }
 
-export function removeDisplayDevice(accountId: number): Promise<void> {
-  return api.delete<void>(`/api/display/devices/${accountId}`)
+export function removeDisplayDevice(accountId: number): Promise<undefined> {
+  return api.delete<undefined>(`/api/display/devices/${accountId}`)
 }
 
 /** ログインの往復のあいだ、承認の画面へ戻るための確認コードを預ける場所（同じタブ限り）。 */

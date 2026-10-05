@@ -4,6 +4,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type * as DisplayModule from '../services/display'
 import type { DisplayableFamily, DisplayDevice } from '../services/display'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { DisplayApprovePage } from './DisplayApprovePage'
@@ -13,7 +14,7 @@ const approvePairing =
 const listDisplayableFamilies = vi.fn<() => Promise<DisplayableFamily[]>>()
 
 vi.mock('../services/display', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/display')>()),
+  ...(await importOriginal<typeof DisplayModule>()),
   approvePairing: (body: { user_code: string; family_id: number; name: string }) =>
     approvePairing(body),
   listDisplayableFamilies: () => listDisplayableFamilies(),
