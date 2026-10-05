@@ -383,6 +383,7 @@ def test_reset_needs_a_linked_account(client: TestClient, parent: Account) -> No
 
 
 def test_with_an_idp_a_parent_invitation_cannot_create_an_account(
+    *,
     client: TestClient,
     admin_headers: dict[str, str],
     parent: Account,
