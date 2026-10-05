@@ -20,9 +20,17 @@ import {
 describe('invitationLink', () => {
   it('参加の入口へ、断片としてコードを載せる', () => {
     expect(invitationJoinPath('ABC123')).toBe('/join#code=ABC123')
-    expect(invitationUrl('ABC123', 'https://points.example.com')).toBe(
+    expect(invitationUrl('ABC123', 'child', 'https://points.example.com')).toBe(
       'https://points.example.com/join#code=ABC123',
     )
+  })
+
+  it('親の招待はログインの画面へ向ける（新しいアカウントを作らせない。ADR-0048）', () => {
+    for (const role of ['parent', 'owner'] as const) {
+      expect(invitationUrl('ABC123', role, 'https://points.example.com')).toBe(
+        'https://points.example.com/login#code=ABC123',
+      )
+    }
   })
 
   it('受け取り側の 3 画面がどれも断片で運ぶ', () => {
@@ -51,7 +59,7 @@ describe('invitationLink', () => {
   })
 
   it('出所の末尾のスラッシュで `//join` にしない', () => {
-    expect(invitationUrl('ABC123', 'https://points.example.com/')).toBe(
+    expect(invitationUrl('ABC123', 'child', 'https://points.example.com/')).toBe(
       'https://points.example.com/join#code=ABC123',
     )
   })

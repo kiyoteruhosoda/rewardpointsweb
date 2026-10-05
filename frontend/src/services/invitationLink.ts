@@ -13,6 +13,11 @@
  * 受け取り側の 3 画面（`/join`・`/login`・`/families`）はどれもここを通してコードを
  * 読み書きする。片方だけクエリへ戻ると、そこから先が平文でログに載る。
  *
+ * 渡す URL の行き先は招待の立場で分ける。子の招待はアカウントを作る画面（`/join`）、
+ * 親の招待はログインの画面（`/login`）。⚠ **親は新しいアカウントを作らず、ログインして
+ * から参加する**（ADR-0048）——ここで別のアカウントを作ると、SSO で入ったときに同じ人の
+ * アカウントが 2 つになる。初めての人も SSO でログインすればアカウントができる。
+ *
  * 差し出す URL の宛先は、発行した親がいま見ているのと同じ入口（`origin`）にする。
  * 設定の `APP_BASE_URL` はメール本文の生成元で、既定は空。空のまま使うと開けない
  * URL を渡すことになるので、ここでは参照しない。
@@ -22,6 +27,8 @@
  * `sso_login_sessions` にも平文で残る。往復のあいだは同じタブの
  * `sessionStorage` に預ける（`rememberInvitationCode` / `takeRememberedInvitationCode`）。
  */
+
+import type { FamilyRole } from './families'
 
 /** アカウントを作って家族へ加わる画面（未認証で開ける）。 */
 const JOIN_PATH = '/join'
@@ -60,10 +67,13 @@ export function invitationAcceptPath(code: string): string {
 /**
  * 受け取った人へそのまま渡せる URL。
  *
+ * @param role 招待の立場。親（owner・parent）ならログインの画面、子ならアカウントを作る画面。
  * @param origin 発行した画面の出所（`window.location.origin`）。末尾の `/` は落とす。
  */
-export function invitationUrl(code: string, origin: string): string {
-  return `${origin.replace(/\/+$/, '')}${invitationJoinPath(code)}`
+export function invitationUrl(code: string, role: FamilyRole, origin: string): string {
+  const path =
+    role === 'owner' || role === 'parent' ? invitationSignInPath(code) : invitationJoinPath(code)
+  return `${origin.replace(/\/+$/, '')}${path}`
 }
 
 /**

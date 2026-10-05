@@ -380,3 +380,52 @@ def test_reset_needs_a_linked_account(client: TestClient, parent: Account) -> No
     )
     assert response.status_code == 400
     assert response.json()["detail"]["error"] == "membership_not_linked"
+
+
+def test_with_an_idp_a_parent_invitation_cannot_create_an_account(
+    client: TestClient,
+    admin_headers: dict[str, str],
+    parent: Account,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """⚠ IdP があるなら、大人の口座は IdP で入ったときの 1 つだけ（ADR-0048）。
+
+    ここで作るとメールアドレスを持たない別の口座になり、初めて SSO で入ったときに
+    同じ人の口座が 2 つになる。断ってもコードは使えるまま残り、ログインして受諾できる。
+    """
+    monkeypatch.setenv("OIDC_ENABLED", "true")
+    family_id = create_family(client, parent.headers)
+    invitation = issue_invitation(client, parent.headers, family_id, role="parent")
+
+    refused = client.post(
+        "/api/families/invitations/redeem",
+        json={"code": invitation["code"], "username": "mom", "password": "mom-pass-123", "display_name": "おかあさん"},
+    )
+    assert refused.status_code == 400
+    assert refused.json()["detail"]["error"] == "guardian_invitation_requires_sign_in"
+    assert db_session.scalar(select(User).where(User.username == "mom")) is None
+
+    mom = create_account(client, admin_headers, username="mom", role="member", display_name="おかあさん")
+    joined = client.post(
+        "/api/families/invitations/accept",
+        headers=mom.headers,
+        json={"code": invitation["code"], "display_name": "おかあさん"},
+    )
+    assert joined.status_code == 200, joined.text
+
+
+def test_with_an_idp_a_child_invitation_still_creates_the_account(
+    client: TestClient, parent: Account, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """子は IdP に口座を持たない（ADR-0011・ADR-0035）。入り口はこれまでどおりここだけ。"""
+    monkeypatch.setenv("OIDC_ENABLED", "true")
+    family_id = create_family(client, parent.headers)
+    child = add_child(client, parent.headers, family_id, display_name="たろう")
+    invitation = issue_invitation(
+        client, parent.headers, family_id, role="child", target_membership_id=int(str(child["id"]))
+    )
+
+    redeemed = _redeem(client, invitation["code"], username="taro", password="taro-pass-123")
+
+    assert redeemed["role"] == "child"
