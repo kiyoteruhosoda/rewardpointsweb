@@ -9,6 +9,14 @@
 
 const ACCESS_KEY = 'access_token'
 const REFRESH_KEY = 'refresh_token'
+/**
+ * 表示端末（サイネージ）の資格情報（ADR-0047）。ペアリングで 1 度だけ受け取る。
+ *
+ * ⚠ **ログアウトやセッションの失効では消さない**（`clearTokens` の外）。消すのは
+ * サーバーが「外された・失効した」と答えたときだけ。届かないだけで消すと、
+ * リリースのたびに端末がペアリングからやり直しになる（ADR-0046 と同じ考え）。
+ */
+const DISPLAY_CREDENTIAL_KEY = 'display_credential'
 
 /**
  * オフライン閲覧用に Service Worker が閲覧系 GET を保存するキャッシュ名
@@ -81,6 +89,53 @@ export function setTokens(access: string, refresh: string): void {
   localStorage.setItem(REFRESH_KEY, refresh)
 }
 
+export function displayCredential(): string | null {
+  return localStorage.getItem(DISPLAY_CREDENTIAL_KEY)
+}
+
+export function rememberDisplayCredential(credential: string): void {
+  localStorage.setItem(DISPLAY_CREDENTIAL_KEY, credential)
+}
+
+export function forgetDisplayCredential(): void {
+  localStorage.removeItem(DISPLAY_CREDENTIAL_KEY)
+}
+
+/** 表示端末のセッションを開いた結果。 */
+export type DisplaySessionOutcome = 'opened' | 'removed' | 'unreachable'
+
+/**
+ * 端末の資格情報を 5 分のアクセストークンに換える（ADR-0047）。
+ *
+ * 401 は「外された・失効した」なので資格情報を消す（ペアリングからやり直し）。
+ * それ以外の失敗は届かないだけとみなし、資格情報を残す。
+ */
+export async function openDisplaySession(): Promise<DisplaySessionOutcome> {
+  const credential = displayCredential()
+  if (!credential) return 'removed'
+  let response: Response
+  try {
+    response = await fetch('/api/display/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_credential: credential }),
+    })
+  } catch {
+    return 'unreachable'
+  }
+  if (response.status === 401) {
+    forgetDisplayCredential()
+    clearTokens()
+    return 'removed'
+  }
+  if (!response.ok) return 'unreachable'
+  const session = (await response.json()) as { access_token: string }
+  // リフレッシュトークンは無い。切れたら資格情報で取り直す
+  localStorage.setItem(ACCESS_KEY, session.access_token)
+  localStorage.removeItem(REFRESH_KEY)
+  return 'opened'
+}
+
 /**
  * オフライン閲覧キャッシュを消す（ADR-0015）。
  *
@@ -135,6 +190,8 @@ interface TokenPair {
 }
 
 async function tryRefresh(): Promise<boolean> {
+  // 表示端末はリフレッシュトークンを持たない。資格情報で取り直す（ADR-0047）
+  if (displayCredential()) return (await openDisplaySession()) === 'opened'
   const refresh = localStorage.getItem(REFRESH_KEY)
   if (!refresh) return false
   const response = await fetch('/api/auth/refresh', {

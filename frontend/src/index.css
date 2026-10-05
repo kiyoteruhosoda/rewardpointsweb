@@ -1633,3 +1633,148 @@ tr.reversed {
     animation-duration: 1.6s;
   }
 }
+
+/* --- 表示端末（ADR-0047） ------------------------------------------------- */
+
+/* ボタンの見た目のリンク（画面を移るだけの主操作）。 */
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.9rem;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 0.5rem;
+  text-decoration: none;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+/* 表示の画面は操作の無い全画面。離れた所からも読めるよう、字を大きく取る。 */
+.display-screen {
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding: max(1.5rem, env(safe-area-inset-top)) 1.5rem max(1.5rem, env(safe-area-inset-bottom));
+  background: var(--surface);
+  color: var(--text);
+}
+
+.display-note {
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.display-reconnecting {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-muted);
+}
+
+.display-pairing {
+  max-width: 40rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.display-pairing-code {
+  margin: 1.5rem 0;
+  font-size: clamp(2.5rem, 10vw, 5rem);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+}
+
+.display-pairing-qr {
+  width: min(16rem, 60vw);
+  height: auto;
+  padding: 0.8rem;
+  background: #fff;
+  border-radius: 0.8rem;
+}
+
+.display-board-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.display-board-header h1 {
+  margin: 0;
+  font-size: clamp(1.4rem, 4vw, 2.2rem);
+}
+
+.display-children {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem;
+  margin: 1.2rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.display-child {
+  padding: 1.2rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  box-shadow: var(--shadow-card);
+}
+
+.display-child-name {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.display-child-balance {
+  margin: 0.3rem 0 0.8rem;
+  font-size: clamp(2.6rem, 8vw, 4rem);
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.display-records {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 1.05rem;
+}
+
+.display-records li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.6rem;
+}
+
+.display-record-date {
+  color: var(--text-muted);
+}
+
+.display-record-reason {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.display-record-amount {
+  font-variant-numeric: tabular-nums;
+  color: var(--success);
+}
+
+.display-record-amount.negative {
+  color: var(--danger);
+}
+
+.display-screen-hint {
+  font-size: 0.85rem;
+}

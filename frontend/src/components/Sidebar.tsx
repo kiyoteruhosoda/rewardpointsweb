@@ -43,6 +43,8 @@ const ADMIN_ITEMS: Item[] = [
   { to: '/admin/permissions', labelKey: 'nav.permissions', scopes: ['permission:manage'] },
   { to: '/admin/config', labelKey: 'nav.config', scopes: ['admin:system-settings'] },
   { to: '/admin/logs', labelKey: 'nav.logs', scopes: ['log:view'] },
+  // 表示端末の承認・一覧は運用管理者だけ（admin には出ない。ADR-0047）
+  { to: '/admin/displays', labelKey: 'nav.displays', scopes: ['display:approve'] },
 ]
 
 /** 引き出しの id。ヘッダーの開閉ボタンが `aria-controls` で指す。 */

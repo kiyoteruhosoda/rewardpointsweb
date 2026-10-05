@@ -24,6 +24,8 @@ interface SignInEntrances {
   totp: boolean
   passkeys: number
   identity_providers: string[]
+  /** ペアリングした表示端末として入れるか（ADR-0047）。 */
+  display_device: boolean
 }
 
 /**
@@ -38,6 +40,7 @@ function entranceLabels(entrances: SignInEntrances, t: (key: string) => string):
   if (entrances.totp) labels.push(t('users.entrance.totp'))
   if (entrances.passkeys > 0) labels.push(`${t('users.entrance.passkey')} ×${entrances.passkeys}`)
   if (entrances.identity_providers.length > 0) labels.push(t('users.entrance.sso'))
+  if (entrances.display_device) labels.push(t('users.entrance.display'))
   return labels
 }
 

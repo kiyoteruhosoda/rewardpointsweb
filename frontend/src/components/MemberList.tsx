@@ -132,7 +132,7 @@ function MemberActionButtons({ member, familyId, ...actions }: ButtonProps) {
             actions.onRemove(member)
           }}
         >
-          {t('families.remove')}
+          {member.role === 'display' ? t('families.removeDisplay') : t('families.remove')}
         </ActionButton>
       )}
     </>

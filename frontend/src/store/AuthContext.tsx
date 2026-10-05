@@ -26,6 +26,8 @@ export interface Me {
    * 偽 = SSO でしか入れない利用者。画面はパスワード変更の導線を出さない。
    */
   has_password: boolean
+  /** 表示端末（サイネージ）のセッションか（ADR-0047）。真なら表示の画面だけを出す。 */
+  display_device: boolean
 }
 
 interface TokenPair {
