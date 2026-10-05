@@ -11,7 +11,8 @@
 来ない（idp の ADR-0054）。結び付けた時点で ``federated_identities`` に控えを残すので、
 2 回目以降は 1 で決まる。
 
-⚠ **作れないときは断る。** 同じメールアドレスの口座が既にある（``sso_account_not_linked``）、
+⚠ **作れないときは断る。** 同じメールアドレスの口座が既にある（``sso_account_not_linked``。
+識別子（``username``）がそのアドレスの口座も含む）、
 ``username`` を決められない（``sso_username_unavailable``）。どちらも黙って別の値で
 作ると、同じ人の口座が 2 つになるか、本人の知らない識別子になる。
 """
@@ -86,7 +87,7 @@ class ResolveFederatedAccount:
         ⚠ **メールアドレスが要るのはここだけである**（ADR-0038）。既に結び付いて
         いる相手は ``sub`` で引けるので、無くても入れる。
         """
-        existing = self.directory.find_by_email(user.email) if user.email else None
+        existing = self._account_holding(user.email) if user.email else None
         if existing is not None:
             if not self.policy.may_link(user):
                 # ⚠ **作らずに断る**（ADR-0041）。作ると同じ人の口座が 2 つになる。寄せる
@@ -101,6 +102,23 @@ class ResolveFederatedAccount:
             logger.warning("sso_username_unavailable", extra={"reason": "raced"})
             raise SsoUsernameUnavailableError
         return self._link(issuer, user.subject, created, provisioned=True)
+
+    def _account_holding(self, email: str) -> FederatedAccount | None:
+        """このメールアドレスを持つ口座。``email`` の列か、識別子がそのアドレスの口座。
+
+        ⚠ **``email`` の列だけでは見落とす。** 招待の受諾で作った口座は ``email`` を
+        持たず（ADR-0011）、メールアドレスを識別子にしている口座が多い（移行値もそう）。
+        ``email`` だけで探すと、その人が初めて SSO で来たときに 2 つ目の口座を作り、
+        家族から外れる（2026-10-05 に本番で起きた）。
+        """
+        holder = self.directory.find_by_email(email)
+        if holder is not None:
+            return holder
+        try:
+            username = Username(email).value
+        except ValueError:
+            return None
+        return self.directory.find_by_username(username)
 
     def _free_username(self, user: FederatedUser) -> str:
         """IdP の ``preferred_username`` を、このアプリの ``username`` にする。

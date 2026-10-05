@@ -25,7 +25,8 @@ class FederatedUserDirectory(Protocol):
         """利用者をメールアドレスで引く（初回の結び付けの手掛かり）。
 
         メールアドレスは任意項目なので、持っていない利用者は決して当たらない
-        （ADR-0011）。
+        （ADR-0011）。識別子がメールアドレスの口座は、呼び出し側が
+        ``find_by_username`` でも探す。
         """
 
     def find_by_username(self, username: str) -> FederatedAccount | None:
