@@ -23,6 +23,8 @@ class SignInEntrances(BaseModel):
     passkeys: int = 0
     #: 結び付いている IdP の issuer。空 = SSO では入れない。
     identity_providers: list[str] = []
+    #: ペアリングした表示端末として入れるか（ADR-0047）。表示アカウントはこれだけが真になる。
+    display_device: bool = False
 
 
 class UserResponse(BaseModel):

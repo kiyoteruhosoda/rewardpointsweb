@@ -65,7 +65,7 @@
  コードと QR を大きく出す
  POST /api/display/pairings/claim ─→ authorization_pending        QR を読む／コードを入れる
    （5 秒ごと）                                              ←─ 映す家族・名前を選んで承認
-         ←───────────────────── device_credential ＋ アクセストークン（1 度だけ）
+         ←───────────────────── device_credential（1 度だけ）
  device_credential を保存して表示
 ```
 
@@ -75,8 +75,8 @@
 - どちらも**ハッシュで保存**する。有効期限は 10 分、問い合わせの間隔は 5 秒
 - 受け取りの返事（`POST /api/display/pairings/claim` の 400 の `error`）: `authorization_pending`（まだ）/
   `expired_token`（期限切れ・受け取り済み・知らない秘密）。承認は 1 度、受け取りも 1 度だけ
-- 承認の口（`POST /api/display/pairings/approve`）は `display:approve` が要る。知らない・期限切れのコードは
-  それぞれ `pairing_not_found` / `pairing_expired`
+- 承認の口（`POST /api/display/pairings/approve`）は `display:approve` が要る。知らない・承認済みのコードは
+  404 `pairing_not_found`、期限切れは 410 `pairing_expired`。どちらのときも表示アカウントは作らない
 - QR が指すのは `/display/approve#<確認コード>`。コードを URL の `#` の後ろに置く（ADR-0025 と同じ理由。
   サーバーのログ・Referer に載せない）
 

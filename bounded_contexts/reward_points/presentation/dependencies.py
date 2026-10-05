@@ -44,6 +44,7 @@ from bounded_contexts.reward_points.application.use_cases.issue_invitation impor
 from bounded_contexts.reward_points.application.use_cases.leave_family import LeaveFamilyUseCase
 from bounded_contexts.reward_points.application.use_cases.list_families import ListFamiliesUseCase
 from bounded_contexts.reward_points.application.use_cases.list_invitations import ListInvitationsUseCase
+from bounded_contexts.reward_points.application.use_cases.manage_displays import DisplayRoster
 from bounded_contexts.reward_points.application.use_cases.manage_reward_events import (
     ChangeRewardEventDeadlineUseCase,
     CreateRewardEventUseCase,
@@ -480,6 +481,12 @@ def get_ensure_user_can_be_deleted_use_case(families: FamilyRepoDep) -> EnsureUs
     return EnsureUserCanBeDeletedUseCase(families)
 
 
+def get_display_roster(
+    families: FamilyRepoDep, memberships: MembershipRepoDep, provisioning: ProvisioningDep
+) -> DisplayRoster:
+    return DisplayRoster(families=families, memberships=memberships, provisioning=provisioning)
+
+
 ListFamiliesDep = Annotated[ListFamiliesUseCase, Depends(get_list_families_use_case)]
 CreateFamilyDep = Annotated[CreateFamilyUseCase, Depends(get_create_family_use_case)]
 ViewFamilyDep = Annotated[ViewFamilyUseCase, Depends(get_view_family_use_case)]
@@ -516,6 +523,7 @@ CreateRewardEventDep = Annotated[CreateRewardEventUseCase, Depends(get_create_re
 StickRewardEventStickerDep = Annotated[StickRewardEventStickerUseCase, Depends(get_stick_reward_event_sticker_use_case)]
 PeelRewardEventStickerDep = Annotated[PeelRewardEventStickerUseCase, Depends(get_peel_reward_event_sticker_use_case)]
 DeleteRewardEventDep = Annotated[DeleteRewardEventUseCase, Depends(get_delete_reward_event_use_case)]
+DisplayRosterDep = Annotated[DisplayRoster, Depends(get_display_roster)]
 
 
 __all__ = [
@@ -530,6 +538,7 @@ __all__ = [
     "CreateFamilyDep",
     "CreateRewardEventDep",
     "DeleteRewardEventDep",
+    "DisplayRosterDep",
     "DissolveFamilyDep",
     "EditFamilyRulesDep",
     "ExportFamilyDep",
@@ -555,6 +564,7 @@ __all__ = [
     "ViewFamilyDep",
     "ViewLedgerDep",
     "ViewRewardEventsDep",
+    "get_display_roster",
     "get_ensure_user_can_be_deleted_use_case",
     "resolve_day_boundary",
 ]

@@ -22,6 +22,8 @@ ROLES: Sequence[tuple[int, str]] = (
     (2, "manager"),
     (3, "member"),
     (4, "guest"),
+    (5, "operator"),
+    (6, "display"),
 )
 
 # --- 権限コード（scope） -----------------------------------------------------
@@ -44,6 +46,10 @@ PERMISSION_CODES: Sequence[str] = (
     "family:manage",
     "point:view",
     "point:manage",
+    # --- 表示端末（display_devices コンテキスト。ADR-0047） ---
+    # 表示端末を承認する・一覧を見る・外す。ある家族の台帳をある端末に映す操作なので、
+    # admin には付けない（admin は家庭の台帳を見ない。ADR-0018）
+    "display:approve",
 )
 
 # --- ロールへの権限付与 ------------------------------------------------------
@@ -55,10 +61,14 @@ PERMISSION_CODES: Sequence[str] = (
 #   member  = 親・大人（メンバー）。家族を作り、子を追加し、ポイントを記録できる
 #   guest   = 子（ゲスト）。招待の受諾でのみ生まれ、自分の家族と台帳を見るだけ
 #   manager = 運用者。家族機能とは無関係で、家族のフローでは一切割り当てない
+#   operator = 運用管理者。表示端末を承認して、どの家族をどの端末に映すかを決める（ADR-0047）
+#   display  = 表示端末（人ではない）。承認で生まれ、家族の全部の子の台帳を見るだけ（ADR-0047）
 _FAMILY_POINT_SCOPES: frozenset[str] = frozenset({"family:view", "family:manage", "point:view", "point:manage"})
+# admin に付けない scope。家族・ポイントに加えて、家族を端末へ映す承認も持たせない
+_OUTSIDE_ADMIN_SCOPES: frozenset[str] = _FAMILY_POINT_SCOPES | {"display:approve"}
 
 ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
-    "admin": tuple(code for code in PERMISSION_CODES if code not in _FAMILY_POINT_SCOPES),
+    "admin": tuple(code for code in PERMISSION_CODES if code not in _OUTSIDE_ADMIN_SCOPES),
     "manager": (
         "item:view",
         "item:manage",
@@ -80,6 +90,18 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
         "dashboard:view",
         "gui:view",
         # 自分の家族・自分のポイントと履歴は見られるが、変更する scope は持たない
+        "family:view",
+        "point:view",
+    ),
+    "operator": (
+        "dashboard:view",
+        "gui:view",
+        "display:approve",
+    ),
+    "display": (
+        "dashboard:view",
+        "gui:view",
+        # 家族の全部の子の台帳を見るだけ。どの台帳かは家族の中の立場 display が決める
         "family:view",
         "point:view",
     ),

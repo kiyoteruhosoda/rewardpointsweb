@@ -32,7 +32,10 @@ class ListFamiliesUseCase:
                     name=family.name_value,
                     my_membership_id=membership.id,
                     my_role=membership.role,
-                    member_count=len(self._memberships.list_for_family(family.id)),
+                    # 表示端末は人ではないので数えない（ADR-0047）
+                    member_count=sum(
+                        1 for member in self._memberships.list_for_family(family.id) if not member.role.is_display
+                    ),
                 )
             )
         return summaries

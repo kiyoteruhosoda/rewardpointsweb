@@ -42,6 +42,10 @@ class SqlFamilyRepository(IFamilyRepository):
         ).all()
         return [_to_family(row) for row in rows]
 
+    def list_all(self) -> list[Family]:
+        rows = self._session.scalars(select(FamilyModel).order_by(FamilyModel.name, FamilyModel.id)).all()
+        return [_to_family(row) for row in rows]
+
     def update_name(self, *, family_id: int, name: str) -> Family:
         validated = FamilyName(name)  # ドメイン不変条件を書き込み前に強制する
         row = self._session.get(FamilyModel, family_id)

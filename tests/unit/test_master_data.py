@@ -16,11 +16,24 @@ def test_every_role_has_permission_assignment() -> None:
 
 
 def test_admin_role_has_everything_except_family_and_points() -> None:
-    """システム管理者は家族・ポイントに関与しない（ADR-0018）。"""
-    family_point = {"family:view", "family:manage", "point:view", "point:manage"}
+    """システム管理者は家族・ポイントに関与せず、家族を端末へ映す承認も持たない（ADR-0018・ADR-0047）。"""
+    outside = {"family:view", "family:manage", "point:view", "point:manage", "display:approve"}
     granted = set(master_data.ROLE_PERMISSIONS["admin"])
-    assert granted == set(master_data.PERMISSION_CODES) - family_point
-    assert not granted & family_point
+    assert granted == set(master_data.PERMISSION_CODES) - outside
+    assert not granted & outside
+
+
+def test_only_the_operator_approves_display_devices() -> None:
+    """表示端末の承認は運用管理者だけ（ADR-0047）。"""
+    holders = {role for role, codes in master_data.ROLE_PERMISSIONS.items() if "display:approve" in codes}
+    assert holders == {"operator"}
+
+
+def test_display_role_only_views() -> None:
+    """表示端末は見るだけ。変更の scope を持たない（ADR-0047）。"""
+    granted = set(master_data.ROLE_PERMISSIONS["display"])
+    assert {"family:view", "point:view"} <= granted
+    assert not {code for code in granted if code.endswith(":manage") or code == "display:approve"}
 
 
 def test_default_admin_role_exists() -> None:

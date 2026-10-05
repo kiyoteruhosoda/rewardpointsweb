@@ -123,8 +123,25 @@ async def get_current_principal_or_none(
     return principal
 
 
-async def get_settled_principal(
+async def get_person_principal(
     principal: AuthenticatedPrincipal = Depends(get_active_principal),
+) -> AuthenticatedPrincipal:
+    """**人のセッション**だけを通す。表示端末（ADR-0047）は断る。
+
+    表示端末は資格情報（二要素・パスキー・SSO の結び付け）もプロフィールも持たない。
+    ⚠ 持たせると、端末の前に立った人が**外された後も入れる口**を作れる（メールアドレスを
+    足してリセットでパスワードを生やす、など）。資格情報やプロフィールを変える経路はここを通す。
+    """
+    if principal.via_display_device:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "display_device_not_allowed"},
+        )
+    return principal
+
+
+async def get_settled_principal(
+    principal: AuthenticatedPrincipal = Depends(get_person_principal),
     db: Session = Depends(get_db),
 ) -> AuthenticatedPrincipal:
     """**資格情報を変える経路**のための関門（ADR-0037）。
@@ -135,6 +152,7 @@ async def get_settled_principal(
     意味が無い**（ADR-0011）。
 
     ⚠ **止められた利用者もここで弾く。** 新しい資格情報を作らせないためである。
+    表示端末も（:func:`get_person_principal` で）弾く。
     """
     from presentation.fastapi.services.token_service import TokenService
 
@@ -185,6 +203,8 @@ __all__ = [
     "clear_access_token_cookie",
     "get_active_principal",
     "get_current_principal",
+    "get_person_principal",
+    "get_settled_principal",
     "require_permission",
     "set_access_token_cookie",
 ]

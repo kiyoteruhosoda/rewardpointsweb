@@ -22,6 +22,7 @@ from bounded_contexts.reward_points.domain.exceptions import (
     ChildInvitationRequiresSignupError,
     CorrectionOfReversalError,
     DisplayNameRequiredError,
+    DisplayNotFoundError,
     FamilyAccessDeniedError,
     FamilyNotEmptyError,
     FamilyNotFoundError,
@@ -60,6 +61,7 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     TransactionNotFoundError: status.HTTP_404_NOT_FOUND,
     InvitationNotFoundError: status.HTTP_404_NOT_FOUND,
     RewardEventNotFoundError: status.HTTP_404_NOT_FOUND,
+    DisplayNotFoundError: status.HTTP_404_NOT_FOUND,
     # 画面が古い姿を見ている（ADR-0042）。読み直せば正しい番号が分かる
     RewardEventCompletedError: status.HTTP_409_CONFLICT,
     StickerOutOfOrderError: status.HTTP_409_CONFLICT,

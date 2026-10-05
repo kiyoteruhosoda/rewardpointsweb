@@ -16,13 +16,13 @@ from bounded_contexts.reward_points.domain.value_objects.family_role import Fami
 
 
 def can_view_ledger(membership: FamilyMembership, ledger: PointLedger) -> bool:
-    """親は家族の全ての台帳を、子は自分の台帳だけを見られる。
+    """親と表示端末は家族の全ての台帳を、子は自分の台帳だけを見られる。
 
-    兄弟の残高・履歴は相互に参照できない。
+    兄弟の残高・履歴は相互に参照できない。表示端末は見るだけ（ADR-0047）。
     """
     if not ledger.belongs_to_family(membership.family_id):
         return False
-    if membership.role.is_guardian:
+    if membership.role.sees_every_ledger:
         return True
     return ledger.membership_id == membership.id
 
@@ -91,8 +91,18 @@ def can_remove_member(actor: FamilyMembership, target: FamilyMembership, *, ledg
     owner だけができ、自分自身は外せない（家族を管理できる人がいなくなる）。
     記録の残る台帳は道連れにしない（``ledger_not_empty``。ADR-0010）ので、
     台帳が空であることも条件に含める — 押してから断られる操作を画面に出さない。
+
+    表示端末だけは親（owner / parent）なら外せる（ADR-0047）。自分たちの台帳が
+    どこに映っているかを見て、その場で止められるようにするため。
     """
+    if target.role.is_display:
+        return can_detach_display(actor, target)
     return actor.role.can_administer_family and target.id != actor.id and ledger_is_empty
+
+
+def can_detach_display(actor: FamilyMembership, target: FamilyMembership) -> bool:
+    """表示端末を家族の側から外せるか。同じ家族の親なら外せる（ADR-0047）。"""
+    return actor.role.is_guardian and actor.family_id == target.family_id and target.role.is_display
 
 
 def can_reset_password_of(actor: FamilyMembership, target: FamilyMembership) -> bool:
@@ -123,6 +133,7 @@ def can_issue_temporary_password_for(actor: FamilyMembership, target: FamilyMemb
 __all__ = [
     "can_administer_family",
     "can_create_child",
+    "can_detach_display",
     "can_edit_family_rules",
     "can_invite",
     "can_issue_temporary_password_for",

@@ -67,5 +67,9 @@ class IFamilyMembershipRepository(ABC):
     @abstractmethod
     def list_by_ids(self, membership_ids: Sequence[int]) -> list[FamilyMembership]: ...
 
+    @abstractmethod
+    def list_displays(self) -> list[FamilyMembership]:
+        """全ての家族の表示端末（ADR-0047）。運用管理者の一覧に使う。"""
+
 
 __all__ = ["IFamilyMembershipRepository"]

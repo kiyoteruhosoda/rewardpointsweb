@@ -61,7 +61,9 @@ class FamilyArchiveWriter:
         family = self._families.find_by_id(family_id)
         if family is None:
             raise FamilyNotFoundError
-        members = self._memberships.list_for_family(family_id)
+        # 表示端末は控えに入れない。端末は家族の持ち物ではなく、運用管理者の承認でだけ
+        # 生まれる（ADR-0047）。取り込んでも映す端末が無い
+        members = [member for member in self._memberships.list_for_family(family_id) if not member.role.is_display]
         ledgers = {ledger.membership_id: ledger for ledger in self._ledgers.list_for_family(family_id)}
         histories = self._transactions.list_by_ledgers([ledger.id for ledger in ledgers.values()])
         member_refs = {member.id: f"m{index + 1}" for index, member in enumerate(members)}

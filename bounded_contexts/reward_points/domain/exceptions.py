@@ -299,6 +299,12 @@ class RewardEventDeadlinePassedError(RewardPointsError):
     code = "reward_event_deadline_passed"
 
 
+class DisplayNotFoundError(RewardPointsError):
+    """表示端末が見つからない（外された・知らないアカウント。ADR-0047）。"""
+
+    code = "display_not_found"
+
+
 class StickerOutOfOrderError(RewardPointsError):
     """次の番号ではないシールを貼る・最後の 1 枚ではないシールをはがそうとした。
 
@@ -316,6 +322,7 @@ __all__ = [
     "ChildInvitationRequiresSignupError",
     "CorrectionOfReversalError",
     "DisplayNameRequiredError",
+    "DisplayNotFoundError",
     "FamilyAccessDeniedError",
     "FamilyNotEmptyError",
     "FamilyNotFoundError",

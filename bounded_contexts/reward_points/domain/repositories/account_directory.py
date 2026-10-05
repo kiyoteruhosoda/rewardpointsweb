@@ -61,6 +61,14 @@ class IAccountProvisioning(ABC):
         """
 
     @abstractmethod
+    def create_display_account(self, *, display_name: str) -> AccountRef:
+        """表示端末のアカウントを作る（ADR-0047）。
+
+        パスワード・メールアドレスを持たない。入口はペアリングした端末だけで、
+        ログインの識別子は人が打たないので実装側が決める。
+        """
+
+    @abstractmethod
     def issue_temporary_password(self, account_id: int) -> TemporaryPassword:
         """一時パスワードを発行し、次回ログイン後の変更を必須にする。"""
 
@@ -75,7 +83,7 @@ class IAccountProvisioning(ABC):
 
     @abstractmethod
     def delete_account(self, account_id: int) -> None:
-        """除名された子のアカウントを削除する（ADR-0018）。
+        """除名された子・外された表示端末のアカウントを削除する（ADR-0018・ADR-0047）。
 
         子アカウントは招待の受諾で生まれ、家族の参加としてだけ存在する。
         除名（台帳が空の場合に限る — ADR-0013）で家族との縁が切れたら、

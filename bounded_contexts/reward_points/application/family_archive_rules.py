@@ -38,6 +38,7 @@ def require_importable(archive: FamilyArchiveDTO) -> None:
     # 控えは、この API を通しては作れない履歴になる
     recorders = frozenset(member.ref for member in archive.members if member.role.is_guardian)
     for member in archive.members:
+        _require_person(member)
         _require_ledger_matches_role(member)
         if member.ledger is not None:
             _require_writable_ledger(member.ledger, recorders=recorders)
@@ -70,6 +71,12 @@ def _require_single_owner(members: Sequence[ArchivedMemberDTO]) -> None:
     """
     owners = [member for member in members if member.role.can_administer_family]
     if len(owners) != 1:
+        raise InvalidFamilyArchiveError
+
+
+def _require_person(member: ArchivedMemberDTO) -> None:
+    """控えに入るのは人だけ。表示端末は書き出さない（ADR-0047）ので、載っていれば書き換えられた控え。"""
+    if member.role.is_display:
         raise InvalidFamilyArchiveError
 
 
