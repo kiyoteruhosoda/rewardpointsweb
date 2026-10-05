@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 import { Footer } from './components/Footer'
 import { Header } from './components/Header'
@@ -8,6 +8,9 @@ import { useI18n } from './i18n'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ConfigPage } from './pages/ConfigPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { DisplayApprovePage } from './pages/DisplayApprovePage'
+import { DisplayPage } from './pages/DisplayPage'
+import { DisplaysPage } from './pages/DisplaysPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { LoginPage } from './pages/LoginPage'
 import { FamiliesPage } from './pages/FamiliesPage'
@@ -23,6 +26,8 @@ import { SsoCallbackPage } from './pages/SsoCallbackPage'
 import { SecurityPage } from './pages/SecurityPage'
 import { SystemLogsPage } from './pages/SystemLogsPage'
 import { UsersPage } from './pages/UsersPage'
+import { displayCredential } from './services/api'
+import { APPROVE_PATH, rememberPendingApproval, takePendingApproval } from './services/display'
 import { useAuth } from './store/AuthContext'
 import { FamilyProvider } from './store/FamilyContext'
 
@@ -39,6 +44,14 @@ function RequireAuth() {
   const closeNav = useCallback(() => {
     setNavOpen(false)
   }, [])
+  const navigate = useNavigate()
+
+  // 表示端末の QR コードから来て、ログインを挟んだ人を承認の画面へ戻す（ADR-0047）
+  useEffect(() => {
+    if (!user) return
+    const pending = takePendingApproval()
+    if (pending !== null) navigate(pending, { replace: true })
+  }, [user, navigate])
 
   if (loading) return <p className="loading">{t('common.loading')}</p>
   // 届かないだけならログイン画面へ送らない（リリース中など。つながれば自動で戻る。ADR-0046）
@@ -48,7 +61,14 @@ function RequireAuth() {
         <span className="spinner" aria-hidden="true" /> {t('common.unreachable')}
       </p>
     )
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    // ペアリング済みの表示端末は、ホーム画面のアイコンが / を開いても表示の画面へ（ADR-0047）
+    if (displayCredential() !== null) return <Navigate to="/display" replace />
+    if (location.pathname === APPROVE_PATH) rememberPendingApproval(location.hash)
+    return <Navigate to="/login" replace />
+  }
+  // 表示端末は表示の画面だけを出す（ADR-0047）
+  if (user.display_device) return <Navigate to="/display" replace />
   // 一時パスワードでのログイン中は、変更を終えるまで他の画面へ行かせない
   // （サーバー側も同じ関門を持つ。ADR-0011）
   if (user.must_change_password && location.pathname !== '/change-password') {
@@ -82,6 +102,8 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/join" element={<RedeemInvitationPage />} />
+      {/* 表示端末（サイネージ）。ログインの画面を通らない（ADR-0047） */}
+      <Route path="/display" element={<DisplayPage />} />
       <Route element={<RequireAuth />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/families" element={<FamiliesPage />} />
@@ -96,6 +118,8 @@ export default function App() {
         <Route path="/admin/permissions" element={<PermissionsPage />} />
         <Route path="/admin/config" element={<ConfigPage />} />
         <Route path="/admin/logs" element={<SystemLogsPage />} />
+        <Route path="/admin/displays" element={<DisplaysPage />} />
+        <Route path={APPROVE_PATH} element={<DisplayApprovePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

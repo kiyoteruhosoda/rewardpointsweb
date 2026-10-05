@@ -49,6 +49,7 @@ function authValueOf(scopes: string[]): AuthValue {
       scopes,
       must_change_password: false,
       has_password: true,
+      display_device: false,
     },
     loading: false,
     unreachable: false,

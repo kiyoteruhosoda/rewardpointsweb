@@ -167,6 +167,8 @@ export function LoginPage() {
             )}
             <Link to="/forgot-password">{t('login.forgot')}</Link>
             <Link to={joinPath}>{t('login.withInvitation')}</Link>
+            {/* 表示端末（サイネージ）にする入口。ホーム画面に置いた Web アプリでは URL を打てない（ADR-0047） */}
+            <Link to="/display">{t('login.useAsDisplay')}</Link>
           </>
         ) : (
           <>

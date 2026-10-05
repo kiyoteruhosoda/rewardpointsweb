@@ -7,7 +7,8 @@
  */
 import { api, type Fetched } from './api'
 
-export type FamilyRole = 'owner' | 'parent' | 'child'
+/** `display` は人ではなく表示端末（サイネージ。ADR-0047）。 */
+export type FamilyRole = 'owner' | 'parent' | 'child' | 'display'
 
 export interface Membership {
   id: number

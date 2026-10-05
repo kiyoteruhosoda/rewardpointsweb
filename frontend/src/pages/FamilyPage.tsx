@@ -107,7 +107,10 @@ export function FamilyPage() {
   ) => runForRow(member.id, action, () => run(request))
 
   const remove = (member: Membership) => {
-    if (!window.confirm(t('families.confirmRemove', { name: member.display_name }))) return
+    // 表示端末は外しても記録もアカウントの持ち主も無い。人の削除とは言い方を変える（ADR-0047）
+    const question =
+      member.role === 'display' ? 'families.confirmRemoveDisplay' : 'families.confirmRemove'
+    if (!window.confirm(t(question, { name: member.display_name }))) return
     void runForMember(member, 'removal', () => families.removeMembership(id, member.id))
   }
 
