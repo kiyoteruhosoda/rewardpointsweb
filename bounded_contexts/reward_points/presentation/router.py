@@ -482,7 +482,18 @@ async def remove_membership(
     use_case: RemoveMembershipDep,
     principal: FamilyManager,
 ) -> None:
-    use_case.execute(family_id=family_id, membership_id=membership_id, account_id=principal.user_id)
+    display_account_id = use_case.execute(
+        family_id=family_id, membership_id=membership_id, account_id=principal.user_id
+    )
+    if display_account_id is not None:
+        # 運用管理者が外したときと同じ本文で残す（誰が・どの家族の・どの端末を。ADR-0047）
+        logger.info(
+            "display_removed: family_id=%s account_id=%s remover_id=%s",
+            family_id,
+            display_account_id,
+            principal.user_id,
+        )
+        return
     logger.info("membership_removed", extra={"family_id": family_id, "membership_id": membership_id})
 
 

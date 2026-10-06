@@ -6,6 +6,7 @@ import { usePendingAction } from '../hooks/usePendingAction'
 import { usePendingRows } from '../hooks/usePendingRows'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
+import { roleLabel } from '../services/roles'
 
 interface Role {
   id: number
@@ -109,7 +110,7 @@ export function RolesPage() {
               const busy = rowAction !== null
               return (
                 <tr key={role.id}>
-                  <td>{role.name}</td>
+                  <td>{roleLabel(t, role.name)}</td>
                   {permissions.map((p) => (
                     <td key={p.id}>
                       <input
