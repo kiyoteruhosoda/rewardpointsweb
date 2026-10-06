@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react
 
 import { Footer } from './components/Footer'
 import { Header } from './components/Header'
+import { RequireScope } from './components/RequireScope'
 import { Sidebar } from './components/Sidebar'
 import { useI18n } from './i18n'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
@@ -118,8 +119,10 @@ export default function App() {
         <Route path="/admin/permissions" element={<PermissionsPage />} />
         <Route path="/admin/config" element={<ConfigPage />} />
         <Route path="/admin/logs" element={<SystemLogsPage />} />
-        <Route path="/admin/displays" element={<DisplaysPage />} />
-        <Route path={APPROVE_PATH} element={<DisplayApprovePage />} />
+        <Route element={<RequireScope scopes={['display:approve']} />}>
+          <Route path="/admin/displays" element={<DisplaysPage />} />
+          <Route path={APPROVE_PATH} element={<DisplayApprovePage />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

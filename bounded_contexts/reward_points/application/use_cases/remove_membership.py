@@ -49,7 +49,8 @@ class RemoveMembershipUseCase:
         self._transactions = transactions
         self._provisioning = provisioning
 
-    def execute(self, *, family_id: int, membership_id: int, account_id: int) -> None:
+    def execute(self, *, family_id: int, membership_id: int, account_id: int) -> int | None:
+        """外す。表示端末を外したときは、その端末のアカウント ID を返す（監査ログ用）。"""
         actor = self._access.membership_in(family_id=family_id, account_id=account_id)
         target = self._memberships.find_by_id(membership_id)
         if target is None or target.family_id != family_id:
@@ -59,13 +60,14 @@ class RemoveMembershipUseCase:
             raise MembershipNotFoundError
         if target.role.is_display:
             self._detach_display(actor, target)
-            return
+            return target.account_id
         if not family_access_policy.can_administer_family(actor) or target.id == actor.id:
             # owner が自分を外すと家族を管理できる人がいなくなる
             raise FamilyAccessDeniedError
         self._remove_ledger_of(target.id)
         self._memberships.delete(target.id)
         self._delete_owned_account_of(target)
+        return None
 
     def _detach_display(self, actor: FamilyMembership, target: FamilyMembership) -> None:
         if not family_access_policy.can_detach_display(actor, target):

@@ -565,6 +565,9 @@ INFO。ログインの失敗は WARNING）。失敗した行の本文にはエ�
 管理操作は本文の頭で引ける。`admin_user_created` / `admin_user_updated` /
 `admin_user_deleted` / `admin_role_created` / `admin_role_updated` /
 `admin_role_deleted` / `system_settings_updated` / `login_failed`。
+表示端末（ADR-0047）は `display_approved`（承認した人 `approver_id`）/ `display_removed`
+（外した人 `remover_id`。運用管理者の一覧からでも家族の画面からでも同じ本文）/
+`display_expired`（90 日使われずに失効）で、どれも `family_id` と端末の `account_id` が付く。
 
 `/healthz`・`/readyz`・`/api/health`・`/metrics` の成功したアクセスは記録されない
 （失敗したときは記録される）。死活の確認は `docker compose ps` の healthcheck 状態か

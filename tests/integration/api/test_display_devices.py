@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -380,6 +381,29 @@ def test_a_parent_removes_a_display_from_the_family_page(
     assert response.status_code == 204, response.text
     assert client.post("/api/display/session", json={"device_credential": display.credential}).status_code == 401
     assert client.get("/api/display/devices", headers=operator.headers).json() == []
+
+
+def test_removing_a_display_is_logged_the_same_way_from_both_sides(
+    *, client: TestClient, operator: Account, household: Household, caplog: pytest.LogCaptureFixture
+) -> None:
+    """運用管理者の一覧からでも家族の画面からでも、誰が・どの家族の・どの端末を外したかが残る。"""
+    by_operator = _pair(client, operator, household)
+    with caplog.at_level(logging.INFO):
+        client.delete(f"/api/display/devices/{by_operator.account_id}", headers=operator.headers)
+    by_owner = _pair(client, operator, household)
+    with caplog.at_level(logging.INFO):
+        client.delete(
+            f"/api/families/{household.family_id}/memberships/{by_owner.membership_id}",
+            headers=household.owner.headers,
+        )
+
+    messages = [record.getMessage() for record in caplog.records]
+    for display, remover in ((by_operator, operator), (by_owner, household.owner)):
+        expected = (
+            f"display_removed: family_id={household.family_id} account_id={display.account_id} "
+            f"remover_id={remover.user_id}"
+        )
+        assert expected in messages
 
 
 def test_an_unused_credential_expires_and_the_display_is_removed(

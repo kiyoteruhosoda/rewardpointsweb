@@ -17,6 +17,7 @@ import { usePendingAction } from '../hooks/usePendingAction'
 import { usePendingRows } from '../hooks/usePendingRows'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
+import { roleLabel } from '../services/roles'
 
 /** この利用者が**このアプリへ入れる手段**（ADR-0035）。 */
 interface SignInEntrances {
@@ -79,7 +80,9 @@ interface RoleCheckboxesProps {
  * 管理者には選択肢を出しようがないので、その場合は今のロール名だけを示す。
  */
 function RoleCheckboxes({ user, roles, disabled, onToggle }: RoleCheckboxesProps) {
-  if (roles.length === 0) return <>{user.roles.join(', ') || '—'}</>
+  const { t } = useI18n()
+  if (roles.length === 0)
+    return <>{user.roles.map((name) => roleLabel(t, name)).join(', ') || '—'}</>
   return (
     <div className="checkbox-list">
       {roles.map((role) => (
@@ -93,7 +96,7 @@ function RoleCheckboxes({ user, roles, disabled, onToggle }: RoleCheckboxesProps
               onToggle(user, role.name)
             }}
           />
-          <span>{role.name}</span>
+          <span>{roleLabel(t, role.name)}</span>
         </label>
       ))}
     </div>
@@ -226,7 +229,7 @@ export function UsersPage() {
         >
           {roles.map((r) => (
             <option key={r.id} value={r.name}>
-              {r.name}
+              {roleLabel(t, r.name)}
             </option>
           ))}
         </select>

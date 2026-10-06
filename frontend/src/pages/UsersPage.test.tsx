@@ -68,7 +68,7 @@ describe('UsersPage', () => {
 
   it('ログイン ID と表示名を別々に送る（display_name 欠落は 422 になる）', async () => {
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
-    await screen.findByRole('option', { name: 'member' })
+    await screen.findByRole('option', { name: 'Parent (member)' })
 
     fillForm({ email: 'kid@example.com' })
     fireEvent.click(screen.getByRole('button', { name: 'Add user' }))
@@ -86,7 +86,7 @@ describe('UsersPage', () => {
 
   it('メールアドレスは任意で、空なら null を送る（ADR-0011）', async () => {
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
-    await screen.findByRole('option', { name: 'member' })
+    await screen.findByRole('option', { name: 'Parent (member)' })
 
     fillForm()
     fireEvent.click(screen.getByRole('button', { name: 'Add user' }))
@@ -153,7 +153,7 @@ describe('UsersPage', () => {
     )
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
 
-    expect(await screen.findByText('member')).toBeInTheDocument()
+    expect(await screen.findByText('Parent (member)')).toBeInTheDocument()
     expect(screen.queryByLabelText('kid: member')).not.toBeInTheDocument()
   })
 
@@ -186,5 +186,22 @@ describe('UsersPage', () => {
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
 
     expect(await screen.findByText('Passkey ×2 / SSO')).toBeInTheDocument()
+  })
+
+  it('決まったロールは呼び名に名前を添え、管理画面で作ったロールは名前のまま出す', async () => {
+    get.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === '/api/admin/roles'
+          ? [
+              { id: 5, name: 'operator' },
+              { id: 9, name: 'auditor' },
+            ]
+          : [],
+      ),
+    )
+    renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
+
+    expect(await screen.findByRole('option', { name: 'Operator (operator)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'auditor' })).toBeInTheDocument()
   })
 })
