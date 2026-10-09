@@ -36,6 +36,28 @@ describe('balanceSeries', () => {
 
     expect(series.map((point) => point.change)).toEqual([10, -10])
   })
+
+  it('打ち消しは打ち消した記録の時点に置く（過去を直しても今日は跳ねない）', () => {
+    const series = balanceSeries([
+      { ...row(4, 30, '2026-09-01T00:00:00'), corrects_id: 2 },
+      { ...row(3, -50, '2026-10-09T00:00:00'), reversal_of_id: 2 },
+      { ...row(2, 50, '2026-09-01T00:00:00'), is_reversed: true },
+      row(1, 100, '2026-08-01T00:00:00'),
+    ])
+
+    expect(series.map((point) => [point.at, point.balance])).toEqual([
+      [Date.parse('2026-08-01T00:00:00Z'), 100],
+      [Date.parse('2026-09-01T00:00:00Z'), 150],
+      [Date.parse('2026-09-01T00:00:00Z'), 100],
+      [Date.parse('2026-09-01T00:00:00Z'), 130],
+    ])
+  })
+
+  it('打ち消した相手が無ければ打ち消しの日時に置く', () => {
+    const series = balanceSeries([{ ...row(3, -50, '2026-10-09T00:00:00'), reversal_of_id: 2 }])
+
+    expect(series[0]?.at).toBe(Date.parse('2026-10-09T00:00:00Z'))
+  })
 })
 
 describe('trendWindow', () => {

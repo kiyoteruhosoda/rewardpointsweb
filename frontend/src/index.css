@@ -694,6 +694,32 @@ button.danger:hover:not(:disabled) {
   align-items: flex-end;
 }
 
+/* 訂正のときの「加算・消費」の選択。入力欄の列の頭に 1 行で置く */
+.entry-kind {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.entry-kind legend {
+  float: left;
+  margin-right: 0.25rem;
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.card .entry-kind label {
+  flex-direction: row;
+  gap: 0.35rem;
+  align-items: center;
+  min-height: 2.25rem;
+}
+
 /* パスワード入力欄（PasswordField.tsx）。見出しの有無で高さが変わるだけで、
  * 縦積み（.card label）でも横並び（.inline-form）でも同じ形で置ける。 */
 .password-field {

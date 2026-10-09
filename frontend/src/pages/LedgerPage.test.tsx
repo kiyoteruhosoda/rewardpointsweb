@@ -322,7 +322,7 @@ describe('LedgerPage', () => {
 
     await screen.findByText('100 pt')
     startCorrection()
-    fireEvent.click(screen.getByRole('button', { name: 'Save as added points' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
       expect(reasonSuggestions).toHaveBeenCalledTimes(2)
@@ -340,8 +340,10 @@ describe('LedgerPage', () => {
     await screen.findByText('-60 pt')
     startCorrection()
 
-    // 符号はボタンで決めるので、入力欄には絶対値が入る
+    // 符号はラジオで決めるので、入力欄には絶対値が入る。種類は元の記録の側を選んでおく
     expect(await screen.findByLabelText('Points')).toHaveValue(60)
+    expect(screen.getByRole('radio', { name: 'Used points' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Added points' })).not.toBeChecked()
     expect(screen.getByLabelText('Reason')).toHaveValue('おかし')
     // 記録の入力欄とは入れ替わる（どちらへ打っているのか分からなくならない）
     expect(screen.queryByRole('button', { name: 'Add points' })).not.toBeInTheDocument()
@@ -359,7 +361,7 @@ describe('LedgerPage', () => {
     await screen.findByText('100 pt')
     startCorrection()
     fireEvent.change(screen.getByLabelText('Points'), { target: { value: '50' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save as added points' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByText('50 pt')).toBeInTheDocument()
     expect(correct).toHaveBeenCalledWith(1, {
@@ -373,6 +375,24 @@ describe('LedgerPage', () => {
     expect(await screen.findByRole('button', { name: 'Add points' })).toBeInTheDocument()
   })
 
+  it('消費の記録を直すと、そのまま消費として送る', async () => {
+    viewLedger.mockResolvedValue(ledger({ transactions: [transaction({ amount: -60 })] }))
+    correct.mockResolvedValue({
+      reversal: transaction({ id: 2, amount: 60, reversal_of_id: 1 }),
+      correction: transaction({ id: 3, amount: -40, corrects_id: 1 }),
+    })
+    renderPage()
+
+    await screen.findByText('-60 pt')
+    startCorrection()
+    fireEvent.change(screen.getByLabelText('Points'), { target: { value: '40' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(correct).toHaveBeenCalledWith(1, expect.objectContaining({ amount: -40 }))
+    })
+  })
+
   it('符号の付け間違いは消費として保存し直せる', async () => {
     viewLedger.mockResolvedValue(ledger())
     correct.mockResolvedValue({
@@ -383,7 +403,8 @@ describe('LedgerPage', () => {
 
     await screen.findByText('100 pt')
     startCorrection()
-    fireEvent.click(screen.getByRole('button', { name: 'Save as used points' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Used points' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
       expect(correct).toHaveBeenCalledWith(1, expect.objectContaining({ amount: -100 }))
@@ -398,7 +419,7 @@ describe('LedgerPage', () => {
     await screen.findByText('100 pt')
     startCorrection()
     fireEvent.change(screen.getByLabelText('Points'), { target: { value: '50' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save as added points' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
       expect(correct).toHaveBeenCalled()
