@@ -4,6 +4,12 @@
  * 残高は履歴の合計として導出する（ADR-0010）ので、推移も同じく履歴を古い順に
  * 足していけば出る。打ち消し・訂正の行も 1 行として足す（台帳の残高と同じ数に
  * なる）。サーバーには何も足していない。
+ *
+ * 打ち消しの行は、打ち消した記録の発生日時に置く（ADR-0049）。打ち消しは
+ * 「その記録は無かった」という意味なので、打ち消した日に残高が跳ねると、
+ * 過去の記録を直しただけで今日に増減があったように見える。訂正後の行は元の
+ * 発生日時を引き継いでいるので、打ち消しと同じ時点に並ぶ。履歴の表は
+ * 打ち消した日時のまま出す（いつ直したかは表で分かる）。
  */
 import { parseUtc, type Transaction } from './families'
 
@@ -25,8 +31,14 @@ const RANGE_DAYS: Record<Exclude<TrendRange, 'all'>, number> = { month: 30, quar
 
 /** 古い順に並べ、行ごとの残高を出す。 */
 export function balanceSeries(transactions: readonly Transaction[]): BalancePoint[] {
+  const occurredAt = new Map(transactions.map((row) => [row.id, row.occurred_at]))
   const ordered = transactions
-    .map((transaction) => ({ transaction, at: parseUtc(transaction.occurred_at).getTime() }))
+    .map((transaction) => {
+      // 打ち消した相手が手元に無いとき（届いていない等）は打ち消しの日時に置く
+      const original =
+        transaction.reversal_of_id === null ? undefined : occurredAt.get(transaction.reversal_of_id)
+      return { transaction, at: parseUtc(original ?? transaction.occurred_at).getTime() }
+    })
     .sort((a, b) => a.at - b.at || a.transaction.id - b.transaction.id)
   let balance = 0
   return ordered.map(({ transaction, at }) => {

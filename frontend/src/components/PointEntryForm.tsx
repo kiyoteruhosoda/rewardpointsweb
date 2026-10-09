@@ -3,7 +3,9 @@
  *
  * 台帳は符号で加算と消費を区別する（ADR-0010）。画面では「加算」「消費」の
  * 2 つのボタンに分け、送るときに符号を付ける。入力欄で負の数を打たせない。
- * 訂正のときも同じで、符号の付け間違い（加算のつもりが消費）はボタンで直せる。
+ * 訂正のときは、加算と消費の入れ替えはまれなので、元の記録の種類を選んだ
+ * ラジオを出して「保存」1 つで送る。どちらを直しているかが見え、あえて
+ * 入れ替えるときだけラジオを切り替える（ADR-0049）。
  *
  * 冪等キーは 1 回の記録につき 1 つ発行し、**成功するまで持ち越す**。通信が
  * 途中で切れたときに利用者がもう一度押しても、サーバー側で同じ 1 行として
@@ -22,7 +24,7 @@ import { ActionButton } from './ActionButton'
 
 /** 訂正のときだけ渡す。元の記録の内容と、やめるときの戻り先。 */
 interface CorrectionTarget {
-  /** 元の符号付きの量。入力欄には絶対値を入れる（符号はボタンが決める）。 */
+  /** 元の符号付きの量。入力欄には絶対値を入れる（符号はラジオが決める）。 */
   amount: number
   reason: string
   onCancel: () => void
@@ -51,6 +53,8 @@ function signOf(event: SubmitEvent): 1 | -1 {
 export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) {
   const { t } = useI18n()
   const [points, setPoints] = useState(editing ? String(Math.abs(editing.amount)) : '')
+  // 訂正のときの種類。元の記録と同じ側を選んでおく
+  const [editingSign, setEditingSign] = useState<1 | -1>(editing && editing.amount < 0 ? -1 : 1)
   const [reason, setReason] = useState(editing?.reason ?? '')
   // 送信中の符号（押したボタンにだけスピナーを出す）。null なら送信していない。
   const [submittingSign, setSubmittingSign] = useState<1 | -1 | null>(null)
@@ -81,9 +85,27 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
       className="inline-form"
       onSubmit={(event) => {
         event.preventDefault()
-        void submit(signOf(event.nativeEvent as SubmitEvent))
+        void submit(editing ? editingSign : signOf(event.nativeEvent as SubmitEvent))
       }}
     >
+      {editing && (
+        <fieldset className="entry-kind" disabled={busy}>
+          <legend>{t('points.kind')}</legend>
+          {([1, -1] as const).map((sign) => (
+            <label key={sign}>
+              <input
+                type="radio"
+                name="entry-kind"
+                checked={editingSign === sign}
+                onChange={() => {
+                  setEditingSign(sign)
+                }}
+              />
+              {sign === 1 ? t('points.kindAdd') : t('points.kindConsume')}
+            </label>
+          ))}
+        </fieldset>
+      )}
       <label>
         {t('points.amount')}
         <input
@@ -114,16 +136,29 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
           <option key={suggestion} value={suggestion} />
         ))}
       </datalist>
-      <ActionButton type="submit" pending={submittingSign === 1} disabled={busy}>
-        {editing ? t('points.saveAsAdd') : t('points.add')}
-      </ActionButton>
-      <ActionButton type="submit" value={CONSUME} pending={submittingSign === -1} disabled={busy}>
-        {editing ? t('points.saveAsConsume') : t('points.consume')}
-      </ActionButton>
-      {editing && (
-        <button type="button" disabled={busy} onClick={editing.onCancel}>
-          {t('common.cancel')}
-        </button>
+      {editing ? (
+        <>
+          <ActionButton type="submit" pending={busy} disabled={busy}>
+            {t('common.save')}
+          </ActionButton>
+          <button type="button" disabled={busy} onClick={editing.onCancel}>
+            {t('common.cancel')}
+          </button>
+        </>
+      ) : (
+        <>
+          <ActionButton type="submit" pending={submittingSign === 1} disabled={busy}>
+            {t('points.add')}
+          </ActionButton>
+          <ActionButton
+            type="submit"
+            value={CONSUME}
+            pending={submittingSign === -1}
+            disabled={busy}
+          >
+            {t('points.consume')}
+          </ActionButton>
+        </>
       )}
     </form>
   )
