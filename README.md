@@ -74,18 +74,31 @@ make format             # 整形の指摘を自動修正
 
 ## Docker / デプロイ
 
+**本番は nolumialab の k3s で動きます。成果物はコンテナイメージ 1 つです。**
+**main へのマージで、deck（https://deck.nolumia.com）が build → pin → deploy を自動で走らせます。**
+手で押す必要はありません。
+
+```
+forge のソース ──マージ──▶ deck: build ──push──▶ hub.nolumia.com:5000/app/rewardpointsweb:sha-<コミット>
+                            │
+                            ├─ pin    deploy-repo の k8s/rewardpointsweb-prod/ のイメージを digest で書き換える
+                            └─ deploy その宣言を k3s へ当てる（起動時に alembic upgrade head が走る）
+```
+
+- 稼働状態の正は deploy-repo の `k8s/rewardpointsweb-prod/`、ビルドの表は `resources/build-matrix.json`
+- 配った版は `https://rewardpointsweb.nolumia.com/info` の `git_sha` で確かめる
+
+手元で動かすときは compose を使います（デプロイには使いません）。
+
 ```bash
 docker compose up -d --build    # ローカルで db / web / nginx を起動 → http://127.0.0.1:8080
-./scripts/build.sh              # dist/ に image.tar / image-db.tar / deploy.sh / manifest
+make image                      # Dockerfile が壊れていないかの確認用ビルド
 ```
 
 `docker compose up` は clone 直後にそのまま動きます（`.env` は任意。無ければ
 開発向けの既定値が使われる）。compose プロジェクト名は `rewardpointsweb` で固定
 なので、clone 先のディレクトリ名を変えてもコンテナ・ネットワーク名は変わりません。
 
-配置先サーバーでは `dist/` の中身を `<app>/<stg|prod>/` に置き、
-`./deploy.sh <app|migrate|reset>` を実行します。git の無いデプロイ先では
-`scripts/build-remote-container.sh`（一括デプロイ）が使えます。
 詳細な手順は [docs/OPERATIONS.md](docs/OPERATIONS.md) を参照してください。
 
 ## ドキュメント

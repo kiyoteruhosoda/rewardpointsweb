@@ -1,18 +1,15 @@
 # ソースツリーから直接 `docker compose up -d` するための上書き。
 #
-# docker-compose.yml 本体は image を参照するだけで build を持たない。配置先には
-# ソースが無く、イメージは `docker load`（deploy.sh）で入るためで、そのままだと
-# リポジトリ側で `docker compose up` してもイメージを registry へ探しに行ってしまう。
-# ここで build を足し、手元では compose がそのままビルドしてから起動するようにする。
+# docker-compose.yml 本体は image を参照するだけで build を持たない。そのままだと
+# `docker compose up` がイメージを registry へ探しに行ってしまうので、ここで build を
+# 足し、手元では compose がそのままビルドしてから起動するようにする。
 #
 # .env を任意にするのもここ。本体の `env_file: [.env]` と同じパスを長い書式で
 # 上書きすると `required: false` が勝ち、.env が無くても起動する（${VAR:-default}
 # が値を供給する）。長い書式は Compose 2.24.0 以降でしか読めないため、配置先が
 # 使う本体には置かない。
 #
-# このファイルは `-f` を付けずに実行したときだけ自動で読まれる。deploy.sh は
-# `docker compose -p <project> -f docker-compose.yml` と明示するので配置先には
-# 影響しない（dist/ にも含まれない）。
+# このファイルは `-f` を付けずに実行したときだけ自動で読まれる。
 services:
   db:
     build:

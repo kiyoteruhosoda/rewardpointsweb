@@ -121,12 +121,11 @@ uv run alembic revision --autogenerate -m "<description>"
 ## Docker イメージをビルドしたいとき
 
 ```bash
-./scripts/build.sh   # アプリ + DB イメージ → dist/（tar・deploy.sh・manifest 一式）
-# make build でも同じ（scripts/build.sh を呼ぶだけ）
+make image           # scripts/generate_version.sh → docker build -t rewardpointsweb:dev .
 ```
 
 **手元での確認用**（Dockerfile が壊れていないか）。本番に使うイメージは deck が焼く
-（下の「デプロイしたいとき」）。`dist/` の `deploy.sh` は NAS に置いていた頃の配り方で、本番では使わない。
+（下の「デプロイしたいとき」）。
 
 ## docker compose でローカル起動したいとき
 
