@@ -248,7 +248,7 @@ export function UsersPage() {
               <th>{t('users.roles')}</th>
               <th>{t('users.effectivePermissions')}</th>
               <th>{t('common.active')}</th>
-              <th>{t('users.entrances')}</th>
+              <th className="entrance-heading">{t('users.entrances')}</th>
               <th>{t('common.actions')}</th>
             </tr>
           </thead>
@@ -297,7 +297,15 @@ export function UsersPage() {
                   <td>
                     {/* 入れる手段は変えられない（ここは棚卸しのための表示）。
                         取り上げ方はそれぞれの口の側にある。 */}
-                    {entranceLabels(user.entrances, t).join(' / ') || t('users.entrance.none')}
+                    {entranceLabels(user.entrances, t).length === 0 ? (
+                      t('users.entrance.none')
+                    ) : (
+                      <ul className="entrance-list">
+                        {entranceLabels(user.entrances, t).map((label) => (
+                          <li key={label}>{label}</li>
+                        ))}
+                      </ul>
+                    )}
                   </td>
                   <td>
                     <ActionButton

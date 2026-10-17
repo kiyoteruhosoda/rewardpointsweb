@@ -5,11 +5,12 @@
  * 足していけば出る。打ち消し・訂正の行も 1 行として足す（台帳の残高と同じ数に
  * なる）。サーバーには何も足していない。
  *
- * 打ち消しの行は、打ち消した記録の発生日時に置く（ADR-0049）。打ち消しは
- * 「その記録は無かった」という意味なので、打ち消した日に残高が跳ねると、
- * 過去の記録を直しただけで今日に増減があったように見える。訂正後の行は元の
- * 発生日時を引き継いでいるので、打ち消しと同じ時点に並ぶ。履歴の表は
- * 打ち消した日時のまま出す（いつ直したかは表で分かる）。
+ * 打ち消しの行と、打ち消された記録は、組にして推移から外す（ADR-0050）。
+ * 打ち消しは「その記録は無かった」という意味なので、合計は 0 で、残高の推移にも
+ * 現れないのが実態に合う。同じ時点に「元の記録・打ち消し・訂正後の行」を順に
+ * 並べると、点を結ぶ線が一瞬だけ元の値まで跳ねる（+100 を 10 に直すと 185 まで
+ * 上がって 95 へ戻る）。履歴の表は打ち消した日時のまま出す（いつ直したかは表で分かる）。
+ * 打ち消した相手が手元に無いとき（届いていない等）だけ、打ち消しを自分の日時に置く。
  */
 import { parseUtc, type Transaction } from './families'
 
@@ -29,16 +30,19 @@ export const TREND_RANGES: TrendRange[] = ['month', 'quarter', 'all']
 const DAY = 24 * 60 * 60 * 1000
 const RANGE_DAYS: Record<Exclude<TrendRange, 'all'>, number> = { month: 30, quarter: 90 }
 
-/** 古い順に並べ、行ごとの残高を出す。 */
+/** 古い順に並べ、行ごとの残高を出す。打ち消し合う組は描かない。 */
 export function balanceSeries(transactions: readonly Transaction[]): BalancePoint[] {
-  const occurredAt = new Map(transactions.map((row) => [row.id, row.occurred_at]))
+  const ids = new Set(transactions.map((row) => row.id))
+  const cancelled = new Set(
+    transactions.flatMap((row) =>
+      row.reversal_of_id !== null && ids.has(row.reversal_of_id)
+        ? [row.id, row.reversal_of_id]
+        : [],
+    ),
+  )
   const ordered = transactions
-    .map((transaction) => {
-      // 打ち消した相手が手元に無いとき（届いていない等）は打ち消しの日時に置く
-      const original =
-        transaction.reversal_of_id === null ? undefined : occurredAt.get(transaction.reversal_of_id)
-      return { transaction, at: parseUtc(original ?? transaction.occurred_at).getTime() }
-    })
+    .filter((transaction) => !cancelled.has(transaction.id))
+    .map((transaction) => ({ transaction, at: parseUtc(transaction.occurred_at).getTime() }))
     .sort((a, b) => a.at - b.at || a.transaction.id - b.transaction.id)
   let balance = 0
   return ordered.map(({ transaction, at }) => {

@@ -37,19 +37,43 @@ describe('balanceSeries', () => {
     expect(series.map((point) => point.change)).toEqual([10, -10])
   })
 
-  it('打ち消しは打ち消した記録の時点に置く（過去を直しても今日は跳ねない）', () => {
+  it('打ち消しと打ち消された記録は組にして描かない（訂正しても元の値まで跳ねない）', () => {
+    // 85 の上に +100 を記録し、あとで 10 に訂正した: 打ち消し −100 と訂正後の +10 が足される
     const series = balanceSeries([
-      { ...row(4, 30, '2026-09-01T00:00:00'), corrects_id: 2 },
+      { ...row(4, 10, '2026-09-01T00:00:00'), corrects_id: 2 },
+      { ...row(3, -100, '2026-10-09T00:00:00'), reversal_of_id: 2 },
+      { ...row(2, 100, '2026-09-01T00:00:00'), is_reversed: true },
+      row(1, 85, '2026-08-01T00:00:00'),
+    ])
+
+    expect(series.map((point) => [point.at, point.balance])).toEqual([
+      [Date.parse('2026-08-01T00:00:00Z'), 85],
+      [Date.parse('2026-09-01T00:00:00Z'), 95],
+    ])
+    expect(Math.max(...series.map((point) => point.balance))).toBe(95)
+  })
+
+  it('取り消した記録は推移に現れない', () => {
+    const series = balanceSeries([
       { ...row(3, -50, '2026-10-09T00:00:00'), reversal_of_id: 2 },
       { ...row(2, 50, '2026-09-01T00:00:00'), is_reversed: true },
       row(1, 100, '2026-08-01T00:00:00'),
     ])
 
-    expect(series.map((point) => [point.at, point.balance])).toEqual([
-      [Date.parse('2026-08-01T00:00:00Z'), 100],
-      [Date.parse('2026-09-01T00:00:00Z'), 150],
-      [Date.parse('2026-09-01T00:00:00Z'), 100],
-      [Date.parse('2026-09-01T00:00:00Z'), 130],
+    expect(series.map((point) => point.balance)).toEqual([100])
+  })
+
+  it('同じ時刻に並ぶ訂正後の行と別の記録は、残高を足した順に並べる', () => {
+    const series = balanceSeries([
+      { ...row(4, 10, '2026-09-01T00:00:00'), corrects_id: 2 },
+      { ...row(3, -100, '2026-10-09T00:00:00'), reversal_of_id: 2 },
+      row(2, 100, '2026-09-01T00:00:00'),
+      row(1, -5, '2026-09-01T00:00:00'),
+    ])
+
+    expect(series.map((point) => [point.change, point.balance])).toEqual([
+      [-5, -5],
+      [10, 5],
     ])
   })
 

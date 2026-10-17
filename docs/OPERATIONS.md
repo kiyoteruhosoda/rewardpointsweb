@@ -125,6 +125,9 @@ uv run alembic revision --autogenerate -m "<description>"
 # make build でも同じ（scripts/build.sh を呼ぶだけ）
 ```
 
+**手元での確認用**（Dockerfile が壊れていないか）。本番に使うイメージは deck が焼く
+（下の「デプロイしたいとき」）。`dist/` の `deploy.sh` は NAS に置いていた頃の配り方で、本番では使わない。
+
 ## docker compose でローカル起動したいとき
 
 リポジトリのルートで実行する。`.env` は必須ではなく、無ければ
@@ -147,11 +150,7 @@ docker compose down              # 停止（データは mnt/ に残る）
 - 永続データはホストの `mnt/`（`HOST_DATA_ROOT`）。消すと DB は初期化される。
 
 ビルドと「`.env` を任意にする」を担うのは `docker-compose.override.yml`（`-f` を
-付けずに実行したときだけ自動で読まれる）。配置先の `deploy.sh` は
-`-f docker-compose.yml` を明示するため、そちらはロード済みイメージをそのまま使い、
-`.env`（`deploy.sh` が自動生成する）も従来どおり必須のまま。この分け方は
-`env_file` の `required:` が Compose 2.24.0 以降の機能で、配置先の Compose が
-それより古いことがあるため。
+付けずに実行したときだけ自動で読まれる）。
 
 ## DB に直接つなぎたいとき
 
@@ -214,52 +213,60 @@ DB の `log` テーブルにも同じ行が入る（`trace` 列に traceback）�
 
 ## デプロイしたいとき
 
-配置先サーバーの `<アプリ名>/<stg|prod>/` に `dist/` の中身をそのまま置いて実行する:
+**main へマージすれば本番へ配られる。手では押さない。** forge の push を受けた deck
+（https://deck.nolumia.com）が、環境 `rewardpointsweb/prod` で **build → pin → deploy** の 3 段を
+LAN の中で走らせる。本番は nolumialab の k3s（namespace `rewardpointsweb-prod`）で動いている。
+
+```
+1. 変更を main へマージする（forge: git.nolumia.com/kyon/rewardpointsweb）
+2. deck が続けて自動で走らせる
+     build   イメージを焼いて hub.nolumia.com:5000/app/rewardpointsweb:sha-<コミット> へ push
+     pin     その digest を deploy-repo の k8s/rewardpointsweb-prod/40-web.yaml へ書き戻す
+     deploy  k8s/rewardpointsweb-prod/ を k3s へ apply する
+3. 入れ替わったかを確かめる（下の「デプロイした版を確認したいとき」）
+```
+
+マイグレーションは `web` の entrypoint が起動時に流す（`scripts/run_db_migrations.py`）。
+デプロイの手順としては分かれていない。
+
+マージから 10 分たっても版が変わらないときは、deck の画面で `rewardpointsweb/prod` の実行の記録を見る。
+走っていなければ（push の知らせの取りこぼし）、forge のリポジトリ設定の Webhook から deck 宛ての
+知らせを送り直すか、deck の画面からその環境の版を上げる。
+
+stg（`rewardpointsweb/stg`）は普段止めてある。試すときは deck の画面で起こして版を上げ、
+使い終わったら止める（台数 0 に戻す）。
+
+⚠ **deck が落ちているときの退避経路**は deploy-repo の workflow 2 つ
+（`build-image.yml` → `apply-manifests.yml`。どちらも手押し）。⚠ **どちらも既定が
+安全側**（apply は `mode=plan`、build の pin は `*-stg`）なので、**prod へ入れるには
+2 つとも明示が要る** ——明示しないと**何も入らないまま success が返る**。
+手順は deploy-repo の `docs/build-and-apply.md`。
+
+## デプロイした版を確認したいとき
 
 ```bash
-./deploy.sh app          # 通常デプロイ（アプリのみ更新）
-./deploy.sh migrate      # DDL 更新時（Alembic migration 追加時）
-./deploy.sh reset        # 完全初期化（DB 消去。破壊的）
+curl -s https://rewardpointsweb.nolumia.com/info   # version / git_sha / branch / build_time / environment
 ```
 
-**置き場所がデプロイの名前を決める。** アプリ名は親ディレクトリ名、環境（stg / prod）は
-自分のディレクトリ名から自動判定される。
+`git_sha` がマージのコミットになっていれば入れ替わっている。⚠ **成功表示を証拠にしない。**
+動いている Pod の像も突き合わせられる:
 
+```bash
+ssh nolumialab "sudo k3s kubectl -n rewardpointsweb-prod get po \
+  -o jsonpath='{.items[*].status.containerStatuses[*].imageID}'"
 ```
-/volume1/docker/rewardpointsweb/prod/deploy.sh   → アプリ名 rewardpointsweb・環境 prod
-/volume1/docker/kaimono/stg/deploy.sh            → アプリ名 kaimono・環境 stg
+
+## 前の版へ戻したいとき
+
+**宣言の `image:` を前の digest に戻して apply する。** 履歴は deploy-repo の
+git に残っているので、`k8s/rewardpointsweb-prod/40-web.yaml` の 1 行を戻すだけでよい。
+
+```bash
+git -C deploy-repo log -p --follow -- k8s/rewardpointsweb-prod/40-web.yaml | grep -n 'image:'
 ```
 
-イメージタグ・compose プロジェクト名・DB コンテナ名・ネットワーク名はすべてアプリ名から
-作られるので、**別のアプリは別のディレクトリへ置けばそれだけで衝突しない**。同じホストで
-複数のアプリを動かすときに気にすることは無い。
-
-ディレクトリ名を使えないとき（記号だけの名前など）だけ `.env` の `APP_NAME` で明示する。
-どの名前が使われたかは起動時のログ 1 行目付近に出る。
-
-例外は**旧アプリ名**（`deploy.sh` の `LEGACY_APP_NAMES`。現在は `fastapitemplate`）。
-配置ディレクトリが旧名のままでも、`.env` に `APP_NAME=fastapitemplate` が残っていても、
-その名前は採用せず `rewardpointsweb` へ倒す（警告を 1 行出す）。引退した名前で
-コンテナが作られ続けるのを防ぐため。旧名で動いているコンテナは、次の `./deploy.sh app`
-が畳んでから新しい名前で起動し直す。`.env` の `DB_CONTAINER_NAME` /
-`DOCKER_NETWORK_NAME` が旧名の既定値のままなら、それも新しい名前へ書き換わる。
-永続データは `HOST_DATA_ROOT` にあるので、この入れ替えでは消えない。
-
-旧名のコンテナを畳めないとき（compose の `working_dir` ラベルが読めず、この配置の
-ものだと確認できないとき）は、**デプロイを中止する**。そのまま起動すると新旧 2 つの
-MariaDB が同じ `db_data` を同時に開いて DB が壊れるため。表示されたコンテナを確認し、
-この配置の前身なら `docker rm -f` で消してから再実行する。
-
-警告を消したい（配置も新しい名前に揃えたい）ときは、配置ディレクトリを
-`rewardpointsweb` へ改名し、`.env` の `HOST_DATA_ROOT` を新しい絶対パスへ直す。
-`HOST_DATA_ROOT` は自動生成時に絶対パスで書かれるため、直さないとデータの実体を
-見失って空の DB で起動する。
-
-`.env` が無ければ初回実行時にテンプレートが自動生成される。
-
-**ディレクトリ名を変えたとき**は、旧ディレクトリで起動したコンテナが旧名のまま残る。
-`deploy.sh` は「その配置から起動したと確認できるコンテナだけ」を畳んで新しい名前へ
-移すので、通常はそのままデプロイし直せばよい（データはホスト側の `mnt/` にある）。
+**DB のスキーマは戻らない。** マイグレーションを含む版から戻すときは、
+その `downgrade()` を先に当てる必要がある。
 
 ## アプリのアイコンを変えたいとき
 
@@ -283,51 +290,6 @@ uv run python scripts/generate_app_icons.py
 iOS はホーム画面に追加した時点のアイコンを端末に焼き付けるため、配信側で
 できることは無い。急ぐ場合は追加し直してもらう。
 
-## デプロイが `network ... is ambiguous` で失敗したとき
-
-同じ名前の Docker ネットワークが 2 つ以上できている。`deploy.sh` は起動前と
-失敗時に自動で掃除するので、まずはもう一度デプロイし直す。
-
-```bash
-./deploy.sh app
-```
-
-**「containers outside this project are attached」で止まったとき**は、そのネットワークに
-このアプリ以外のコンテナ（保守用に繋いだ mysql クライアント等）が接続している。
-自動では触らないので、表示されたコンテナを停止するか別のネットワークへ移してから
-デプロイし直す。
-
-それでも「Could not resolve the duplicated Docker network」で止まるときは手で消す
-（ネットワークは作り直せる。消しても DB・アプリのデータには影響しない）:
-
-```bash
-docker network ls | grep rewardpointsweb      # 同名で ID が違う行を確認する
-docker network rm <ID> <ID>                   # 1 つ残して他を削除する
-./deploy.sh app                               # 残った 1 つを compose が再利用する
-```
-
-コンテナが接続中で消せないときは、先に切り離す:
-
-```bash
-docker network inspect <ID>                   # Containers に出るコンテナ名を確認
-docker network disconnect -f <ID> <コンテナ名>
-```
-
-## デプロイ先に git が無いホスト（Synology 等）で一括デプロイしたいとき
-
-`scripts/build-remote-container.sh` をデプロイ先の `<app>/<stg|prod>/` に一度だけ手で置き、
-同じ場所に `build-remote-container.env`（雛形: `scripts/build-remote-container.env.example`）を
-作成してから実行する:
-
-```bash
-./build-remote-container.sh            # app（通常デプロイ）
-./build-remote-container.sh migrate
-./build-remote-container.sh reset
-```
-
-git pull → build.sh → dist/ 取り込み → deploy.sh を 1 本で実行する
-（ビルドは同一ホスト上の dev コンテナ内。スクリプト自身も自動で最新版へ差し替わる）。
-
 ## システム設定を変更したいとき
 
 管理画面（`/admin/config`。要 `admin:system-settings` 権限）から編集する。
@@ -342,7 +304,8 @@ git pull → build.sh → dist/ 取り込み → deploy.sh を 1 本で実行す
 ## アプリを再起動したいとき
 
 - 画面: `/admin/config` の再起動ボタン、または `POST /api/admin/system/restart`
-- ホスト: `docker compose restart web`
+- 手元: `docker compose restart web`
+- 本番: `ssh nolumialab "sudo k3s kubectl -n rewardpointsweb-prod rollout restart deploy/web"`
 
 ## 二要素認証・パスキーを設定したいとき
 
@@ -566,7 +529,7 @@ INFO。ログインの失敗は WARNING）。失敗した行の本文にはエ�
 `admin_user_deleted` / `admin_role_created` / `admin_role_updated` /
 `admin_role_deleted` / `system_settings_updated` / `login_failed`。
 表示端末（ADR-0047）は `display_approved`（承認した人 `approver_id`）/ `display_removed`
-（外した人 `remover_id`。運用管理者の一覧からでも家族の画面からでも同じ本文）/
+（外した人 `remover_id`。表示端末の承認者の一覧からでも家族の画面からでも同じ本文）/
 `display_expired`（90 日使われずに失効）で、どれも `family_id` と端末の `account_id` が付く。
 
 `/healthz`・`/readyz`・`/api/health`・`/metrics` の成功したアクセスは記録されない
@@ -695,20 +658,20 @@ docker compose logs web | grep password_reset_link_issued | tail -1
 
 ## iPad を表示端末（サイネージ）にしたいとき（ADR-0047）
 
-準備: 承認する人に **運用管理者**（`operator`）のロールを付ける。付けるのは admin で、`/admin/users` のロールの欄で行う。
+準備: 承認する人に **表示端末の承認者**（`operator`）のロールを付ける。付けるのは admin で、`/admin/users` のロールの欄で行う。
 admin 自身には承認の権限（`display:approve`）が無い。
 
 1. iPad の Safari で `https://<このアプリ>/display` を開き、共有ボタン →「ホーム画面に追加」を選ぶ
 2. ⚠ **ホーム画面のアイコンから開き直す。** ホーム画面の Web アプリは Safari と保存先が別なので、
    Safari のままペアリングすると、アイコンの側には合鍵が入らない。アイコンがログインの画面を開いたら、
    「この端末を表示端末にする」を押す
-3. 画面に確認コードと QR コードが出る。運用管理者がスマホで QR コードを読むか、「表示端末」→「表示端末を追加」で
+3. 画面に確認コードと QR コードが出る。表示端末の承認者がスマホで QR コードを読むか、「表示端末」→「表示端末を追加」で
    コードを入れ、映す家族と名前を選んで承認する。数秒で iPad の画面が切り替わる
 4. 設定 → アクセシビリティ → アクセスガイドをオンにし、表示中にサイドボタン（ホームボタンのある機種は
    ホームボタン）を 3 回押して固定する
 5. 画面が消えるなら、設定 → 画面表示と明るさ → 自動ロックを「なし」にする
 
 - iPad を再起動するとアクセスガイドは外れる。アイコンを押せば、何も入力せずに表示へ戻る
-- 外すときは、運用管理者が「表示端末」の一覧で「外す」を押す（映されている家族の親も、家族の画面から外せる）。
+- 外すときは、表示端末の承認者が「表示端末」の一覧で「外す」を押す（映されている家族の親も、家族の画面から外せる）。
   端末は 5 分以内にコードの画面へ戻る
 - 使われないまま 90 日経った端末は自動で外れる

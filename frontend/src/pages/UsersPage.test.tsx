@@ -185,7 +185,8 @@ describe('UsersPage', () => {
     )
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
 
-    expect(await screen.findByText('Passkey ×2 / SSO')).toBeInTheDocument()
+    expect(await screen.findByText('Passkey ×2')).toBeInTheDocument()
+    expect(screen.getByText('SSO')).toBeInTheDocument()
   })
 
   it('決まったロールは呼び名に名前を添え、管理画面で作ったロールは名前のまま出す', async () => {
@@ -201,7 +202,9 @@ describe('UsersPage', () => {
     )
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
 
-    expect(await screen.findByRole('option', { name: 'Operator (operator)' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('option', { name: 'Display approver (operator)' }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'auditor' })).toBeInTheDocument()
   })
 })

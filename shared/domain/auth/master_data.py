@@ -60,8 +60,8 @@ PERMISSION_CODES: Sequence[str] = (
 #             家族・ポイントは家庭の当事者（member / guest）の領分で関与しない
 #   member  = 親・大人（メンバー）。家族を作り、子を追加し、ポイントを記録できる
 #   guest   = 子（ゲスト）。招待の受諾でのみ生まれ、自分の家族と台帳を見るだけ
-#   manager = 運用者。家族機能とは無関係で、家族のフローでは一切割り当てない
-#   operator = 運用管理者。表示端末を承認して、どの家族をどの端末に映すかを決める（ADR-0047）
+#   manager = ログの閲覧者（画面の呼び名。旧称は運用者）。家族機能とは無関係で、家族のフローでは一切割り当てない
+#   operator = 表示端末の承認者（画面の呼び名。旧称は運用管理者）。表示端末を承認して、どの家族をどの端末に映すかを決める（ADR-0047）
 #   display  = 表示端末（人ではない）。承認で生まれ、家族の全部の子の台帳を見るだけ（ADR-0047）
 _FAMILY_POINT_SCOPES: frozenset[str] = frozenset({"family:view", "family:manage", "point:view", "point:manage"})
 # admin に付けない scope。家族・ポイントに加えて、家族を端末へ映す承認も持たせない
