@@ -3,14 +3,14 @@
 # 起動ログが「どのコミットのイメージが動いているか」を答えるための唯一の出どころ。
 #
 # 呼ばれる場所は 3 つ:
-#   1. Komodo Build の pre_build（本番の経路）— クローン済みリポジトリで git から作り、
+#   1. build の「版を刻む」段（本番の経路）— クローン済みリポジトリで git から作り、
 #      その出力が Docker ビルドコンテキストへ入る（ADR-0023）
 #   2. Dockerfile の RUN — 1 が動いていれば **何もしない**。無ければ dev と刻む
 #   3. 手元での確認（`make image` / 直接実行）
 #
 # 優先順位: **git > 既にある version.json > dev**
 #
-# ⚠ git が引ける場所では必ず作り直す。Komodo はビルドディレクトリを使い回し、
+# ⚠ git が引ける場所では必ず作り直す。ビルドディレクトリを使い回す作りだと、
 #   version.json は .gitignore 済みで `git pull` でも消えないため、「既存を尊重する」
 #   にすると2回目以降のビルドが**初回の版を名乗り続ける**。
 # ⚠ 逆にイメージの中（.git が無い）では既存を絶対に上書きしない。上書きにすると
@@ -22,7 +22,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 VERSION_FILE="$PROJECT_ROOT/shared/kernel/version.json"
 
 # --- 1. git から作る（引ける場所では必ず作り直す）-----------------------------
-# ⚠ `-c safe.directory=*` が要る。Komodo の periphery はクローンした所有者と別 UID で
+# ⚠ `-c safe.directory=*` が要る。ビルドする側はクローンした所有者と別 UID で
 #   pre_build を走らせることがあり、無いと "dubious ownership" で git が黙って落ちる。
 if command -v git >/dev/null 2>&1 && [ -d "$PROJECT_ROOT/.git" ]; then
     GIT=(git -c "safe.directory=*" --git-dir="$PROJECT_ROOT/.git" --work-tree="$PROJECT_ROOT")

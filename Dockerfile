@@ -45,12 +45,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 # バージョン情報（shared/kernel/version.json）は **ビルドの前に生成してコンテキストへ入れる**。
 #
-# ⚠ build-arg で渡す形はやめた。Komodo Build はコミット情報を build-arg で渡さず、
-#   .dockerignore が .git を除いているので Dockerfile の中から git も引けない。
-#   その結果 **ビルドは成功したまま** イメージが version=dev を名乗り、/info も
-#   システムステータス画面も「どのコミットが動いているか」を答えられなかった。
-#   Komodo Build の pre_build が scripts/generate_version.sh を実行し、その出力が
-#   ここへ COPY されてくる（deploy-repo resources/builds.toml）。
+# ⚠ build-arg で渡す形はやめた（ADR-0028）。.dockerignore が .git を除いているので
+#   Dockerfile の中から git は引けない。build の「版を刻む」段（deploy-repo の
+#   resources/build-matrix.json で pre_build: true）が scripts/generate_version.sh を
+#   実行し、その出力がここへ COPY されてくる。
 # この RUN は「無かったときに dev として印を付ける」だけで、既にある内容は書き換えない。
 RUN bash scripts/generate_version.sh
 
