@@ -834,6 +834,19 @@ th {
   white-space: nowrap;
 }
 
+/* 入れる手段（ユーザー管理）。1 つずつ行を分け、語の途中で折り返さない
+   （列が細くなると「パスワード」が 1 文字ずつ縦に積まれていた）。 */
+.entrance-heading,
+.entrance-list {
+  white-space: nowrap;
+}
+
+.entrance-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 /* 実際に効いている scope。ロールの和集合で読み取り専用なので、操作できる
    ロールと見分けが付くよう控えめに出す。 */
 .scope-list {

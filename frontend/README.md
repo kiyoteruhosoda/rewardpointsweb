@@ -62,12 +62,14 @@ manifest の `icons` が指す URL には、`vite.config.ts` がビルド時に�
 
 ### ログイン不要
 
-| パス               | 実装                             | 何をする画面か                                                                                     |
-| ------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `/login`           | `pages/LoginPage.tsx`            | ユーザー名＋パスワード、またはパスキーでログイン。二要素認証が有効なら確認コードの入力に切り替わる |
-| `/forgot-password` | `pages/ForgotPasswordPage.tsx`   | 再設定リンクの送信を申し込む（メールアドレスを設定しているアカウントのみ）                         |
-| `/reset-password`  | `pages/ResetPasswordPage.tsx`    | メールのリンク（`?token=`）から新しいパスワードを設定する                                          |
-| `/join`            | `pages/RedeemInvitationPage.tsx` | 招待コードでアカウントを作って家族へ加わる（子どもの入り口。ADR-0011）                             |
+| パス               | 実装                             | 何をする画面か                                                                                                       |
+| ------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `/login`           | `pages/LoginPage.tsx`            | ユーザー名＋パスワード、またはパスキーでログイン。二要素認証が有効なら確認コードの入力に切り替わる                   |
+| `/forgot-password` | `pages/ForgotPasswordPage.tsx`   | 再設定リンクの送信を申し込む（メールアドレスを設定しているアカウントのみ）                                           |
+| `/reset-password`  | `pages/ResetPasswordPage.tsx`    | メールのリンク（`?token=`）から新しいパスワードを設定する                                                            |
+| `/join`            | `pages/RedeemInvitationPage.tsx` | 招待コードでアカウントを作って家族へ加わる（子どもの入り口。ADR-0011）                                               |
+| `/login/sso`       | `pages/SsoCallbackPage.tsx`      | IdP から戻った直後の中継。引き換え券をトークンへ換え、SSO を始めた画面へ送る（ADR-0029）                             |
+| `/display`         | `pages/DisplayPage.tsx`          | 表示端末（サイネージ）。資格情報が無ければ確認コードと QR を出し、承認されたら家族の子の残高を出し続ける（ADR-0047） |
 
 ### ログイン必須
 
@@ -75,24 +77,27 @@ manifest の `icons` が指す URL には、`vite.config.ts` がビルド時に�
 `Footer` が付く。Sidebar の項目は scope を持つものだけが並ぶ（`components/Sidebar.tsx`）。
 言語とテーマの切り替えは `/profile` にある（ヘッダーに置くと、狭い画面で 3 行になるため）。
 
-| パス                                    | 実装                           | 必要な scope            | 何をする画面か                                                                          |
-| --------------------------------------- | ------------------------------ | ----------------------- | --------------------------------------------------------------------------------------- |
-| `/`                                     | `pages/AdminDashboardPage.tsx` | —                       | ログイン中のユーザーと API ドキュメントへのリンク。Sidebar には `dashboard:view` で出る |
-| `/families`                             | `pages/FamiliesPage.tsx`       | `family:view`           | **家族の一覧。** 所属する家族。作成は保護者の scope 一式、参加は招待コード              |
-| `/families/:familyId`                   | `pages/FamilyPage.tsx`         | `family:view`           | **家族の詳細。** 参加者と残高、子の追加・招待・一時パスワードの発行                     |
-| `/families/:familyId/ledgers/:ledgerId` | `pages/LedgerPage.tsx`         | `point:view`            | **ポイント台帳。** 残高・履歴・加算・消費・訂正                                         |
-| `/items`                                | `pages/ItemsPage.tsx`          | `item:view`             | 見本のアイテム CRUD（`bounded_contexts/example`）                                       |
-| `/profile`                              | `pages/ProfilePage.tsx`        | —                       | 表示名とメールアドレスの変更・表示設定（言語 / テーマ）・セキュリティ設定               |
-| `/change-password`                      | `pages/ChangePasswordPage.tsx` | —                       | パスワード変更（⚠ パスワードを持たない利用者には案内文だけ出す。ADR-0034）              |
-| `/security`                             | `pages/SecurityPage.tsx`       | —                       | 二要素認証とパスキーの登録・解除、IdP との連携（ADR-0036）                              |
-| `/admin/users`                          | `pages/UsersPage.tsx`          | `user:manage`           | ユーザー管理（「入れる手段」の棚卸しつき。ADR-0035）                                    |
-| `/admin/roles`                          | `pages/RolesPage.tsx`          | `role:manage`           | ロール管理                                                                              |
-| `/admin/permissions`                    | `pages/PermissionsPage.tsx`    | `permission:manage`     | 権限一覧                                                                                |
-| `/admin/config`                         | `pages/ConfigPage.tsx`         | `admin:system-settings` | システム設定                                                                            |
-| `/admin/logs`                           | `pages/SystemLogsPage.tsx`     | `log:view`              | システムログ                                                                            |
+| パス                                           | 実装                           | 必要な scope            | 何をする画面か                                                                              |
+| ---------------------------------------------- | ------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------- |
+| `/`                                            | `pages/DashboardPage.tsx`      | `dashboard:view`        | **ホーム。** 所属する家族の子どもたちの残高をひと目で見わたす                               |
+| `/families`                                    | `pages/FamiliesPage.tsx`       | `family:view`           | **家族の一覧。** 所属する家族。作成は保護者の scope 一式、参加は招待コード                  |
+| `/families/:familyId`                          | `pages/FamilyPage.tsx`         | `family:view`           | **家族の詳細。** 参加者と残高、子の追加・招待・一時パスワードの発行                         |
+| `/families/:familyId/ledgers/:ledgerId`        | `pages/LedgerPage.tsx`         | `point:view`            | **ポイント台帳。** 残高・履歴・加算・消費・訂正                                             |
+| `/families/:familyId/ledgers/:ledgerId/events` | `pages/RewardEventsPage.tsx`   | `point:view`            | **イベント（がんばりカード）。** 1 人の子のカードを並べ、「達成」でシールを貼る（ADR-0042） |
+| `/profile`                                     | `pages/ProfilePage.tsx`        | —                       | 表示名とメールアドレスの変更・表示設定（言語 / テーマ）・セキュリティ設定                   |
+| `/change-password`                             | `pages/ChangePasswordPage.tsx` | —                       | パスワード変更（⚠ パスワードを持たない利用者には案内文だけ出す。ADR-0034）                  |
+| `/security`                                    | `pages/SecurityPage.tsx`       | —                       | 二要素認証とパスキーの登録・解除、IdP との連携（ADR-0036）                                  |
+| `/admin/users`                                 | `pages/UsersPage.tsx`          | `user:manage`           | ユーザー管理（「入れる手段」の棚卸しつき。ADR-0035）                                        |
+| `/admin/roles`                                 | `pages/RolesPage.tsx`          | `role:manage`           | ロール管理                                                                                  |
+| `/admin/permissions`                           | `pages/PermissionsPage.tsx`    | `permission:manage`     | 権限一覧                                                                                    |
+| `/admin/config`                                | `pages/ConfigPage.tsx`         | `admin:system-settings` | システム設定                                                                                |
+| `/admin/logs`                                  | `pages/SystemLogsPage.tsx`     | `log:view`              | システムログ                                                                                |
+| `/admin/displays`                              | `pages/DisplaysPage.tsx`       | `display:approve`       | 表示端末の一覧。どの家族をどの端末に映しているかと、外す操作（ADR-0047）                    |
+| `/admin/displays/approve`                      | `pages/DisplayApprovePage.tsx` | `display:approve`       | 表示端末を承認する。QR から開くと確認コードが入っている（ADR-0047）                         |
 
 「必要な scope」は Sidebar に項目が出る条件で、URL を直接開いたときの遮断は
-API 側が行う（画面はエラーを表示する）。
+API 側が行う（画面はエラーを表示する）。表示端末の 2 画面だけは、`display:approve` が
+無ければ画面の側でも開かない（`components/RequireScope.tsx`）。
 
 ## 遷移図
 
@@ -107,6 +112,10 @@ flowchart TD
   families["/families 家族の一覧"]
   family["/families/:familyId 家族の詳細"]
   ledger["/families/:familyId/ledgers/:ledgerId 台帳"]
+  events["…/ledgers/:ledgerId/events イベント"]
+  displays["/admin/displays 表示端末"]
+  approve["/admin/displays/approve 承認"]
+  display["/display 表示端末の画面"]
   admin["/admin/* 管理画面"]
   own["自分の設定<br/>/profile /security"]
 
@@ -122,6 +131,10 @@ flowchart TD
   families -->|"家族を選ぶ"| family
   family -->|"履歴"| ledger
   ledger -->|"戻る"| family
+  ledger -->|"イベント"| events
+  admin -->|"Sidebar: 表示端末"| displays
+  display -.->|"QR を読む（承認する人の端末）"| approve
+  displays --> approve
   dash -->|"Header: ユーザー名"| own
   dash -->|"Sidebar: システム管理"| admin
 
