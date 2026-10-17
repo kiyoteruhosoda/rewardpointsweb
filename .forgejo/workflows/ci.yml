@@ -24,21 +24,30 @@ concurrency:
 # 1 回の実行でまとめて指摘が出るようにする（`if: always()`）。
 jobs:
   backend:
-    name: Backend (Python ${{ matrix.python-version }})
+    name: Backend (Python)
     # ⚠ **自前の台で回す**（forge へ移したとき変えた）。
     runs-on: [self-hosted, nolumialab]
     env:
-      # Python も forge の置き場から取る（task #171。置いてあるのは cpython 3.12.14 の x86_64 Linux だけ）。
+      # Python も forge の置き場から取る（task #171。置いてあるのは cpython 3.11.16・3.12.14・3.14.7 の x86_64 Linux だけ）。
       UV_PYTHON_INSTALL_MIRROR: "https://git.nolumia.com/astral-sh/python-build-standalone/releases/download"
     # ⚠ 既定は 6 時間。ぶら下がったジョブが枠と台を食い潰すので上限を置く。
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12"]
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Python の版が本番のイメージと揃っているか
+        # ⚠ **試験の Python は `.python-version` の版**（uv が読む）。本番のイメージ（Dockerfile の
+        #   `FROM python:X.Y`）とずれたら落とす。Renovate は両方を 1 本の PR で上げる（task #461）。
+        #   CI だけ 3.12 のまま、本番だけ 3.14 に上がっていた。
+        run: |
+          want="$(tr -d '[:space:]' < .python-version)"
+          got="$(git ls-files 'Dockerfile' '*/Dockerfile' | xargs grep -hoE '^FROM +python:[0-9]+\.[0-9]+' | sed -E 's/^FROM +python://' | sort -u)"
+          echo ".python-version: ${want} / Dockerfile: ${got//$'\n'/ }"
+          if [ -z "$got" ] || [ "$got" != "$want" ]; then
+            echo "::error::.python-version（${want}）と Dockerfile の FROM python（${got//$'\n'/ }）が揃っていない"
+            exit 1
+          fi
 
       - name: Set up uv
         # ⚠ ここだけ完全な版で固定する。setup-uv は v8 以降、
@@ -52,7 +61,6 @@ jobs:
           version: "0.12.5"
           manifest-file: "https://git.nolumia.com/astral-sh/uv/raw/branch/main/uv.ndjson"
           download-from-astral-mirror: false
-          python-version: ${{ matrix.python-version }}
           enable-cache: true
 
       - name: Install dependencies
