@@ -2,7 +2,7 @@
  * 表示端末の画面（ADR-0047）: ペアリング → 受け取り → 表示、と、外されたらペアリングへ戻る。
  */
 import { screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as ApiModule from '../services/api'
 import type { DisplaySessionOutcome, Fetched } from '../services/api'
@@ -154,5 +154,31 @@ describe('DisplayPage', () => {
     expect(await screen.findByText('Reconnecting…')).toBeInTheDocument()
     expect(localStorage.getItem('display_credential')).toBe('device-credential')
     expect(startPairing).not.toHaveBeenCalled()
+  })
+
+  describe('版の表示（task #498）', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('動いている版を画面の隅に出す', async () => {
+      localStorage.setItem('display_credential', 'device-credential')
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve(
+            new Response(JSON.stringify({ version: 'd5f51cc', git_sha: 'd5f51cc' }), {
+              status: 200,
+            }),
+          ),
+        ),
+      )
+
+      renderWithProviders(<DisplayPage />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('display-version')).toHaveTextContent('d5f51cc')
+      })
+    })
   })
 })

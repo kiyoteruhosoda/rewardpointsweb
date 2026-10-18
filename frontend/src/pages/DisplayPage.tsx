@@ -13,6 +13,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { useVersionLabel } from '../hooks/useVersionLabel'
 import { useI18n } from '../i18n'
 import {
   ApiError,
@@ -22,7 +23,7 @@ import {
   openDisplaySession,
   rememberDisplayCredential,
 } from '../services/api'
-import { watchForUpdate } from '../services/appUpdate'
+import { DISPLAY_UPDATE_CHECK_INTERVAL_MS, watchForUpdate } from '../services/appUpdate'
 import { claimPairing, startPairing, type StartedPairing } from '../services/display'
 import { families, parseUtc, type FamilyDetail, type Transaction } from '../services/families'
 
@@ -99,12 +100,18 @@ function usePersistentStorage(): void {
   }, [])
 }
 
-/** 新しい版が有効になったら、押されるのを待たずに再読み込みする。 */
+/**
+ * 新しい版が有効になったら、押されるのを待たずに再読み込みする。
+ * 触られない画面なので、確認は短い間隔で起こす（task #498）。
+ */
 function useImmediateUpdates(): void {
   useEffect(() => {
-    watchForUpdate((apply) => {
-      apply()
-    })
+    watchForUpdate(
+      (apply) => {
+        apply()
+      },
+      { checkIntervalMs: DISPLAY_UPDATE_CHECK_INTERVAL_MS },
+    )
   }, [])
 }
 
@@ -113,6 +120,7 @@ export function DisplayPage() {
   useScreenKeptOn()
   usePersistentStorage()
   useImmediateUpdates()
+  const version = useVersionLabel()
 
   const onPaired = useCallback(() => {
     setPaired(true)
@@ -124,6 +132,10 @@ export function DisplayPage() {
   return (
     <div className="display-screen">
       {paired ? <DisplayBoard onRemoved={onRemoved} /> : <Pairing onPaired={onPaired} />}
+      {/* 版が替わったことを画面で見分けられるように（task #498） */}
+      <p className="display-version" data-testid="display-version">
+        {version}
+      </p>
     </div>
   )
 }
