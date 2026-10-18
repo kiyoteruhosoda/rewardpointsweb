@@ -17,6 +17,12 @@
 /** 更新を確認する間隔。 */
 export const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000
 
+/**
+ * 表示の画面（`/display`）の確認の間隔。操作もタブの出入りも無いので、確認は間隔だけが頼り。
+ * 配ってから数分で入れ替わるよう短く取る（task #498。確認は `sw.js` を 1 本取るだけ）。
+ */
+export const DISPLAY_UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 1000
+
 /** 確認どうしの最短間隔（タブの出入りを繰り返しても頻繁には叩かない）。 */
 const MIN_CHECK_GAP_MS = 60 * 1000
 
@@ -29,10 +35,16 @@ export type ApplyUpdate = () => void
 /** 新しい版が有効になったときに呼ばれる。 */
 export type UpdateReadyListener = (apply: ApplyUpdate) => void
 
-/** 新しい版を見張る。 */
-export type WatchForUpdate = (onUpdateReady: UpdateReadyListener) => void
+/** 見張り方。 */
+export interface WatchOptions {
+  /** 更新を確認する間隔（既定は `UPDATE_CHECK_INTERVAL_MS`）。 */
+  checkIntervalMs?: number
+}
 
-function scheduleChecks(registration: ServiceWorkerRegistration): void {
+/** 新しい版を見張る。 */
+export type WatchForUpdate = (onUpdateReady: UpdateReadyListener, options?: WatchOptions) => void
+
+function scheduleChecks(registration: ServiceWorkerRegistration, intervalMs: number): void {
   let checkedAt = 0
 
   const check = (): void => {
@@ -45,13 +57,13 @@ function scheduleChecks(registration: ServiceWorkerRegistration): void {
     })
   }
 
-  setInterval(check, UPDATE_CHECK_INTERVAL_MS)
+  setInterval(check, intervalMs)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') check()
   })
 }
 
-export const watchForUpdate: WatchForUpdate = (onUpdateReady) => {
+export const watchForUpdate: WatchForUpdate = (onUpdateReady, options = {}) => {
   // 開発サーバーでは Service Worker を作らない（vite-plugin-pwa の既定と同じ）
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return
   const workers = navigator.serviceWorker
@@ -70,7 +82,9 @@ export const watchForUpdate: WatchForUpdate = (onUpdateReady) => {
 
   workers
     .register(SERVICE_WORKER_URL, { scope: '/' })
-    .then(scheduleChecks)
+    .then((registration) => {
+      scheduleChecks(registration, options.checkIntervalMs ?? UPDATE_CHECK_INTERVAL_MS)
+    })
     .catch(() => {
       // 登録できなくても画面は動く（オフライン閲覧と版の知らせが無いだけ）。
     })

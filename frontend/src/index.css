@@ -1712,6 +1712,16 @@ tr.reversed {
   font-size: 1rem;
 }
 
+/* 動いている版（task #498）。読む物ではないので隅に小さく。 */
+.display-version {
+  position: fixed;
+  right: calc(0.75rem + env(safe-area-inset-right));
+  bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .display-reconnecting {
   display: flex;
   align-items: center;
