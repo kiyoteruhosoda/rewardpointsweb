@@ -29,6 +29,7 @@ import { SystemLogsPage } from './pages/SystemLogsPage'
 import { UsersPage } from './pages/UsersPage'
 import { displayCredential } from './services/api'
 import { APPROVE_PATH, rememberPendingApproval, takePendingApproval } from './services/display'
+import { signInPathFor } from './services/returnTo'
 import { useAuth } from './store/AuthContext'
 import { FamilyProvider } from './store/FamilyContext'
 
@@ -66,7 +67,8 @@ function RequireAuth() {
     // ペアリング済みの表示端末は、ホーム画面のアイコンが / を開いても表示の画面へ（ADR-0047）
     if (displayCredential() !== null) return <Navigate to="/display" replace />
     if (location.pathname === APPROVE_PATH) rememberPendingApproval(location.hash)
-    return <Navigate to="/login" replace />
+    // 開こうとしていた画面を持たせて送る（ADR-0051）。持たせないと、ログインした先は着地になる。
+    return <Navigate to={signInPathFor(location)} replace />
   }
   // 表示端末は表示の画面だけを出す（ADR-0047）
   if (user.display_device) return <Navigate to="/display" replace />

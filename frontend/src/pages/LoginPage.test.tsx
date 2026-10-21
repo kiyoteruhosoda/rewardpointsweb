@@ -33,6 +33,7 @@ function renderLogin(route: string) {
     extraRoutes: (
       <>
         <Route path="/families" element={<p>families page</p>} />
+        <Route path="/admin/logs" element={<p>logs page</p>} />
         <Route path="/" element={<p>dashboard</p>} />
       </>
     ),
@@ -77,6 +78,20 @@ describe('LoginPage', () => {
 
     expect(await screen.findByText('dashboard')).toBeInTheDocument()
     expect(screen.queryByText(/Sign in first/)).not.toBeInTheDocument()
+  })
+
+  it('開こうとしていた画面（redirect_to）へ、クエリごと戻す（ADR-0051）', async () => {
+    renderLogin('/login?redirect_to=%2Fadmin%2Flogs%3Flevel%3DERROR')
+    signIn()
+
+    expect(await screen.findByText('logs page')).toBeInTheDocument()
+  })
+
+  it('招待コードがあれば、redirect_to より家族の画面を先にする', async () => {
+    renderLogin('/login?redirect_to=%2Fadmin%2Flogs#code=CODE1234')
+    signIn()
+
+    expect(await screen.findByText('families page')).toBeInTheDocument()
   })
 
   describe('SSO', () => {
@@ -126,6 +141,19 @@ describe('LoginPage', () => {
       // 戻り先はサーバーへ届く。招待コードは載せず、同じタブへ預ける（ADR-0025）
       expect(startSsoLogin).toHaveBeenCalledExactlyOnceWith('/families')
       expect(sessionStorage.getItem('pendingInvitationCode')).toBe('CODE1234')
+    })
+
+    it.each([
+      ['/login?redirect_to=%2Fadmin%2Flogs%3Fq%3Da', '/admin/logs?q=a'],
+      ['/login', '/'],
+      ['/login?redirect_to=https%3A%2F%2Fevil.example%2F', '/'],
+    ])('開こうとしていた画面を IdP の往復に渡す（%s → %s。ADR-0051）', async (entry, expected) => {
+      fetchSsoProvider.mockResolvedValue({ enabled: true, display_name: 'Nolumia' })
+      renderLogin(entry)
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Sign in with Nolumia' }))
+
+      expect(startSsoLogin).toHaveBeenCalledExactlyOnceWith(expected)
     })
 
     it('IdP から戻された失敗を出す', () => {
