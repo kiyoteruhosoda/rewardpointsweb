@@ -12,6 +12,7 @@ import {
   readInvitationCode,
   rememberInvitationCode,
 } from '../services/invitationLink'
+import { REDIRECT_TO_PARAM, sanitizeRedirectTo } from '../services/returnTo'
 import { fetchSsoProvider, startSsoLogin, type SsoProvider } from '../services/sso'
 import { isPasskeySupported, passkeyErrorKey } from '../services/webauthn'
 import { RECONNECT_INTERVAL_MS, useAuth } from '../store/AuthContext'
@@ -26,11 +27,14 @@ export function LoginPage() {
   // 招待コードを持ったままここへ来ることがある（アカウント作成の画面から回された
   // 場合、または招待リンクから直接）。コードは URL の断片で運ばれる（ADR-0025）。
   // ログイン後は既定の行き先ではなく、そのコードで参加できる家族の画面へ送る。
+  // コードが無ければ、開こうとしていた画面（`?redirect_to=`。ADR-0051）へ戻す。
   const { hash } = useLocation()
+  const [searchParams] = useSearchParams()
   const pendingCode = readInvitationCode(hash)
-  const destination = pendingCode ? invitationAcceptPath(pendingCode) : '/'
+  const returnTo = sanitizeRedirectTo(searchParams.get(REDIRECT_TO_PARAM))
+  const destination = pendingCode ? invitationAcceptPath(pendingCode) : returnTo
   // SSO の戻り先はサーバーを経由するので、コードを含まない経路だけを渡す
-  const ssoDestination = pendingCode ? '/families' : '/'
+  const ssoDestination = pendingCode ? '/families' : returnTo
   // 行き来してもコードを落とさない（ここで落とすと打ち直しになる）
   const joinPath = invitationJoinPath(pendingCode)
   const [step, setStep] = useState<Step>('credentials')
@@ -41,7 +45,6 @@ export function LoginPage() {
   const [sso, setSso] = useState<SsoProvider | null>(null)
   const [ssoUnreachable, setSsoUnreachable] = useState(false)
   // SSO の失敗は画面遷移で戻ってくるため、応答本文ではなく URL に載る
-  const [searchParams] = useSearchParams()
   const ssoError = searchParams.get('sso_error')
 
   // 問い合わせに失敗するのはサーバーに届かないとき（リリース中など）。⚠ **一度で諦めない**
