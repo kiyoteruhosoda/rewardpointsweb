@@ -10,6 +10,7 @@ import {
   setTokens,
 } from '../services/api'
 import { exchangeSsoTicket } from '../services/sso'
+import { clearSilentSsoMarks, markSignedOut } from '../services/silentSso'
 import { assertPasskey, type PasskeyChallenge } from '../services/webauthn'
 
 export interface Me {
@@ -112,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // オフライン閲覧キャッシュを持ち越さない（ADR-0015）
     await clearOfflineViewCache()
     setTokens(pair.access_token, pair.refresh_token)
+    clearSilentSsoMarks()
     await refreshMe()
   }
 
@@ -125,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // login と同じく、別アカウントでの入り直しに備えて消す（ADR-0015）
     await clearOfflineViewCache()
     setTokens(pair.access_token, pair.refresh_token)
+    clearSilentSsoMarks()
     await refreshMe()
   }
 
@@ -133,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // login と同じく、別アカウントでの入り直しに備えて消す（ADR-0015）
     await clearOfflineViewCache()
     setTokens(session.access_token, session.refresh_token)
+    clearSilentSsoMarks()
     await refreshMe()
     return session.redirect_to
   }
@@ -141,6 +145,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void api.post('/api/auth/logout').catch(() => undefined)
     clearTokens()
     setUser(null)
+    // IdP の SSO は既定で残るので、ログイン画面を開いてもボタンを押さずに入り直さない（ADR-0052）
+    markSignedOut()
   }
 
   const hasScope = (...codes: string[]) =>

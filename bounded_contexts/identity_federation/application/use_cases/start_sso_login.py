@@ -51,8 +51,11 @@ class StartSsoLogin:
     #: 認可要求に載せる ``acr_values``（空 = 要求しない）。ADR-0039。
     acr_values: tuple[str, ...] = ()
 
-    def execute(self, *, redirect_to: str | None = None) -> SsoAuthorizationDto:
-        """IdP へ送り出す URL と、ブラウザへ持たせる合言葉を返す。"""
+    def execute(self, *, redirect_to: str | None = None, silent: bool = False) -> SsoAuthorizationDto:
+        """IdP へ送り出す URL と、ブラウザへ持たせる合言葉を返す。
+
+        ``silent`` なら IdP に画面を出させない（``prompt=none``。ADR-0052）。
+        """
         provider = require_usable(self.provider)
         state = new_secret()
         nonce = new_secret()
@@ -66,6 +69,7 @@ class StartSsoLogin:
                 binding_hash=hash_secret(binding),
                 redirect_to=RedirectTarget.parse(redirect_to).path,
                 expires_at=utcnow() + timedelta(seconds=self.session_ttl_seconds),
+                silent=silent,
             )
         )
         authorization_url = self.gateway.authorization_url(
@@ -75,6 +79,7 @@ class StartSsoLogin:
                 nonce=nonce,
                 code_challenge=code_challenge_of(code_verifier),
                 acr_values=self.acr_values,
+                silent=silent,
             )
         )
         return SsoAuthorizationDto(authorization_url=authorization_url, browser_binding=binding)

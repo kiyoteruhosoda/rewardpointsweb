@@ -38,6 +38,7 @@ class SqlSsoLoginSessionRepository:
                 redirect_to=session.redirect_to,
                 expires_at=session.expires_at,
                 link_user_id=session.link_user_id,
+                silent=session.silent,
             )
         )
         self.session.flush()
@@ -85,6 +86,7 @@ def _to_session(record: SsoLoginSessionRecord) -> SsoLoginSession:
         redirect_to=record.redirect_to,
         expires_at=record.expires_at,
         link_user_id=record.link_user_id,
+        silent=record.silent,
     )
 
 

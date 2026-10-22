@@ -13,6 +13,7 @@ import {
   rememberInvitationCode,
 } from '../services/invitationLink'
 import { REDIRECT_TO_PARAM, sanitizeRedirectTo } from '../services/returnTo'
+import { markSilentSsoTried, maySilentSso } from '../services/silentSso'
 import { fetchSsoProvider, startSsoLogin, type SsoProvider } from '../services/sso'
 import { isPasskeySupported, passkeyErrorKey } from '../services/webauthn'
 import { RECONNECT_INTERVAL_MS, useAuth } from '../store/AuthContext'
@@ -44,6 +45,10 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [sso, setSso] = useState<SsoProvider | null>(null)
   const [ssoUnreachable, setSsoUnreachable] = useState(false)
+  // IdP で入っていればボタンを押さずに入れる（ADR-0052）。試してよいかは開いたときの URL で決める。
+  // 招待コードを持って来たときは試さない（入ったあとの行き先が参加の画面になるため、本人に選ばせる）。
+  // ⚠ **試すと決めたら入口を描かない。** 描いてから飛ぶと、一瞬だけログイン画面が見える。
+  const [silentAllowed] = useState(() => !pendingCode && maySilentSso(searchParams))
   // SSO の失敗は画面遷移で戻ってくるため、応答本文ではなく URL に載る
   const ssoError = searchParams.get('sso_error')
 
@@ -57,6 +62,10 @@ export function LoginPage() {
       fetchSsoProvider()
         .then((provider) => {
           if (cancelled) return
+          if (provider.enabled && silentAllowed && markSilentSsoTried()) {
+            startSsoLogin(returnTo, { silent: true })
+            return
+          }
           setSso(provider)
           setSsoUnreachable(false)
         })
@@ -71,7 +80,7 @@ export function LoginPage() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [])
+  }, [returnTo, silentAllowed])
 
   const [submit, submitting] = usePendingAction(async (e: FormEvent) => {
     e.preventDefault()
