@@ -118,6 +118,16 @@ export function LoginPage() {
     setError(null)
   }
 
+  // 試すかどうかが決まるまでは入口を描かない（ADR-0052）。描いてから IdP へ飛ぶと、パスワード欄が
+  // 一瞬だけ見える。届かないと分かったら（ssoUnreachable）いつもの入口を出す。
+  if (silentAllowed && sso === null && !ssoUnreachable) {
+    return (
+      <div className="auth-page">
+        <p className="card loading">{t('common.loading')}</p>
+      </div>
+    )
+  }
+
   return (
     <div className="auth-page">
       <form className="card" onSubmit={submit}>
