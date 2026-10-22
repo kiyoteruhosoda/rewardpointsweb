@@ -56,6 +56,8 @@ class SsoLoginSessionRecord(Base):
     # ⚠ **外部キーを張らない。** この表は短命な控えで、利用者を消したときに
     #   道連れにする対象ではない（消えた利用者の控えは期限で消える）。
     link_user_id: Mapped[int | None] = mapped_column(BigIntPk, nullable=True)
+    # 画面を出さずに試した往復（prompt=none。ADR-0052）
+    silent: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False, default=False, server_default=sa.false())
 
 
 class SsoLoginTicketRecord(Base):

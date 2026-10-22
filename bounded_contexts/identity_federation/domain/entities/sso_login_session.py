@@ -38,6 +38,11 @@ class SsoLoginSession:
     #: ⚠ **戻ってきたときのセッションでは代用できない。** 往復の途中でサイン
     #:   アウトして別の利用者で入り直せば、結び付け先がその人にすり替わる。
     link_user_id: int | None = None
+    #: 画面を出さずに試した往復（``prompt=none``。ADR-0052）。
+    #:
+    #: ⚠ **戻りで「入っていない」と言われたときの扱いを決めるためにある。** 試しただけなので
+    #:   失敗ではなく、エラーを出さずにログイン画面へ戻す。
+    silent: bool = False
 
     def is_expired(self, now: datetime) -> bool:
         return now >= self.expires_at
@@ -48,6 +53,10 @@ class SsoLoginSession:
         突き合わせはハッシュ同士で行う（生の値は保存していない）。
         """
         return bool(binding_hash) and binding_hash == self.binding_hash
+
+    def declined_silently(self, binding_hash: str) -> bool:
+        """送り出したブラウザへの戻りで、それが画面を出さずに試した往復か（ADR-0052）。"""
+        return self.silent and self.belongs_to(binding_hash)
 
     def started_by(self, user_id: int) -> bool:
         """連携の往復を始めたのが、いま入っているこの利用者か（ADR-0036）。"""

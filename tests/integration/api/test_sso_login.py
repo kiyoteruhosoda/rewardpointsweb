@@ -516,3 +516,46 @@ def test_an_absent_acr_is_refused_too(sso_client: TestClient, gateway: FakeGatew
     )
 
     assert response.headers["location"] == "/login?sso_error=sso_acr_not_satisfied"
+
+
+def _start_silently(client: TestClient, redirect_to: str = "/families") -> str:
+    """ログイン画面が開いたときの試し（ADR-0052）を出し、``state`` を返す。"""
+    response = client.get("/api/auth/sso/login", params={"prompt": "none", "redirect_to": redirect_to})
+    assert response.status_code == 303, response.text
+    return str(parse_qs(urlparse(response.headers["location"]).query)["state"][0])
+
+
+def test_a_silent_attempt_asks_the_idp_not_to_show_a_screen(sso_client: TestClient, gateway: FakeGateway) -> None:
+    _start_silently(sso_client)
+    assert gateway.sent[-1].silent is True
+    # ふつうの往復には付けない
+    _start(sso_client)
+    assert gateway.sent[-1].silent is False
+
+
+@pytest.mark.parametrize(
+    "error", ["login_required", "consent_required", "interaction_required", "account_selection_required"]
+)
+def test_a_declined_silent_attempt_returns_to_the_login_screen_without_an_error(
+    sso_client: TestClient, error: str
+) -> None:
+    """IdP で入っていなかった。失敗ではないので ``sso_error`` を付けず、行き先は持ち帰る。"""
+    state = _start_silently(sso_client, "/families")
+    back = sso_client.get("/api/auth/sso/callback", params={"error": error, "state": state})
+    assert back.status_code == 303
+    assert back.headers["location"] == "/login?sso_silent=declined&redirect_to=%2Ffamilies"
+
+
+def test_a_declined_ordinary_attempt_is_still_an_error(sso_client: TestClient) -> None:
+    """ボタンで始めた往復の ``login_required`` は今までどおりエラーで返す。"""
+    state = _start(sso_client)
+    back = sso_client.get("/api/auth/sso/callback", params={"error": "login_required", "state": state})
+    assert "sso_error=login_required" in back.headers["location"]
+
+
+def test_a_declined_silent_attempt_from_another_browser_is_still_an_error(sso_client: TestClient) -> None:
+    """合言葉の Cookie が無い戻りは、試した往復でも黙って飲み込まない。"""
+    state = _start_silently(sso_client)
+    sso_client.cookies.clear()
+    back = sso_client.get("/api/auth/sso/callback", params={"error": "login_required", "state": state})
+    assert "sso_error=login_required" in back.headers["location"]

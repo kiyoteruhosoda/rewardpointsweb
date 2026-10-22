@@ -8,7 +8,7 @@
  * SSO のボタンは、サーバーが「使える」と答えたときにだけ出す。失敗の理由は
  * 画面遷移で戻ってくるため URL に載る（ADR-0029）。
  */
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'react-router-dom'
 
@@ -17,12 +17,13 @@ import type { SsoProvider } from '../services/sso'
 import { LoginPage } from './LoginPage'
 
 const fetchSsoProvider = vi.fn<() => Promise<SsoProvider>>()
-const startSsoLogin = vi.fn<(redirectTo: string) => void>()
+const startSsoLogin = vi.fn<(redirectTo: string, options?: { silent?: boolean }) => void>()
 
 vi.mock('../services/sso', () => ({
   fetchSsoProvider: () => fetchSsoProvider(),
-  startSsoLogin: (redirectTo: string) => {
-    startSsoLogin(redirectTo)
+  startSsoLogin: (redirectTo: string, options?: { silent?: boolean }) => {
+    if (options) startSsoLogin(redirectTo, options)
+    else startSsoLogin(redirectTo)
   },
 }))
 
@@ -51,6 +52,9 @@ describe('LoginPage', () => {
     fetchSsoProvider.mockReset()
     startSsoLogin.mockReset()
     sessionStorage.clear()
+    localStorage.clear()
+    // 入口の出し分けを見る試験。ボタンを押さずに入る試し（ADR-0052）は済んだことにする
+    sessionStorage.setItem('ssoSilentTried', '1')
     // 既定は「SSO は使えない」。使える場合は各テストで差し替える
     fetchSsoProvider.mockResolvedValue({ enabled: false, display_name: '' })
   })
@@ -170,6 +174,61 @@ describe('LoginPage', () => {
       renderLogin('/login?sso_error=something_new')
 
       expect(screen.getByText('Single sign-on failed. Please try again.')).toBeInTheDocument()
+    })
+  })
+
+  describe('ボタンを押さずに入る試し（ADR-0052）', () => {
+    beforeEach(() => {
+      sessionStorage.clear()
+      fetchSsoProvider.mockResolvedValue({ enabled: true, display_name: 'Nolumia' })
+    })
+
+    it('開いたら入口を描かずに prompt=none で IdP へ送り出す（行き先は保つ）', async () => {
+      renderLogin('/login?redirect_to=%2Fadmin%2Flogs')
+
+      await waitFor(() => {
+        expect(startSsoLogin).toHaveBeenCalledExactlyOnceWith('/admin/logs', { silent: true })
+      })
+      expect(screen.queryByRole('button', { name: 'Sign in with Nolumia' })).not.toBeInTheDocument()
+    })
+
+    it('試して戻ってきたら、エラーを出さずにふつうの入口を出す', async () => {
+      renderLogin('/login?sso_silent=declined&redirect_to=%2Fadmin%2Flogs')
+
+      expect(
+        await screen.findByRole('button', { name: 'Sign in with Nolumia' }),
+      ).toBeInTheDocument()
+      expect(startSsoLogin).not.toHaveBeenCalled()
+      expect(screen.queryByText('Single sign-on failed. Please try again.')).not.toBeInTheDocument()
+    })
+
+    it('招待コードを持って来たときは試さない', async () => {
+      renderLogin('/login#code=CODE1234')
+
+      expect(
+        await screen.findByRole('button', { name: 'Sign in with Nolumia' }),
+      ).toBeInTheDocument()
+      expect(startSsoLogin).not.toHaveBeenCalled()
+    })
+
+    it('このタブで一度試していたら試さない', async () => {
+      sessionStorage.setItem('ssoSilentTried', '1')
+      renderLogin('/login')
+
+      expect(
+        await screen.findByRole('button', { name: 'Sign in with Nolumia' }),
+      ).toBeInTheDocument()
+      expect(startSsoLogin).not.toHaveBeenCalled()
+    })
+
+    it('サインアウトした後は試さない', async () => {
+      localStorage.setItem('ssoSignedOut', '1')
+      renderLogin('/login')
+
+      expect(
+        await screen.findByRole('button', { name: 'Sign in with Nolumia' }),
+      ).toBeInTheDocument()
+      expect(startSsoLogin).not.toHaveBeenCalled()
     })
   })
 })
