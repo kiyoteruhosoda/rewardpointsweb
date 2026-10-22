@@ -190,6 +190,8 @@ describe('LoginPage', () => {
         expect(startSsoLogin).toHaveBeenCalledExactlyOnceWith('/admin/logs', { silent: true })
       })
       expect(screen.queryByRole('button', { name: 'Sign in with Nolumia' })).not.toBeInTheDocument()
+      // 試す前にパスワード欄を描かない（一瞬見えてから IdP へ飛ばない）
+      expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
     })
 
     it('試して戻ってきたら、エラーを出さずにふつうの入口を出す', async () => {
