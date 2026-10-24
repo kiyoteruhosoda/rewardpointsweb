@@ -7,11 +7,24 @@
  * 指（またはマウス）を置くと、いちばん近い記録に縦線が合い、その時点の残高と
  * 何が増減したかが出る。キーボードでは左右の矢印で記録を 1 つずつ移る。数字の
  * 一覧は同じ画面の履歴の表が受け持つ。
+ *
+ * 「いま」から先は、これからの見込みを点線で伸ばす（ADR-0053）。直近の増え方が
+ * 続いたときの見積もりで、確かな値ではないので実線とは描き分け、グラフの下に
+ * 何日後に何 pt かと、見積もりの元（1 日あたりの増え方）を文で添える。
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react'
 
 import { useI18n } from '../i18n'
 import {
+  balanceForecast,
   balanceSeries,
   niceTicks,
   trendWindow,
@@ -59,19 +72,26 @@ export function BalanceTrend({ transactions, asOf }: Props) {
   const [range, setRange] = useState<TrendRange>('all')
   const [active, setActive] = useState<number | null>(null)
   const [frameRef, width] = useWidth(640)
+  const forecastId = useId()
   const series = useMemo(() => balanceSeries(transactions), [transactions])
   // 記録の時刻が読んだ時刻より先にある（端末の時計のずれ）ときも、線は最後の記録まで描く
   const now = Math.max(asOf.getTime(), series.at(-1)?.at ?? 0)
   const view = useMemo(() => trendWindow(series, range, now), [series, range, now])
+  const forecast = useMemo(() => balanceForecast(series, now), [series, now])
+  const ahead = forecast?.points.at(-1) ?? null
+  const end = ahead?.at ?? view.end
 
-  const balances = [view.startBalance, ...view.points.map((point) => point.balance)]
+  const balances = [
+    view.startBalance,
+    ...view.points.map((point) => point.balance),
+    ...(forecast?.points.map((point) => point.balance) ?? []),
+  ]
   const ticks = niceTicks(Math.min(0, ...balances), Math.max(10, ...balances))
   const low = ticks[0] ?? 0
   const high = ticks.at(-1) ?? 10
   const innerWidth = width - MARGIN.left - MARGIN.right
   const innerHeight = HEIGHT - MARGIN.top - MARGIN.bottom
-  const x = (at: number) =>
-    MARGIN.left + ((at - view.start) / (view.end - view.start || 1)) * innerWidth
+  const x = (at: number) => MARGIN.left + ((at - view.start) / (end - view.start || 1)) * innerWidth
   const y = (balance: number) => MARGIN.top + ((high - balance) / (high - low || 1)) * innerHeight
 
   const steps = view.points.map(
@@ -84,6 +104,10 @@ export function BalanceTrend({ transactions, asOf }: Props) {
   const date = (at: number) =>
     new Date(at).toLocaleDateString(locale, { month: 'numeric', day: 'numeric' })
   const current = series.at(-1)?.balance ?? 0
+  const projection =
+    ahead === null
+      ? null
+      : `M${x(view.end).toFixed(1)},${y(current).toFixed(1)}L${x(ahead.at).toFixed(1)},${y(ahead.balance).toFixed(1)}`
   const focused: BalancePoint | null = active === null ? null : (view.points[active] ?? null)
 
   const nearest = (event: PointerEvent<SVGSVGElement>) => {
@@ -147,6 +171,7 @@ export function BalanceTrend({ transactions, asOf }: Props) {
             to: date(view.end),
             points: current,
           })}
+          aria-describedby={forecast === null ? undefined : forecastId}
           onKeyDown={step}
           onBlur={() => {
             setActive(null)
@@ -173,6 +198,20 @@ export function BalanceTrend({ transactions, asOf }: Props) {
             ))}
             <path className="trend-area" d={area} />
             <path className="trend-line" d={line} />
+            {projection !== null && (
+              <g className="trend-forecast-mark">
+                <line
+                  x1={x(view.end)}
+                  x2={x(view.end)}
+                  y1={MARGIN.top}
+                  y2={HEIGHT - MARGIN.bottom}
+                />
+                <text x={x(view.end)} y={HEIGHT - 6} textAnchor="middle">
+                  {t('trend.today')}
+                </text>
+                <path d={projection} />
+              </g>
+            )}
             {view.points.length <= MAX_MARKERS &&
               view.points.map((point) => (
                 <circle
@@ -187,7 +226,7 @@ export function BalanceTrend({ transactions, asOf }: Props) {
               {date(view.start)}
             </text>
             <text className="trend-axis" x={width - MARGIN.right} y={HEIGHT - 6} textAnchor="end">
-              {date(view.end)}
+              {date(end)}
             </text>
             {focused && (
               <g className="trend-focus">
@@ -218,6 +257,26 @@ export function BalanceTrend({ transactions, asOf }: Props) {
               </span>
             </div>
           )}
+        </div>
+      )}
+
+      {forecast !== null && (
+        <div id={forecastId} className="trend-forecast">
+          <h3>{t('trend.forecast.title')}</h3>
+          <ul>
+            {forecast.points.map((point) => (
+              <li key={point.days}>
+                <span>{t(`trend.forecast.after.${point.days}`)}</span>
+                <strong>{t('trend.forecast.value', { points: point.balance })}</strong>
+              </li>
+            ))}
+          </ul>
+          <p>
+            {t('trend.forecast.basis', {
+              days: forecast.basisDays,
+              perDay: withSign(Math.round(forecast.perDay * 10) / 10),
+            })}
+          </p>
         </div>
       )}
     </section>

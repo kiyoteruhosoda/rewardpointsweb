@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { balanceSeries, niceTicks, trendWindow } from './balanceSeries'
+import { balanceForecast, balanceSeries, niceTicks, trendWindow } from './balanceSeries'
 import type { Transaction } from './families'
 
 function row(id: number, amount: number, occurredAt: string): Transaction {
@@ -119,5 +119,65 @@ describe('niceTicks', () => {
     expect(ticks).toContain(0)
     expect(ticks[0]).toBeLessThanOrEqual(-30)
     expect(ticks.at(-1)).toBeGreaterThanOrEqual(70)
+  })
+})
+
+describe('balanceForecast', () => {
+  const now = Date.parse('2026-10-31T00:00:00Z')
+
+  it('直近 30 日の増え方が続いたとして、1 週間後と 1 か月後を出す', () => {
+    // 30 日前より前に 100、その後の 30 日で +60（毎日のボーナス +90 と使った −30）
+    const forecast = balanceForecast(
+      balanceSeries([
+        row(3, -30, '2026-10-20T00:00:00'),
+        row(2, 90, '2026-10-10T00:00:00'),
+        row(1, 100, '2026-09-01T00:00:00'),
+      ]),
+      now,
+    )
+
+    expect(forecast?.perDay).toBe(2)
+    expect(forecast?.basisDays).toBe(30)
+    expect(forecast?.points.map((point) => [point.days, point.balance])).toEqual([
+      [7, 174],
+      [30, 220],
+    ])
+  })
+
+  it('記録が 30 日に満たないときは、最初の記録からの日数で割る', () => {
+    const forecast = balanceForecast(
+      balanceSeries([row(2, 50, '2026-10-25T00:00:00'), row(1, 50, '2026-10-21T00:00:00')]),
+      now,
+    )
+
+    expect(forecast?.basisDays).toBe(10)
+    expect(forecast?.perDay).toBe(10)
+  })
+
+  it('使う方が多ければ、見込みは減っていく', () => {
+    const forecast = balanceForecast(
+      balanceSeries([row(2, -150, '2026-10-15T00:00:00'), row(1, 300, '2026-09-01T00:00:00')]),
+      now,
+    )
+
+    expect(forecast?.points.at(-1)?.balance).toBe(0)
+  })
+
+  it('記録が 1 週間に満たないうちは見積もらない', () => {
+    expect(balanceForecast(balanceSeries([row(1, 100, '2026-10-26T00:00:00')]), now)).toBeNull()
+    expect(balanceForecast([], now)).toBeNull()
+  })
+
+  it('取り消した記録は増え方に数えない', () => {
+    const forecast = balanceForecast(
+      balanceSeries([
+        { ...row(3, -100, '2026-10-20T00:00:00'), reversal_of_id: 2 },
+        { ...row(2, 100, '2026-10-10T00:00:00'), is_reversed: true },
+        row(1, 100, '2026-09-01T00:00:00'),
+      ]),
+      now,
+    )
+
+    expect(forecast?.perDay).toBe(0)
   })
 })
