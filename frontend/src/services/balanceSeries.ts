@@ -88,3 +88,51 @@ export function niceTicks(min: number, max: number, count = 4): number[] {
   const steps = Math.max(1, Math.ceil((max - first) / step))
   return Array.from({ length: steps + 1 }, (_, index) => Math.round(first + index * step))
 }
+
+/** 予測の見積もりに使う過去の長さ（日）。 */
+export const FORECAST_BASIS_DAYS = 30
+/** これより記録が短いと、増え方を見積もらない（数日の記録だと 1 回の加算で大きく振れる）。 */
+export const FORECAST_MIN_HISTORY_DAYS = 7
+/** 予測を出す先（日後）。グラフは最後の先まで点線で伸ばす。 */
+export const FORECAST_HORIZONS = [7, 30] as const
+
+export interface BalanceForecast {
+  /** 見積もった 1 日あたりの増減（小数のまま）。 */
+  perDay: number
+  /** 見積もりに使った過去の日数。 */
+  basisDays: number
+  /** 各先での残高の見込み（四捨五入）。*FORECAST_HORIZONS* と同じ順。 */
+  points: { days: number; at: number; balance: number }[]
+}
+
+/**
+ * これからの残高を見積もる（ADR-0053）。
+ *
+ * 直近 *FORECAST_BASIS_DAYS* 日の増え方（毎日のボーナスも、手で付けた・使った分も
+ * 込み）がそのまま続いたとして伸ばす。毎日のボーナスだけで伸ばさないのは、使う分を
+ * 見ないと見込みが実際より大きく外れるため。記録が *FORECAST_MIN_HISTORY_DAYS* 日に
+ * 満たないうちは null（見積もらない）。
+ */
+export function balanceForecast(
+  series: readonly BalancePoint[],
+  now: number,
+): BalanceForecast | null {
+  const first = series[0]
+  if (first === undefined) return null
+  const historyDays = (now - first.at) / DAY
+  if (historyDays < FORECAST_MIN_HISTORY_DAYS) return null
+  const basisDays = Math.min(FORECAST_BASIS_DAYS, historyDays)
+  const since = now - basisDays * DAY
+  const before = series.filter((point) => point.at < since).at(-1)?.balance ?? 0
+  const current = series.filter((point) => point.at <= now).at(-1)?.balance ?? 0
+  const perDay = (current - before) / basisDays
+  return {
+    perDay,
+    basisDays: Math.round(basisDays),
+    points: FORECAST_HORIZONS.map((days) => ({
+      days,
+      at: now + days * DAY,
+      balance: Math.round(current + perDay * days),
+    })),
+  }
+}

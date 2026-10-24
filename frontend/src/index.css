@@ -1093,6 +1093,60 @@ tr.reversed {
   margin: 0;
 }
 
+/* これからの予測（ADR-0053）。見積もりなので実線と描き分け、点線で伸ばす。
+ * 「今日」の縦線で、ここまでが記録・ここからが見込みと分ける。 */
+.trend-forecast-mark line {
+  stroke: var(--border);
+}
+
+.trend-forecast-mark text {
+  fill: var(--text-muted);
+  font-size: 11px;
+}
+
+.trend-forecast-mark path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+}
+
+.trend-forecast {
+  margin-top: 0.75rem;
+}
+
+.trend-forecast h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.trend-forecast ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trend-forecast li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-forecast li span,
+.trend-forecast p {
+  color: var(--text-muted);
+}
+
+.trend-forecast p {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+}
+
 /* 見出しの横に添える入口（台帳 ⇄ イベント）。 */
 .page-heading-row {
   display: flex;
