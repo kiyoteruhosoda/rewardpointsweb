@@ -56,9 +56,7 @@ jobs:
         # ⚠ **鏡に無いので自前の鏡を完全な URL で指す**（forge へ移したため）。
         uses: https://git.nolumia.com/astral-sh/setup-uv@v10.0.1
         with:
-          # ⚠ **版を固定し、一覧も uv 本体も forge の置き場から取る**（task #171）。版を省くと
-          #   最新版を GitHub の API へ匿名で聞きに行き、レート制限（60 回/時・IP ごと）で落ちる。
-          version: "0.12.5"
+          # 版は書かない: manifest-file の一覧（forge の写し・毎週取り込み）の最新を使う。manifest-file があれば GitHub の API へは行かない（2026-10-27）。
           manifest-file: "https://git.nolumia.com/astral-sh/uv/raw/branch/main/uv.ndjson"
           download-from-astral-mirror: false
           enable-cache: true
