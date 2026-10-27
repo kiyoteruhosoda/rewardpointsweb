@@ -51,7 +51,7 @@ export function RedeemInvitationPage() {
       const joined = await families.redeemInvitation(code, username, password, displayName)
       // 作った直後はまだログインしていない。設定したばかりの資格情報でそのまま入る
       await login(joined.username, password)
-      navigate('/')
+      void navigate('/')
     } catch (err) {
       setError(errorMessageKey(err))
     }

@@ -54,7 +54,7 @@ export function DisplayApprovePage() {
         name: name.trim(),
       })
       notify('success', t('displays.approved', { name: approved.name }))
-      navigate(LIST_PATH)
+      void navigate(LIST_PATH)
     } catch (err) {
       notify('error', t(errorMessageKey(err)))
     }
@@ -117,7 +117,7 @@ export function DisplayApprovePage() {
             <button
               type="button"
               onClick={() => {
-                navigate(LIST_PATH)
+                void navigate(LIST_PATH)
               }}
             >
               {t('common.cancel')}

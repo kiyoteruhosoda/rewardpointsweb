@@ -29,7 +29,7 @@ export function SsoCallbackPage() {
     exchanged.current = true
 
     if (!ticket) {
-      navigate('/login?sso_error=sso_ticket_invalid', { replace: true })
+      void navigate('/login?sso_error=sso_ticket_invalid', { replace: true })
       return
     }
     loginWithSsoTicket(ticket)
@@ -38,12 +38,12 @@ export function SsoCallbackPage() {
         // （サーバーを通す ``redirect_to`` には載せられない。ADR-0025）
         const code = takeRememberedInvitationCode()
         // 履歴に残さない（「戻る」で使用済みの券へ戻らないようにする）
-        navigate(code ? invitationAcceptPath(code) : redirectTo, { replace: true })
+        void navigate(code ? invitationAcceptPath(code) : redirectTo, { replace: true })
       })
       .catch((error: unknown) => {
         // 失敗もログイン画面で伝える（この画面は中継で、そのまま抜ける）
         const code = error instanceof ApiError ? error.code : 'sso_error'
-        navigate(`/login?sso_error=${encodeURIComponent(code)}`, { replace: true })
+        void navigate(`/login?sso_error=${encodeURIComponent(code)}`, { replace: true })
       })
   }, [ticket, navigate, loginWithSsoTicket])
 

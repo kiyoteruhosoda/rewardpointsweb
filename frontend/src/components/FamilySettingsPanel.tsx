@@ -99,7 +99,7 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
       await leaving()
       await onChanged()
       notify('success', t(message))
-      navigate('/families')
+      void navigate('/families')
     } catch (error) {
       fail(error)
     }
