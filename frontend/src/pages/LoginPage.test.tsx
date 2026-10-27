@@ -9,7 +9,7 @@
  * 画面遷移で戻ってくるため URL に載る（ADR-0029）。
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'react-router-dom'
 
 import { renderWithProviders } from '../test-support/renderWithProviders'
@@ -183,6 +183,10 @@ describe('LoginPage', () => {
       fetchSsoProvider.mockResolvedValue({ enabled: true, display_name: 'Nolumia' })
     })
 
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
     it('開いたら入口を描かずに prompt=none で IdP へ送り出す（行き先は保つ）', async () => {
       renderLogin('/login?redirect_to=%2Fadmin%2Flogs')
 
@@ -206,6 +210,55 @@ describe('LoginPage', () => {
 
     it('招待コードを持って来たときは試さない', async () => {
       renderLogin('/login#code=CODE1234')
+
+      expect(
+        await screen.findByRole('button', { name: 'Sign in with Nolumia' }),
+      ).toBeInTheDocument()
+      expect(startSsoLogin).not.toHaveBeenCalled()
+    })
+
+    it('試して戻った画面を再読み込みしたら、もう 1 回試す（ADR-0054）', async () => {
+      sessionStorage.setItem('ssoSilentTried', '1')
+      vi.spyOn(window.performance, 'getEntriesByType').mockReturnValue([
+        { type: 'reload' } as PerformanceNavigationTiming,
+      ])
+      renderLogin('/login?sso_silent=declined&redirect_to=%2Fadmin%2Flogs')
+
+      await waitFor(() => {
+        expect(startSsoLogin).toHaveBeenCalledExactlyOnceWith('/admin/logs', { silent: true })
+      })
+    })
+
+    it('再読み込みでも、サインアウトした後は試さない', async () => {
+      localStorage.setItem('ssoSignedOut', '1')
+      vi.spyOn(window.performance, 'getEntriesByType').mockReturnValue([
+        { type: 'reload' } as PerformanceNavigationTiming,
+      ])
+      renderLogin('/login?sso_silent=declined')
+
+      expect(
+        await screen.findByRole('button', { name: 'Sign in with Nolumia' }),
+      ).toBeInTheDocument()
+      expect(startSsoLogin).not.toHaveBeenCalled()
+    })
+
+    it('再読み込みでも、エラーの知らせが付いていたら試さない', async () => {
+      vi.spyOn(window.performance, 'getEntriesByType').mockReturnValue([
+        { type: 'reload' } as PerformanceNavigationTiming,
+      ])
+      renderLogin('/login?sso_silent=declined&sso_error=sso_failed')
+
+      expect(
+        await screen.findByRole('button', { name: 'Sign in with Nolumia' }),
+      ).toBeInTheDocument()
+      expect(startSsoLogin).not.toHaveBeenCalled()
+    })
+
+    it('再読み込みでも、招待コードを持って来たときは試さない', async () => {
+      vi.spyOn(window.performance, 'getEntriesByType').mockReturnValue([
+        { type: 'reload' } as PerformanceNavigationTiming,
+      ])
+      renderLogin('/login?sso_silent=declined#code=CODE1234')
 
       expect(
         await screen.findByRole('button', { name: 'Sign in with Nolumia' }),
