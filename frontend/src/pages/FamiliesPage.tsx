@@ -49,7 +49,7 @@ export function FamiliesPage() {
   const enter = async (familyId: number) => {
     // 先に読み直してから送る。左のナビゲーションと詳細が同時に新しい家族へ変わる。
     await reload()
-    navigate(`/families/${String(familyId)}`)
+    void navigate(`/families/${String(familyId)}`)
   }
 
   const [create, creating] = usePendingAction(async (event: FormEvent) => {
@@ -69,7 +69,7 @@ export function FamiliesPage() {
       const joined = await families.acceptInvitation(code, null)
       setCode('')
       // 使い終えたコードを URL に残さない（再読み込みで案内だけが蘇る）
-      if (carriedCode) navigate(pathname, { replace: true })
+      if (carriedCode) void navigate(pathname, { replace: true })
       notify('success', t('families.joined'))
       await enter(joined.family_id)
     } catch (error) {

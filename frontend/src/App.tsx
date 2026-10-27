@@ -52,7 +52,7 @@ function RequireAuth() {
   useEffect(() => {
     if (!user) return
     const pending = takePendingApproval()
-    if (pending !== null) navigate(pending, { replace: true })
+    if (pending !== null) void navigate(pending, { replace: true })
   }, [user, navigate])
 
   if (loading) return <p className="loading">{t('common.loading')}</p>

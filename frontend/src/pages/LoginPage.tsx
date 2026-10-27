@@ -87,7 +87,7 @@ export function LoginPage() {
     setError(null)
     try {
       await login(username, password, step === 'totp' ? totpCode : undefined)
-      navigate(destination)
+      void navigate(destination)
     } catch (err) {
       const code = err instanceof ApiError ? err.code : 'unknown_error'
       if (code === 'totp_required') {
@@ -106,7 +106,7 @@ export function LoginPage() {
     setError(null)
     try {
       await loginWithPasskey()
-      navigate(destination)
+      void navigate(destination)
     } catch (err) {
       setError(passkeyErrorKey(err) ?? errorMessageKey(err))
     }
