@@ -95,6 +95,7 @@ def mail_outbox(monkeypatch: pytest.MonkeyPatch) -> list[EmailMessage]:
         "send",
         lambda _self, message: sent.append(message),
     )
+    monkeypatch.setattr(SmtpEmailSender, "check_reachable", lambda _self: None)
     return sent
 
 

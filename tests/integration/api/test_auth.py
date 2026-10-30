@@ -190,6 +190,34 @@ def test_forgot_password_reports_when_the_smtp_server_is_unreachable(
     assert response.json() == {"status": "mail_unavailable"}
 
 
+def test_forgot_password_while_smtp_is_down_does_not_leak_user_existence(
+    client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SMTP に届かない間も、実在する大人と実在しない名前・子どもで応答が同じ。
+
+    以前は実在する大人にだけ ``mail_unavailable`` を返し、他は ``accepted`` だったので、
+    障害中だけ大人のユーザー名が実在するかを外から確かめられた（task #768）。
+    """
+    monkeypatch.setenv("MAIL_ENABLED", "true")
+
+    def _refuse_send(_self: SmtpEmailSender, _message: EmailMessage) -> None:
+        raise ConnectionRefusedError("smtp down")
+
+    def _refuse_connect(_self: SmtpEmailSender) -> None:
+        raise ConnectionRefusedError("smtp down")
+
+    monkeypatch.setattr(SmtpEmailSender, "send", _refuse_send)
+    monkeypatch.setattr(SmtpEmailSender, "check_reachable", _refuse_connect)
+    db_session.add(User(username="kid", email=None, display_name="こども", password_hash="x", is_active=True))
+    db_session.commit()
+
+    adult = client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
+    kid = client.post("/api/auth/forgot-password", json={"username": "kid"})
+    nobody = client.post("/api/auth/forgot-password", json={"username": "nobody-here"})
+    assert adult.status_code == kid.status_code == nobody.status_code == 200
+    assert adult.json() == kid.json() == nobody.json() == {"status": "mail_unavailable"}
+
+
 def test_forgot_password_without_email_answers_like_an_unknown_name(
     client: TestClient, db_session: Session, mail_outbox: list[EmailMessage]
 ) -> None:
