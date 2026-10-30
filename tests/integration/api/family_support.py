@@ -30,7 +30,7 @@ def create_account(
     admin_headers: dict[str, str],
     *,
     username: str,
-    role: str,
+    role: str | tuple[str, ...],
     display_name: str | None = None,
 ) -> Account:
     password = f"{username}-pass-123"
@@ -41,7 +41,7 @@ def create_account(
             "username": username,
             "display_name": display_name or username,
             "password": password,
-            "roles": [role],
+            "roles": [role] if isinstance(role, str) else list(role),
         },
     )
     assert response.status_code == 201, response.text

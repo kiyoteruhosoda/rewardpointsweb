@@ -1,9 +1,11 @@
 """表示端末を家族へ付ける・外す・一覧する（運用管理者。ADR-0047）。
 
 ここに来る呼び出しは ``display:approve`` を持つ人（運用管理者）か、端末そのものの
-取り直し（``/api/display/session``）に限る。運用管理者は家族の参加者ではないので、
-:class:`FamilyAccessResolver` は通さない ——どの家族を映すかを決めるのがこの役の仕事で、
-認可は scope（router）で済んでいる。
+取り直し（``/api/display/session``）に限る。
+
+⚠ **付けられるのは、承認する人がその家族の owner / parent のときだけ**（task #758）。
+scope だけで通していたので、運用管理者はどの家族の台帳でも端末に映せ、admin も
+自分に operator を付ければ全家族の台帳に届いた。選べる家族も同じ条件で絞る。
 
 家族の側から外す経路（親が家族の画面で外す）は :class:`RemoveMembershipUseCase` が持つ。
 """
@@ -15,7 +17,11 @@ from dataclasses import dataclass
 from bounded_contexts.reward_points.application.dto.display_dto import DisplayableFamilyDTO, DisplayDTO
 from bounded_contexts.reward_points.domain.entities.family import Family
 from bounded_contexts.reward_points.domain.entities.family_membership import FamilyMembership
-from bounded_contexts.reward_points.domain.exceptions import DisplayNotFoundError, FamilyNotFoundError
+from bounded_contexts.reward_points.domain.exceptions import (
+    DisplayNotFoundError,
+    FamilyAccessDeniedError,
+    FamilyNotFoundError,
+)
 from bounded_contexts.reward_points.domain.repositories.account_directory import IAccountProvisioning
 from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
     IFamilyMembershipRepository,
@@ -28,6 +34,8 @@ from bounded_contexts.reward_points.domain.value_objects.family_role import Fami
 @dataclass(frozen=True, kw_only=True)
 class AttachDisplayCommand:
     family_id: int
+    #: 承認する人。映す家族の owner / parent でなければ断る
+    approver_id: int
     #: 端末の名前（例「リビング」）
     name: str
 
@@ -47,7 +55,14 @@ class DisplayRoster:
         self._provisioning = provisioning
 
     def attach(self, command: AttachDisplayCommand) -> DisplayDTO:
-        """表示アカウントを作り、家族へ表示端末として加える。"""
+        """表示アカウントを作り、家族へ表示端末として加える。
+
+        承認する人が家族の親でなければ :class:`FamilyAccessDeniedError`。家族が実在するかは
+        その後で見る（参加していない家族の実在を確かめさせない）。
+        """
+        approver = self._memberships.find_in_family(family_id=command.family_id, account_id=command.approver_id)
+        if approver is None or not approver.role.is_guardian:
+            raise FamilyAccessDeniedError
         family = self._families.find_by_id(command.family_id)
         if family is None:
             raise FamilyNotFoundError
@@ -83,8 +98,13 @@ class DisplayRoster:
         families = {family.id: family for family in self._families.list_by_ids([d.family_id for d in displays])}
         return [_to_dto(display, families[display.family_id]) for display in displays if display.family_id in families]
 
-    def families_to_display(self) -> list[DisplayableFamilyDTO]:
-        return [DisplayableFamilyDTO(id=family.id, name=family.name_value) for family in self._families.list_all()]
+    def families_to_display(self, approver_id: int) -> list[DisplayableFamilyDTO]:
+        """*approver_id* が owner / parent として入っている家族だけ（:meth:`attach` と同じ条件）。"""
+        family_ids = [m.family_id for m in self._memberships.list_for_account(approver_id) if m.role.is_guardian]
+        return [
+            DisplayableFamilyDTO(id=family.id, name=family.name_value)
+            for family in self._families.list_by_ids(family_ids)
+        ]
 
 
 def _to_dto(membership: FamilyMembership, family: Family) -> DisplayDTO:

@@ -1,6 +1,7 @@
 """表示端末（サイネージ）のペアリングと、表示アカウントの立場（ADR-0047）。
 
 - 承認できるのは運用管理者（``display:approve``）だけ。admin・親・子は断られる
+- 運用管理者でも、映す家族の owner / parent でなければ断られる（task #758）
 - 確認コードだけでは受け取れない。受け取りは端末の秘密で、1 度だけ
 - 表示アカウントは家族の全部の子の台帳を見るだけで、変えられない
 - 外すと（運用管理者・家族の親のどちらからでも）次の取り直しで断られる
@@ -49,13 +50,11 @@ class PairedDisplay:
 
 
 @pytest.fixture
-def operator(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    return create_account(client, admin_headers, username="ops", role="operator", display_name="運用管理者")
-
-
-@pytest.fixture
 def household(client: TestClient, admin_headers: dict[str, str]) -> Household:
-    owner = create_account(client, admin_headers, username="dad", role="member", display_name="おとうさん")
+    # 家族の owner が運用管理者を兼ねる。端末を付けられるのは自分が親の家族だけ（task #758）
+    owner = create_account(
+        client, admin_headers, username="dad", role=("member", "operator"), display_name="おとうさん"
+    )
     family_id = create_family(client, owner.headers, name="ほその家")
     ledgers = tuple(
         Ledger(
@@ -66,6 +65,11 @@ def household(client: TestClient, admin_headers: dict[str, str]) -> Household:
     )
     ledgers[0].record(client, owner.headers, amount=30, reason="おてつだい", key="k1")
     return Household(owner=owner, family_id=family_id, ledgers=ledgers)
+
+
+@pytest.fixture
+def operator(household: Household) -> Account:
+    return household.owner
 
 
 def _start(client: TestClient) -> dict[str, object]:
@@ -216,14 +220,72 @@ def test_only_the_operator_approves(
     assert (status_code, body["detail"]) == (400, {"error": "authorization_pending"})
 
 
-def test_the_owner_of_the_family_cannot_approve_either(client: TestClient, household: Household) -> None:
+def test_a_parent_of_the_family_cannot_approve_without_the_operator_role(
+    *, client: TestClient, admin_headers: dict[str, str], household: Household
+) -> None:
+    parent = create_account(client, admin_headers, username="mom", role="member")
+    invitation = issue_invitation(client, household.owner.headers, household.family_id, role="parent")
+    joined = client.post("/api/families/invitations/accept", headers=parent.headers, json={"code": invitation["code"]})
+    assert joined.status_code == 200, joined.text
     started = _start(client)
     response = client.post(
         "/api/display/pairings/approve",
-        headers=household.owner.headers,
+        headers=parent.headers,
         json={"user_code": started["user_code"], "family_id": household.family_id, "name": "リビング"},
     )
     assert response.status_code == 403
+
+
+@pytest.mark.parametrize("roles", [("member", "operator"), ("operator",), ("admin", "operator")])
+def test_an_operator_cannot_attach_a_display_to_a_family_they_are_not_a_parent_of(
+    *, client: TestClient, admin_headers: dict[str, str], household: Household, roles: tuple[str, ...]
+) -> None:
+    """運用管理者でも、自分が親でない家族の台帳は端末に映せない（task #758）。
+
+    admin が自分に operator を付けた場合（``("admin", "operator")``）も同じ。
+    """
+    outsider = create_account(client, admin_headers, username="outsider", role=roles)
+    started = _start(client)
+
+    response = client.post(
+        "/api/display/pairings/approve",
+        headers=outsider.headers,
+        json={"user_code": started["user_code"], "family_id": household.family_id, "name": "リビング"},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == {"error": "family_access_denied"}
+    # 表示アカウントは作られず、端末は待ったまま
+    status_code, body = _claim(client, started["device_code"])
+    assert (status_code, body["detail"]) == (400, {"error": "authorization_pending"})
+    family = client.get(f"/api/families/{household.family_id}", headers=household.owner.headers).json()
+    assert all(m["role"] != "display" for m in family["memberships"])
+    # 選べる家族にも出ない
+    assert client.get("/api/display/families", headers=outsider.headers).json() == []
+
+
+def test_an_operator_is_refused_the_same_way_for_a_family_that_does_not_exist(
+    *, client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    """無い家族も、参加していない家族と同じ 403（実在を確かめさせない）。"""
+    outsider = create_account(client, admin_headers, username="outsider", role="operator")
+    started = _start(client)
+    response = client.post(
+        "/api/display/pairings/approve",
+        headers=outsider.headers,
+        json={"user_code": started["user_code"], "family_id": 999999, "name": "リビング"},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == {"error": "family_access_denied"}
+
+
+def test_the_operator_chooses_only_from_families_they_are_a_parent_of(
+    *, client: TestClient, admin_headers: dict[str, str], operator: Account, household: Household
+) -> None:
+    other = create_account(client, admin_headers, username="neighbor", role="member")
+    create_family(client, other.headers, name="となりの家")
+
+    families = client.get("/api/display/families", headers=operator.headers).json()
+    assert families == [{"id": household.family_id, "name": "ほその家"}]
 
 
 def test_the_admin_has_no_display_approve_and_the_operator_role_exists(

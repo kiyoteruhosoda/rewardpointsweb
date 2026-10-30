@@ -141,7 +141,7 @@
   "displays.name": "名前",
   "displays.namePlaceholder": "例: リビング",
   "displays.neverUsed": "まだ使われていません",
-  "displays.noFamilies": "映せる家族がありません。",
+  "displays.noFamilies": "映せる家族がありません。表示端末を付けられるのは、あなたが親として入っている家族だけです。",
   "displays.remove": "外す",
   "displays.removed": "「{name}」を外しました。",
   "displays.title": "表示端末",
