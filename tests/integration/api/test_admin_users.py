@@ -228,6 +228,7 @@ def test_a_manager_cannot_read_the_app_logs(client: TestClient, admin_headers: d
         json={
             "email": "log-manager@example.com",
             "username": "logmanager",
+            "display_name": "ログの確かめ",
             "password": "password-123",
             "roles": ["manager"],
         },
