@@ -672,6 +672,8 @@ docker compose logs web | grep password_reset_link_issued | tail -1
 
 準備: 承認する人に **表示端末の承認者**（`operator`）のロールを付ける。付けるのは admin で、`/admin/users` のロールの欄で行う。
 admin 自身には承認の権限（`display:approve`）が無い。
+⚠ 承認する人は、**映す家族の owner / parent** でなければならない（task #758）。家族に親として入っていない人に
+ロールを付けても、承認の画面には「映せる家族がありません」と出る。
 
 1. iPad の Safari で `https://<このアプリ>/display` を開き、共有ボタン →「ホーム画面に追加」を選ぶ
 2. ⚠ **ホーム画面のアイコンから開き直す。** ホーム画面の Web アプリは Safari と保存先が別なので、

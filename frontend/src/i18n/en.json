@@ -141,7 +141,7 @@
   "displays.name": "Name",
   "displays.namePlaceholder": "e.g. Living room",
   "displays.neverUsed": "Not used yet",
-  "displays.noFamilies": "There is no family to show.",
+  "displays.noFamilies": "There is no family to show. You can only add a display to a family you belong to as a parent.",
   "displays.remove": "Remove",
   "displays.removed": "Removed \"{name}\".",
   "displays.title": "Displays",

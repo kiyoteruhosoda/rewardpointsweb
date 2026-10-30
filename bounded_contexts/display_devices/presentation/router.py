@@ -6,7 +6,7 @@
 - ``POST /api/display/pairings/claim`` ——承認されたら端末の資格情報を 1 度だけ受け取る
 - ``POST /api/display/session`` ——端末の資格情報を 5 分のアクセストークンに換える
 
-運用管理者の側（``display:approve``）:
+運用管理者の側（``display:approve``。付けられるのは自分が owner / parent の家族だけ。task #758）:
 
 - ``POST /api/display/pairings/approve`` ——映す家族と名前を決めて承認する
 - ``GET /api/display/families`` ——映す先として選べる家族
@@ -148,12 +148,15 @@ async def approve_pairing(
     """確認コードを承認し、映す家族へ表示端末を加える。
 
     確認コードが無い・承認済みなら 404 ``pairing_not_found``、期限切れなら 410
-    ``pairing_expired``。どちらのときも表示アカウントは作らない。
+    ``pairing_expired``。承認する人が映す家族の owner / parent でなければ 403
+    ``family_access_denied``（task #758）。どのときも表示アカウントは作らない。
     """
     attached: list[DisplayDTO] = []
 
     def enroll() -> int:
-        display = roster.attach(AttachDisplayCommand(family_id=body.family_id, name=body.name))
+        display = roster.attach(
+            AttachDisplayCommand(family_id=body.family_id, name=body.name, approver_id=principal.user_id)
+        )
         attached.append(display)
         return display.account_id
 
@@ -169,9 +172,12 @@ async def approve_pairing(
 
 
 @router.get("/families", response_model=list[DisplayableFamilyResponse])
-async def list_families(roster: DisplayRosterDep, _principal: DisplayApprover) -> list[DisplayableFamilyResponse]:
-    """映す先として選べる家族（名前だけ。台帳は載せない）。"""
-    return [DisplayableFamilyResponse(id=family.id, name=family.name) for family in roster.families_to_display()]
+async def list_families(roster: DisplayRosterDep, principal: DisplayApprover) -> list[DisplayableFamilyResponse]:
+    """映す先として選べる家族（名前だけ。台帳は載せない）。承認する人が owner / parent の家族だけ。"""
+    return [
+        DisplayableFamilyResponse(id=family.id, name=family.name)
+        for family in roster.families_to_display(principal.user_id)
+    ]
 
 
 @router.get("/devices", response_model=list[DisplayDeviceResponse])
