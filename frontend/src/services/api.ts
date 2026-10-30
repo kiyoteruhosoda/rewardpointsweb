@@ -244,7 +244,11 @@ async function requestResponse(
     } catch {
       /* 非 JSON 応答 */
     }
-    throw new ApiError(response.status, errorCodeOf(response.status, payload), extractErrorFields(payload))
+    throw new ApiError(
+      response.status,
+      errorCodeOf(response.status, payload),
+      extractErrorFields(payload),
+    )
   }
   return response
 }
