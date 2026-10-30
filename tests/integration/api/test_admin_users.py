@@ -218,3 +218,25 @@ def test_unknown_role_rejected(client: TestClient, admin_headers: dict[str, str]
         },
     )
     assert response.status_code == 400
+
+
+def test_a_manager_cannot_read_the_app_logs(client: TestClient, admin_headers: dict[str, str]) -> None:
+    """アプリのログは admin だけ（task #786）。"""
+    created = client.post(
+        "/api/admin/users",
+        headers=admin_headers,
+        json={
+            "email": "log-manager@example.com",
+            "username": "logmanager",
+            "password": "password-123",
+            "roles": ["manager"],
+        },
+    )
+    assert created.status_code == 201, created.text
+    client.cookies.clear()
+    signed_in = client.post("/api/auth/login", json={"username": "logmanager", "password": "password-123"})
+    assert signed_in.status_code == 200, signed_in.text
+    headers = {"Authorization": f"Bearer {signed_in.json()['access_token']}"}
+
+    assert "log:view" not in client.get("/api/auth/me", headers=headers).json()["scopes"]
+    assert client.get("/api/admin/logs", headers=headers).status_code == 403
