@@ -10,3 +10,7 @@ class EmailSendingDisabledError(Exception):
 class IEmailSender(ABC):
     @abstractmethod
     def send(self, message: EmailMessage) -> None: ...
+
+    @abstractmethod
+    def check_reachable(self) -> None:
+        """送らずに、送り先のサーバーへ届くかだけを確かめる。届かなければ送るときと同じ例外を投げる。"""

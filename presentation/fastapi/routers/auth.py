@@ -298,7 +298,8 @@ async def forgot_password(body: ForgotPasswordRequest, db: DbDep, throttle: Thro
     画面が常に案内する。
 
     メール送信が無効・SMTP に届かない運用では ``mail_unavailable`` を返す。
-    送れないのに ``accepted`` を返すと、届かないメールを待つことになる。
+    送れないのに ``accepted`` を返すと、届かないメールを待つことになる。SMTP に
+    届かない間は、実在しない名前にも同じく ``mail_unavailable`` を返す（task #768）。
     """
     # 宛名ごとに数える。**成功も数える** ——成功しても相手にメールが届くので、
     # 数えないと宛名を知っているだけで受信箱を埋められる（ADR-0055）

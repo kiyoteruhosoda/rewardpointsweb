@@ -13,7 +13,10 @@
 ``MAIL_UNAVAILABLE`` も持つ。``MAIL_ENABLED`` が無効な運用や SMTP が
 落ちている間に「送りました」と返すと、決して届かないメールを待たせることになり、
 ログイン不能からの回復手段が事実上失われる。送信可否は利用者に依らないので、
-実在しないユーザー名でも同じ応答になり、実在は漏れない。
+実在しないユーザー名でも同じ応答になり、実在は漏れない。SMTP に届くかどうかは
+送ってみるまで分からないので、送る先の無い申し込み（不在・子ども・SSO だけの口座）
+でも SMTP に届くかを確かめてから応答を決める（task #768。以前は SMTP の障害中だけ、
+大人のユーザー名が実在するかを外から確かめられた）。
 
 そして発行したリンクは **必ずログへ出す**。メールが届かない場面でも運用者が
 本人へ手渡せる経路を残すため。ログを読める人はそのリンクでアカウントを乗っ取れる
@@ -71,27 +74,27 @@ class PasswordResetService:
         """リセットトークンを発行し、ログへ出したうえでメールを送る。
 
         ユーザー不在なら黙って「送信手段があれば ``ACCEPTED``」を返す（存在の
-        有無を漏らさない）。送信手段が無い運用では、実在・不在にかかわらず
-        ``MAIL_UNAVAILABLE`` を返すので、ここでも実在は漏れない。
+        有無を漏らさない）。送信手段が無い運用・SMTP に届かない間は、実在・不在に
+        かかわらず ``MAIL_UNAVAILABLE`` を返すので、ここでも実在は漏れない。
         """
         user = self._find(session, username)
         if user is None or not user.is_active:
             logger.info("password_reset_requested_unknown_account")
             # 応答は実在するアカウントと揃える（送信可否だけで決める）
-            return ResetOutcome.ACCEPTED if settings.mail_enabled else ResetOutcome.MAIL_UNAVAILABLE
+            return self._outcome_without_sending()
         if not user.has_local_password:
             # ⚠ **リセットでローカル認証を生やさない**（ADR-0034）。パスワードを
             # 持たない利用者にここで新しい値を設定させると、「この利用者は SSO でしか
             # 入れない」が黙って崩れる。持たせるなら管理者が明示的に設定する。
             # 応答は不在のときと同じ（存在を漏らさない）。
             logger.info("password_reset_requested_without_local_password")
-            return ResetOutcome.ACCEPTED if settings.mail_enabled else ResetOutcome.MAIL_UNAVAILABLE
+            return self._outcome_without_sending()
         if user.email is None:
             # 送る先が無い（子ども。回復は親からの一時パスワード。ADR-0011）。
             # 応答は不在のときと同じ ——違えると子どものユーザー名が実在するかを
             # 外から確かめられる（task #733）。親への依頼は画面が常に案内する
             logger.info("password_reset_requested_without_email")
-            return ResetOutcome.ACCEPTED if settings.mail_enabled else ResetOutcome.MAIL_UNAVAILABLE
+            return self._outcome_without_sending()
 
         link = self._issue_link(session, user)
         # メールが届かない場面（MAIL_ENABLED 無効・SMTP 障害）でも運用者が本人へ
@@ -119,6 +122,22 @@ class PasswordResetService:
             # SMTP に届かない。以前はここが 500 になり、利用者には原因の分からない
             # 失敗として出ていた。回復手段を案内できる形にする
             logger.exception("password_reset_unavailable: mail_send_failed")
+            return ResetOutcome.MAIL_UNAVAILABLE
+        return ResetOutcome.ACCEPTED
+
+    def _outcome_without_sending(self) -> ResetOutcome:
+        """送る先の無い申し込みの応答。実在する大人に送ったときと同じ条件で決める。
+
+        実在する大人の申し込みは SMTP に送ってみて、届かなければ ``MAIL_UNAVAILABLE``
+        になる。送る先が無いときも同じく SMTP に届くかを確かめないと、障害中だけ
+        応答が分かれて実在が漏れる（task #768）。
+        """
+        if not settings.mail_enabled:
+            return ResetOutcome.MAIL_UNAVAILABLE
+        try:
+            self._sender.check_reachable()
+        except (OSError, smtplib.SMTPException):
+            logger.warning("password_reset_unavailable: mail_unreachable", exc_info=True)
             return ResetOutcome.MAIL_UNAVAILABLE
         return ResetOutcome.ACCEPTED
 
