@@ -41,6 +41,8 @@ from bounded_contexts.reward_points.domain.value_objects.transaction_reason impo
     MAX_LENGTH as REASON_MAX_LENGTH,
 )
 from presentation.fastapi.schemas.types import UtcDatetime
+from shared.domain.auth.password_policy import MAX_LENGTH as PASSWORD_MAX_LENGTH
+from shared.domain.auth.password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH
 from shared.domain.auth.username import MAX_LENGTH as USERNAME_MAX_LENGTH
 
 
@@ -258,7 +260,7 @@ class InvitationRedeemRequest(BaseModel):
 
     code: CodeStr
     username: Annotated[str, Field(min_length=1, max_length=USERNAME_MAX_LENGTH)]
-    password: Annotated[str, Field(min_length=8)]
+    password: Annotated[str, Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)]
     display_name: DisplayNameStr | None = None
 
 

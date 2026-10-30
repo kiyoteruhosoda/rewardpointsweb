@@ -51,6 +51,24 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "value_type": "integer",
     },
     {
+        "key": "LOGIN_MAX_FAILURES",
+        "category": "auth",
+        "label": "Login failures allowed per window (0 = unlimited)",
+        "value_type": "integer",
+    },
+    {
+        "key": "LOGIN_FAILURE_WINDOW_SECONDS",
+        "category": "auth",
+        "label": "Login failure window (seconds)",
+        "value_type": "integer",
+    },
+    {
+        "key": "LOGIN_LOCK_SECONDS",
+        "category": "auth",
+        "label": "Login lock duration after too many failures (seconds)",
+        "value_type": "integer",
+    },
+    {
         "key": "TEMPORARY_PASSWORD_TTL_SECONDS",
         "category": "auth",
         "label": "Temporary password TTL (seconds)",

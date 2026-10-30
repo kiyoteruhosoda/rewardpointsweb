@@ -210,6 +210,19 @@ docker compose logs web | grep unhandled_exception     # traceback つきで出�
 
 DB の `log` テーブルにも同じ行が入る（`trace` 列に traceback）。
 
+## ログインが「失敗が続いたため受け付けていません」で断られるとき（ADR-0055）
+
+ユーザー名ごとの失敗が上限に達している。`LOGIN_LOCK_SECONDS`（既定 900 秒）待てば解ける。
+すぐ解きたいときは、そのユーザー名の控えを消す（`<username>` は小文字にしたユーザー名）。
+
+```sql
+DELETE FROM login_attempts WHERE purpose = 'login' AND identifier = '<username>';
+```
+
+上限・窓・断る長さは管理画面の設定（`LOGIN_MAX_FAILURES` / `LOGIN_FAILURE_WINDOW_SECONDS` /
+`LOGIN_LOCK_SECONDS`）で変える。⚠ `LOGIN_MAX_FAILURES` を 0 にすると数えない（本番で 0 にしない）。
+同じ IP から毎分 10 回を超えると、前段の nginx が 429 を返す（deploy-repo の `rewardpointsweb-*/20-config.yaml`）。
+
 ## デプロイしたいとき
 
 **main へマージすれば本番へ配られる。手では押さない。** forge の push を受けた deck

@@ -173,6 +173,16 @@ function extractErrorCode(body: unknown): string {
   return 'unknown_error'
 }
 
+/**
+ * 回数の上限で断られた（429）のに本文にコードが無いときは `too_many_attempts` とみなす。
+ * 前段の nginx が IP ごとの上限で返す 429 は HTML で、`unknown_error` に落ちると
+ * 「しばらく待てばよい」ことが伝わらない（task #733）。
+ */
+function errorCodeOf(status: number, body: unknown): string {
+  const code = extractErrorCode(body)
+  return status === 429 && code === 'unknown_error' ? 'too_many_attempts' : code
+}
+
 /** 入力検証で落ちた項目名。バックエンドは名前だけを返す（値は載らない）。 */
 function extractErrorFields(body: unknown): string[] {
   const detail = detailOf(body)
@@ -234,7 +244,7 @@ async function requestResponse(
     } catch {
       /* 非 JSON 応答 */
     }
-    throw new ApiError(response.status, extractErrorCode(payload), extractErrorFields(payload))
+    throw new ApiError(response.status, errorCodeOf(response.status, payload), extractErrorFields(payload))
   }
   return response
 }

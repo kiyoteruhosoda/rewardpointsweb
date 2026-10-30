@@ -17,6 +17,10 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     "REFRESH_TOKEN_EXPIRES_SECONDS": 14 * 24 * 3600,
     "SESSION_COOKIE_SECURE": False,
     "PASSWORD_RESET_TOKEN_TTL_SECONDS": 3600,
+    # 宛名ごとの失敗の上限（ADR-0055）。窓の中で上限まで失敗したら、しばらく断る
+    "LOGIN_MAX_FAILURES": 5,
+    "LOGIN_FAILURE_WINDOW_SECONDS": 900,
+    "LOGIN_LOCK_SECONDS": 900,
     # 親が発行した一時パスワードの有効期限（ADR-0011）
     "TEMPORARY_PASSWORD_TTL_SECONDS": 24 * 3600,
     # --- 家族（reward_points コンテキスト） ---

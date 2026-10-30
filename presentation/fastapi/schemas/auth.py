@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from shared.domain.auth.password_policy import MAX_LENGTH as PASSWORD_MAX_LENGTH
+from shared.domain.auth.password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH
 from shared.domain.auth.username import MAX_LENGTH as USERNAME_MAX_LENGTH
 
 DISPLAY_NAME_MAX_LENGTH = 100
@@ -15,7 +17,7 @@ DISPLAY_NAME_MAX_LENGTH = 100
 
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=USERNAME_MAX_LENGTH)
-    password: str
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
     # 二要素認証が有効なアカウントでのみ必須（未提示なら totp_required を返す）
     totp_code: str | None = None
 
@@ -71,8 +73,8 @@ class ProfileUpdateRequest(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str = Field(min_length=8)
+    current_password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    new_password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -86,7 +88,7 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(min_length=8)
+    new_password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
 
 class StatusResponse(BaseModel):

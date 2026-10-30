@@ -231,6 +231,19 @@ class ApplicationSettings:
         return self.get_int("PASSWORD_RESET_TOKEN_TTL_SECONDS", 3600)
 
     @property
+    def login_max_failures(self) -> int:
+        """窓の中で何回まで失敗を許すか。``0`` で数えない（本番で 0 にしない。ADR-0055）。"""
+        return max(self.get_int("LOGIN_MAX_FAILURES", 5), 0)
+
+    @property
+    def login_failure_window_seconds(self) -> int:
+        return max(self.get_int("LOGIN_FAILURE_WINDOW_SECONDS", 900), 1)
+
+    @property
+    def login_lock_seconds(self) -> int:
+        return max(self.get_int("LOGIN_LOCK_SECONDS", 900), 1)
+
+    @property
     def temporary_password_ttl_seconds(self) -> int:
         """親が発行した一時パスワードの有効期限（ADR-0011）。"""
         return self.get_int("TEMPORARY_PASSWORD_TTL_SECONDS", 24 * 3600)
