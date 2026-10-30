@@ -112,4 +112,13 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     "LOG_TO_DATABASE": True,
 }
 
-__all__ = ["DEFAULT_APPLICATION_SETTINGS"]
+#: 環境変数だけで決める設定（ADR-0056）。サーバーがつなぎに行く先と、鍵のファイルの場所。
+#: 管理画面には見るだけで出し、保存は断る。DB に古い値が残っていても読まない。
+ENV_ONLY_SETTINGS: frozenset[str] = frozenset(
+    {
+        "OIDC_ISSUER",
+        "OIDC_PRIVATE_KEY_FILE",
+    }
+)
+
+__all__ = ["DEFAULT_APPLICATION_SETTINGS", "ENV_ONLY_SETTINGS"]

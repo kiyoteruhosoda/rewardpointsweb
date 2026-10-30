@@ -20,12 +20,25 @@ from presentation.fastapi.admin.system_settings_definitions import (
 )
 from presentation.fastapi.admin.system_settings_validation import validate_system_settings
 from shared.infrastructure.models import SystemSetting
+from shared.kernel.outbound_destination import DestinationRefusedError, check_host_name
 from shared.kernel.restart import ALL_RESTART_SCOPES, RestartScope
 from shared.kernel.settings.settings import settings
-from shared.kernel.settings.system_settings_defaults import DEFAULT_APPLICATION_SETTINGS
+from shared.kernel.settings.system_settings_defaults import DEFAULT_APPLICATION_SETTINGS, ENV_ONLY_SETTINGS
 
 _SETTING_KEY = "app.config"
 _SECRET_PLACEHOLDER = "********"
+
+#: ホスト名だけを持つ通信先。画面に残すが、宅内やクラスタの内側は断る（ADR-0056）。
+_CHECKED_HOST_SETTINGS = frozenset({"MAIL_SERVER"})
+
+
+class SettingRefusedError(ValueError):
+    """保存できない設定。``error`` は ``setting_env_only`` / ``invalid_destination``。"""
+
+    def __init__(self, error: str, key: str) -> None:
+        super().__init__(error)
+        self.error = error
+        self.key = key
 
 
 @dataclass(frozen=True)
@@ -73,6 +86,7 @@ class SystemSettingService:
             result.append(
                 {
                     **definition,
+                    "env_only": key in ENV_ONLY_SETTINGS,
                     "value": value,
                     # ⚠ **止める印ではない。** DB の値が環境変数より強いので、
                     #   ここが真でも画面から変えられる。意味は「この鍵は
@@ -93,6 +107,8 @@ class SystemSettingService:
 
         戻り値には、採り込んだキーと、そのうち反映に再起動が必要なものが入る。
         """
+        for key, value in values.items():
+            cls._ensure_acceptable(key, value)
         payload = cls.stored_payload(session)
         changed: list[str] = []
         for key, value in values.items():
@@ -141,6 +157,16 @@ class SystemSettingService:
             else:
                 resolved[key] = DEFAULT_APPLICATION_SETTINGS.get(key)
         return resolved
+
+    @staticmethod
+    def _ensure_acceptable(key: str, value: Any) -> None:
+        if key in ENV_ONLY_SETTINGS:
+            raise SettingRefusedError("setting_env_only", key)
+        if key in _CHECKED_HOST_SETTINGS and value:
+            try:
+                check_host_name(str(value))
+            except DestinationRefusedError as error:
+                raise SettingRefusedError("invalid_destination", key) from error
 
     @staticmethod
     def restart_requirement(keys: Iterable[str]) -> RestartRequirement:

@@ -19,6 +19,8 @@ interface SettingItem {
   choices?: [value: string, label: string][]
   /** 空でなければ、反映にそのサービスの再起動が必要。 */
   restart_scopes: string[]
+  /** 環境変数だけで決める設定。見るだけ（ADR-0056）。 */
+  env_only?: boolean
   value: unknown
   default: unknown
   env_fallback: boolean
@@ -166,7 +168,8 @@ export function ConfigPage() {
               <label key={item.key} className="config-row">
                 <span>
                   {labelFor(item)} <code>{item.key}</code>
-                  {item.env_fallback && <em> ({t('config.envFallback')})</em>}
+                  {item.env_only && <em>{t('config.envOnly')}</em>}
+                  {item.env_fallback && !item.env_only && <em> ({t('config.envFallback')})</em>}
                   {item.restart_scopes.length > 0 && <em> ({t('config.needsRestart')})</em>}
                 </span>
                 {item.value_type === 'boolean' ? (
@@ -192,6 +195,7 @@ export function ConfigPage() {
                   </select>
                 ) : (
                   <input
+                    disabled={item.env_only}
                     type={
                       item.secret ? 'password' : item.value_type === 'integer' ? 'number' : 'text'
                     }
