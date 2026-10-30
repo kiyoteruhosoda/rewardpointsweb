@@ -16,8 +16,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from bounded_contexts.account_security.application.use_cases.throttle_login import ThrottleLogin
 from bounded_contexts.account_security.application.use_cases.verify_second_factor import (
     VerifySecondFactor,
+)
+from bounded_contexts.account_security.domain.entities.login_attempts import (
+    PURPOSE_LOGIN,
+    PURPOSE_PASSWORD_RESET,
 )
 from bounded_contexts.account_security.domain.exceptions import (
     InvalidTotpCodeError,
@@ -58,6 +63,12 @@ PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
 # プロフィールを変える経路。表示端末は通さない（ADR-0047）
 PersonPrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_person_principal)]
 SecondFactorDep = Annotated[VerifySecondFactor, Depends(security.verify_second_factor)]
+# 宛名ごとの失敗の数え上げ（ADR-0055）
+ThrottleDep = Annotated[ThrottleLogin, Depends(security.throttle_login)]
+
+#: 未知の宛名・パスワードを持たない利用者でも照合の時間を揃えるためのハッシュ。
+#: **何とも一致しない**（応答時間で存在が分かるのを防ぐ。ADR-0055）
+_DUMMY_HASH = generate_password_hash("no-account-has-this-password")
 
 
 def _find_by_username(db: Session, raw: str) -> User | None:
@@ -80,7 +91,8 @@ def _rejection_reason(user: User, password: str) -> str | None:
     """
     if user.password_hash is None:
         # パスワードという入り口を持たない利用者（ADR-0034）。照合する相手が
-        # 無いので、ここで断る。理由は分けない。
+        # 無いので、ここで断る。理由は分けない。照合の時間は揃える
+        check_password_hash(_DUMMY_HASH, password)
         return "invalid_credentials"
     if not check_password_hash(user.password_hash, password):
         return "invalid_credentials"
@@ -107,19 +119,27 @@ async def login(
     response: Response,
     db: DbDep,
     second_factor: SecondFactorDep,
+    throttle: ThrottleDep,
 ) -> TokenResponse:
     """パスワード認証。二要素認証が有効なら ``totp_code`` も必須になる。
 
     コード未提示は ``totp_required``、不一致は ``invalid_totp`` を返す。どちらも
     パスワードは正しかったことを意味するが、この時点ではまだトークンを発行して
     いないため、コードを添えて再度ログインすればよい。
+
+    失敗（二要素のコードの間違いも）は宛名ごとに数え、上限に達したらしばらく
+    429 ``too_many_attempts`` で断る。正しいパスワードでも断る（ADR-0055）。
     """
+    throttle.require_allowed(PURPOSE_LOGIN, body.username, utcnow())
 
     def _reject(reason: str) -> HTTPException:
         # 失敗したログインは WARNING で残す（既定では 401 = INFO）。試行が続いて
         # いないかは運用で見たい情報で、埋もれさせない。ユーザー名は書かない
         # （CLAUDE.md「ログ」）——追跡は requestId で行う。
         logger.warning("login_failed: %s", reason)
+        if throttle.record_attempt(PURPOSE_LOGIN, body.username, utcnow()):
+            # この 1 回で断り始めた。当たられていることは運用で見たい
+            logger.warning("login_locked")
         return HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": reason},
@@ -127,6 +147,8 @@ async def login(
 
     user = _find_by_username(db, body.username)
     if user is None or not user.is_active:
+        # 未知の宛名でも照合の時間を揃える。応答時間で存在が分かるのを防ぐ
+        check_password_hash(_DUMMY_HASH, body.password)
         raise _reject("invalid_credentials")
     rejection = _rejection_reason(user, body.password)
     if rejection is not None:
@@ -135,13 +157,12 @@ async def login(
     try:
         second_factor.execute(user_id=user.id, code=body.totp_code)
     except (TotpRequiredError, InvalidTotpCodeError) as error:
-        logger.warning("login_failed: %s", error.code)
-        # 認証の失敗として 401 に揃える（既定の対応付けでは 400 になる）
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": error.code},
-        ) from None
+        # 認証の失敗として 401 に揃える（既定の対応付けでは 400 になる）。
+        # コードの間違いもパスワードと同じ数え上げに入れる（6 桁を総当たりさせない）
+        raise _reject(error.code) from None
 
+    # 正しく入れた。それまでの失敗は打ち間違いなので忘れる
+    throttle.record_success(PURPOSE_LOGIN, body.username)
     pair = TokenService.create_token_pair(user)
     set_access_token_cookie(response, str(pair["access_token"]))
     logger.info("login_succeeded")
@@ -268,16 +289,21 @@ async def change_password(
 
 
 @router.post("/forgot-password", response_model=StatusResponse)
-async def forgot_password(body: ForgotPasswordRequest, db: DbDep) -> StatusResponse:
+async def forgot_password(body: ForgotPasswordRequest, db: DbDep, throttle: ThrottleDep) -> StatusResponse:
     """リセットリンクを申し込む。
 
-    メールアドレスを持たないアカウント（子ども）にはリンクを送れないので、
-    ``ask_guardian`` を返して親からの一時パスワード発行へ誘導する（ADR-0011）。
-    存在しないユーザー名は ``accepted`` に丸める。
+    メールアドレスを持たないアカウント（子ども）にはリンクを送れない。それでも
+    応答は存在しないユーザー名と同じにする（子どものユーザー名が実在するかを
+    外から確かめさせない。task #733）。親からの一時パスワード発行（ADR-0011）は
+    画面が常に案内する。
 
     メール送信が無効・SMTP に届かない運用では ``mail_unavailable`` を返す。
     送れないのに ``accepted`` を返すと、届かないメールを待つことになる。
     """
+    # 宛名ごとに数える。**成功も数える** ——成功しても相手にメールが届くので、
+    # 数えないと宛名を知っているだけで受信箱を埋められる（ADR-0055）
+    throttle.require_allowed(PURPOSE_PASSWORD_RESET, body.username, utcnow())
+    throttle.record_attempt(PURPOSE_PASSWORD_RESET, body.username, utcnow())
     outcome = PasswordResetService().request_reset(db, body.username)
     return StatusResponse(status=outcome.value)
 

@@ -190,16 +190,21 @@ def test_forgot_password_reports_when_the_smtp_server_is_unreachable(
     assert response.json() == {"status": "mail_unavailable"}
 
 
-def test_forgot_password_without_email_points_at_the_guardian(
+def test_forgot_password_without_email_answers_like_an_unknown_name(
     client: TestClient, db_session: Session, mail_outbox: list[EmailMessage]
 ) -> None:
-    """メールアドレスを持たないアカウントには送れない（ADR-0011）。"""
+    """メールアドレスを持たないアカウント（子ども）にも、実在しない名前と同じ応答を返す。
+
+    違えると、子どものユーザー名が実在するかを外から確かめられる（task #733）。
+    親への依頼（ADR-0011）は画面が常に案内する。
+    """
     db_session.add(User(username="kid", email=None, display_name="こども", password_hash="x", is_active=True))
     db_session.commit()
 
-    response = client.post("/api/auth/forgot-password", json={"username": "kid"})
-    assert response.status_code == 200
-    assert response.json() == {"status": "ask_guardian"}
+    kid = client.post("/api/auth/forgot-password", json={"username": "kid"})
+    nobody = client.post("/api/auth/forgot-password", json={"username": "nobody-here"})
+    assert kid.status_code == nobody.status_code == 200
+    assert kid.json() == nobody.json() == {"status": "accepted"}
     # 送る先が無いので、トークンも発行しない
     assert db_session.scalar(select(PasswordResetToken)) is None
     assert mail_outbox == []

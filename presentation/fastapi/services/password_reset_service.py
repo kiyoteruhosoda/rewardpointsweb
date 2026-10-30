@@ -4,15 +4,13 @@
 
 申し込みの識別子は **ユーザー名**。メールアドレスは任意項目になったので、
 「そのアドレスの持ち主」を起点にできない（ADR-0011）。応答は
-:class:`ResetOutcome` の 3 種類で、``ASK_GUARDIAN`` だけは「親に頼んでください」と
-案内するために区別する。メールアドレスを持たない子アカウントに「送りました」と
-返すと、届かないメールを待たせることになるため。
+:class:`ResetOutcome` の 2 種類で、**実在するかどうかでは変えない**。
+メールアドレスを持たない子アカウントにも、存在しないユーザー名と同じ応答を返す
+（子どものユーザー名が実在するかを外から確かめさせない。task #733）。
+届かないメールを待たせないよう、画面は「メールアドレスの無いアカウントは
+親に一時パスワードを頼む」を常に添える。
 
-区別する以上、その 1 つは「そのユーザー名は実在し、メールアドレスを持たない」
-ことを意味する。家庭内で使う識別子であること（親が決めて本人へ伝える）を踏まえ、
-この範囲の露出は許容する。
-
-同じ理由で ``MAIL_UNAVAILABLE`` を持つ。``MAIL_ENABLED`` が無効な運用や SMTP が
+``MAIL_UNAVAILABLE`` も持つ。``MAIL_ENABLED`` が無効な運用や SMTP が
 落ちている間に「送りました」と返すと、決して届かないメールを待たせることになり、
 ログイン不能からの回復手段が事実上失われる。送信可否は利用者に依らないので、
 実在しないユーザー名でも同じ応答になり、実在は漏れない。
@@ -58,10 +56,8 @@ def _hash_token(token: str) -> str:
 class ResetOutcome(Enum):
     """申し込みの結果。"""
 
-    #: リセットリンクを送った（あるいは、そのユーザー名が存在しなかった）
+    #: リセットリンクを送った（あるいは、そのユーザー名が存在しない・メールアドレスを持たない）
     ACCEPTED = "accepted"
-    #: 実在するがメールアドレスを持たない。回復は親からの一時パスワードで行う
-    ASK_GUARDIAN = "ask_guardian"
     #: メールを送れない（``MAIL_ENABLED`` が無効、または SMTP に届かない）。
     #: 待たせても届かないので、親からの一時パスワードへ誘導する
     MAIL_UNAVAILABLE = "mail_unavailable"
@@ -91,9 +87,11 @@ class PasswordResetService:
             logger.info("password_reset_requested_without_local_password")
             return ResetOutcome.ACCEPTED if settings.mail_enabled else ResetOutcome.MAIL_UNAVAILABLE
         if user.email is None:
-            # 送る先が無い。メール送信は試みず、親への依頼を促す（ADR-0011）
+            # 送る先が無い（子ども。回復は親からの一時パスワード。ADR-0011）。
+            # 応答は不在のときと同じ ——違えると子どものユーザー名が実在するかを
+            # 外から確かめられる（task #733）。親への依頼は画面が常に案内する
             logger.info("password_reset_requested_without_email")
-            return ResetOutcome.ASK_GUARDIAN
+            return ResetOutcome.ACCEPTED if settings.mail_enabled else ResetOutcome.MAIL_UNAVAILABLE
 
         link = self._issue_link(session, user)
         # メールが届かない場面（MAIL_ENABLED 無効・SMTP 障害）でも運用者が本人へ
