@@ -23,7 +23,7 @@ from presentation.fastapi.schemas.admin import (
     SystemSettingsUpdateRequest,
     SystemSettingsUpdateResponse,
 )
-from presentation.fastapi.services.system_setting_service import SystemSettingService
+from presentation.fastapi.services.system_setting_service import SettingRefusedError, SystemSettingService
 from shared.kernel.database.session import get_db
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,11 @@ async def update_config(body: SystemSettingsUpdateRequest, db: DbDep) -> SystemS
     """
     try:
         saved = SystemSettingService.save(db, body.values)
+    except SettingRefusedError as refused:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": refused.error, "key": refused.key},
+        ) from refused
     except PasskeyConfigurationError as error:
         # 既定のハンドラは「サーバーの設定不備」として 500 を返す。ここでは
         # 管理者が今まさに入力している値の誤りなので、入力エラーとして返す。
