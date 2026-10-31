@@ -73,7 +73,6 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
     "manager": (
         "item:view",
         "item:manage",
-        "log:view",
         "dashboard:view",
         "gui:view",
     ),
