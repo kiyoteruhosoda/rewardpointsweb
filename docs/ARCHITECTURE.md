@@ -137,7 +137,7 @@ scope は「その操作を行える立場か」を表す。「*その* デー�
 
 | 経路 | 記録するもの | ロガー |
 |---|---|---|
-| アクセスログ（ミドルウェア） | `http_request`（method / path / status / duration） | `app.request` |
+| アクセスログ（ミドルウェア） | `http_request`（method / path / status / duration。認証済みなら `user_id_hash` も） | `app.request` |
 | `HTTPException`・ドメイン例外 | `request_failed: <エラーコード>` | `presentation.fastapi.error_handling` |
 | 入力検証エラー | `request_validation_failed: <項目名:理由>`（値は入れない） | 同上 |
 | 想定外の例外 | `unhandled_exception`（+ traceback） | 同上 |
