@@ -39,7 +39,7 @@ DbDep = Annotated[Session, Depends(get_db)]
 
 
 @router.post("/challenge", response_model=PasskeyChallengeResponse)
-async def create_login_challenge(
+def create_login_challenge(
     use_case: Annotated[StartPasskeyAuthentication, Depends(dependencies.start_passkey_authentication)],
 ) -> PasskeyChallengeResponse:
     """ログイン用のチャレンジを発行する（``navigator.credentials.get`` 用）。
@@ -52,7 +52,7 @@ async def create_login_challenge(
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login_with_passkey(
+def login_with_passkey(
     *,
     body: PasskeyAuthenticationRequest,
     response: Response,

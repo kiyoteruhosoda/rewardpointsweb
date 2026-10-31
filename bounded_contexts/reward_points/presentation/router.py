@@ -248,7 +248,7 @@ def _to_correction(dto: CorrectionDTO) -> CorrectionResponse:
     status_code=status.HTTP_201_CREATED,
     response_model=RedeemedInvitationResponse,
 )
-async def redeem_invitation(body: InvitationRedeemRequest, use_case: RedeemInvitationDep) -> RedeemedInvitationResponse:
+def redeem_invitation(body: InvitationRedeemRequest, use_case: RedeemInvitationDep) -> RedeemedInvitationResponse:
     """招待コードでアカウントを作り、家族へ加わる。
 
     作成後はまだログインしていない。設定した ``username`` とパスワードで
@@ -267,7 +267,7 @@ async def redeem_invitation(body: InvitationRedeemRequest, use_case: RedeemInvit
 
 
 @router.post("/invitations/accept", response_model=RedeemedInvitationResponse)
-async def accept_invitation(
+def accept_invitation(
     body: InvitationAcceptRequest,
     use_case: AcceptInvitationDep,
     principal: FamilyViewer,
@@ -293,7 +293,7 @@ async def accept_invitation(
 
 
 @router.get("", response_model=list[FamilySummaryResponse])
-async def list_families(use_case: ListFamiliesDep, principal: FamilyViewer) -> list[FamilySummaryResponse]:
+def list_families(use_case: ListFamiliesDep, principal: FamilyViewer) -> list[FamilySummaryResponse]:
     """自分が所属する家族を返す（複数所属を許す）。"""
     return [
         FamilySummaryResponse(
@@ -308,7 +308,7 @@ async def list_families(use_case: ListFamiliesDep, principal: FamilyViewer) -> l
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=FamilyDetailResponse)
-async def create_family(
+def create_family(
     body: FamilyCreateRequest, use_case: CreateFamilyDep, principal: FamilyGuardian
 ) -> FamilyDetailResponse:
     """家族を作る。作った人が owner になる。
@@ -331,7 +331,7 @@ async def create_family(
 
 
 @router.post("/import", status_code=status.HTTP_201_CREATED, response_model=ImportedFamilyResponse)
-async def import_family(
+def import_family(
     body: FamilyArchiveDocument, use_case: ImportFamilyDep, principal: FamilyGuardian
 ) -> ImportedFamilyResponse:
     """控えから家族を作り直す（復元）。
@@ -365,7 +365,7 @@ async def import_family(
 
 
 @router.get("/{family_id}/export", response_model=FamilyArchiveDocument)
-async def export_family(family_id: int, use_case: ExportFamilyDep, principal: ArchiveReader) -> FamilyArchiveDocument:
+def export_family(family_id: int, use_case: ExportFamilyDep, principal: ArchiveReader) -> FamilyArchiveDocument:
     """家族まるごとを控えとして書き出す（親のみ）。
 
     参加者・子どもの台帳・記録・毎日のボーナスが 1 つの JSON に入る。**アカウント
@@ -383,7 +383,7 @@ async def export_family(family_id: int, use_case: ExportFamilyDep, principal: Ar
 
 
 @router.get("/{family_id}", response_model=FamilyDetailResponse)
-async def view_family(family_id: int, use_case: ViewFamilyDep, principal: FamilyViewer) -> FamilyDetailResponse:
+def view_family(family_id: int, use_case: ViewFamilyDep, principal: FamilyViewer) -> FamilyDetailResponse:
     """参加者と、見える範囲の台帳・残高。
 
     参加者ごとの操作の可否（``can_*``）は、家族の中での立場と ``family:manage``
@@ -400,7 +400,7 @@ async def view_family(family_id: int, use_case: ViewFamilyDep, principal: Family
 
 
 @router.patch("/{family_id}", response_model=FamilyDetailResponse)
-async def rename_family(
+def rename_family(
     *,
     family_id: int,
     body: FamilyRenameRequest,
@@ -414,7 +414,7 @@ async def rename_family(
 
 
 @router.put("/{family_id}/rules", response_model=FamilyDetailResponse)
-async def edit_family_rules(
+def edit_family_rules(
     *,
     family_id: int,
     body: FamilyRulesRequest,
@@ -434,14 +434,14 @@ async def edit_family_rules(
 
 
 @router.delete("/{family_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def dissolve_family(family_id: int, use_case: DissolveFamilyDep, principal: FamilyManager) -> None:
+def dissolve_family(family_id: int, use_case: DissolveFamilyDep, principal: FamilyManager) -> None:
     """家族を解散する（owner のみ。自分以外の参加者がいないこと）。"""
     use_case.execute(family_id=family_id, account_id=principal.user_id)
     logger.info("family_dissolved", extra={"family_id": family_id})
 
 
 @router.post("/{family_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
-async def leave_family(family_id: int, use_case: LeaveFamilyDep, principal: FamilyViewer) -> None:
+def leave_family(family_id: int, use_case: LeaveFamilyDep, principal: FamilyViewer) -> None:
     """家族から抜ける（親のみ。他に親が残る場合に限る）。
 
     抜けた後は初期状態と同じで、家族を作り直すことも招待を受け直すこともできる。
@@ -455,7 +455,7 @@ async def leave_family(family_id: int, use_case: LeaveFamilyDep, principal: Fami
     status_code=status.HTTP_201_CREATED,
     response_model=MembershipResponse,
 )
-async def add_child(
+def add_child(
     *,
     family_id: int,
     body: ChildCreateRequest,
@@ -475,7 +475,7 @@ async def add_child(
 
 
 @router.delete("/{family_id}/memberships/{membership_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_membership(
+def remove_membership(
     *,
     family_id: int,
     membership_id: int,
@@ -498,7 +498,7 @@ async def remove_membership(
 
 
 @router.put("/{family_id}/member-order", response_model=FamilyDetailResponse)
-async def reorder_members(
+def reorder_members(
     *,
     family_id: int,
     body: MemberOrderRequest,
@@ -523,7 +523,7 @@ async def reorder_members(
     "/{family_id}/memberships/{membership_id}/password-reset",
     response_model=TemporaryPasswordResponse,
 )
-async def reset_child_password(
+def reset_child_password(
     *,
     family_id: int,
     membership_id: int,
@@ -560,7 +560,7 @@ async def reset_child_password(
     "/{family_id}/memberships/{membership_id}/independence-proposal",
     response_model=MembershipResponse,
 )
-async def propose_independence(
+def propose_independence(
     *,
     family_id: int,
     membership_id: int,
@@ -589,7 +589,7 @@ async def propose_independence(
     "/{family_id}/memberships/{membership_id}/independence-proposal",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def revoke_independence_proposal(
+def revoke_independence_proposal(
     *,
     family_id: int,
     membership_id: int,
@@ -602,7 +602,7 @@ async def revoke_independence_proposal(
 
 
 @router.post("/{family_id}/independence", status_code=status.HTTP_204_NO_CONTENT)
-async def approve_independence(
+def approve_independence(
     family_id: int,
     use_case: ApproveIndependenceDep,
     principal: FamilyViewer,
@@ -620,7 +620,7 @@ async def approve_independence(
 
 
 @router.get("/{family_id}/invitations", response_model=list[InvitationResponse])
-async def list_invitations(
+def list_invitations(
     family_id: int, use_case: ListInvitationsDep, principal: FamilyManager
 ) -> list[InvitationResponse]:
     return [_to_invitation(dto) for dto in use_case.execute(family_id=family_id, account_id=principal.user_id)]
@@ -631,7 +631,7 @@ async def list_invitations(
     status_code=status.HTTP_201_CREATED,
     response_model=InvitationResponse,
 )
-async def issue_invitation(
+def issue_invitation(
     *,
     family_id: int,
     body: InvitationCreateRequest,
@@ -651,7 +651,7 @@ async def issue_invitation(
 
 
 @router.delete("/{family_id}/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def revoke_invitation(
+def revoke_invitation(
     *,
     family_id: int,
     invitation_id: int,
@@ -666,13 +666,13 @@ async def revoke_invitation(
 
 
 @router.get("/{family_id}/reason-suggestions", response_model=list[str])
-async def suggest_reasons(family_id: int, use_case: SuggestReasonsDep, principal: PointManager) -> list[str]:
+def suggest_reasons(family_id: int, use_case: SuggestReasonsDep, principal: PointManager) -> list[str]:
     """その家族でよく使われている理由（入力候補）。頻度の高い順。"""
     return use_case.execute(family_id=family_id, account_id=principal.user_id)
 
 
 @router.get("/{family_id}/ledgers/{ledger_id}", response_model=LedgerResponse)
-async def view_ledger(ledger_id: int, use_case: ViewLedgerDep, principal: PointViewer) -> LedgerResponse:
+def view_ledger(ledger_id: int, use_case: ViewLedgerDep, principal: PointViewer) -> LedgerResponse:
     """残高と履歴。``can_modify`` で画面側が変更 UI の出し分けを決める。"""
     dto = use_case.execute(ledger_id=ledger_id, account_id=principal.user_id)
     return LedgerResponse(
@@ -692,7 +692,7 @@ async def view_ledger(ledger_id: int, use_case: ViewLedgerDep, principal: PointV
     status_code=status.HTTP_201_CREATED,
     response_model=TransactionResponse,
 )
-async def record_transaction(
+def record_transaction(
     *,
     ledger_id: int,
     body: TransactionCreateRequest,
@@ -722,7 +722,7 @@ async def record_transaction(
     status_code=status.HTTP_201_CREATED,
     response_model=TransactionResponse,
 )
-async def reverse_transaction(
+def reverse_transaction(
     *,
     ledger_id: int,
     transaction_id: int,
@@ -751,7 +751,7 @@ async def reverse_transaction(
     status_code=status.HTTP_201_CREATED,
     response_model=CorrectionResponse,
 )
-async def correct_transaction(
+def correct_transaction(
     *,
     ledger_id: int,
     transaction_id: int,
@@ -791,7 +791,7 @@ async def correct_transaction(
 
 
 @router.put("/{family_id}/ledgers/{ledger_id}/daily-bonus", response_model=DailyBonusResponse)
-async def configure_daily_bonus(
+def configure_daily_bonus(
     *,
     ledger_id: int,
     body: DailyBonusRequest,
@@ -817,7 +817,7 @@ async def configure_daily_bonus(
 
 
 @router.delete("/{family_id}/ledgers/{ledger_id}/daily-bonus", status_code=status.HTTP_204_NO_CONTENT)
-async def stop_daily_bonus(
+def stop_daily_bonus(
     *,
     ledger_id: int,
     use_case: StopDailyBonusDep,
@@ -839,7 +839,7 @@ def _event_path(suffix: str = "") -> str:
 
 
 @router.get(_event_path(), response_model=RewardEventBoardResponse)
-async def view_reward_events(
+def view_reward_events(
     ledger_id: int, use_case: ViewRewardEventsDep, principal: PointViewer
 ) -> RewardEventBoardResponse:
     """その子のイベント（がんばりカード）を作った順に返す。
@@ -856,7 +856,7 @@ async def view_reward_events(
 
 
 @router.post(_event_path(), status_code=status.HTTP_201_CREATED, response_model=RewardEventResponse)
-async def create_reward_event(
+def create_reward_event(
     *,
     ledger_id: int,
     body: RewardEventCreateRequest,
@@ -882,7 +882,7 @@ async def create_reward_event(
 
 
 @router.put(_event_path("/{event_id}/deadline"), response_model=RewardEventResponse)
-async def change_reward_event_deadline(
+def change_reward_event_deadline(
     *,
     ledger_id: int,
     event_id: int,
@@ -901,7 +901,7 @@ async def change_reward_event_deadline(
 
 
 @router.put(_event_path("/{event_id}/stickers/{number}"), response_model=RewardEventResponse)
-async def stick_reward_event_sticker(
+def stick_reward_event_sticker(
     *,
     ledger_id: int,
     event_id: int,
@@ -931,7 +931,7 @@ async def stick_reward_event_sticker(
 
 
 @router.delete(_event_path("/{event_id}/stickers/{number}"), response_model=RewardEventResponse)
-async def peel_reward_event_sticker(
+def peel_reward_event_sticker(
     *,
     ledger_id: int,
     event_id: int,
@@ -948,7 +948,7 @@ async def peel_reward_event_sticker(
 
 
 @router.delete(_event_path("/{event_id}"), status_code=status.HTTP_204_NO_CONTENT)
-async def delete_reward_event(
+def delete_reward_event(
     *,
     ledger_id: int,
     event_id: int,

@@ -380,7 +380,7 @@ def _link_failed(code: str) -> RedirectResponse:
 
 
 @router.post("/token", response_model=SsoSessionResponse)
-async def exchange_ticket(
+def exchange_ticket(
     *,
     body: SsoTicketRequest,
     response: Response,

@@ -50,13 +50,13 @@ def _resolve_permissions(db: Session, codes: list[str]) -> list[Permission]:
 
 
 @router.get("", response_model=list[RoleResponse])
-async def list_roles(db: DbDep) -> list[RoleResponse]:
+def list_roles(db: DbDep) -> list[RoleResponse]:
     roles = db.scalars(select(Role).order_by(Role.id)).all()
     return [_to_response(r) for r in roles]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=RoleResponse)
-async def create_role(body: RoleCreateRequest, db: DbDep) -> RoleResponse:
+def create_role(body: RoleCreateRequest, db: DbDep) -> RoleResponse:
     if db.scalar(select(Role).where(Role.name == body.name)):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -71,7 +71,7 @@ async def create_role(body: RoleCreateRequest, db: DbDep) -> RoleResponse:
 
 
 @router.put("/{role_id}", response_model=RoleResponse)
-async def update_role(role_id: int, body: RoleUpdateRequest, db: DbDep) -> RoleResponse:
+def update_role(role_id: int, body: RoleUpdateRequest, db: DbDep) -> RoleResponse:
     role = db.get(Role, role_id)
     if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "role_not_found"})
@@ -92,7 +92,7 @@ async def update_role(role_id: int, body: RoleUpdateRequest, db: DbDep) -> RoleR
 
 
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_role(role_id: int, db: DbDep) -> None:
+def delete_role(role_id: int, db: DbDep) -> None:
     role = db.get(Role, role_id)
     if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "role_not_found"})

@@ -113,7 +113,7 @@ def _token_response(pair: dict[str, object], user: User) -> TokenResponse:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(
+def login(
     *,
     body: LoginRequest,
     response: Response,
@@ -170,7 +170,7 @@ async def login(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(body: RefreshRequest, response: Response, db: DbDep) -> TokenResponse:
+def refresh(body: RefreshRequest, response: Response, db: DbDep) -> TokenResponse:
     refreshed = TokenService.verify_refresh_token(body.refresh_token, session=db)
     if refreshed is None:
         raise HTTPException(
@@ -190,7 +190,7 @@ async def logout(response: Response) -> StatusResponse:
 
 
 @router.get("/me", response_model=MeResponse)
-async def me(principal: PrincipalDep, db: DbDep) -> MeResponse:
+def me(principal: PrincipalDep, db: DbDep) -> MeResponse:
     """自分が誰か。
 
     ⚠ **名前とメールは行から読む**（ADR-0037）。トークンのクレームは発行の時点の
@@ -227,7 +227,7 @@ def _resolved_email(db: Session, email: str | None, *, user_id: int) -> str | No
 
 
 @router.put("/me", response_model=MeResponse)
-async def update_profile(body: ProfileUpdateRequest, principal: PersonPrincipalDep, db: DbDep) -> MeResponse:
+def update_profile(body: ProfileUpdateRequest, principal: PersonPrincipalDep, db: DbDep) -> MeResponse:
     """自分の表示名とメールアドレスを変える。
 
     ログイン識別子（``username``）はここでは変えない。変えるとログインの手順が
@@ -258,7 +258,7 @@ async def update_profile(body: ProfileUpdateRequest, principal: PersonPrincipalD
 
 
 @router.post("/change-password", response_model=TokenResponse)
-async def change_password(
+def change_password(
     *, body: ChangePasswordRequest, principal: PrincipalDep, db: DbDep, response: Response
 ) -> TokenResponse:
     """パスワードを変える。**終わったら新しいトークンを出す。**
@@ -289,7 +289,7 @@ async def change_password(
 
 
 @router.post("/forgot-password", response_model=StatusResponse)
-async def forgot_password(body: ForgotPasswordRequest, db: DbDep, throttle: ThrottleDep) -> StatusResponse:
+def forgot_password(body: ForgotPasswordRequest, db: DbDep, throttle: ThrottleDep) -> StatusResponse:
     """リセットリンクを申し込む。
 
     メールアドレスを持たないアカウント（子ども）にはリンクを送れない。それでも
@@ -310,7 +310,7 @@ async def forgot_password(body: ForgotPasswordRequest, db: DbDep, throttle: Thro
 
 
 @router.post("/reset-password", response_model=StatusResponse)
-async def reset_password(body: ResetPasswordRequest, db: DbDep) -> StatusResponse:
+def reset_password(body: ResetPasswordRequest, db: DbDep) -> StatusResponse:
     if not PasswordResetService().reset(db, body.token, body.new_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

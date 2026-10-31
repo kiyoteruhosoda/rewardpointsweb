@@ -22,7 +22,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[LogEntryResponse])
-async def list_logs(
+def list_logs(
     *,
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[int, Query(ge=1, le=500)] = 100,

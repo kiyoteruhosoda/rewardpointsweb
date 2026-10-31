@@ -25,7 +25,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[PermissionResponse])
-async def list_permissions(
+def list_permissions(
     db: Annotated[Session, Depends(get_db)],
 ) -> list[PermissionResponse]:
     permissions = db.scalars(select(Permission).order_by(Permission.code)).all()

@@ -64,7 +64,7 @@ async def restart_status(_principal: SystemManagerDep) -> RestartStatusResponse:
     response_model=RestartCommandResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def request_restart(
+def request_restart(
     body: RestartCommandRequest,
     principal: SystemManagerDep,
     db: DbDep,
