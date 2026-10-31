@@ -168,14 +168,14 @@ def _reject_self_lockout(principal: AuthenticatedPrincipal, user: User, roles: l
 
 
 @router.get("", response_model=list[UserResponse])
-async def list_users(db: DbDep) -> list[UserResponse]:
+def list_users(db: DbDep) -> list[UserResponse]:
     users = db.scalars(select(User).order_by(User.id)).all()
     inventory = _Inventory.of(db)
     return [_to_response(u, inventory) for u in users]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=UserResponse)
-async def create_user(body: UserCreateRequest, db: DbDep) -> UserResponse:
+def create_user(body: UserCreateRequest, db: DbDep) -> UserResponse:
     try:
         username = Username(body.username).value
     except ValueError as error:
@@ -208,7 +208,7 @@ async def create_user(body: UserCreateRequest, db: DbDep) -> UserResponse:
 
 
 @router.put("/{user_id}", response_model=UserResponse)
-async def update_user(user_id: int, body: UserUpdateRequest, db: DbDep, *, principal: UserManagerDep) -> UserResponse:
+def update_user(user_id: int, body: UserUpdateRequest, db: DbDep, *, principal: UserManagerDep) -> UserResponse:
     """アカウントを変更する。
 
     ``roles`` は差分ではなく **変更後の全体** を渡す（省略時はロールを触らない）。
@@ -242,7 +242,7 @@ async def update_user(user_id: int, body: UserUpdateRequest, db: DbDep, *, princ
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(user_id: int, db: DbDep, deletable: DeletableDep) -> None:
+def delete_user(user_id: int, db: DbDep, deletable: DeletableDep) -> None:
     """アカウントを削除する。
 
     家族の owner として残っているアカウントは削除できない（409）。無効化したい

@@ -177,6 +177,8 @@ SystemSetting.query.get("some_key")
 
 ## API 設計（FastAPI + Pydantic）
 
+**DB を使う口と依存関数は `def` で書く**（ADR-0057）。`async def` の中で同期の DB を呼ぶと、同じ行への同時の書き込みでイベントループごと止まる（SQLite の試験では出ない）。`await` が要る口は DB を `run_in_threadpool` へ逃がす。ログの文脈（`ContextVar`）は `async def` の依存関数で置く。試験で止める。
+
 - エンドポイントは FastAPI の `APIRouter` として実装。
 - リクエスト・レスポンスは Pydantic `BaseModel` で定義し、Application 層には **バリデーション済みの値** のみを渡す。
 - Schema から直接 Domain モデルを生成しない（Application 層で変換）。

@@ -73,7 +73,7 @@ DisplayApprover = Annotated[AuthenticatedPrincipal, Depends(require_permission("
 
 
 @router.post("/pairings", status_code=status.HTTP_201_CREATED, response_model=PairingStartResponse)
-async def start_pairing(use_case: StartPairingDep, body: PairingStartRequest | None = None) -> PairingStartResponse:
+def start_pairing(use_case: StartPairingDep, body: PairingStartRequest | None = None) -> PairingStartResponse:
     """ペアリングを始める。確認コードを画面に出し、端末の秘密で受け取りを問い合わせる。
 
     ``origin`` を送ると、承認の画面を指す QR コードも返す。確認コードは URL の ``#`` の後ろに
@@ -91,7 +91,7 @@ async def start_pairing(use_case: StartPairingDep, body: PairingStartRequest | N
 
 
 @router.post("/pairings/claim", response_model=PairingClaimResponse)
-async def claim_pairing(body: PairingClaimRequest, use_case: ClaimPairingDep) -> PairingClaimResponse:
+def claim_pairing(body: PairingClaimRequest, use_case: ClaimPairingDep) -> PairingClaimResponse:
     """承認されていれば、端末の資格情報を 1 度だけ返す。
 
     まだなら 400 ``authorization_pending``（間隔を空けて問い合わせ続ける）、期限切れ・
@@ -101,7 +101,7 @@ async def claim_pairing(body: PairingClaimRequest, use_case: ClaimPairingDep) ->
 
 
 @router.post("/session", response_model=DisplaySessionResponse)
-async def open_session(
+def open_session(
     *,
     body: DisplaySessionRequest,
     response: Response,
@@ -138,7 +138,7 @@ def _unauthorized(code: str) -> JSONResponse:
 
 
 @router.post("/pairings/approve", status_code=status.HTTP_201_CREATED, response_model=DisplayDeviceResponse)
-async def approve_pairing(
+def approve_pairing(
     *,
     body: PairingApproveRequest,
     use_case: ApprovePairingDep,
@@ -172,7 +172,7 @@ async def approve_pairing(
 
 
 @router.get("/families", response_model=list[DisplayableFamilyResponse])
-async def list_families(roster: DisplayRosterDep, principal: DisplayApprover) -> list[DisplayableFamilyResponse]:
+def list_families(roster: DisplayRosterDep, principal: DisplayApprover) -> list[DisplayableFamilyResponse]:
     """映す先として選べる家族（名前だけ。台帳は載せない）。承認する人が owner / parent の家族だけ。"""
     return [
         DisplayableFamilyResponse(id=family.id, name=family.name)
@@ -181,7 +181,7 @@ async def list_families(roster: DisplayRosterDep, principal: DisplayApprover) ->
 
 
 @router.get("/devices", response_model=list[DisplayDeviceResponse])
-async def list_devices(
+def list_devices(
     roster: DisplayRosterDep, credentials: DescribeDisplayCredentialsDep, _principal: DisplayApprover
 ) -> list[DisplayDeviceResponse]:
     """全ての家族の表示端末と、最後に使った日時。"""
@@ -190,7 +190,7 @@ async def list_devices(
 
 
 @router.delete("/devices/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_device(account_id: int, roster: DisplayRosterDep, principal: DisplayApprover) -> None:
+def remove_device(account_id: int, roster: DisplayRosterDep, principal: DisplayApprover) -> None:
     """表示端末を外す。参加・アカウント・資格情報を消す。
 
     ⚠ 端末の手元のアクセストークンは寿命（5 分）まで通る（ADR-0037 と同じ上限）。

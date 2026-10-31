@@ -54,7 +54,7 @@ RepoDep = Annotated[SqlItemRepository, Depends(get_item_repository)]
     response_model=ItemResponse,
     dependencies=[Depends(require_permission("item:manage"))],
 )
-async def create_item(body: ItemCreateRequest, repo: RepoDep) -> ItemResponse:
+def create_item(body: ItemCreateRequest, repo: RepoDep) -> ItemResponse:
     dto = CreateItemUseCase(repo).execute(body.name)
     logger.info("item_created", extra={"item_id": dto.id})
     return ItemResponse(id=dto.id, name=dto.name)
@@ -65,6 +65,6 @@ async def create_item(body: ItemCreateRequest, repo: RepoDep) -> ItemResponse:
     response_model=list[ItemResponse],
     dependencies=[Depends(require_permission("item:view"))],
 )
-async def list_items(repo: RepoDep) -> list[ItemResponse]:
+def list_items(repo: RepoDep) -> list[ItemResponse]:
     dtos = ListItemsUseCase(repo).execute()
     return [ItemResponse(id=dto.id, name=dto.name) for dto in dtos]

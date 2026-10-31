@@ -140,7 +140,7 @@ async def get_person_principal(
     return principal
 
 
-async def get_settled_principal(
+def get_settled_principal(
     principal: AuthenticatedPrincipal = Depends(get_person_principal),
     db: Session = Depends(get_db),
 ) -> AuthenticatedPrincipal:
