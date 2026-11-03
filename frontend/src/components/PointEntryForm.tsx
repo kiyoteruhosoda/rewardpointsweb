@@ -85,7 +85,7 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
       className="inline-form"
       onSubmit={(event) => {
         event.preventDefault()
-        void submit(editing ? editingSign : signOf(event.nativeEvent as SubmitEvent))
+        void submit(editing ? editingSign : signOf(event.nativeEvent))
       }}
     >
       {editing && (

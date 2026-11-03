@@ -7,7 +7,7 @@
  *
  * 失敗したときは入力を残す（打ち直させない）。通ったら空にして次を作れるようにする。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 
 import { usePendingAction } from '../hooks/usePendingAction'
 import { useRequiredText } from '../hooks/useRequiredText'
@@ -38,7 +38,7 @@ export function RewardEventForm({ onCreate, today }: Props) {
   const goalIsValid = Number.isInteger(goalCount) && goalCount >= 1 && goalCount <= MAX_GOAL_COUNT
   const columns = goalIsValid ? gridColumns(goalCount) : null
 
-  const [submit, submitting] = usePendingAction(async (event: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
     try {
       await onCreate({

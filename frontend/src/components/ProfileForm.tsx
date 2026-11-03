@@ -7,7 +7,7 @@
  * メールアドレスは任意項目。空にして保存すると外れる — メールアドレスを持たない
  * アカウントは、パスワードのリセットを親からの一時パスワードで受ける。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 
 import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
@@ -23,7 +23,7 @@ export function ProfileForm() {
   const [displayName, setDisplayName] = useState(user?.display_name ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
 
-  const [submit, submitting] = usePendingAction(async (event: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
     try {
       await api.put<Me>('/api/auth/me', {

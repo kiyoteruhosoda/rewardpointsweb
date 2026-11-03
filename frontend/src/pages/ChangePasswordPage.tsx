@@ -4,7 +4,7 @@
  * 一時パスワードでログインしている間は、他の画面がすべてここへ寄せられる
  * （ADR-0011）。変更が終わると `must_change_password` が下り、通常の画面へ戻る。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 
 import { ActionButton } from '../components/ActionButton'
 import { PasswordField } from '../components/PasswordField'
@@ -21,7 +21,7 @@ export function ChangePasswordPage() {
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
 
-  const [submit, submitting] = usePendingAction(async (e: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (e: SubmitEvent) => {
     e.preventDefault()
     try {
       await api.post('/api/auth/change-password', {

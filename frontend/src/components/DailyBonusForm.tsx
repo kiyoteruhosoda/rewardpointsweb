@@ -8,7 +8,7 @@
  * 量は子ども一人ひとりで違ってよい。並べるのは家族設定の画面（`DailyBonusPanel`）で、
  * ここは 1 人ぶんだけを受け持つ。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 
 import { useI18n } from '../i18n'
 import { useRequiredText } from '../hooks/useRequiredText'
@@ -38,7 +38,7 @@ export function DailyBonusForm({ familyId, ledgerId, childName, bonus, onChanged
   const [reason, setReason] = useState(bonus?.reason ?? t('dailyBonus.defaultReason'))
   const reasonRef = useRequiredText(reason, t('common.reasonRequired'))
 
-  const [save, saving] = usePendingAction(async (event: FormEvent) => {
+  const [save, saving] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
     const points = Number(amount)
     if (!Number.isFinite(points) || points < 1 || !reason.trim()) return

@@ -1,5 +1,5 @@
 /** アカウントのセキュリティ設定（二要素認証・パスキー・IdP との連携）。 */
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type SubmitEvent } from 'react'
 
 import { ActionButton } from '../components/ActionButton'
 import { FederatedIdentityControls } from '../components/FederatedIdentityControls'
@@ -90,7 +90,7 @@ export function SecurityPage() {
     }
   })
 
-  const [confirmEnrollment, confirming] = usePendingAction(async (e: FormEvent) => {
+  const [confirmEnrollment, confirming] = usePendingAction(async (e: SubmitEvent) => {
     e.preventDefault()
     setTwoFactorError(null)
     try {
@@ -104,7 +104,7 @@ export function SecurityPage() {
     }
   })
 
-  const [disableTwoFactor, disabling] = usePendingAction(async (e: FormEvent) => {
+  const [disableTwoFactor, disabling] = usePendingAction(async (e: SubmitEvent) => {
     e.preventDefault()
     setTwoFactorError(null)
     try {

@@ -15,7 +15,7 @@
  * 入力済みの招待コードを持たせてログインへ送る。行き先で拾えないと
  * 「コードを持っているのに元の画面へ戻される」動線になる。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
@@ -44,7 +44,7 @@ export function RedeemInvitationPage() {
   // 打ち込んだコードはログインの先まで運ぶ。空のまま送っても意味がないので付けない。
   const signInPath = invitationSignInPath(code)
 
-  const [submit, submitting] = usePendingAction(async (event: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
     setError(null)
     try {
