@@ -10,7 +10,7 @@
  * メール送信そのものが使えない運用では `mail_unavailable` が返る。ここで「送信
  * しました」と出すと、届かないメールを待たせてしまうので、同じく親へ誘導する。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 
 import { ActionButton } from '../components/ActionButton'
 import { usePendingAction } from '../hooks/usePendingAction'
@@ -31,7 +31,7 @@ export function ForgotPasswordPage() {
   const [username, setUsername] = useState('')
   const [outcome, setOutcome] = useState<Outcome['status'] | null>(null)
 
-  const [submit, submitting] = usePendingAction(async (e: FormEvent) => {
+  const [submit, submitting] = usePendingAction(async (e: SubmitEvent) => {
     e.preventDefault()
     const response = await api.post<Outcome>('/api/auth/forgot-password', { username })
     setOutcome(response.status)

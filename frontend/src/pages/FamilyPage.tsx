@@ -19,7 +19,7 @@
  * - **削除** … 台帳に記録が無い参加者だけ。記録が 1 件でもあれば履歴が黙って
  *   消える経路になるので、サーバーが断る（ADR-0010）。画面にも出さない。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
@@ -57,7 +57,7 @@ export function FamilyPage() {
     }
   }
 
-  const [addChild, addingChild] = usePendingAction(async (event: FormEvent) => {
+  const [addChild, addingChild] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
     if (!family) return
     const familyId = family.id

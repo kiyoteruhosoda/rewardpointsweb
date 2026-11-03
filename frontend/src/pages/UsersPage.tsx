@@ -8,7 +8,7 @@
  * 実際に効く scope（ロールの和集合）はサーバーが返した値をそのまま読み取り専用で
  * 並べる。scope を直に付け替える口は用意しない（CLAUDE.md「権限管理」）。
  */
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type SubmitEvent } from 'react'
 
 import { ActionButton } from '../components/ActionButton'
 import { PasswordField } from '../components/PasswordField'
@@ -127,7 +127,7 @@ export function UsersPage() {
       })
   }, [])
 
-  const [create, creating] = usePendingAction(async (e: FormEvent) => {
+  const [create, creating] = usePendingAction(async (e: SubmitEvent) => {
     e.preventDefault()
     try {
       await api.post('/api/admin/users', {

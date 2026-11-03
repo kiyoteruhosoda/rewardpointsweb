@@ -5,7 +5,7 @@
  * （ADR-0025 と同じく、コードをサーバーのログ・Referer に載せない）。ログインして
  * いなければ、ログインの後にこの画面へ戻ってくる（`RequireAuth` が行き先を覚える）。
  */
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type SubmitEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
@@ -45,7 +45,7 @@ export function DisplayApprovePage() {
       })
   }, [notify, t])
 
-  const [approve, approving] = usePendingAction(async (e: FormEvent) => {
+  const [approve, approving] = usePendingAction(async (e: SubmitEvent) => {
     e.preventDefault()
     try {
       const approved = await approvePairing({

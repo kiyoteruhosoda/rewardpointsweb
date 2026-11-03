@@ -7,7 +7,7 @@
  * 親には「期限を変える」を出す。期限切れのカードも、延ばせばまた貼れる。過ぎた日は
  * 選べない（`min` を今日にする。サーバーも断る）。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 
 import { useI18n } from '../i18n'
 import { DEADLINE_SOON_DAYS, daysUntil } from '../services/eventDeadline'
@@ -51,7 +51,7 @@ export function EventDeadline({ event, today, canModify, pending, disabled, onCh
     return (
       <form
         className="event-deadline-form"
-        onSubmit={(formEvent: FormEvent) => {
+        onSubmit={(formEvent: SubmitEvent) => {
           formEvent.preventDefault()
           void save(value === '' ? null : value)
         }}

@@ -10,7 +10,7 @@
  * 復元しても、他の参加者のアカウントは戻らない — 控えに入っていないため。子ども
  * には招待コードを配り直す。取り込みの案内でそこまで言う。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 
 import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
@@ -30,7 +30,7 @@ export function FamilyImportPanel({ onImported }: Props) {
   const { notify } = useToast()
   const [file, setFile] = useState<File | null>(null)
 
-  const [restore, restoring] = usePendingAction(async (event: FormEvent) => {
+  const [restore, restoring] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
     if (!file) return
     try {

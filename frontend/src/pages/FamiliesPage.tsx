@@ -18,7 +18,7 @@
  * バックアップからの復元（ADR-0026）もここに置く。復元は新しい家族を作る操作で、
  * 所属していない状態からしか行えない — 作成と同じ条件なので、同じ画面に並ぶ。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 
 import { ActionButton } from '../components/ActionButton'
@@ -52,7 +52,7 @@ export function FamiliesPage() {
     void navigate(`/families/${String(familyId)}`)
   }
 
-  const [create, creating] = usePendingAction(async (event: FormEvent) => {
+  const [create, creating] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
     try {
       const created = await families.create(name)
@@ -63,7 +63,7 @@ export function FamiliesPage() {
     }
   })
 
-  const [join, joining] = usePendingAction(async (event: FormEvent) => {
+  const [join, joining] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
     try {
       const joined = await families.acceptInvitation(code, null)

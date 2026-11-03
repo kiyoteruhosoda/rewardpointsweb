@@ -13,7 +13,7 @@
  * ルール（家族で決めた約束ごと。ADR-0027）も家族に 1 つ。ここが唯一の書く場所で、
  * 子どもの台帳には同じ文面が読むだけの形で出る。
  */
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { usePendingAction } from '../hooks/usePendingAction'
@@ -47,7 +47,7 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
     notify('error', t(errorMessageKey(error)))
   }
 
-  const [rename, renaming] = usePendingAction(async (event: FormEvent) => {
+  const [rename, renaming] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
     try {
       await families.rename(family.id, name)
@@ -58,7 +58,7 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
     }
   })
 
-  const [saveRules, savingRules] = usePendingAction(async (event: FormEvent) => {
+  const [saveRules, savingRules] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
     try {
       await families.setRules(family.id, rules)
