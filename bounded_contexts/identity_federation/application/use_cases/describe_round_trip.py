@@ -34,5 +34,10 @@ class DescribeRoundTrip:
             return None
         return session.redirect_to
 
+    def is_renewal(self, *, state: str, browser_binding: str | None) -> bool:
+        """送り出したブラウザへ戻った、切れたログインを続ける往復か（ADR-0058）。"""
+        session = self.sessions.peek(state)
+        return session is not None and session.renewal_from(hash_secret(browser_binding or ""))
+
 
 __all__ = ["DescribeRoundTrip"]

@@ -2,10 +2,16 @@
  * API クライアント（fetch ラッパー）。
  *
  * - JWT を localStorage に保持し、Authorization ヘッダーで送る。
- * - 401 のとき refresh トークンで1回だけ再試行する。
+ * - 401 のとき 1 回だけログインを続けてから再試行する。パスワード・パスキーで入ったログインは
+ *   refresh トークン、表示端末は端末の資格情報（ADR-0047）、SSO で入ったログイン（refresh トークンを
+ *   持たない）は見えない枠で IdP へ問い合わせ、返ってきた引き換え券をトークンへ換える
+ *   （ADR-0058。`silentRenewal.ts`）。続けられなければ「ログインが終わった」と知らせる。
  * - バックエンドはエラーコード（{"error": "..."}）を返す。表示文言への変換は
  *   i18n（フロントエンド側）で行う。
  */
+import { reportSessionEnded } from './sessionEnded'
+import { oneAtATime, renewInFrame } from './silentRenewal'
+import { clearSilentSsoMarks, markSilentSsoTried, signedOutHere } from './silentSso'
 
 const ACCESS_KEY = 'access_token'
 const REFRESH_KEY = 'refresh_token'
@@ -84,9 +90,11 @@ export function errorMessageKey(error: unknown): string {
   return `error.${error.code}`
 }
 
-export function setTokens(access: string, refresh: string): void {
+/** トークンを置く。SSO で入ったログインは refresh を持たない（`null`。ADR-0058）。 */
+export function setTokens(access: string, refresh: string | null): void {
   localStorage.setItem(ACCESS_KEY, access)
-  localStorage.setItem(REFRESH_KEY, refresh)
+  if (refresh) localStorage.setItem(REFRESH_KEY, refresh)
+  else localStorage.removeItem(REFRESH_KEY)
 }
 
 export function displayCredential(): string | null {
@@ -193,17 +201,42 @@ function extractErrorFields(body: unknown): string[] {
     : []
 }
 
-/** ``/api/auth/refresh`` の応答。 */
+/** ``/api/auth/refresh``・``/api/auth/sso/token`` の応答。 */
 interface TokenPair {
   access_token: string
-  refresh_token: string
+  refresh_token: string | null
 }
 
-async function tryRefresh(): Promise<boolean> {
+/** いま走っている続ける処理。同時に 401 になった要求は 1 本を待つ。 */
+let continuing: Promise<boolean> | null = null
+
+function tryRefresh(): Promise<boolean> {
+  continuing ??= continueSession().finally(() => {
+    continuing = null
+  })
+  return continuing
+}
+
+async function continueSession(): Promise<boolean> {
   // 表示端末はリフレッシュトークンを持たない。資格情報で取り直す（ADR-0047）
   if (displayCredential()) return (await openDisplaySession()) === 'opened'
   const refresh = localStorage.getItem(REFRESH_KEY)
-  if (!refresh) return false
+  if (refresh) return sendRefresh(refresh)
+  // SSO で入ったログイン（ADR-0058）。サインアウトした後は IdP に問い合わせない
+  if (!hasTokens() || signedOutHere()) return false
+  return oneAtATime(async () => {
+    // 待っている間に、ほかのタブが続けていたかもしれない（localStorage は共有）
+    if (await stillSignedIn()) return true
+    const outcome = await renewInFrame()
+    if (outcome.result === 'declined') markSilentSsoTried()
+    if (outcome.result !== 'renewed') return false
+    const exchanged = await exchangeRenewal(outcome.ticket)
+    if (exchanged) clearSilentSsoMarks()
+    return exchanged
+  })
+}
+
+async function sendRefresh(refresh: string): Promise<boolean> {
   const response = await fetch('/api/auth/refresh', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -216,6 +249,54 @@ async function tryRefresh(): Promise<boolean> {
   const pair = (await response.json()) as TokenPair
   setTokens(pair.access_token, pair.refresh_token)
   return true
+}
+
+function authorization(): Record<string, string> {
+  const access = localStorage.getItem(ACCESS_KEY)
+  return access ? { Authorization: `Bearer ${access}` } : {}
+}
+
+async function stillSignedIn(): Promise<boolean> {
+  const response = await fetch('/api/auth/me', { headers: authorization() })
+  return response.ok
+}
+
+/**
+ * 続ける往復の引き換え券をトークンへ換える。手元の（期限切れの）トークンを添えるので、
+ * サーバーは同じ人のときだけ換える（別の人なら 401）。
+ */
+async function exchangeRenewal(ticket: string): Promise<boolean> {
+  const response = await fetch('/api/auth/sso/token', {
+    method: 'POST',
+    headers: { ...authorization(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticket, continuing: true }),
+  })
+  if (!response.ok) return false
+  const pair = (await response.json()) as TokenPair
+  setTokens(pair.access_token, pair.refresh_token)
+  return true
+}
+
+/**
+ * ログインが切れた・無いという 401 か。入口の 401（パスワード違い・二要素の不足など）では続けない
+ * ——続けると、パスワードを打ち間違えただけで IdP への問い合わせが走る。
+ */
+const SESSION_ERRORS = new Set(['authentication_required', 'invalid_token'])
+
+async function meansSessionExpired(response: Response): Promise<boolean> {
+  try {
+    return SESSION_ERRORS.has(extractErrorCode(await response.clone().json()))
+  } catch {
+    return false
+  }
+}
+
+/** 401 のあと続けられたか。続けられなければ「ログインが終わった」と知らせる。 */
+async function continuedAfter(response: Response): Promise<boolean> {
+  if (!(await meansSessionExpired(response))) return false
+  if (await tryRefresh()) return true
+  reportSessionEnded()
+  return false
 }
 
 async function requestResponse(
@@ -234,7 +315,7 @@ async function requestResponse(
 
   const response = await fetch(path, init)
 
-  if (response.status === 401 && retry && (await tryRefresh())) {
+  if (response.status === 401 && retry && (await continuedAfter(response))) {
     return requestResponse(method, path, body, false)
   }
   if (!response.ok) {

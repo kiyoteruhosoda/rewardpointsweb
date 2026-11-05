@@ -1,6 +1,7 @@
 /** 認証状態（ログイン中ユーザーと scope）。認可判定は hasScope で行う。 */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
+import { clearSessionDrafts } from '../hooks/useSessionDraft'
 import {
   ApiError,
   api,
@@ -9,6 +10,7 @@ import {
   hasTokens,
   setTokens,
 } from '../services/api'
+import { subscribeSessionEnded } from '../services/sessionEnded'
 import { exchangeSsoTicket } from '../services/sso'
 import { clearSilentSsoMarks, markSignedOut } from '../services/silentSso'
 import { assertPasskey, type PasskeyChallenge } from '../services/webauthn'
@@ -33,7 +35,8 @@ export interface Me {
 
 interface TokenPair {
   access_token: string
-  refresh_token: string
+  /** SSO で入ったログインには出ない（ADR-0058）。 */
+  refresh_token: string | null
 }
 
 export interface AuthValue {
@@ -86,6 +89,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [])
+
+  // ログインを続けられなかった（ADR-0058）。画面はログイン画面へ移る（行き先と書きかけは残る）
+  useEffect(
+    () =>
+      subscribeSessionEnded(() => {
+        setUser(null)
+      }),
+    [],
+  )
 
   useEffect(() => {
     if (!unreachable) return
@@ -147,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     // IdP の SSO は既定で残るので、ログイン画面を開いてもボタンを押さずに入り直さない（ADR-0052）
     markSignedOut()
+    clearSessionDrafts()
   }
 
   const hasScope = (...codes: string[]) =>

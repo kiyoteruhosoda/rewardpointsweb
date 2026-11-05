@@ -43,6 +43,10 @@ class SsoLoginSession:
     #: ⚠ **戻りで「入っていない」と言われたときの扱いを決めるためにある。** 試しただけなので
     #:   失敗ではなく、エラーを出さずにログイン画面へ戻す。
     silent: bool = False
+    #: 切れたログインを続ける往復（見えない枠の中。ADR-0058）。常に ``silent`` でもある。
+    #:
+    #: ⚠ **戻りの行き先を決めるためにある。** 枠の中なので SPA の画面へは戻さず、結果の頁へ送る。
+    renewal: bool = False
 
     def is_expired(self, now: datetime) -> bool:
         return now >= self.expires_at
@@ -57,6 +61,10 @@ class SsoLoginSession:
     def declined_silently(self, binding_hash: str) -> bool:
         """送り出したブラウザへの戻りで、それが画面を出さずに試した往復か（ADR-0052）。"""
         return self.silent and self.belongs_to(binding_hash)
+
+    def renewal_from(self, binding_hash: str) -> bool:
+        """送り出したブラウザへの戻りで、それが切れたログインを続ける往復か（ADR-0058）。"""
+        return self.renewal and self.belongs_to(binding_hash)
 
     def started_by(self, user_id: int) -> bool:
         """連携の往復を始めたのが、いま入っているこの利用者か（ADR-0036）。"""

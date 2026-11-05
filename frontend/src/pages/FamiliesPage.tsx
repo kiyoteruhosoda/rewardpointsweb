@@ -25,6 +25,7 @@ import { ActionButton } from '../components/ActionButton'
 import { FamilyImportPanel } from '../components/FamilyImportPanel'
 import { useToast } from '../components/ToastNotification'
 import { usePendingAction } from '../hooks/usePendingAction'
+import { useSessionValue } from '../hooks/useSessionDraft'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families } from '../services/families'
@@ -40,7 +41,8 @@ export function FamiliesPage() {
   const navigate = useNavigate()
   const { pathname, hash } = useLocation()
   const carriedCode = readInvitationCode(hash)
-  const [name, setName] = useState('')
+  // 書きかけはログインの往復をまたいで残す（ADR-0058）
+  const [name, setName] = useSessionValue('families.name', '')
   const [code, setCode] = useState(carriedCode)
 
   // 作成は保護者の scope 一式が要る（サーバーの入口と同じ条件 — ADR-0018）

@@ -7,10 +7,11 @@
  *
  * 失敗したときは入力を残す（打ち直させない）。通ったら空にして次を作れるようにする。
  */
-import { useState, type SubmitEvent } from 'react'
+import { type SubmitEvent } from 'react'
 
 import { usePendingAction } from '../hooks/usePendingAction'
 import { useRequiredText } from '../hooks/useRequiredText'
+import { useSessionValue } from '../hooks/useSessionDraft'
 import { useI18n } from '../i18n'
 import { MAX_GOAL_COUNT, TITLE_MAX_LENGTH, type NewRewardEvent } from '../services/rewardEvents'
 import { gridColumns } from '../services/stickerSheet'
@@ -27,11 +28,12 @@ const DEFAULT_GOAL = '10'
 
 export function RewardEventForm({ onCreate, today }: Props) {
   const { t } = useI18n()
-  const [title, setTitle] = useState('')
-  const [reward, setReward] = useState('')
-  const [goal, setGoal] = useState(DEFAULT_GOAL)
+  // 書きかけはログインの往復をまたいで残す（ADR-0058）
+  const [title, setTitle] = useSessionValue('events.title', '')
+  const [reward, setReward] = useSessionValue('events.reward', '')
+  const [goal, setGoal] = useSessionValue('events.goal', DEFAULT_GOAL)
   // 空なら期限なし
-  const [deadline, setDeadline] = useState('')
+  const [deadline, setDeadline] = useSessionValue('events.deadline', '')
   const titleRef = useRequiredText(title, t('events.titleRequired'))
 
   const goalCount = Number(goal)

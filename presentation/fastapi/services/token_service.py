@@ -73,6 +73,9 @@ class TokenService:
 
         ``scopes`` を指定した場合も保有権限との積集合に切り詰める。
         ``federated_login`` は SSO で始まったセッションのときだけ渡す（ADR-0032）。
+
+        ⚠ **SSO で入ったログインにはリフレッシュトークンを出さない**（``refresh_token`` は ``None``。ADR-0058）。
+        切れたら画面が見えない枠で IdP へ問い合わせ、IdP のログイン状態が生きていれば入り直す。
         """
         granted = user.permission_codes
         effective = sorted(granted if scopes is None else granted & set(scopes))
@@ -100,14 +103,18 @@ class TokenService:
             settings.jwt_secret_key,
             algorithm=_ALGORITHM,
         )
-        refresh = jwt.encode(
-            {
-                **base_claims,
-                "type": TYPE_REFRESH,
-                "exp": now + timedelta(seconds=settings.refresh_token_expires_seconds),
-            },
-            settings.jwt_secret_key,
-            algorithm=_ALGORITHM,
+        refresh = (
+            None
+            if federated_login is not None
+            else jwt.encode(
+                {
+                    **base_claims,
+                    "type": TYPE_REFRESH,
+                    "exp": now + timedelta(seconds=settings.refresh_token_expires_seconds),
+                },
+                settings.jwt_secret_key,
+                algorithm=_ALGORITHM,
+            )
         )
         return {
             "access_token": access,
@@ -252,6 +259,37 @@ def _federation_claims(federated_login: FederatedLogin | None) -> dict[str, obje
     return claims
 
 
+#: 期限の切れた SSO のアクセストークンから、続ける往復が利用者を読む長さ（ADR-0058）。
+#: IdP のログイン状態の最も長いもの（30 日）に揃える。これより古いトークンは読まない（新しいログインとして入る）
+RENEWAL_CARRY_SECONDS = 30 * 24 * 3600
+
+
+def continued_user_of(token: str) -> int | None:
+    """期限の切れた SSO のアクセストークンが、誰のログインだったか（ADR-0058）。
+
+    ⚠ **これは認証ではない。** IdP から**同じ人**が戻ってきたかを見るのにだけ使う。署名と
+    発行者・宛先は確かめ、期限は :data:`RENEWAL_CARRY_SECONDS` まで見逃す。SSO で入ったログインの
+    ものでなければ読まない（表示端末のトークンも読まない）。
+    """
+    try:
+        claims = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[_ALGORITHM],
+            audience=settings.access_token_audience,
+            issuer=settings.access_token_issuer,
+            leeway=timedelta(seconds=RENEWAL_CARRY_SECONDS),
+        )
+    except jwt.InvalidTokenError:
+        return None
+    if claims.get("type") != TYPE_ACCESS or _federated_login_of(claims) is None:
+        return None
+    try:
+        return int(claims.get("sub", ""))
+    except ValueError:
+        return None
+
+
 def _federated_login_of(claims: dict[str, Any]) -> FederatedLogin | None:
     """クレームから IdP 側のセッションを読む。載っていなければ ``None``。"""
     issuer = claims.get(CLAIM_FEDERATED_ISSUER)
@@ -291,9 +329,11 @@ __all__ = [
     "CLAIM_FEDERATED_SUBJECT",
     "CLAIM_SESSION_ID",
     "CLAIM_VIA",
+    "RENEWAL_CARRY_SECONDS",
     "TYPE_ACCESS",
     "TYPE_REFRESH",
     "VIA_DISPLAY_DEVICE",
     "RefreshedSession",
     "TokenService",
+    "continued_user_of",
 ]

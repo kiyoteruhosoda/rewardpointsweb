@@ -1,3 +1,10 @@
+## 2026-11-05（SSO で入ったログインのリフレッシュトークンをやめ、切れたら画面を出さずに IdP へ問い合わせる。ADR-0058・task #889）
+
+- SSO で入ったログインには refresh トークンを出さない（`refresh_token` は `null`）。アクセストークン（既定 5 分）が切れたら、画面が見えない枠で `/api/auth/sso/renew` を開き、IdP へ `prompt=none` で問い合わせる。戻りは結果の頁へ 1 回限りの引き換え券を付けて送り、画面がそれをトークンへ換えて続ける。IdP のログイン状態が無ければログイン画面へ送る（家族・子ども・イベント・ロール・ユーザーの追加の欄は sessionStorage に残る）。
+- 前に出した SSO の refresh トークンは `/api/auth/refresh` で断る。
+- `sso_login_sessions` に `renewal` を足した（マイグレーション `renewal_round_trip`）。
+- パスワード・パスキーで入ったログインと表示端末は変わらない。
+
 ## 2026-10-31（アクセスログに誰の要求かを残す。雛形の ADR-0075・task #808）
 
 - `RequestLoggingMiddleware` を素の ASGI にした。`http_request` の行に、認証済みなら `user_id_hash` が入る。行を出す時点（応答の先頭）と `duration_ms` の意味は変えていない。

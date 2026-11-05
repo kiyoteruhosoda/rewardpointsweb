@@ -24,7 +24,8 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    refresh_token: str
+    #: SSO で入ったログインには出さない（``None``。ADR-0058）
+    refresh_token: str | None = None
     token_type: str
     expires_in: int
     # 一時パスワードでのログイン。画面はパスワード変更へ誘導する（ADR-0011）

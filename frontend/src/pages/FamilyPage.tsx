@@ -31,6 +31,7 @@ import { MemberList, type MemberAction } from '../components/MemberList'
 import { useToast } from '../components/ToastNotification'
 import { usePendingAction } from '../hooks/usePendingAction'
 import { usePendingRows } from '../hooks/usePendingRows'
+import { useSessionValue } from '../hooks/useSessionDraft'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { families, parseUtc, type Membership, type TemporaryPassword } from '../services/families'
@@ -43,7 +44,8 @@ export function FamilyPage() {
   const { notify } = useToast()
   const { hasScope, logout } = useAuth()
   const { family, loading, reload } = useFamily()
-  const [childName, setChildName] = useState('')
+  // 書きかけはログインの往復をまたいで残す（ADR-0058）
+  const [childName, setChildName] = useSessionValue('family.childName', '')
   const [issued, setIssued] = useState<TemporaryPassword | null>(null)
   const { pendingActionOf, runForRow } = usePendingRows<MemberAction>()
 
