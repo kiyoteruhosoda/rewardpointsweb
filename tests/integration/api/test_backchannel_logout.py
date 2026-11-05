@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+import jwt
 import pytest
 import sqlalchemy as sa
 from fastapi import FastAPI
@@ -143,9 +144,25 @@ def _post_logout(client: TestClient, logout_token: str) -> int:
     return client.post(LOGOUT, data={"logout_token": logout_token}).status_code
 
 
+def _legacy_refresh_of(session: dict[str, Any]) -> str:
+    """この仕組み（ADR-0058）より前に出していた、SSO のログインの更新の札を作る（宛名と時刻は同じ）。"""
+    claims = jwt.decode(
+        session["access_token"],
+        settings.jwt_secret_key,
+        algorithms=["HS256"],
+        audience=settings.access_token_audience,
+        issuer=settings.access_token_issuer,
+    )
+    claims["type"] = "refresh"
+    claims["exp"] = int(claims["exp"]) + 3600
+    return jwt.encode(claims, settings.jwt_secret_key, algorithm="HS256")
+
+
 def _refresh(client: TestClient, session: dict[str, Any]) -> int:
-    """更新を 1 回通す。⚠ **止める判定はここに集約してある**（ADR-0037）。"""
-    return client.post("/api/auth/refresh", json={"refresh_token": session["refresh_token"]}).status_code
+    """延ばす道があるか。SSO で入ったログインは更新の札を持たず（ADR-0058）、続けるのは IdP への
+    問い合わせだけ（止められていれば IdP が断る）。前の仕組みの札も更新の口が断る。"""
+    assert session["refresh_token"] is None
+    return client.post("/api/auth/refresh", json={"refresh_token": _legacy_refresh_of(session)}).status_code
 
 
 def test_a_stop_from_the_idp_ends_the_session_at_the_next_refresh(sso_client: TestClient, parent: int) -> None:
@@ -172,8 +189,7 @@ def test_a_stopped_session_cannot_be_refreshed(sso_client: TestClient, parent: i
     """⚠ ここが抜けると、更新を 1 回通すだけで停止をすり抜けられる。"""
     session = _sign_in_with_sso(sso_client)
     assert _post_logout(sso_client, "session-1|delivery-1") == 200
-    refreshed = sso_client.post("/api/auth/refresh", json={"refresh_token": session["refresh_token"]})
-    assert refreshed.status_code == 401, refreshed.text
+    assert _refresh(sso_client, session) == 401
 
 
 def test_a_stop_for_another_session_leaves_this_one_alone(sso_client: TestClient, parent: int) -> None:

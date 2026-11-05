@@ -15,7 +15,8 @@ export interface SsoProvider {
 
 export interface SsoSession {
   access_token: string
-  refresh_token: string
+  /** SSO で入ったログインには出ない（ADR-0058）。 */
+  refresh_token: string | null
   /** SSO を始めた画面（アプリ内の経路）。 */
   redirect_to: string
 }

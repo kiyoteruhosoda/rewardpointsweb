@@ -4,6 +4,7 @@ import { ActionButton } from '../components/ActionButton'
 import { useToast } from '../components/ToastNotification'
 import { usePendingAction } from '../hooks/usePendingAction'
 import { usePendingRows } from '../hooks/usePendingRows'
+import { useSessionValue } from '../hooks/useSessionDraft'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 import { roleLabel } from '../services/roles'
@@ -27,7 +28,8 @@ export function RolesPage() {
   const { notify } = useToast()
   const [roles, setRoles] = useState<Role[]>([])
   const [permissions, setPermissions] = useState<Permission[]>([])
-  const [name, setName] = useState('')
+  // 書きかけはログインの往復をまたいで残す（ADR-0058）
+  const [name, setName] = useSessionValue('roles.name', '')
   const { pendingActionOf, runForRow } = usePendingRows<RowAction>()
 
   const reload = () => api.get<Role[]>('/api/admin/roles').then(setRoles)

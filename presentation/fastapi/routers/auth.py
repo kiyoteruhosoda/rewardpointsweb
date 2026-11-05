@@ -105,11 +105,17 @@ def _rejection_reason(user: User, password: str) -> str | None:
 def _token_response(pair: dict[str, object], user: User) -> TokenResponse:
     return TokenResponse(
         access_token=str(pair["access_token"]),
-        refresh_token=str(pair["refresh_token"]),
+        refresh_token=_refresh_token_of(pair),
         token_type=str(pair["token_type"]),
         expires_in=int(str(pair["expires_in"])),
         must_change_password=user.must_change_password,
     )
+
+
+def _refresh_token_of(pair: dict[str, object]) -> str | None:
+    """SSO で入ったログインには無い（ADR-0058）。"""
+    value = pair["refresh_token"]
+    return value if isinstance(value, str) else None
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -172,7 +178,9 @@ def login(
 @router.post("/refresh", response_model=TokenResponse)
 def refresh(body: RefreshRequest, response: Response, db: DbDep) -> TokenResponse:
     refreshed = TokenService.verify_refresh_token(body.refresh_token, session=db)
-    if refreshed is None:
+    # SSO で入ったログインの札は受けない（ADR-0058）。この仕組みより前に出した札が画面に残っていても
+    # 通さない ——盗まれた札から使い続けられるのを塞ぐのが目的。画面は 401 で IdP へ問い合わせ直す
+    if refreshed is None or refreshed.federated_login is not None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_token"},

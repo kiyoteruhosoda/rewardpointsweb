@@ -223,12 +223,13 @@ def receive_backchannel_logout(db: DbDep, gateway: GatewayDep) -> ReceiveBackcha
 
     記録を残す期間は**リフレッシュトークンの寿命**に合わせる。これを過ぎれば
     停止より前に発行されたトークンは自力で期限切れになる。
+    SSO で入ったログインは更新の札を持たないので（ADR-0058）、**アクセストークンの寿命**より短くはしない。
     """
     return ReceiveBackchannelLogout(
         provider=identity_provider(),
         gateway=gateway,
         revocations=SqlSessionRevocationRepository(db),
-        keep_for_seconds=settings.refresh_token_expires_seconds,
+        keep_for_seconds=max(settings.refresh_token_expires_seconds, settings.access_token_expires_seconds),
     )
 
 

@@ -39,6 +39,7 @@ class SqlSsoLoginSessionRepository:
                 expires_at=session.expires_at,
                 link_user_id=session.link_user_id,
                 silent=session.silent,
+                renewal=session.renewal,
             )
         )
         self.session.flush()
@@ -87,6 +88,7 @@ def _to_session(record: SsoLoginSessionRecord) -> SsoLoginSession:
         expires_at=record.expires_at,
         link_user_id=record.link_user_id,
         silent=record.silent,
+        renewal=record.renewal,
     )
 
 

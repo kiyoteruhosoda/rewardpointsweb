@@ -56,6 +56,13 @@ class StartSsoLogin:
 
         ``silent`` なら IdP に画面を出させない（``prompt=none``。ADR-0052）。
         """
+        return self._start(redirect_to=RedirectTarget.parse(redirect_to).path, silent=silent, renewal=False)
+
+    def renew(self) -> SsoAuthorizationDto:
+        """切れたログインを画面を出さずに続ける往復（見えない枠の中。ADR-0058）。常に ``prompt=none``。"""
+        return self._start(redirect_to="/", silent=True, renewal=True)
+
+    def _start(self, *, redirect_to: str, silent: bool, renewal: bool) -> SsoAuthorizationDto:
         provider = require_usable(self.provider)
         state = new_secret()
         nonce = new_secret()
@@ -67,9 +74,10 @@ class StartSsoLogin:
                 nonce=nonce,
                 code_verifier=code_verifier,
                 binding_hash=hash_secret(binding),
-                redirect_to=RedirectTarget.parse(redirect_to).path,
+                redirect_to=redirect_to,
                 expires_at=utcnow() + timedelta(seconds=self.session_ttl_seconds),
                 silent=silent,
+                renewal=renewal,
             )
         )
         authorization_url = self.gateway.authorization_url(

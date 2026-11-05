@@ -22,6 +22,9 @@ class SsoTicketRequest(BaseModel):
     """コールバックが渡した引き換え券。"""
 
     ticket: str = Field(min_length=1, max_length=255)
+    #: 切れたログインを続ける往復（見えない枠。ADR-0058）の券か。真なら、送ってきた手元のトークン
+    #: （期限切れでよい）と同じ人のときだけ換える。
+    continuing: bool = False
 
 
 class SsoSessionResponse(TokenResponse):

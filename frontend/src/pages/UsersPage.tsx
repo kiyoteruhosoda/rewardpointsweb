@@ -15,6 +15,7 @@ import { PasswordField } from '../components/PasswordField'
 import { useToast } from '../components/ToastNotification'
 import { usePendingAction } from '../hooks/usePendingAction'
 import { usePendingRows } from '../hooks/usePendingRows'
+import { useSessionValue } from '../hooks/useSessionDraft'
 import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 import { roleLabel } from '../services/roles'
@@ -108,9 +109,10 @@ export function UsersPage() {
   const { notify } = useToast()
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<Role[]>([])
-  const [email, setEmail] = useState('')
-  const [username, setUsername] = useState('')
-  const [displayName, setDisplayName] = useState('')
+  // 書きかけはログインの往復をまたいで残す（ADR-0058）。パスワードだけは残さない
+  const [email, setEmail] = useSessionValue('users.email', '')
+  const [username, setUsername] = useSessionValue('users.username', '')
+  const [displayName, setDisplayName] = useSessionValue('users.displayName', '')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState('member')
   const { pendingActionOf, runForRow } = usePendingRows<RowAction>()

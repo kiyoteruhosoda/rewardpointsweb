@@ -1,10 +1,12 @@
 """SSO（OpenID Connect）ログイン API。
 
-経路は 5 つ。
+主な経路。
 
 - ``GET /provider`` — ログイン画面が「SSO で入る」ボタンを出すかを問い合わせる
 - ``GET /login`` — IdP の認可エンドポイントへブラウザを送り出す
-- ``GET /callback`` — IdP からの戻り。引き換え券を付けて SPA へ戻す
+- ``GET /renew`` — 切れたログインを画面を出さずに続ける往復を始める（見えない枠の中。ADR-0058）
+- ``GET /callback`` — IdP からの戻り。引き換え券を付けて SPA へ戻す（続ける往復なら結果の頁へ）
+- ``GET /renewed`` — 続ける往復の結果の頁（画面は枠の行き先を読む）
 - ``POST /token`` — 引き換え券をトークンへ換える（Cookie もここで載せる）
 - ``POST /backchannel-logout`` — IdP からの停止の通知を受ける（ADR-0032）
 
@@ -29,6 +31,7 @@ from urllib.parse import parse_qsl, quote, urlencode
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -38,6 +41,7 @@ from bounded_contexts.account_security.application.use_cases.count_local_factors
 from bounded_contexts.account_security.infrastructure.sql_local_factor_directory import (
     SqlLocalFactorDirectory,
 )
+from bounded_contexts.identity_federation.application.dto.sso_dto import ResolvedAccountDto
 from bounded_contexts.identity_federation.application.use_cases.complete_sso_link import (
     CompleteSsoLink,
 )
@@ -77,7 +81,7 @@ from bounded_contexts.identity_federation.domain.exceptions import (
 from bounded_contexts.identity_federation.domain.value_objects.sso_callback import (
     SsoCallback,
 )
-from bounded_contexts.identity_federation.presentation import dependencies
+from bounded_contexts.identity_federation.presentation import dependencies, renewal
 from bounded_contexts.identity_federation.presentation.schemas import (
     FederatedLinkResponse,
     SsoLinkStartResponse,
@@ -92,7 +96,7 @@ from presentation.fastapi.dependencies.auth import (
     set_access_token_cookie,
 )
 from presentation.fastapi.schemas.auth import StatusResponse
-from presentation.fastapi.services.token_service import TokenService
+from presentation.fastapi.services.token_service import TokenService, continued_user_of
 from shared.application.authenticated_principal import AuthenticatedPrincipal
 from shared.infrastructure.models import User
 from shared.kernel.database.session import get_db
@@ -181,16 +185,46 @@ def start_login(
         logger.warning("sso_start_failed: %s", error.code)
         return _to_login_screen(error.code)
     response = RedirectResponse(url=authorization.authorization_url, status_code=status.HTTP_303_SEE_OTHER)
+    _set_binding_cookie(response, authorization.browser_binding)
+    return response
+
+
+@router.get("/renew", include_in_schema=False)
+def start_renewal(
+    use_case: Annotated[StartSsoLogin, Depends(dependencies.start_sso_login)],
+) -> RedirectResponse:
+    """切れたログインを画面を出さずに続ける往復を始める（ADR-0058）。**画面は見えない枠で開く。**
+
+    常に ``prompt=none``。IdP と話せなければ結果の頁（``failed``）へ送る。
+    """
+    try:
+        authorization = use_case.renew()
+    except IdentityFederationError as error:
+        logger.warning("sso_renewal_start_failed: %s", error.code)
+        return _renewal_result(renewal.RenewalResult.FAILED)
+    response = RedirectResponse(url=authorization.authorization_url, status_code=status.HTTP_303_SEE_OTHER)
+    _set_binding_cookie(response, authorization.browser_binding)
+    renewal.allow_same_origin_framing(response)
+    return response
+
+
+@router.get("/renewed", include_in_schema=False)
+def renewal_result() -> Response:
+    """続ける往復の結果の頁（画面は枠の URL の ``result``・``ticket`` を読む）。"""
+    return renewal.result_page()
+
+
+def _set_binding_cookie(response: Response, binding: str) -> None:
+    """送り出すブラウザに合言葉を持たせる（ログイン CSRF を止める）。"""
     response.set_cookie(
         SSO_BINDING_COOKIE,
-        authorization.browser_binding,
+        binding,
         max_age=settings.oidc_login_session_ttl_seconds,
         httponly=True,
         secure=settings.session_cookie_secure,
         samesite="lax",
         path=router.prefix,
     )
-    return response
 
 
 class _CallbackTools:
@@ -228,6 +262,8 @@ def complete_callback(
     ⚠ **どちらの往復かは控えが持っている。** クエリでは渡さない ——戻りの URL を
     書き換えるだけで化けさせられるため。
     """
+    if query.state and tools.purpose.is_renewal(state=query.state, browser_binding=binding):
+        return _complete_renewal(query, tools, binding)
     if query.error in _SILENT_DECLINES and query.state:
         declined_to = tools.purpose.silently_declined(state=query.state, browser_binding=binding)
         if declined_to is not None:
@@ -248,14 +284,45 @@ def _complete_login(callback: SsoCallback, tools: _CallbackTools) -> RedirectRes
         )
     except IdentityFederationError as error:
         return _failed(error.code)
-    if handoff.account.provisioned:
+    _log_account_changes(handoff.account)
+    return _redirect(f"{HANDOFF_SCREEN}?ticket={quote(handoff.ticket)}")
+
+
+def _log_account_changes(account: ResolvedAccountDto) -> None:
+    if account.provisioned:
         # 口座を作った往復は別の名前で残す（ADR-0041）。利用者が増えた記録になる。
         logger.info("sso_account_provisioned")
-    elif handoff.account.linked:
+    elif account.linked:
         # 初めて結び付いた往復だけ 1 行残す（誰かは requestId から辿る。
         # CLAUDE.md「ログ」）。
         logger.info("sso_identity_linked")
-    return _redirect(f"{HANDOFF_SCREEN}?ticket={quote(handoff.ticket)}")
+
+
+def _complete_renewal(query: SsoCallbackQuery, tools: _CallbackTools, binding: str | None) -> RedirectResponse:
+    """続ける往復の戻り（ADR-0058）。引き換え券を付けて結果の頁へ送る（画面が枠の URL から読んで換える）。
+
+    「入っていない」「許可が無い」は失敗ではない（画面を出さずに試しただけ）ので失敗として残さない。
+    """
+    if query.error is not None or not query.code or not query.state:
+        if query.error not in _SILENT_DECLINES:
+            logger.warning("sso_renewal_failed: %s", query.error or "sso_callback_invalid")
+            return _renewal_result(renewal.RenewalResult.FAILED)
+        logger.info("sso_renewal_declined")
+        return _renewal_result(renewal.RenewalResult.DECLINED)
+    try:
+        handoff = tools.login.execute(code=query.code, state=query.state, browser_binding=binding)
+    except IdentityFederationError as error:
+        logger.warning("sso_renewal_failed: %s", error.code)
+        return _renewal_result(renewal.RenewalResult.FAILED)
+    _log_account_changes(handoff.account)
+    return _renewal_result(renewal.RenewalResult.RENEWED, handoff.ticket)
+
+
+def _renewal_result(result: renewal.RenewalResult, ticket: str | None = None) -> RedirectResponse:
+    """結果の頁へ送る（合言葉の Cookie は落とし、自分の枠にだけ入れてよい印を付ける）。"""
+    response = _redirect(renewal.result_location(result, ticket))
+    renewal.allow_same_origin_framing(response)
+    return response
 
 
 def _complete_link(callback: SsoCallback, tools: _CallbackTools) -> RedirectResponse:
@@ -379,6 +446,19 @@ def _link_failed(code: str) -> RedirectResponse:
     return _redirect(f"{SECURITY_SCREEN}?sso_link_error={safe}")
 
 
+#: 続ける往復の券を換えるときに、画面が添える手元のトークン（期限切れでよい。ADR-0058）
+_continued_bearer = HTTPBearer(auto_error=False)
+
+
+def _continued_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_continued_bearer)] = None,
+) -> int | None:
+    """画面が添えた手元のトークンが、誰のログインだったか（読めなければ ``None``）。"""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    return continued_user_of(credentials.credentials)
+
+
 @router.post("/token", response_model=SsoSessionResponse)
 def exchange_ticket(
     *,
@@ -386,11 +466,16 @@ def exchange_ticket(
     response: Response,
     db: DbDep,
     use_case: Annotated[ExchangeSsoTicket, Depends(dependencies.exchange_sso_ticket)],
+    continued_user: Annotated[int | None, Depends(_continued_user)],
 ) -> SsoSessionResponse:
     """引き換え券をトークンへ換える（1 回限り）。
 
     一時パスワードの状態（``must_change_password``）は SSO で入っても解けない。
     ここで黙って落とすと、親が発行した一時パスワードの意味が無くなる（ADR-0011）。
+
+    SSO で入ったログインにリフレッシュトークンは出さない（ADR-0058）。続ける往復の券（``continuing``）なら、
+    ⚠ **手元のトークンと別の人のときは換えない**（401 ``sso_renewal_switched_user``。IdP で別の人に入り
+    直していた。開いている画面は前の人のもの）。手元のトークンが読めなければ新しいログインとして入る。
     """
     session = use_case.execute(ticket=body.ticket)
     user = db.get(User, session.user_id)
@@ -399,12 +484,15 @@ def exchange_ticket(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_credentials"},
         )
+    if body.continuing and continued_user is not None and continued_user != user.id:
+        logger.info("sso_renewal_switched_user")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"error": "sso_renewal_switched_user"})
     pair = TokenService.create_token_pair(user, federated_login=session.login)
     set_access_token_cookie(response, str(pair["access_token"]))
-    logger.info("sso_login_succeeded")
+    logger.info("sso_renewal_succeeded" if body.continuing else "sso_login_succeeded")
     return SsoSessionResponse(
         access_token=str(pair["access_token"]),
-        refresh_token=str(pair["refresh_token"]),
+        refresh_token=None,
         token_type=str(pair["token_type"]),
         expires_in=int(str(pair["expires_in"])),
         must_change_password=user.must_change_password,

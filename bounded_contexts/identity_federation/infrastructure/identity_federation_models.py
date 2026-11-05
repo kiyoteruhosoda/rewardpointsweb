@@ -58,6 +58,8 @@ class SsoLoginSessionRecord(Base):
     link_user_id: Mapped[int | None] = mapped_column(BigIntPk, nullable=True)
     # 画面を出さずに試した往復（prompt=none。ADR-0052）
     silent: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False, default=False, server_default=sa.false())
+    # 切れたログインを続ける往復（見えない枠の中。ADR-0058）。戻りは結果の頁へ送る
+    renewal: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False, default=False, server_default=sa.false())
 
 
 class SsoLoginTicketRecord(Base):
