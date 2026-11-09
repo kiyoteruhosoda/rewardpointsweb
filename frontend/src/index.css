@@ -244,7 +244,8 @@ textarea:focus-visible {
   border-bottom: 1px solid var(--border);
   /* スクロールしてもメニューの開閉ボタンへ手が届くようにする */
   position: sticky;
-  top: 0;
+  /* 新しい版の知らせ（`.update-bar`）が出ている間は、その真下に貼り付く（ADR-0059）。 */
+  top: var(--update-bar-height, 0px);
   z-index: 30;
   background: var(--surface-raised);
 }
@@ -1497,44 +1498,42 @@ tr.reversed {
   outline-offset: 2px;
 }
 
-/* 新しい版の知らせ（AppUpdatePrompt.tsx。ADR-0044）。トーストと違って押すまで消えない。
- * 画面の下の中央に浮かせ、トースト（右下）と重ならない高さにする。 */
-.update-prompt {
-  position: fixed;
-  left: 1rem;
-  right: 1rem;
-  bottom: calc(1rem + var(--safe-bottom));
-  z-index: 90;
+/* 新しい版の知らせ（AppUpdatePrompt.tsx。ADR-0059）。どの画面でもいちばん上に帯で出し、
+ * 押されるまで消さない。下へ送っても上に残し、サインイン後の画面ではヘッダー（z-index: 30）が
+ * その真下に付く（`.header` の `top`）。狭い画面の引き出し（50）と幕（40）は帯の上に重ねる
+ * ——開いている間は引き出しだけを操作させるため。 */
+.update-bar {
+  position: sticky;
+  top: 0;
+  z-index: 35;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.8rem;
-  width: fit-content;
-  max-width: calc(100% - 2rem);
-  margin-inline: auto;
-  padding: 0.6rem 0.8rem 0.6rem 1.1rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  box-shadow: var(--shadow-card-hover);
-}
-
-.update-prompt-text {
-  font-weight: 600;
-}
-
-.update-prompt .update-prompt-button {
+  gap: 0.4rem 0.8rem;
+  padding: 0.5rem 1rem;
+  padding-top: calc(0.5rem + var(--safe-top));
+  padding-right: calc(1rem + var(--safe-right));
+  padding-left: calc(1rem + var(--safe-left));
   background: var(--accent);
-  border-color: var(--accent);
-  border-radius: 999px;
   color: var(--on-accent);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* 帯と同じ色のボタンだと沈むので、色を反転させて押せる所だと分かるようにする。 */
+.update-bar .update-bar-button {
+  background: var(--on-accent);
+  border-color: var(--on-accent);
+  border-radius: 999px;
+  color: var(--accent);
   font-weight: 700;
 }
 
-.update-prompt .update-prompt-button:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+.update-bar .update-bar-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--on-accent) 88%, var(--accent));
+  border-color: var(--on-accent);
+  color: var(--accent);
 }
 
 /* 長い一覧のページ送り（Pager.tsx）。表の下の中央に置く。 */
