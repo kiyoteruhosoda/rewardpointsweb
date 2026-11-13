@@ -1,15 +1,15 @@
-"""IdP から届いた「このセッションを止めろ」（OpenID Connect Back-Channel Logout 1.0）。
+"""A "stop this session" from the IdP (OpenID Connect Back-Channel Logout 1.0).
 
-``logout_token`` の**署名・発行者・対象者・有効期限**を確かめるのは Infrastructure 層
-（JWT の話なので）。ここが見るのは**それ以外の 4 つ**で、どれも仕様が明示的に
-求めているものである（§2.6）。
+Checking the ``logout_token``'s **signature, issuer, audience and expiry** is the Infrastructure layer's job
+(it is a JWT matter). This looks at **the other four**, all of which the spec explicitly
+requires (§2.6).
 
-- ``events`` に back-channel logout のイベントが入っていること
-  ——入っていない JWT は「ログアウトの通知」ではない
-- ``nonce`` が**入っていない**こと ——入っているものは ID トークンであり、
-  それを受け付けると**手元の ID トークンを投げ返すだけでログアウトを起こせる**
-- ``sub`` か ``sid`` のどちらかがあること ——どちらも無ければ誰を止めるのか決まらない
-- ``jti`` があること ——再送を弾く鍵になる（ADR-0024 は再送しても同じ ``jti`` を使う）
+- ``events`` contains the back-channel logout event
+  -- a JWT without it is not a "logout notice"
+- ``nonce`` is **absent** -- one that has it is an ID token, and
+  accepting it would let **anyone cause a logout just by throwing back an ID token they hold**
+- either ``sub`` or ``sid`` is present -- without both, there is no telling whom to stop
+- ``jti`` is present -- it is the key for rejecting resends (ADR-0024 uses the same ``jti`` on resend)
 """
 
 from __future__ import annotations
@@ -25,20 +25,20 @@ from bounded_contexts.identity_federation.domain.value_objects.federated_session
     FederatedSession,
 )
 
-#: back-channel logout のイベント名（OpenID Connect Back-Channel Logout 1.0 §2.4）。
+#: Event name for back-channel logout (OpenID Connect Back-Channel Logout 1.0 §2.4).
 LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout"
 
 
 @dataclass(frozen=True)
 class LogoutNotice:
-    """検証を通った通知。``jti`` は配送の identity で、再送でも変わらない。"""
+    """A notice that passed verification. ``jti`` is the delivery identity and does not change on resend."""
 
     jti: str
     session: FederatedSession
 
     @classmethod
     def from_claims(cls, claims: Mapping[str, Any], *, issuer: str) -> LogoutNotice:
-        """検証済みのクレームから組み立てる。成立しないものは例外にする。"""
+        """Build from verified claims. Anything invalid raises an exception."""
         _ensure_logout_event(claims)
         _ensure_not_an_id_token(claims)
         jti = _text(claims.get("jti"))
@@ -61,11 +61,11 @@ def _ensure_logout_event(claims: Mapping[str, Any]) -> None:
 
 
 def _ensure_not_an_id_token(claims: Mapping[str, Any]) -> None:
-    """``nonce`` を持つものは受け取らない（仕様が MUST NOT としている）。
+    """Reject anything with a ``nonce`` (the spec says MUST NOT).
 
-    ID トークンと logout token は署名鍵も発行者も対象者も同じなので、**この 1 点だけ**が
-    両者を分ける。落とすと、正規に受け取った ID トークンを送り返すだけで
-    他人のセッションを落とせる。
+    An ID token and a logout token share the signing key, issuer and audience, so **this one point**
+    alone tells them apart. Dropping it would let anyone take down another person's session just by
+    sending back a legitimately received ID token.
     """
     if "nonce" in claims:
         raise InvalidLogoutTokenError

@@ -1,14 +1,14 @@
 /**
- * 控えから家族を作り直す（復元。ADR-0026）。
+ * Rebuilds a family from a backup (restore; ADR-0026).
  *
- * 出るのは、まだどの家族にも所属していない親の画面だけ。取り込みは必ず **新しい
- * 家族** を作るので、所属したままでは押せてもサーバーが断る（ADR-0013）。
+ * Shown only on the screen of a parent who does not belong to any family yet. Import always creates a
+ * **new family**, so while still a member the server refuses even if it could be pressed (ADR-0013).
  *
- * ファイルを選んだ時点では何もしない。JSON として読めるかだけを送信の直前に見て、
- * 中身の辻褄はサーバーへ任せる（同じ検査を 2 か所に置かない）。
+ * Nothing happens when the file is chosen. Just before sending, only check that it parses as JSON, and
+ * leave the consistency of the content to the server (don't put the same check in two places).
  *
- * 復元しても、他の参加者のアカウントは戻らない — 控えに入っていないため。子ども
- * には招待コードを配り直す。取り込みの案内でそこまで言う。
+ * Restoring does not bring back other participants' accounts — they are not in the backup. Children
+ * get invitation codes again. The import guidance says as much.
  */
 import { useState, type SubmitEvent } from 'react'
 
@@ -21,7 +21,7 @@ import { ActionButton } from './ActionButton'
 import { useToast } from './ToastNotification'
 
 interface Props {
-  /** 取り込めた家族へ入る（読み直してから移る）。 */
+  /** Enters the imported family (reloads first, then moves). */
   onImported: (familyId: number) => Promise<void>
 }
 
@@ -64,8 +64,8 @@ export function FamilyImportPanel({ onImported }: Props) {
             }}
           />
         </label>
-        {/* 選ぶまでは押せない。押してから「ファイルがありません」と言うより、
-            何が足りないかが先に分かる */}
+        {/* Disabled until a file is chosen. Better to show up front what is missing than to say
+            "no file" after pressing */}
         <ActionButton type="submit" pending={restoring} disabled={file === null}>
           {t('families.import.submit')}
         </ActionButton>

@@ -1,4 +1,4 @@
-"""打ち消し（ADR-0010）と訂正（ADR-0022）の組み立て。"""
+"""Building reversals (ADR-0010) and corrections (ADR-0022)."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ def test_correction_carries_the_new_content_and_points_at_the_original() -> None
 
 
 def test_correction_keeps_the_original_moment_unless_asked_otherwise() -> None:
-    """量や理由を直しただけで、出来事の日時が今日へ動かないこと。"""
+    """Correcting only the amount or reason does not move the event's date to today."""
     draft = _transaction(amount=100).plan_correction(amount=50, reason="おてつだい")
 
     assert draft.occurred_at == _MOMENT
@@ -77,7 +77,7 @@ def test_correction_can_move_the_moment() -> None:
 
 
 def test_correction_may_flip_addition_into_consumption() -> None:
-    """符号の付け間違い（加算のつもりが消費）も訂正で直せる。"""
+    """A sign mistake (meant to add but recorded as spending) can also be fixed by a correction."""
     assert _transaction(amount=-100).plan_correction(amount=100, reason="おてつだい").amount.value == 100
 
 
@@ -89,7 +89,7 @@ def test_a_reversal_cannot_be_corrected() -> None:
 
 
 def test_a_correction_can_be_corrected_again() -> None:
-    """訂正の内容を打ち間違えても、もう一度直せる。"""
+    """Even if the correction itself is mistyped, it can be corrected again."""
     correction = _transaction(amount=50, corrects_id=3)
 
     assert correction.is_correction

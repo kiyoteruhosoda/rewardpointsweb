@@ -1,6 +1,7 @@
-"""イベント（がんばりカード）の決まり（ADR-0042）。
+"""Rules of events (effort cards) (ADR-0042).
 
-シールを貼る・はがす順序と、達成の冪等キー。DB に触らないので、カードを直接作って確かめる。
+The order of putting on and peeling off stickers, and the completion idempotency key. No DB is touched,
+so cards are built directly.
 """
 
 from __future__ import annotations
@@ -89,7 +90,7 @@ def test_a_completed_card_does_not_peel() -> None:
 
 
 def test_the_award_key_cannot_collide_with_a_users_key() -> None:
-    """``#`` は利用者の鍵に現れない予約文字。手で書いた行と取り違えない。"""
+    """``#`` is a reserved character that never appears in user keys. Not to be confused with hand-written rows."""
     key = _event().award_key
 
     assert key == "reward-event#7"
@@ -115,7 +116,7 @@ def test_a_card_past_its_deadline_takes_no_stickers() -> None:
 
 
 def test_resending_a_sticker_after_the_deadline_is_still_a_resend() -> None:
-    """期限の直前に貼った 1 枚の再送が、日付をまたいで届いても断らない。"""
+    """A resend of the sticker put on just before the deadline is not refused even if it arrives after midnight."""
     assert _event(stuck=2, deadline=_TODAY - timedelta(days=1)).should_stick(2, today=_TODAY) is False
 
 

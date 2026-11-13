@@ -1,9 +1,9 @@
-"""ロールの改名に耐えて割り当てを引き直す（0010_realign_roles / ADR-0018）。
+"""Re-resolve role assignments in a way that survives role renames (0010_realign_roles / ADR-0018).
 
-ロールの名前は ``PUT /api/admin/roles/{role_id}`` で運用者が変えられる。移行が
-名前でロールを引くと、改名された環境では対象が見つからず、付与の増減も割り当ての
-引き直しも黙って飛ばされる。「権限を変えたつもりで変わっていない」状態のまま
-移行が通るのが一番たちが悪いので、id（``ROLES`` の安定キー）で引くことを確かめる。
+Operators can rename roles with ``PUT /api/admin/roles/{role_id}``. If the migration looked up
+roles by name, in a renamed environment it would not find them, and both the grant changes and the
+reassignment would be silently skipped. Passing the migration while "permissions look changed but are not"
+is the worst outcome, so this checks that roles are looked up by id (the stable key in ``ROLES``).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from werkzeug.security import generate_password_hash
 
 from shared.domain.auth import master_data
 
-# ロールを揃え直す直前のリビジョン
+# The revision just before roles are realigned
 _BEFORE_REALIGN = "password_reset_cascade"
 
 _ROLE_IDS = {name: role_id for role_id, name in master_data.ROLES}
@@ -60,11 +60,11 @@ def _add_account(engine: sa.Engine, *, user_id: int, username: str, role_id: int
 
 
 def _revoke(engine: sa.Engine, *, role_id: int, codes: tuple[str, ...]) -> None:
-    """このリビジョン直前の付与の姿へ戻す。
+    """Revert to the grants as they were just before this revision.
 
-    移行の連鎖は 0007 の投入に**現在の**正本を使うため、そのまま上げると
-    ``member`` / ``guest`` は 0010 を待たずに新しい scope を持ってしまう。それでは
-    「0010 が付与したのか」を確かめられないので、先に剥がしておく。
+    The migration chain uses the **current** source of truth for the 0007 seed, so upgrading as is
+    would give ``member`` / ``guest`` the new scopes without waiting for 0010. That would make it
+    impossible to check "whether 0010 granted them", so strip them first.
     """
     with engine.begin() as connection:
         connection.execute(
@@ -77,7 +77,7 @@ def _revoke(engine: sa.Engine, *, role_id: int, codes: tuple[str, ...]) -> None:
 
 
 def _rename_every_builtin_role(engine: sa.Engine) -> None:
-    """運用者が管理画面から全ロールを改名した環境を作る。"""
+    """Build an environment where an operator renamed every role from the admin screen."""
     with engine.begin() as connection:
         for name, role_id in _ROLE_IDS.items():
             connection.execute(
@@ -88,16 +88,16 @@ def _rename_every_builtin_role(engine: sa.Engine) -> None:
 
 @pytest.fixture
 def renamed_deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> sa.Engine:
-    """改名済みの環境を移行前まで用意し、head まで上げる。"""
+    """Prepare a renamed environment up to just before the migration, then upgrade to head."""
     db_path = tmp_path / "renamed.db"
     monkeypatch.setenv("DATABASE_URI", f"sqlite:///{db_path}")
     config = Config("alembic.ini")
     command.upgrade(config, _BEFORE_REALIGN)
 
     engine = create_engine(f"sqlite:///{db_path}")
-    # このリビジョン以前、親は manager ロールだった
+    # Before this revision, parents had the manager role
     _add_account(engine, user_id=100, username="dad", role_id=_ROLE_IDS["manager"])
-    # 0010 が付与する前の姿へ戻す（付与された側も検証できるようにする）
+    # Revert to the state before 0010 grants them (so the granted side can be verified too)
     _revoke(engine, role_id=_ROLE_IDS["member"], codes=("family:manage", "point:manage"))
     _revoke(engine, role_id=_ROLE_IDS["guest"], codes=("family:view", "point:view"))
     _rename_every_builtin_role(engine)
@@ -107,10 +107,10 @@ def renamed_deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> sa.En
 
 
 def test_renamed_admin_still_loses_the_family_scopes(renamed_deployment: sa.Engine) -> None:
-    """取り上げそこねると、システム管理者が家族と台帳へ手を伸ばせるままになる。"""
+    """If not revoked, the system admin keeps being able to reach families and ledgers."""
     scopes = _scopes_of_role_id(renamed_deployment, _ROLE_IDS["admin"])
     assert not scopes & {"family:view", "family:manage", "point:view", "point:manage"}
-    # 名前を変えただけなので、システム系の権限は残る
+    # Only the name changed, so the system permissions remain
     assert "user:manage" in scopes
 
 
@@ -120,12 +120,12 @@ def test_renamed_manager_still_loses_the_family_scopes(renamed_deployment: sa.En
 
 
 def test_renamed_member_and_guest_still_gain_their_scopes(renamed_deployment: sa.Engine) -> None:
-    """親（member）と子（guest）が受け取る側の付与も、改名で飛ばされない。"""
+    """The grants on the receiving side, parents (member) and children (guest), are not skipped by renames either."""
     assert {"family:manage", "point:manage"} <= _scopes_of_role_id(renamed_deployment, _ROLE_IDS["member"])
     assert {"family:view", "point:view"} <= _scopes_of_role_id(renamed_deployment, _ROLE_IDS["guest"])
 
 
 def test_manager_holders_are_still_reassigned_to_member(renamed_deployment: sa.Engine) -> None:
-    """割り当ての引き直しも名前に頼らない。飛ばすと親が家族を触れなくなる。"""
+    """Reassignment does not rely on names either. Skipping it would leave parents unable to touch their family."""
     roles = _role_ids_of_user(renamed_deployment, 100)
     assert roles == {_ROLE_IDS["member"]}

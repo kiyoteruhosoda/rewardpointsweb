@@ -1,8 +1,8 @@
-"""ID トークン（および UserInfo）のクレーム -> :class:`FederatedUser` の対応付け。
+"""Mapping of ID token (and UserInfo) claims -> :class:`FederatedUser`.
 
-クレーム名は IdP ごとに違うため設定で変えられる（``OIDC_*_CLAIM``）。ここは
-「どの名前から何を読むか」だけを持ち、通信は行わない（純粋な変換なので単体
-テストで確かめられる）。
+Claim names differ per IdP, so they are configurable (``OIDC_*_CLAIM``). This holds only
+"which name to read what from" and does no I/O (it is a pure transformation, so it can be
+checked with unit tests).
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from bounded_contexts.identity_federation.domain.value_objects.federated_user im
     FederatedUser,
 )
 
-# 表示名が対応付け先に無いときの代替。IdP の実装差を吸収する。
+# Fallbacks when the display name is missing from the mapped claim. Absorbs IdP implementation differences.
 _DISPLAY_NAME_FALLBACK_CLAIMS = ("name", "preferred_username", "nickname")
 
 
@@ -28,13 +28,13 @@ class ClaimsMapping:
     display_name_claim: str = "name"
 
     def apply(self, claims: Mapping[str, Any]) -> FederatedUser:
-        """クレームを利用者の情報へ写す。
+        """Map claims to user information.
 
-        ``sub`` が無いものは ID トークンとして成立していない。
+        Anything without ``sub`` is not a valid ID token.
 
-        ⚠ **メールアドレスが無くても通す**（ADR-0038）。結び付きの鍵は ``sub`` なので、
-        既に結び付いている相手はメールが無くても入れる。**無いと困る場面で断る**
-        ——初回に既存の利用者を探すときだけである。
+        ⚠ **Pass even without an email address** (ADR-0038). The link key is ``sub``, so
+        someone already linked can sign in without an email. **Refuse only where its absence matters**
+        -- which is only when looking for an existing user on the first sign-in.
         """
         subject = _text(claims.get("sub"))
         if not subject:
@@ -45,17 +45,17 @@ class ClaimsMapping:
             email=email.lower() if email else None,
             display_name=self._display_name(claims, email, subject),
             email_verified=claims.get("email_verified") is True,
-            # ⚠ **クレーム名は設定にしない。** OIDC Core の標準クレームで、口座を作るときの
-            #   ``username`` の元になる（ADR-0041）。読み替えられると、作る口座の識別子が
-            #   設定 1 つで変わる。
+            # ⚠ **The claim name is not configurable.** It is a standard OIDC Core claim and the source of
+            #   ``username`` when creating an account (ADR-0041). If it could be remapped, the identifier of
+            #   created accounts would change with a single setting.
             preferred_username=_text(claims.get("preferred_username")) or None,
         )
 
     def _display_name(self, claims: Mapping[str, Any], email: str, subject: str) -> str:
-        """名乗り。対応付け先が空なら別名のクレーム、それも無ければメールの左側。
+        """Display name. If the mapped claim is empty, an alternate claim; failing that, the local part of the email.
 
-        ⚠ **メールも無ければ ``sub`` を使う。** 読みにくい値になるが、**名乗りの
-        空いた利用者を作るよりはよい** ——後から画面で直せる。
+        ⚠ **If there is no email either, use ``sub``.** It is hard to read, but **better than creating a user
+        with an empty name** -- it can be fixed on screen later.
         """
         for claim in (self.display_name_claim, *_DISPLAY_NAME_FALLBACK_CLAIMS):
             value = _text(claims.get(claim))

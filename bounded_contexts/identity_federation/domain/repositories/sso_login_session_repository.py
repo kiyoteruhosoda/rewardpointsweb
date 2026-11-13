@@ -1,4 +1,4 @@
-"""認可要求の控えの永続化インターフェース（実装は Infrastructure 層）。"""
+"""Persistence interface for authorization request records (implemented in the Infrastructure layer)."""
 
 from __future__ import annotations
 
@@ -11,20 +11,20 @@ from bounded_contexts.identity_federation.domain.entities.sso_login_session impo
 
 class SsoLoginSessionRepository(Protocol):
     def issue(self, session: SsoLoginSession) -> SsoLoginSession:
-        """控えを保存する。期限切れのものはこの機会に掃除する。"""
+        """Save a record. Expired ones are cleaned up at this opportunity."""
 
     def peek(self, state: str) -> SsoLoginSession | None:
-        """控えを**消さずに**読む。無い・期限切れなら ``None``（ADR-0036）。
+        """Read a record **without deleting it**. ``None`` if absent or expired (ADR-0036).
 
-        ⚠ **これで認証しない。** 使うのは「ログインの戻りか、連携の戻りか」を
-        決めるためだけで、合言葉の照合と消費は続く :meth:`consume` が行う。
+        ⚠ **Do not authenticate with this.** It is used only to decide "is this a login return or a
+        linking return"; passphrase matching and consumption are done by the following :meth:`consume`.
         """
 
     def consume(self, state: str) -> SsoLoginSession:
-        """控えを取り出して破棄する（1 回限り）。
+        """Take out a record and discard it (one time only).
 
-        見つからない・期限切れの場合は
-        :class:`~bounded_contexts.identity_federation.domain.exceptions.SsoLoginSessionNotFoundError`。
+        If not found or expired, raises
+        :class:`~bounded_contexts.identity_federation.domain.exceptions.SsoLoginSessionNotFoundError`.
         """
 
 

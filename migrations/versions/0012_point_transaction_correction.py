@@ -1,15 +1,15 @@
 """point transaction correction
 
-記録の訂正（打ち消し ＋ 正しい内容の書き直し）を台帳の上で追えるようにする
-（ADR-0022）。訂正後の行から元の行への参照 ``corrects_id`` を足す。
+Makes corrections to a record (a reversal plus a rewrite with the correct content) traceable on the ledger
+(ADR-0022). Adds ``corrects_id``, a reference from the corrected row to the original row.
 
-既存の行はすべて NULL で入る（訂正されて生まれた行がまだ無いため）ので、
-このリビジョンの前後で見え方は変わらない。
+All existing rows get NULL (no row has been created by a correction yet), so
+nothing looks different before and after this revision.
 
-``ON DELETE SET NULL`` にしてあるのは、独立の成立で台帳ごと消すとき
-（ADR-0014）に、元の行と訂正後の行のどちらを先に消しても拒まれないようにするため。
+``ON DELETE SET NULL`` is used so that when a ledger is deleted wholesale because independence takes effect
+(ADR-0014), deleting either the original row or the corrected row first is not rejected.
 
-定義の正本は ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``。
+The definitions' source of truth is ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``.
 
 Revision ID: point_transaction_correction
 Revises: membership_display_order

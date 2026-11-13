@@ -1,4 +1,4 @@
-"""``IPointLedgerRepository`` の SQLAlchemy 実装。"""
+"""SQLAlchemy implementation of ``IPointLedgerRepository``."""
 
 from __future__ import annotations
 

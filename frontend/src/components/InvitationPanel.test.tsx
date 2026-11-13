@@ -1,12 +1,12 @@
 /**
- * 招待の発行。
+ * Issuing invitations.
  *
- * 見るのは「発行した直後に、コードを載せた URL を渡せる形で出すこと」。コードだけを
- * 出していた頃は、受け取った人がどの画面へ行きどこへ打ち込むかを別に教わる必要が
- * あった。URL は 1 度きりのコードと同じで発行の応答にしか現れないので、ここで出し
- * 損ねると発行し直すしかない。
+ * What we check: "right after issuing, the URL containing the code is shown in a shareable form".
+ * Back when only the code was shown, recipients had to be told separately which screen to go to and
+ * where to type it. The URL, like the one-time code, appears only in the issue response, so if it
+ * is not shown here the only option is to issue again.
  *
- * コピーできない出所（安全でない接続など）でも詰まらないことも併せて守る。
+ * Also guards that it does not get stuck on origins that cannot copy (insecure connections etc.).
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -20,7 +20,7 @@ const issueInvitation =
   vi.fn<(familyId: number, role: FamilyRole, target: number | null) => Promise<Invitation>>()
 
 vi.mock('../services/families', () => ({
-  // 本物と同じ判定にする。サーバは Z 付きで返すので、無条件に足すと `...ZZ` になる
+  // Same check as the real thing. The server returns times with Z, so appending unconditionally gives `...ZZ`
   parseUtc: (value: string) =>
     new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`),
   families: {
@@ -50,7 +50,7 @@ function renderPanel(unlinkedMembers: Membership[] = []) {
   )
 }
 
-/** 押した URL の写し先。安全でない出所では触れないので、テストでも都度置き換える。 */
+/** Where the pressed URL is copied to. Not accessible on insecure origins, so tests replace it each time. */
 function stubClipboard(writeText: (text: string) => Promise<void>) {
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText },
@@ -65,7 +65,7 @@ describe('InvitationPanel', () => {
     issueInvitation.mockResolvedValue(ISSUED)
   })
 
-  it('発行するとコードを載せた URL を出す（親の招待はログインの画面へ。ADR-0048）', async () => {
+  it('issuing shows the URL with the code (a parent invite goes to the login screen; ADR-0048)', async () => {
     renderPanel()
 
     fireEvent.click(screen.getByRole('button', { name: /Invite another parent/ }))
@@ -73,11 +73,11 @@ describe('InvitationPanel', () => {
     const expected = `${window.location.origin}/login#code=AB%2BCD`
     const link = await screen.findByRole('link', { name: expected })
     expect(link).toHaveAttribute('href', expected)
-    // URL を開けない相手のために、コードそのものも併せて出す。
+    // Also show the code itself for recipients who cannot open the URL.
     expect(screen.getByText('AB+CD')).toBeInTheDocument()
   })
 
-  it('コピーを押すと URL をクリップボードへ渡す', async () => {
+  it('pressing copy passes the URL to the clipboard', async () => {
     const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     stubClipboard(writeText)
     renderPanel()
@@ -91,7 +91,7 @@ describe('InvitationPanel', () => {
     expect(await screen.findByText('The link was copied.')).toBeInTheDocument()
   })
 
-  it('コピーできない出所では手で写すよう伝え、URL は出したままにする', async () => {
+  it('on origins that cannot copy, says to copy by hand and keeps the URL shown', async () => {
     stubClipboard(() => Promise.reject(new Error('not allowed')))
     renderPanel()
 

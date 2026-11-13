@@ -1,11 +1,11 @@
-"""JWT の発行・検証（access / refresh の2トークン）。
+"""Issuing and verifying JWTs (two tokens: access / refresh).
 
-- scope クレームはユーザーの保有権限の範囲内。未指定・空 = 権限なし。
-- ``fed_iss`` / ``fed_sub`` / ``sid`` / ``fed_iat`` は、IdP 経由で始まったセッションの
-  宛名と**始まった時刻**（ADR-0032）。**検証のたびに「止められていないか」を照合
-  する**——サーバーにセッションの控えが無いので、届いた停止はここでしか効かせ
-  られない。ローカルのログインで発行したトークンには載らない。
-- 検証結果は ``AuthenticatedPrincipal`` として返す。
+- The scope claim stays within the user's permissions. Unspecified / empty = no permissions.
+- ``fed_iss`` / ``fed_sub`` / ``sid`` / ``fed_iat`` are the address and **start time** of a
+  session that began via the IdP (ADR-0032). **Every verification checks "has it been
+  stopped"** — the server keeps no record of sessions, so a received stop can only be
+  enforced here. Not included in tokens issued for local login.
+- The verification result is returned as ``AuthenticatedPrincipal``.
 """
 
 from __future__ import annotations
@@ -36,25 +36,25 @@ from shared.kernel.settings.settings import settings
 _ALGORITHM = "HS256"
 TYPE_ACCESS = "access"
 TYPE_REFRESH = "refresh"
-# IdP 側のセッションの宛名（ADR-0032）。``sid`` だけ OIDC と同じ綴りにする
-# （ID トークンから写した値であることを読み取れるようにするため）。
+# Address of the IdP-side session (ADR-0032). Only ``sid`` uses the same spelling as OIDC
+# (so it is readable as a value copied from the ID token).
 CLAIM_FEDERATED_ISSUER = "fed_iss"
 CLAIM_FEDERATED_SUBJECT = "fed_sub"
 CLAIM_SESSION_ID = "sid"
-# セッションが始まった時刻（エポックからのマイクロ秒）。``iat`` は秒までしか持たず、
-# 止めた直後の同じ秒に入り直した利用者を巻き添えにするため、別に持つ。
+# Time the session started (microseconds since the epoch). ``iat`` has only second precision and
+# would also catch a user who signed in again in the same second right after a stop, so keep it separately.
 CLAIM_FEDERATED_ISSUED_AT = "fed_iat"
-# 入り口が表示端末（ADR-0047）のときだけ載る。値は :data:`VIA_DISPLAY_DEVICE`
+# Present only when the entry point is a display device (ADR-0047). Value is :data:`VIA_DISPLAY_DEVICE`
 CLAIM_VIA = "via"
 VIA_DISPLAY_DEVICE = "display_device"
 
 
 @dataclass(frozen=True)
 class RefreshedSession:
-    """更新の対象。**入り口（``federated_login``）も一緒に返す**（ADR-0032）。
+    """What is being refreshed. **The entry point (``federated_login``) is returned with it** (ADR-0032).
 
-    落とすと、更新のたびに IdP のセッションの宛名が消え、**トークンを 1 回更新する
-    だけで停止の伝播をすり抜けられる**。
+    If it were dropped, the IdP session address would vanish on every refresh, and **a single
+    token refresh would be enough to slip past stop propagation**.
     """
 
     user: User
@@ -69,13 +69,13 @@ class TokenService:
         *,
         federated_login: FederatedLogin | None = None,
     ) -> dict[str, object]:
-        """access / refresh トークンを発行する。
+        """Issue access / refresh tokens.
 
-        ``scopes`` を指定した場合も保有権限との積集合に切り詰める。
-        ``federated_login`` は SSO で始まったセッションのときだけ渡す（ADR-0032）。
+        Even when ``scopes`` is given, it is trimmed to the intersection with held permissions.
+        Pass ``federated_login`` only for sessions that started via SSO (ADR-0032).
 
-        ⚠ **SSO で入ったログインにはリフレッシュトークンを出さない**（``refresh_token`` は ``None``。ADR-0058）。
-        切れたら画面が見えない枠で IdP へ問い合わせ、IdP のログイン状態が生きていれば入り直す。
+        ⚠ **No refresh token is issued for logins via SSO** (``refresh_token`` is ``None``; ADR-0058).
+        When it expires, the UI asks the IdP in a hidden frame and signs in again if the IdP login is alive.
         """
         granted = user.permission_codes
         effective = sorted(granted if scopes is None else granted & set(scopes))
@@ -93,8 +93,8 @@ class TokenService:
                 "type": TYPE_ACCESS,
                 "scope": effective,
                 "username": user.username,
-                # ⚠ **検証が DB を引かないので、principal の材料は全部ここに載せる**
-                #   （ADR-0037）。載せ忘れた項目は、その経路でだけ空になる。
+                # ⚠ **Verification does not hit the DB, so everything the principal needs goes here**
+                #   (ADR-0037). Anything left out ends up empty on that path only.
                 "email": user.email,
                 "display_name": user.display_name,
                 "must_change_password": user.must_change_password,
@@ -125,10 +125,10 @@ class TokenService:
 
     @staticmethod
     def create_display_access_token(user: User) -> dict[str, object]:
-        """表示端末のアクセストークン（ADR-0047）。**リフレッシュトークンは出さない。**
+        """Access token for a display device (ADR-0047). **No refresh token is issued.**
 
-        端末の資格情報（``/api/display/session``）がリフレッシュトークンの役をする。
-        ``via`` のクレームで、資格情報を変える経路を断る（:func:`get_person_principal`）。
+        The device credential (``/api/display/session``) acts as the refresh token.
+        The ``via`` claim is used to refuse credential-changing paths (:func:`get_person_principal`).
         """
         now = datetime.now(UTC)
         access = jwt.encode(
@@ -169,15 +169,15 @@ class TokenService:
 
     @classmethod
     def verify_access_token_with_reason(cls, token: str) -> tuple[AuthenticatedPrincipal | None, str | None]:
-        """アクセストークンを**署名とクレームだけ**で検証する（ADR-0037）。
+        """Verify an access token by **signature and claims only** (ADR-0037).
 
-        ⚠ **DB を引かない。** 止まっている利用者・外された権限・IdP からの停止・
-        親が立てた一時パスワードの印は、ここでは分からない。**分かるのは次に新しい
-        トークンを出すとき**で、それまでの上限が寿命（既定 5 分）になる。
+        ⚠ **Does not hit the DB.** Disabled users, removed permissions, stops from the IdP and
+        the temporary-password flag set by a parent are not visible here. **They are noticed
+        when the next new token is issued**, so the token lifetime (default 5 minutes) is the upper bound.
 
-        ⚠ **資格情報を変える経路だけは別である**（ADR-0011）。
-        :func:`get_settled_principal` が行を読み直す ——一時パスワードを立てた直後に
-        二要素やパスキーを差し替えられては、立てた意味が無い。
+        ⚠ **Credential-changing paths are the exception** (ADR-0011).
+        :func:`get_settled_principal` re-reads the row — if 2FA or passkeys could be swapped right
+        after a temporary password was set, setting it would be pointless.
         """
         claims, reason = cls._decode(token)
         if claims is None:
@@ -215,10 +215,10 @@ class TokenService:
 
     @classmethod
     def federated_login_of(cls, token: str) -> FederatedLogin | None:
-        """検証済みのアクセストークンから、IdP 側のセッションを読む。
+        """Read the IdP-side session from a verified access token.
 
-        新しいトークンを出し直す口が引き継ぐためのもの（引き継がないと、
-        出し直した瞬間に停止の伝播から外れる）。
+        For endpoints that reissue tokens to carry it over (without that, the session falls out of
+        stop propagation the moment a token is reissued).
         """
         claims, _ = cls._decode(token)
         if claims is None or claims.get("type") != TYPE_ACCESS:
@@ -227,7 +227,7 @@ class TokenService:
 
     @classmethod
     def load_active_user(cls, user_id: int, *, session: Session) -> User | None:
-        """止まっていない利用者の行。⚠ **出し直す経路・資格情報を変える経路だけで使う。**"""
+        """Row of a user who is not disabled. ⚠ **Use only on reissue and credential-changing paths.**"""
         user = session.get(User, user_id)
         if user is None or not user.is_active:
             return None
@@ -246,7 +246,7 @@ class TokenService:
 
 
 def _federation_claims(federated_login: FederatedLogin | None) -> dict[str, object]:
-    """IdP 側のセッションをクレームへ写す。ローカルのログインでは何も載せない。"""
+    """Copy the IdP-side session into claims. Adds nothing for local logins."""
     if federated_login is None:
         return {}
     claims: dict[str, object] = {
@@ -259,17 +259,17 @@ def _federation_claims(federated_login: FederatedLogin | None) -> dict[str, obje
     return claims
 
 
-#: 期限の切れた SSO のアクセストークンから、続ける往復が利用者を読む長さ（ADR-0058）。
-#: IdP のログイン状態の最も長いもの（30 日）に揃える。これより古いトークンは読まない（新しいログインとして入る）
+#: How far back the continuation round trip reads the user from an expired SSO access token (ADR-0058).
+#: Matches the longest IdP login state (30 days). Older tokens are not read (treated as a new login)
 RENEWAL_CARRY_SECONDS = 30 * 24 * 3600
 
 
 def continued_user_of(token: str) -> int | None:
-    """期限の切れた SSO のアクセストークンが、誰のログインだったか（ADR-0058）。
+    """Whose login an expired SSO access token belonged to (ADR-0058).
 
-    ⚠ **これは認証ではない。** IdP から**同じ人**が戻ってきたかを見るのにだけ使う。署名と
-    発行者・宛先は確かめ、期限は :data:`RENEWAL_CARRY_SECONDS` まで見逃す。SSO で入ったログインの
-    ものでなければ読まない（表示端末のトークンも読まない）。
+    ⚠ **This is not authentication.** Used only to see whether **the same person** came back from
+    the IdP. Signature, issuer and audience are checked; expiry is tolerated up to
+    :data:`RENEWAL_CARRY_SECONDS`. Tokens not from an SSO login are not read (nor display device tokens).
     """
     try:
         claims = jwt.decode(
@@ -291,7 +291,7 @@ def continued_user_of(token: str) -> int | None:
 
 
 def _federated_login_of(claims: dict[str, Any]) -> FederatedLogin | None:
-    """クレームから IdP 側のセッションを読む。載っていなければ ``None``。"""
+    """Read the IdP-side session from claims. ``None`` if absent."""
     issuer = claims.get(CLAIM_FEDERATED_ISSUER)
     subject = claims.get(CLAIM_FEDERATED_SUBJECT)
     started_at = claims.get(CLAIM_FEDERATED_ISSUED_AT)
@@ -309,7 +309,7 @@ def _federated_login_of(claims: dict[str, Any]) -> FederatedLogin | None:
 
 
 def _to_microseconds(moment: datetime) -> int:
-    """naive な UTC をエポックからのマイクロ秒へ（CLAUDE.md「時刻の契約」）。"""
+    """Naive UTC to microseconds since the epoch (the time contract in CLAUDE.md)."""
     return int(moment.replace(tzinfo=UTC).timestamp() * 1_000_000)
 
 
@@ -318,7 +318,7 @@ def _from_microseconds(value: int) -> datetime:
 
 
 def _session_revoked(claims: dict[str, Any], session: Session) -> bool:
-    """このトークンのセッションが IdP 側で止められていないか（ADR-0032）。"""
+    """Whether this token's session has been stopped on the IdP side (ADR-0032)."""
     check = CheckSessionRevocation(revocations=SqlSessionRevocationRepository(session))
     return check.execute(_federated_login_of(claims))
 

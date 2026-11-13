@@ -1,7 +1,7 @@
-"""ログイン画面へ「SSO で入る」ボタンを出すかどうかを答える。
+"""Answer whether to show a "Sign in with SSO" button on the login screen.
 
-未認証で呼ばれるため、**接続先の URL やクライアント ID は返さない**。返すのは
-「使えるか」と「ボタンに出す名前」だけ。
+Since it is called unauthenticated, **it does not return the connection URL or client ID**. It returns only
+"whether it is usable" and "the name to show on the button".
 """
 
 from __future__ import annotations

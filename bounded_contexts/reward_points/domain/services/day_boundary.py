@@ -1,12 +1,13 @@
-"""1 日の区切り。
+"""Day boundary.
 
-保存・比較する時刻は常に UTC（``shared.kernel.timestamps``）だが、「毎日」を
-UTC の 0 時で切ると、日本の家族には毎朝 9 時が日付の変わり目になる。暮らしの
-側の 1 日と台帳の上の 1 日を合わせるため、区切りに使う地域をここへ 1 つ持たせる。
+Stored and compared times are always UTC (``shared.kernel.timestamps``), but
+cutting "every day" at 00:00 UTC would make 9 a.m. the date change for a family
+in Japan. To align the day in daily life with the day on the ledger, this holds
+the one time zone used for the boundary.
 
-受け渡しする時刻は入口も出口も **UTC の naive datetime** で、地域を意識するのは
-この中だけに閉じる。呼び出し側が tz 付きと naive を混ぜると、比較のたびに例外に
-なる（ADR-0024）。
+Times passed in and out are **naive UTC datetimes**; awareness of the time zone
+stays inside this class. If callers mixed tz-aware and naive values, every
+comparison would raise (ADR-0024).
 """
 
 from __future__ import annotations
@@ -19,15 +20,16 @@ class DayBoundary:
         self._time_zone = time_zone
 
     def day_of(self, moment: datetime) -> date:
-        """*moment*（UTC の naive datetime）が、この区切りで何日にあたるか。"""
+        """Which day *moment* (a naive UTC datetime) falls on under this boundary."""
         return moment.replace(tzinfo=UTC).astimezone(self._time_zone).date()
 
     def starts_at(self, day: date) -> datetime:
-        """*day* の始まり（UTC の naive datetime）。
+        """Start of *day* (a naive UTC datetime).
 
-        その日の出来事として台帳へ並ぶよう、付与の ``occurred_at`` に使う。実際に
-        書き込まれる時刻（``created_at``）とは別物で、停止中に跨いだ日をまとめて
-        追いついたときも、履歴はそれぞれの日付の位置に収まる。
+        Used as a grant's ``occurred_at`` so it lines up in the ledger as that day's
+        event. It differs from the actual write time (``created_at``), so even when
+        days missed during downtime are caught up at once, the history lands on
+        each respective date.
         """
         return datetime.combine(day, time.min, tzinfo=self._time_zone).astimezone(UTC).replace(tzinfo=None)
 

@@ -1,12 +1,12 @@
-"""Alembic マイグレーション環境設定（純粋な Alembic + SQLAlchemy）。
+"""Alembic migration environment (plain Alembic + SQLAlchemy).
 
-実行方法::
+Usage::
 
     uv run alembic revision --autogenerate -m "description"
     uv run alembic upgrade head
     uv run alembic downgrade -1
 
-接続先は環境変数 ``DATABASE_URI``（または ``.env``）で指定する。
+The target database is given by the ``DATABASE_URI`` environment variable (or ``.env``).
 """
 
 from __future__ import annotations
@@ -36,9 +36,9 @@ def _get_database_url() -> str:
 
 
 def _load_metadata() -> MetaData:
-    """全モデルを import して MetaData を返す。
+    """Import every model and return the MetaData.
 
-    コンテキスト固有モデルを追加したらここへ import を足す。
+    When you add a context-specific model, add its import here.
     """
     import bounded_contexts.account_security.infrastructure.account_security_models
     import bounded_contexts.display_devices.infrastructure.display_devices_models

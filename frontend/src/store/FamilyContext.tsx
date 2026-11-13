@@ -1,26 +1,26 @@
 /**
- * ログイン中のアカウントが所属する家族。
+ * The family the signed-in account belongs to.
  *
- * 所属できる家族は 1 つまで（ADR-0013）なので、状態も 1 つで足りる。ここに
- * 集めるのは、ナビゲーション（子の一覧）・ダッシュボード・家族設定が同じ内容を
- * 見るため。画面ごとに取得すると、子を追加した直後に左のナビゲーションだけが
- * 古いままになる。
+ * An account belongs to at most one family (ADR-0013), so one state is enough. It is
+ * collected here because the navigation (list of children), dashboard and family settings
+ * show the same content. Fetching per screen would leave only the left navigation stale
+ * right after adding a child.
  *
- * 取得は `family:view` を持つ人にだけ行う。持たないアカウントで呼ぶと 403 が
- * 「家族がない」に化けて、案内の文言が嘘になる。
+ * Fetch only for people with `family:view`. Calling without it turns a 403 into
+ * "no family", making the guidance text a lie.
  *
- * **読めなかったことを「所属していない」と言わない。** 一覧は引けたのに詳細で
- * 落ちた（5xx・オフライン）ときに `family` を null にすると、画面は「家族が
- * ない」と判断して作成・参加を出し、押せば必ず `already_belongs_to_family` に
- * なる。読めなかったことは `failed` として別に伝える。
+ * **Do not call a failed load "not a member".** If `family` became null when the list
+ * loaded but the details failed (5xx, offline), the screen would decide "no family"
+ * and show create/join, and tapping them always ends in `already_belongs_to_family`.
+ * Load failure is reported separately as `failed`.
  *
- * ここには残高も入る。**ポイントを変えたら `reload` を呼ぶ**（ADR-0021）。
- * 呼ばないと、記録した画面だけが新しい残高になり、ダッシュボード・
- * ナビゲーション・家族設定は古い数字を出したままになる。
+ * Balances live here too. **Call `reload` after changing points** (ADR-0021).
+ * Otherwise only the screen that recorded shows the new balance, while the dashboard,
+ * navigation and family settings keep showing the old number.
  *
- * 取得は 1 回きりにしない。画面を移るたび・手元に戻るたびに読み直す。ログイン中に
- * 1 回だけだと、別の端末や別のタブで足されたポイントがブラウザの再読込まで
- * 出てこない。読み直しても表示は消さないので、画面はちらつかない。
+ * Do not fetch only once. Reload on every screen change and every return to the app. Fetching
+ * once per login means points added on another device or tab do not show until a browser
+ * reload. Reloading keeps the display, so the screen does not flicker.
  */
 import {
   createContext,
@@ -38,20 +38,20 @@ import { families, type FamilyDetail } from '../services/families'
 import { useAuth } from './AuthContext'
 
 export interface FamilyValue {
-  /** 所属している家族。どこにも所属していなければ null。 */
+  /** The family the account belongs to. null if none. */
   family: FamilyDetail | null
   /**
-   * 読み込めず、出せるものが何も無い。所属の有無は分からない
-   * （「所属していない」ではない）。一度読めた後の読み直しが失敗しても、
-   * 前の内容を出したままにするので、ここは偽のままになる（ADR-0021）。
+   * Failed to load and there is nothing to show. Membership is unknown
+   * (not "not a member"). If a reload after a successful load fails, the previous
+   * content stays shown, so this stays false (ADR-0021).
    */
   failed: boolean
-  /** 最初の取得が終わるまで真。「家族がない」との区別に使う。 */
+  /** True until the first fetch finishes. Used to distinguish from "no family". */
   loading: boolean
   reload: () => Promise<void>
 }
 
-/** 取り違えを防ぐため、家族と失敗はいつも 1 組で入れ替える。 */
+/** Family and failure are always swapped as one pair to avoid mixing them up. */
 interface Loaded {
   family: FamilyDetail | null
   failed: boolean
@@ -59,7 +59,7 @@ interface Loaded {
 
 const NONE: Loaded = { family: null, failed: false }
 
-/** テストが状態を差し替えて描画できるよう公開する（本番の生成は FamilyProvider）。 */
+/** Exported so tests can render with replaced state (production builds it in FamilyProvider). */
 export const FamilyContext = createContext<FamilyValue | null>(null)
 
 export function FamilyProvider({ children }: { children: ReactNode }) {
@@ -68,12 +68,12 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const [loaded, setLoaded] = useState<Loaded>(NONE)
   const [loading, setLoading] = useState(true)
-  /** 何番目の取得か。追い越された（古い）応答を捨てるために持つ。 */
+  /** Sequence number of the fetch. Kept to discard overtaken (stale) responses. */
   const latest = useRef(0)
 
   const reload = useCallback(async () => {
-    // 読み直しは重なり得る（記録の直後に画面を移る等）。先に始めた取得が後から
-    // 届いても、新しい取得の結果を古い内容で上書きしない。
+    // Reloads can overlap (e.g. moving screens right after recording). Even if an earlier fetch
+    // arrives later, do not overwrite the newer result with stale content.
     const ticket = ++latest.current
     const isLatest = () => ticket === latest.current
 
@@ -89,27 +89,27 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
       if (isLatest()) setLoaded({ family, failed: false })
     } catch {
       if (!isLatest()) return
-      // 読み直しに失敗しても、すでに読めている家族は捨てない（ADR-0021）。手元に
-      // 戻った瞬間の一時的な不通で残高・子への入口が消えると、家族から外された
-      // ようにしか見えない。「読めなかった」と伝えるのは、出せるものが無いときだけ。
+      // Even if a reload fails, keep the family already loaded (ADR-0021). If balances and child
+      // entries vanished on a brief outage right after returning, it would look like being
+      // removed from the family. Report "could not load" only when there is nothing to show.
       setLoaded((current) => (current.family ? current : { family: null, failed: true }))
     } finally {
-      // 追い越された取得は終わりも告げない。結果を捨てたのに読み込み中を解くと、
-      // まだ何も入っていない状態が「家族がない・子どもがいない」として画面に出る。
+      // An overtaken fetch does not announce its end either. Ending loading after discarding the
+      // result would show the still-empty state as "no family / no children" on screen.
       if (isLatest()) setLoading(false)
     }
   }, [canView])
 
-  // 最初の 1 回と、**画面を移るたび**に読み直す。ログイン中に 1 回だけ取ると、
-  // 別の端末・別のタブで足されたポイントはブラウザを再読込するまで出てこない
-  // （利用者からは「ダッシュボードに古い値が残る」に見える）。表示は消さないので、
-  // 読み直しは画面のちらつきにならず、値が届いたときに入れ替わるだけ。
+  // Reload on the first load and **on every screen change**. Fetching once per login means
+  // points added on another device or tab do not show until a browser reload
+  // (to the user, "the dashboard keeps an old value"). The display is kept, so a reload
+  // does not flicker the screen; values simply swap in when they arrive.
   useEffect(() => {
     void reload()
   }, [reload, pathname])
 
-  // 別の端末（もう一人の親・子ども本人）の記録は、こちらの画面には届かない。
-  // 手元に戻ってきたときに読み直して、開きっぱなしの残高が居座らないようにする。
+  // Records from another device (the other parent, the child) do not reach this screen.
+  // Reload on return so an open balance does not linger.
   useRefreshOnReturn(reload)
 
   return (

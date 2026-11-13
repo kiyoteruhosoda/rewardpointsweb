@@ -1,7 +1,7 @@
-"""アカウントを削除してよいか確かめる。
+"""Check whether an account may be deleted.
 
-ユーザー管理（``/api/admin/users``）から呼ぶ。owner が消えるとその家族を
-管理できる人がいなくなるので、一緒に消すのではなく削除自体を断る。
+Called from user management (``/api/admin/users``). If the owner disappears, no one
+is left to manage that family, so we refuse the deletion instead of cascading it.
 """
 
 from __future__ import annotations

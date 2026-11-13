@@ -1,14 +1,14 @@
-"""本人の操作で IdP の口座と結び付ける導線（ADR-0036）。
+"""The user-initiated flow that links an IdP account (ADR-0036).
 
-ログインの往復（``test_sso_login``）と同じ ``/callback`` で戻ってくるが、後始末が
-違う。ここで確かめるのは
+It comes back through the same ``/callback`` as the login round trip (``test_sso_login``), but the
+follow-up differs. This checks:
 
-- 始めるには**入っていること**が要る（未認証は 401）
-- 戻りの結び付け先は**往復を始めた利用者**で、いまのセッションではない
-- 断りはログイン画面ではなく**設定画面**へ返る（押した人は入ったまま）
-- 外すと入れなくなる利用者は断る
+- Starting requires **being signed in** (unauthenticated is 401)
+- The link target on return is **the user who started the round trip**, not the current session
+- Rejections go back to the **settings screen**, not the login screen (the user stays signed in)
+- Unlinking is refused for a user who would then be unable to sign in
 
-の 4 つ。
+These are the 4 checks.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ ISSUER = "https://idp.example"
 @dataclass
 class FakeGateway:
     subject: str = "idp-subject-1"
-    #: 返す ``acr``。⚠ **既定は返さない** ——要求していないときの姿である（ADR-0039）。
+    #: The ``acr`` to return. ⚠ **Not returned by default** -- that is how it looks when not requested (ADR-0039).
     acr: str | None = None
     seen: list[CodeExchange] = field(default_factory=list)
     sent: list[AuthorizationRequest] = field(default_factory=list)
@@ -77,7 +77,7 @@ def gateway() -> FakeGateway:
 
 @pytest.fixture
 def required_acr(monkeypatch: pytest.MonkeyPatch) -> None:
-    """⚠ **要求したら確かめる**（ADR-0039）。要求する運用へ切り替える。"""
+    """⚠ **If requested, it is verified** (ADR-0039). Switches to the requiring mode."""
     monkeypatch.setenv("OIDC_ACR_VALUES", '["urn:assay:ac:mfa"]')
 
 
@@ -128,12 +128,12 @@ def test_a_completed_round_trip_links_the_identity(sso_client: TestClient) -> No
     body = sso_client.get("/api/auth/sso/link", headers=headers).json()
     assert body["linked"] is True
     assert body["linked_at"].endswith("Z")
-    # 管理者はパスワードを持っているので、外しても入り口が残る。
+    # The admin has a password, so an entry point remains after unlinking.
     assert body["can_unlink"] is True
 
 
 def test_the_identity_is_not_linked_after_signing_out(sso_client: TestClient) -> None:
-    """⚠ 往復の途中で入れ替わったブラウザで、誰かの口座へ結び付けない。"""
+    """⚠ Do not link someone's account in a browser that was swapped mid round trip."""
     headers = _sign_in(sso_client)
     state = _start_link(sso_client, headers)
     sso_client.cookies.clear()
@@ -142,7 +142,7 @@ def test_the_identity_is_not_linked_after_signing_out(sso_client: TestClient) ->
 
 
 def test_a_second_account_at_the_same_provider_is_refused(sso_client: TestClient, gateway: FakeGateway) -> None:
-    """既にある結び付きを黙って差し替えない（前の入り口が予告なく消える）。"""
+    """Do not silently replace an existing link (the previous entry point would vanish without notice)."""
     headers = _sign_in(sso_client)
     _callback(sso_client, _start_link(sso_client, headers))
 
@@ -156,12 +156,12 @@ def test_a_link_can_be_removed_while_a_password_remains(sso_client: TestClient) 
 
     assert sso_client.delete("/api/auth/sso/link", headers=headers).status_code == 200
     assert sso_client.get("/api/auth/sso/link", headers=headers).json()["linked"] is False
-    # 2 回目は「結び付いていない」。
+    # The second time it is "not linked".
     assert sso_client.delete("/api/auth/sso/link", headers=headers).status_code == 404
 
 
 def test_the_last_entrance_is_not_removed(sso_client: TestClient, engine: sa.Engine) -> None:
-    """⚠ パスワードもパスキーも無い利用者からは外させない（締め出しになる）。"""
+    """⚠ Do not let a user with neither a password nor a passkey unlink (that would lock them out)."""
     headers = _sign_in(sso_client)
     _callback(sso_client, _start_link(sso_client, headers))
     _drop_password(engine)
@@ -173,7 +173,7 @@ def test_the_last_entrance_is_not_removed(sso_client: TestClient, engine: sa.Eng
 
 
 def _drop_password(engine: sa.Engine) -> None:
-    """ローカルのパスワードを落とす（IdP でしか入れない利用者にする。ADR-0034）。"""
+    """Drop the local password (making a user who can only sign in via the IdP. ADR-0034)."""
     session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
     user = session.scalars(sa.select(User).where(User.username == master_data.DEFAULT_ADMIN_USERNAME)).one()
     user.password_hash = None
@@ -182,7 +182,7 @@ def _drop_password(engine: sa.Engine) -> None:
 
 
 def test_nothing_is_requested_of_the_idp_by_default(sso_client: TestClient, gateway: FakeGateway) -> None:
-    """⚠ 既定は要求しない（ADR-0039）。予約語を持たない IdP でも従来どおり動く。"""
+    """⚠ Not requested by default (ADR-0039). Works as before even with an IdP that has no reserved values."""
     _start_link(sso_client, _sign_in(sso_client))
 
     assert gateway.sent[0].acr_values == ()
@@ -205,10 +205,10 @@ def test_a_weak_round_trip_does_not_become_a_new_entrance(
     sso_client: TestClient,
     gateway: FakeGateway,
 ) -> None:
-    """⚠ **連携でも強度を確かめる**（ADR-0039）。
+    """⚠ **Linking also verifies the strength** (ADR-0039).
 
-    ここを素通しにすると、**弱い認証で通った往復がそのまま新しい入り口になる。**
-    ログイン側だけ確かめても、入り口を増やす操作が緩いままでは意味が無い。
+    If this were let through, **a round trip that passed with weak authentication becomes a new entry point as is.**
+    Verifying only on the login side means nothing while the operation that adds entry points stays loose.
     """
     gateway.acr = "urn:assay:ac:single"
     headers = _sign_in(sso_client)
@@ -222,7 +222,7 @@ def test_an_absent_acr_does_not_become_a_new_entrance_either(
     sso_client: TestClient,
     gateway: FakeGateway,
 ) -> None:
-    """返ってこないものを「満たした」と読むと、要求は送っただけになる。"""
+    """Reading what does not come back as "satisfied" would mean the requirement is only sent."""
     headers = _sign_in(sso_client)
 
     assert _callback(sso_client, _start_link(sso_client, headers)) == ("/security?sso_link_error=sso_acr_not_satisfied")

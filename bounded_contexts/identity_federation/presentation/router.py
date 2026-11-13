@@ -1,25 +1,27 @@
-"""SSO（OpenID Connect）ログイン API。
+"""SSO (OpenID Connect) login API.
 
-主な経路。
+Main routes.
 
-- ``GET /provider`` — ログイン画面が「SSO で入る」ボタンを出すかを問い合わせる
-- ``GET /login`` — IdP の認可エンドポイントへブラウザを送り出す
-- ``GET /renew`` — 切れたログインを画面を出さずに続ける往復を始める（見えない枠の中。ADR-0058）
-- ``GET /callback`` — IdP からの戻り。引き換え券を付けて SPA へ戻す（続ける往復なら結果の頁へ）
-- ``GET /renewed`` — 続ける往復の結果の頁（画面は枠の行き先を読む）
-- ``POST /token`` — 引き換え券をトークンへ換える（Cookie もここで載せる）
-- ``POST /backchannel-logout`` — IdP からの停止の通知を受ける（ADR-0032）
+- ``GET /provider`` — asks whether the login screen should show the "sign in with SSO" button
+- ``GET /login`` — sends the browser to the IdP's authorization endpoint
+- ``GET /renew`` — starts a round trip that continues an expired login without a screen
+  (inside a hidden frame; ADR-0058)
+- ``GET /callback`` — return from the IdP. Goes back to the SPA with an exchange ticket
+  (to the result page for a continuing round trip)
+- ``GET /renewed`` — result page of a continuing round trip (the screen reads where the frame ended up)
+- ``POST /token`` — exchanges the ticket for tokens (cookies are set here too)
+- ``POST /backchannel-logout`` — receives revocation notices from the IdP (ADR-0032)
 
-``/login`` は**ブラウザに合言葉の Cookie を持たせてから**送り出す。控えの表は
-全員で共有するので、``state`` を知っているだけの相手でも戻りを完了できてしまう
-（攻撃者が始めた認可要求を被害者に踏ませると、被害者は攻撃者としてログインした
-状態になる。ログイン CSRF）。``/callback`` はこの Cookie が一致することまで見る。
+``/login`` sends the browser out **after giving it a passphrase cookie**. The record table is
+shared by everyone, so anyone who merely knows ``state`` could complete the return
+(if an attacker makes a victim open an authorization request the attacker started, the victim ends up
+signed in as the attacker: login CSRF). ``/callback`` also checks that this cookie matches.
 
-``/login`` と ``/callback`` は**ブラウザの画面遷移**で、応答本文を SPA は読めない。
-そのため失敗も JSON ではなくログイン画面への転送で返す（``?sso_error=<code>``）。
-表示文言はフロントエンドが決める（CLAUDE.md「国際化」）。
+``/login`` and ``/callback`` are **browser navigations**, and the SPA cannot read the response body.
+So failures are returned not as JSON but as a redirect to the login screen (``?sso_error=<code>``).
+The display text is decided by the frontend (CLAUDE.md "Internationalization").
 
-トークンを URL に載せないための引き換え券は ADR-0029。
+The exchange ticket that keeps tokens out of URLs is ADR-0029.
 """
 
 from __future__ import annotations
@@ -108,26 +110,26 @@ router = APIRouter(prefix="/api/auth/sso", tags=["auth"])
 
 DbDep = Annotated[Session, Depends(get_db)]
 
-# 戻り先の SPA の経路（フロントエンドのルーティングと対で合わせる）
+# SPA routes to return to (keep in sync with the frontend routing)
 LOGIN_SCREEN = "/login"
 HANDOFF_SCREEN = "/login/sso"
-#: 連携の戻りの着地点（セキュリティ設定の画面。ADR-0036）
+#: Landing point of a linking return (the security settings screen; ADR-0036)
 SECURITY_SCREEN = "/security"
 
-# 認可要求を出したブラウザに持たせる合言葉。``SameSite=Lax`` にするのは、
-# IdP からの戻りが**別サイトからの GET の画面遷移**だから（``Strict`` だと
-# 戻ってきた時点で送られず、正規のログインが必ず失敗する）。
+# Passphrase given to the browser that issued the authorization request. It is ``SameSite=Lax`` because
+# the return from the IdP is **a GET navigation from another site** (with ``Strict`` it would not be
+# sent on return, and legitimate logins would always fail).
 SSO_BINDING_COOKIE = "sso_binding"
 
-# IdP が返すエラーコードはそのまま画面の URL へ載るため、素性の分かる形だけを通す
-# （反射した文字列でリンクを組み立てられないようにする）。照合は ``fullmatch``——
-# ``$`` は末尾の改行の直前にも当たるため、``match`` だと改行を通してしまう。
+# Error codes returned by the IdP go straight into the screen URL, so only well-formed ones pass
+# (so links cannot be built from reflected strings). Matching uses ``fullmatch`` --
+# ``$`` also matches just before a trailing newline, so ``match`` would let a newline through.
 _ERROR_CODE = re.compile(r"[a-z_]{1,64}")
 _GENERIC_ERROR = "sso_error"
 
-#: 画面を出さずに試した往復（``prompt=none``）で、IdP が「画面が要る」と返すコード
-#: （OIDC Core §3.1.2.6）。**失敗ではない**ので、エラーを出さずにログイン画面へ戻す（ADR-0052）。
-#: ``access_denied`` は、Assay に入っているがこのアプリの利用が許可されていないとき（task #648）。
+#: Codes the IdP returns for "a screen is needed" on a round trip tried without a screen (``prompt=none``)
+#: (OIDC Core §3.1.2.6). **Not a failure**, so go back to the login screen without an error (ADR-0052).
+#: ``access_denied`` is when signed in to Assay but not permitted to use this app (task #648).
 _SILENT_DECLINES = frozenset(
     {
         "login_required",
@@ -137,12 +139,12 @@ _SILENT_DECLINES = frozenset(
         "access_denied",
     }
 )
-#: 試して戻ってきた印。ログイン画面はこれが付いていると試し直さない（ループ止め）。
+#: Marker that a try came back. The login screen does not retry when it is present (loop stopper).
 SILENT_DECLINED_PARAM = "sso_silent"
 
 
 class SsoCallbackQuery:
-    """IdP からの戻りに付くクエリ（成功なら ``code`` と ``state``）。"""
+    """Query on the return from the IdP (``code`` and ``state`` on success)."""
 
     def __init__(
         self,
@@ -159,25 +161,25 @@ class SsoCallbackQuery:
 async def describe_provider(
     use_case: Annotated[DescribeSsoProvider, Depends(dependencies.describe_sso_provider)],
 ) -> SsoProviderResponse:
-    """SSO が使えるかを答える（未認証で呼べる。接続先の情報は返さない）。"""
+    """Answer whether SSO is available (callable unauthenticated; does not return endpoint details)."""
     provider = use_case.execute()
     return SsoProviderResponse(enabled=provider.enabled, display_name=provider.display_name)
 
 
-# ``/login`` と ``/callback`` は IdP へ同期の HTTP を出す（discovery・トークン交換）。
-# ``async def`` にするとその往復のあいだイベントループが止まり、同じワーカーの
-# 全リクエストが待たされる。``def`` で定義してスレッドプールへ逃がす。
+# ``/login`` and ``/callback`` make synchronous HTTP calls to the IdP (discovery, token exchange).
+# With ``async def`` the event loop would block for that round trip, making every request in the
+# same worker wait. Defining them with ``def`` offloads them to the thread pool.
 @router.get("/login", include_in_schema=False)
 def start_login(
     use_case: Annotated[StartSsoLogin, Depends(dependencies.start_sso_login)],
     redirect_to: Annotated[str | None, Query(max_length=255)] = None,
-    # 知らない値は無視する（画面遷移なので 422 の JSON を見せない）
+    # Unknown values are ignored (it is a navigation, so do not show a 422 JSON)
     prompt: Annotated[str | None, Query(max_length=16)] = None,
 ) -> RedirectResponse:
-    """IdP へ送り出す。設定が無い・IdP と話せない場合はログイン画面へ戻す。
+    """Send out to the IdP. If not configured or the IdP is unreachable, go back to the login screen.
 
-    ``?prompt=none`` はログイン画面が開いたときに自分で付ける（ADR-0052）。IdP で入って
-    いればボタンを押さずに入れ、入っていなければ画面を出さずに戻ってくる。
+    The login screen adds ``?prompt=none`` itself when it opens (ADR-0052). If signed in at the IdP,
+    the user gets in without pressing the button; if not, it comes back without showing a screen.
     """
     try:
         authorization = use_case.execute(redirect_to=redirect_to, silent=prompt == "none")
@@ -193,9 +195,10 @@ def start_login(
 def start_renewal(
     use_case: Annotated[StartSsoLogin, Depends(dependencies.start_sso_login)],
 ) -> RedirectResponse:
-    """切れたログインを画面を出さずに続ける往復を始める（ADR-0058）。**画面は見えない枠で開く。**
+    """Start a round trip continuing an expired login without a screen (ADR-0058).
+    **The screen opens it in a hidden frame.**
 
-    常に ``prompt=none``。IdP と話せなければ結果の頁（``failed``）へ送る。
+    Always ``prompt=none``. If the IdP is unreachable, go to the result page (``failed``).
     """
     try:
         authorization = use_case.renew()
@@ -210,12 +213,12 @@ def start_renewal(
 
 @router.get("/renewed", include_in_schema=False)
 def renewal_result() -> Response:
-    """続ける往復の結果の頁（画面は枠の URL の ``result``・``ticket`` を読む）。"""
+    """Result page of a continuing round trip (the screen reads ``result`` and ``ticket`` from the frame URL)."""
     return renewal.result_page()
 
 
 def _set_binding_cookie(response: Response, binding: str) -> None:
-    """送り出すブラウザに合言葉を持たせる（ログイン CSRF を止める）。"""
+    """Give the outgoing browser a passphrase (stops login CSRF)."""
     response.set_cookie(
         SSO_BINDING_COOKIE,
         binding,
@@ -228,10 +231,10 @@ def _set_binding_cookie(response: Response, binding: str) -> None:
 
 
 class _CallbackTools:
-    """戻りの後始末に要る道具（ADR-0036）。
+    """Tools needed to wrap up the return (ADR-0036).
 
-    ログインの戻りと連携の戻りを 1 つの経路で受けるので、両方の道具をここへまとめる
-    （ハンドラの引数を増やさないため。``SsoCallbackQuery`` と同じ書き方）。
+    The login return and the linking return are received on one route, so both sets of tools are gathered here
+    (to keep handler arguments from growing; written the same way as ``SsoCallbackQuery``).
     """
 
     def __init__(
@@ -255,12 +258,12 @@ def complete_callback(
     tools: Annotated[_CallbackTools, Depends()],
     binding: Annotated[str | None, Cookie(alias=SSO_BINDING_COOKIE)] = None,
 ) -> RedirectResponse:
-    """IdP からの戻りを受け取る。ログインの戻りと連携の戻りを兼ねる（ADR-0036）。
+    """Receive the return from the IdP. Serves both login returns and linking returns (ADR-0036).
 
-    合言葉の Cookie は、成功しても失敗しても落とす（1 回の往復で使い切る）。
+    The passphrase cookie is dropped on success and failure alike (used up in one round trip).
 
-    ⚠ **どちらの往復かは控えが持っている。** クエリでは渡さない ——戻りの URL を
-    書き換えるだけで化けさせられるため。
+    ⚠ **The record knows which round trip it is.** It is not passed in the query -- otherwise
+    rewriting the return URL alone could disguise it.
     """
     if query.state and tools.purpose.is_renewal(state=query.state, browser_binding=binding):
         return _complete_renewal(query, tools, binding)
@@ -277,7 +280,7 @@ def complete_callback(
 
 
 def _complete_login(callback: SsoCallback, tools: _CallbackTools) -> RedirectResponse:
-    """引き換え券を付けて SPA へ戻す。"""
+    """Go back to the SPA with an exchange ticket."""
     try:
         handoff = tools.login.execute(
             code=callback.code, state=callback.state, browser_binding=callback.browser_binding
@@ -290,18 +293,20 @@ def _complete_login(callback: SsoCallback, tools: _CallbackTools) -> RedirectRes
 
 def _log_account_changes(account: ResolvedAccountDto) -> None:
     if account.provisioned:
-        # 口座を作った往復は別の名前で残す（ADR-0041）。利用者が増えた記録になる。
+        # A round trip that created an account is logged under a different name (ADR-0041). It records a new user.
         logger.info("sso_account_provisioned")
     elif account.linked:
-        # 初めて結び付いた往復だけ 1 行残す（誰かは requestId から辿る。
-        # CLAUDE.md「ログ」）。
+        # Log one line only for a round trip that linked for the first time (who it was is traced from requestId;
+        # CLAUDE.md "Logging").
         logger.info("sso_identity_linked")
 
 
 def _complete_renewal(query: SsoCallbackQuery, tools: _CallbackTools, binding: str | None) -> RedirectResponse:
-    """続ける往復の戻り（ADR-0058）。引き換え券を付けて結果の頁へ送る（画面が枠の URL から読んで換える）。
+    """Return of a continuing round trip (ADR-0058). Go to the result page with an exchange ticket
+    (the screen reads it from the frame URL and exchanges it).
 
-    「入っていない」「許可が無い」は失敗ではない（画面を出さずに試しただけ）ので失敗として残さない。
+    "Not signed in" and "not permitted" are not failures (it was only a try without a screen), so they are not
+    logged as failures.
     """
     if query.error is not None or not query.code or not query.state:
         if query.error not in _SILENT_DECLINES:
@@ -319,18 +324,18 @@ def _complete_renewal(query: SsoCallbackQuery, tools: _CallbackTools, binding: s
 
 
 def _renewal_result(result: renewal.RenewalResult, ticket: str | None = None) -> RedirectResponse:
-    """結果の頁へ送る（合言葉の Cookie は落とし、自分の枠にだけ入れてよい印を付ける）。"""
+    """Go to the result page (drop the passphrase cookie and mark the response as frameable only by our own origin)."""
     response = _redirect(renewal.result_location(result, ticket))
     renewal.allow_same_origin_framing(response)
     return response
 
 
 def _complete_link(callback: SsoCallback, tools: _CallbackTools) -> RedirectResponse:
-    """戻ってきた相手を、往復を始めた利用者へ結び付けて設定画面へ返す。
+    """Link the returning party to the user who started the round trip and go back to the settings screen.
 
-    ⚠ **いま入っている利用者を見て決め直さない。** 誰に結び付けるかは往復を始めた
-    時点で決まっている（控えの ``link_user_id``）。ここで見るのは「その本人が
-    まだ入っているか」だけで、入れ替わっていれば断る。
+    ⚠ **Do not re-decide by looking at the currently signed-in user.** Whom to link to was fixed when the round trip
+    started (``link_user_id`` in the record). What is checked here is only "is that same person
+    still signed in"; if someone else is, refuse.
     """
     viewer = tools.viewer
     if viewer is None:
@@ -351,14 +356,14 @@ def start_link(
     use_case: Annotated[StartSsoLink, Depends(dependencies.start_sso_link)],
     response: Response,
 ) -> SsoLinkStartResponse:
-    """連携の往復を始める。**画面はこの URL へ自分で遷移する**（ADR-0036）。
+    """Start a linking round trip. **The screen navigates to this URL itself** (ADR-0036).
 
-    303 を返さず XHR にしているのは、⚠ **認証が切れている相手に 401 を返せる**
-    ようにするため。画面遷移で始めると、切れていた場合に JSON の生本文が
-    見えるだけで、やり直す導線が出せない。
+    It is an XHR rather than returning 303 so that ⚠ **a 401 can be returned to a caller whose
+    authentication has expired**. Starting with a navigation would, when expired, only show the
+    raw JSON body, with no way offered to retry.
 
-    ⚠ **CSRF の守りはここで効く。** Cookie で認証する更新系なので
-    ``CsrfMiddleware`` の対象になり、よその頁からは起こせない。
+    ⚠ **CSRF protection applies here.** It is a cookie-authenticated mutation, so it is
+    covered by ``CsrfMiddleware`` and cannot be triggered from other pages.
     """
     authorization = use_case.execute(user_id=principal.user_id)
     response.set_cookie(
@@ -380,7 +385,7 @@ def describe_link(
     use_case: Annotated[DescribeFederatedLink, Depends(dependencies.describe_federated_link)],
     db: DbDep,
 ) -> FederatedLinkResponse:
-    """自分の連携の状態を答える（ADR-0036）。他人の分は見えない。"""
+    """Answer the state of one's own links (ADR-0036). Other people's are not visible."""
     link = use_case.execute(user_id=principal.user_id)
     return FederatedLinkResponse(
         available=link.available,
@@ -398,7 +403,7 @@ def remove_link(
     use_case: Annotated[UnlinkFederatedIdentity, Depends(dependencies.unlink_federated_identity)],
     db: DbDep,
 ) -> StatusResponse:
-    """連携を外す。⚠ **外すと入れなくなる利用者は断る**（ADR-0036）。"""
+    """Remove a link. ⚠ **Refuses if the user could no longer sign in after removal** (ADR-0036)."""
     provider = dependencies.identity_provider()
     if provider is None:
         raise SsoNotConfiguredError
@@ -412,13 +417,13 @@ def remove_link(
 
 
 def _has_other_entrance(db: Session, user_id: int) -> bool:
-    """IdP を外したあとも、この利用者に**入り口**が残るか。
+    """Whether this user still has **a way in** after the IdP is removed.
 
-    ⚠ **二要素認証は入り口ではない。** パスワードの後ろに置く second factor なので、
-    それだけでは入れない。数えるのはパスワードとパスキーである。
+    ⚠ **Two-factor authentication is not a way in.** It is a second factor behind the password, so
+    it cannot get anyone in by itself. What counts is passwords and passkeys.
     """
     user = db.get(User, user_id)
-    if user is None:  # pragma: no cover - 認証を通った直後に消えた場合のみ
+    if user is None:  # pragma: no cover - only if deleted right after passing authentication
         return False
     if user.has_local_password:
         return True
@@ -426,10 +431,10 @@ def _has_other_entrance(db: Session, user_id: int) -> bool:
 
 
 def _silently_declined(redirect_to: str) -> RedirectResponse:
-    """画面を出さずに試したが、IdP で入っていなかった（ADR-0052）。
+    """Tried without a screen, but not signed in at the IdP (ADR-0052).
 
-    **失敗として記録しない。** ログイン画面を開いただけの人を監査ログに積むことになる。
-    行き先（``redirect_to``）は持ち帰り、ボタンで入り直したときもそこへ戻れるようにする。
+    **Not recorded as a failure.** Otherwise people who merely opened the login screen would pile up in the audit log.
+    The destination (``redirect_to``) is carried back so that signing in again with the button also returns there.
     """
     logger.info("sso_silent_login_declined")
     query = urlencode({SILENT_DECLINED_PARAM: "declined", "redirect_to": redirect_to})
@@ -437,23 +442,23 @@ def _silently_declined(redirect_to: str) -> RedirectResponse:
 
 
 def _link_failed(code: str) -> RedirectResponse:
-    """連携の失敗を設定画面へ返す。
+    """Return a linking failure to the settings screen.
 
-    ⚠ **ログイン画面へ戻さない。** 押した人は入ったままなので、ログイン画面へ
-    送ると「入っているのに入り直せと言われる」ことになる。
+    ⚠ **Do not go back to the login screen.** The person who pressed it is still signed in, so sending them
+    to the login screen would mean "told to sign in again while already signed in".
     """
     safe = code if _ERROR_CODE.fullmatch(code) else _GENERIC_ERROR
     return _redirect(f"{SECURITY_SCREEN}?sso_link_error={safe}")
 
 
-#: 続ける往復の券を換えるときに、画面が添える手元のトークン（期限切れでよい。ADR-0058）
+#: Local token the screen attaches when exchanging a continuing round trip's ticket (may be expired; ADR-0058)
 _continued_bearer = HTTPBearer(auto_error=False)
 
 
 def _continued_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_continued_bearer)] = None,
 ) -> int | None:
-    """画面が添えた手元のトークンが、誰のログインだったか（読めなければ ``None``）。"""
+    """Whose login the local token attached by the screen was (``None`` if unreadable)."""
     if credentials is None or credentials.scheme.lower() != "bearer":
         return None
     return continued_user_of(credentials.credentials)
@@ -468,14 +473,15 @@ def exchange_ticket(
     use_case: Annotated[ExchangeSsoTicket, Depends(dependencies.exchange_sso_ticket)],
     continued_user: Annotated[int | None, Depends(_continued_user)],
 ) -> SsoSessionResponse:
-    """引き換え券をトークンへ換える（1 回限り）。
+    """Exchange the ticket for tokens (one time only).
 
-    一時パスワードの状態（``must_change_password``）は SSO で入っても解けない。
-    ここで黙って落とすと、親が発行した一時パスワードの意味が無くなる（ADR-0011）。
+    The temporary password state (``must_change_password``) is not cleared by signing in via SSO.
+    Silently dropping it here would make a temporary password issued by a parent meaningless (ADR-0011).
 
-    SSO で入ったログインにリフレッシュトークンは出さない（ADR-0058）。続ける往復の券（``continuing``）なら、
-    ⚠ **手元のトークンと別の人のときは換えない**（401 ``sso_renewal_switched_user``。IdP で別の人に入り
-    直していた。開いている画面は前の人のもの）。手元のトークンが読めなければ新しいログインとして入る。
+    Logins via SSO get no refresh token (ADR-0058). For a continuing round trip's ticket (``continuing``),
+    ⚠ **do not exchange if it is a different person from the local token** (401 ``sso_renewal_switched_user``; they
+    signed in again as someone else at the IdP, and the open screen belongs to the previous person). If the local token
+    is unreadable, it enters as a new login.
     """
     session = use_case.execute(ticket=body.ticket)
     user = db.get(User, session.user_id)
@@ -501,7 +507,7 @@ def exchange_ticket(
 
 
 def _redirect(url: str) -> RedirectResponse:
-    """SPA へ戻す。合言葉の Cookie はここで落とす（往復が終わったため）。"""
+    """Go back to the SPA. The passphrase cookie is dropped here (the round trip is over)."""
     response = RedirectResponse(url=url, status_code=status.HTTP_303_SEE_OTHER)
     response.delete_cookie(SSO_BINDING_COOKIE, path=router.prefix)
     return response
@@ -513,9 +519,9 @@ def _to_login_screen(code: str) -> RedirectResponse:
 
 
 def _failed(reason: str) -> RedirectResponse:
-    """失敗を記録してログイン画面へ戻す。
+    """Log the failure and go back to the login screen.
 
-    誰が試したかは書かない。SSO のログインが通っていない時点では分かっていない。
+    Who tried is not written. It is unknown while the SSO login has not succeeded.
     """
     safe = reason if _ERROR_CODE.fullmatch(reason) else _GENERIC_ERROR
     logger.warning("sso_login_failed: %s", safe)
@@ -525,10 +531,10 @@ def _failed(reason: str) -> RedirectResponse:
 __all__ = ["HANDOFF_SCREEN", "LOGIN_SCREEN", "SILENT_DECLINED_PARAM", "SSO_BINDING_COOKIE", "router"]
 
 
-# 通知の本体は ``application/x-www-form-urlencoded`` の 1 フィールドだけ。**``Form()`` を
-# 使わない**——FastAPI の ``Form`` は ``python-multipart`` を要求するので、この 1 か所の
-# ために依存を 1 つ増やすことになる。
-#: 受け取る本文の上限。``logout_token`` 1 本しか入らないので、これで充分に広い。
+# The notice body is a single ``application/x-www-form-urlencoded`` field. **Do not use
+# ``Form()``** -- FastAPI's ``Form`` requires ``python-multipart``, which would add a dependency
+# just for this one place.
+#: Upper limit of the accepted body. It holds only one ``logout_token``, so this is ample.
 _LOGOUT_BODY_MAX_BYTES = 16 * 1024
 
 
@@ -537,16 +543,16 @@ async def receive_backchannel_logout(
     request: Request,
     use_case: Annotated[ReceiveBackchannelLogout, Depends(dependencies.receive_backchannel_logout)],
 ) -> StatusResponse:
-    """IdP からの停止の通知を受ける（OpenID Connect Back-Channel Logout 1.0。ADR-0032）。
+    """Receive revocation notices from the IdP (OpenID Connect Back-Channel Logout 1.0; ADR-0032).
 
-    ⚠ **この口は未認証で叩ける。** 相手の証明は ``logout_token`` の署名だけなので、
-    検証を通らないものは理由を返さずに 400 で落とす（どこまで通ったかを教えない）。
+    ⚠ **This endpoint can be called unauthenticated.** The only proof of the sender is the ``logout_token``
+    signature, so anything failing verification is dropped with 400 without a reason (do not reveal how far it got).
 
-    ⚠ **応答は「受け取った」だけを意味する。** 実際にセッションが終わるのは、次に
-    そのトークンが提示されたときである（サーバーにセッションの控えが無いため）。
+    ⚠ **The response means only "received".** The session actually ends the next time
+    that token is presented (the server keeps no session records).
 
-    検証では discovery と JWKS の同期 HTTP が出るので、処理はスレッドプールへ逃がす
-    （``/login`` や ``/callback`` を ``def`` にしているのと同じ理由）。
+    Verification makes synchronous HTTP calls for discovery and JWKS, so processing is offloaded to the thread pool
+    (same reason ``/login`` and ``/callback`` are ``def``).
     """
     logout_token = _logout_token_of(await _bounded_body(request))
     notice = await run_in_threadpool(use_case.execute, logout_token=logout_token)
@@ -558,7 +564,7 @@ async def receive_backchannel_logout(
 
 
 async def _bounded_body(request: Request) -> bytes:
-    """本文を読む。**大きすぎるものは読まずに断る**（未認証で叩ける口のため）。"""
+    """Read the body. **Refuse oversized ones without reading** (the endpoint can be called unauthenticated)."""
     declared = request.headers.get("Content-Length")
     if declared is not None and declared.isdigit() and int(declared) > _LOGOUT_BODY_MAX_BYTES:
         raise InvalidLogoutTokenError
@@ -569,7 +575,7 @@ async def _bounded_body(request: Request) -> bytes:
 
 
 def _logout_token_of(body: bytes) -> str:
-    """``logout_token=<JWT>`` を取り出す。無い・空・複数あるものは受け取らない。"""
+    """Extract ``logout_token=<JWT>``. Reject missing, empty or repeated ones."""
     values = [value for name, value in parse_qsl(body.decode("ascii", "replace")) if name == "logout_token"]
     if len(values) != 1 or not values[0]:
         raise InvalidLogoutTokenError

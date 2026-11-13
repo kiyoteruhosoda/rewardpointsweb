@@ -1,4 +1,4 @@
-"""連携の解除 ——外したあと入れなくなる利用者を作らない（ADR-0036）。"""
+"""Unlinking: never leave a user who can no longer get in after the link is removed (ADR-0036)."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ def test_a_link_with_another_entrance_left_can_be_removed() -> None:
 
 
 def test_the_last_entrance_is_not_removed() -> None:
-    """⚠ 締め出しを作らない。残るのは管理者による復旧だけになる。"""
+    """⚠ Do not create a lockout. Only recovery by an admin would remain."""
     identities = _linked()
     with pytest.raises(SsoLastEntranceError):
         UnlinkFederatedIdentity(identities).execute(issuer=_ISSUER, user_id=_ME, has_other_entrance=False)

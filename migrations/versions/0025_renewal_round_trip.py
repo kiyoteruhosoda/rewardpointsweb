@@ -1,9 +1,10 @@
-"""renewal round trip (切れたログインを続ける往復であることを控えに持たせる)
+"""renewal round trip (record in the session that the round trip continues an expired login)
 
-``sso_login_sessions`` に ``renewal`` を足す（ADR-0058）。真なら、画面が見えない枠で始めた
-「切れたログインを続ける」往復で、戻りは引き換え券を付けて結果の頁へ送る（SPA の画面へは戻さない）。
+Adds ``renewal`` to ``sso_login_sessions`` (ADR-0058). When true, it is a "continue an expired login"
+round trip started in an invisible frame, and the return goes to the result page with an exchange ticket
+(not back to the SPA screen).
 
-⚠ **移行より前に始まった往復は偽になる。** それはログインの往復なので正しい。
+⚠ **Round trips started before the migration become false.** They are login round trips, so that is correct.
 
 Revision ID: renewal_round_trip
 Revises: manager_without_log_view

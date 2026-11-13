@@ -1,4 +1,4 @@
-"""停止の記録の SQLAlchemy 実装（ADR-0032）。"""
+"""SQLAlchemy implementation of revocation records (ADR-0032)."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class SqlSessionRevocationRepository:
     session: Session
 
     def record(self, revocation: SessionRevocation) -> bool:
-        """記録を残す。既に同じ ``jti`` があれば ``False``（再送として無視する）。"""
+        """Keep a record. If the same ``jti`` already exists, ``False`` (ignored as a resend)."""
         self.session.execute(
             delete(FederatedSessionRevocationRecord).where(FederatedSessionRevocationRecord.expires_at < utcnow())
         )
@@ -45,11 +45,11 @@ class SqlSessionRevocationRepository:
         return True
 
     def is_revoked(self, login: FederatedLogin) -> bool:
-        """そのログインを無効にする記録があるか。
+        """Whether there is a record invalidating the login.
 
-        ⚠ **``session_id`` が NULL の行は利用者単位の停止**なので、こちらの
-        ``session_id`` が何であっても当たる。逆に、こちらが ``None``（``sid`` を
-        出さない IdP）のときは利用者単位の行にしか当たらない。
+        ⚠ **A row with NULL ``session_id`` is a per-user stop**, so it matches whatever
+        ``session_id`` this side has. Conversely, when this side is ``None`` (an IdP that does not
+        issue ``sid``), it only matches per-user rows.
         """
         record = FederatedSessionRevocationRecord
         target = login.session

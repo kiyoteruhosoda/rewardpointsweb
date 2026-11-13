@@ -7,7 +7,7 @@ def test_admin_users_require_permission(client: TestClient) -> None:
 
 
 def test_user_crud_and_role_scope(client: TestClient, admin_headers: dict[str, str]) -> None:
-    # 作成
+    # Create
     response = client.post(
         "/api/admin/users",
         headers=admin_headers,
@@ -24,7 +24,7 @@ def test_user_crud_and_role_scope(client: TestClient, admin_headers: dict[str, s
     assert response.json()["roles"] == ["member"]
     assert response.json()["display_name"] == "むすこ"
 
-    # member ロールでは items 閲覧のみ・管理系は 403
+    # The member role can only view items; admin endpoints are 403
     login = client.post(
         "/api/auth/login",
         json={"username": "member", "password": "member-pass-1"},
@@ -34,7 +34,7 @@ def test_user_crud_and_role_scope(client: TestClient, admin_headers: dict[str, s
     assert client.post("/api/items", headers=member_headers, json={"name": "x"}).status_code == 403
     assert client.get("/api/admin/users", headers=member_headers).status_code == 403
 
-    # 更新（無効化）
+    # Update (deactivate)
     response = client.put(
         f"/api/admin/users/{user_id}",
         headers=admin_headers,
@@ -43,7 +43,7 @@ def test_user_crud_and_role_scope(client: TestClient, admin_headers: dict[str, s
     assert response.status_code == 200
     assert response.json()["is_active"] is False
 
-    # 削除
+    # Delete
     assert client.delete(f"/api/admin/users/{user_id}", headers=admin_headers).status_code == 204
     users = client.get("/api/admin/users", headers=admin_headers).json()
     assert all(u["id"] != user_id for u in users)
@@ -81,7 +81,7 @@ def test_duplicate_username_rejected(client: TestClient, admin_headers: dict[str
 
 
 def test_account_without_email_can_be_created(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """子アカウントはメールアドレスを持たない（ADR-0011）。"""
+    """Child accounts have no email address (ADR-0011)."""
     response = client.post(
         "/api/admin/users",
         headers=admin_headers,
@@ -93,7 +93,7 @@ def test_account_without_email_can_be_created(client: TestClient, admin_headers:
 
 
 def test_roles_can_be_changed_and_effective_scopes_follow(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """ロールを付け替えると、その人が行えること（scope）がその場で変わる。"""
+    """Changing a user's roles immediately changes what that user can do (scope)."""
     created = client.post(
         "/api/admin/users",
         headers=admin_headers,
@@ -112,18 +112,18 @@ def test_roles_can_be_changed_and_effective_scopes_follow(client: TestClient, ad
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
     assert client.get("/api/items", headers=headers).status_code == 403
 
-    # 変更は差分ではなく「変更後の全体」を渡す
+    # A change sends "the whole state after the change", not a diff
     updated = client.put(f"/api/admin/users/{user_id}", headers=admin_headers, json={"roles": ["guest", "manager"]})
     assert updated.status_code == 200, updated.text
     assert updated.json()["roles"] == ["guest", "manager"]
     assert "item:manage" in updated.json()["permissions"]
 
-    # 発行済みのトークンは古い scope を持つため、取り直してから確かめる
+    # Already issued tokens carry the old scope, so get a new one before checking
     login = client.post("/api/auth/login", json={"username": "swappable", "password": "swap-pass-123"})
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
     assert client.get("/api/items", headers=headers).status_code == 200
 
-    # 空リストは「ロールなし」＝ 権限なし
+    # An empty list means "no roles" = no permissions
     cleared = client.put(f"/api/admin/users/{user_id}", headers=admin_headers, json={"roles": []})
     assert cleared.status_code == 200
     assert cleared.json()["roles"] == []
@@ -131,7 +131,7 @@ def test_roles_can_be_changed_and_effective_scopes_follow(client: TestClient, ad
 
 
 def test_role_change_keeps_other_fields(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """``roles`` を省略した変更はロールを触らない。"""
+    """A change that omits ``roles`` does not touch the roles."""
     created = client.post(
         "/api/admin/users",
         headers=admin_headers,
@@ -161,12 +161,12 @@ def test_unknown_role_rejected_on_update(client: TestClient, admin_headers: dict
     response = client.put(f"/api/admin/users/{user_id}", headers=admin_headers, json={"roles": ["nonexistent"]})
     assert response.status_code == 400
     assert response.json()["detail"]["error"] == "unknown_roles"
-    # 拒まれた変更は何も残さない
+    # A rejected change leaves nothing behind
     assert client.get("/api/admin/users", headers=admin_headers).status_code == 200
 
 
 def test_cannot_revoke_own_user_manage(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """自分から管理の scope を取り上げると画面から戻せなくなるため拒む。"""
+    """Rejected, because taking the admin scope away from yourself cannot be undone from the screen."""
     me = client.get("/api/auth/me", headers=admin_headers).json()
 
     response = client.put(f"/api/admin/users/{me['user_id']}", headers=admin_headers, json={"roles": ["guest"]})
@@ -178,7 +178,7 @@ def test_cannot_revoke_own_user_manage(client: TestClient, admin_headers: dict[s
 
 
 def test_own_roles_can_change_while_user_manage_remains(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """管理の scope が残るなら、自分のロールを増やすことは止めない。"""
+    """As long as the admin scope remains, adding roles to yourself is not blocked."""
     me = client.get("/api/auth/me", headers=admin_headers).json()
 
     response = client.put(
@@ -191,7 +191,7 @@ def test_own_roles_can_change_while_user_manage_remains(client: TestClient, admi
 
 
 def test_other_admin_roles_can_be_revoked(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """他人の管理ロールは外せる（引き継ぎのために必要な操作）。"""
+    """Another user's admin role can be removed (needed for handing over)."""
     created = client.post(
         "/api/admin/users",
         headers=admin_headers,
@@ -221,7 +221,7 @@ def test_unknown_role_rejected(client: TestClient, admin_headers: dict[str, str]
 
 
 def test_a_manager_cannot_read_the_app_logs(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """アプリのログは admin だけ（task #786）。"""
+    """App logs are admin only (task #786)."""
     created = client.post(
         "/api/admin/users",
         headers=admin_headers,

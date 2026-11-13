@@ -1,12 +1,12 @@
-"""ドメイン例外 → HTTP 応答の対応付け。
+"""Mapping of domain exceptions -> HTTP responses.
 
-ルーターごとに ``try/except`` を書き散らさないよう、アプリケーション全体の
-例外ハンドラとして一度だけ登録する。応答本文はエラーコードのみで、表示文言は
-フロントエンドが決める（CLAUDE.md「国際化」）。
+Registered once as an application-wide exception handler so that routers do not
+scatter ``try/except`` everywhere. The response body is just the error code; the
+display text is decided by the frontend (CLAUDE.md "Internationalization").
 
-失敗の記録は横断的な受け皿（:func:`~presentation.fastapi.error_handling.log_failed_request`）
-へ委ねる。ここで独自に記録すると、``HTTPException`` 由来の失敗とレベルや
-フィールドの揃わない行が混ざり、ログを絞り込めなくなる。
+Failures are recorded by the cross-cutting sink (:func:`~presentation.fastapi.error_handling.log_failed_request`).
+Recording them separately here would mix in lines whose level and fields do not
+match failures from ``HTTPException``, making the logs impossible to filter.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from presentation.fastapi.error_handling import log_failed_request
 _STATUS_BY_ERROR: dict[type[AccountSecurityError], int] = {
     ChallengeNotFoundError: status.HTTP_400_BAD_REQUEST,
     InvalidTotpCodeError: status.HTTP_400_BAD_REQUEST,
-    # 設定の誤りは利用者に直せない。入力の誤り（4xx）ではなくサーバー側の不備として返す。
+    # A configuration mistake cannot be fixed by the user. Return it as a server-side fault, not an input error (4xx).
     InvalidWebAuthnOriginError: status.HTTP_500_INTERNAL_SERVER_ERROR,
     InvalidWebAuthnRelyingPartyIdError: status.HTTP_500_INTERNAL_SERVER_ERROR,
     PasskeyAlreadyRegisteredError: status.HTTP_409_CONFLICT,
@@ -60,7 +60,7 @@ def register_account_security_error_handler(app: FastAPI) -> None:
         detail: dict[str, str | int] = {"error": error.code}
         headers: dict[str, str] = {}
         if isinstance(error, TooManyAttemptsError):
-            # いつまで待てばよいかを返す（ADR-0055）。画面はこれを待ち時間として出せる
+            # Tell the client how long to wait (ADR-0055). The screen can show this as the wait time
             detail["retry_after_seconds"] = error.retry_after_seconds
             headers["Retry-After"] = str(error.retry_after_seconds)
         return JSONResponse(status_code=status_code, content={"detail": detail}, headers=headers)

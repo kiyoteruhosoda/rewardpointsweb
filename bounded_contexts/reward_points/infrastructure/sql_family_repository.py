@@ -1,4 +1,4 @@
-"""``IFamilyRepository`` の SQLAlchemy 実装。"""
+"""SQLAlchemy implementation of ``IFamilyRepository``."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class SqlFamilyRepository(IFamilyRepository):
         self._session = session
 
     def add(self, *, name: str, rules: str | None = None) -> Family:
-        validated = FamilyName(name)  # ドメイン不変条件を書き込み前に強制する
+        validated = FamilyName(name)  # Enforce the domain invariant before writing
         row = FamilyModel(name=validated.value, rules=_validated_rules(rules))
         self._session.add(row)
         self._session.flush()
@@ -47,7 +47,7 @@ class SqlFamilyRepository(IFamilyRepository):
         return [_to_family(row) for row in rows]
 
     def update_name(self, *, family_id: int, name: str) -> Family:
-        validated = FamilyName(name)  # ドメイン不変条件を書き込み前に強制する
+        validated = FamilyName(name)  # Enforce the domain invariant before writing
         row = self._session.get(FamilyModel, family_id)
         if row is None:
             raise FamilyNotFoundError
@@ -56,7 +56,7 @@ class SqlFamilyRepository(IFamilyRepository):
         return _to_family(row)
 
     def update_rules(self, *, family_id: int, rules: str | None) -> Family:
-        validated = _validated_rules(rules)  # ドメイン不変条件を書き込み前に強制する
+        validated = _validated_rules(rules)  # Enforce the domain invariant before writing
         row = self._session.get(FamilyModel, family_id)
         if row is None:
             raise FamilyNotFoundError
@@ -65,7 +65,7 @@ class SqlFamilyRepository(IFamilyRepository):
         return _to_family(row)
 
     def delete(self, family_id: int) -> None:
-        # 参加・招待・台帳は外部キーの ON DELETE CASCADE で家族と一緒に消える
+        # Memberships, invitations and ledgers go with the family via ON DELETE CASCADE
         self._session.execute(delete(FamilyModel).where(FamilyModel.id == family_id))
 
     def count_owned_by(self, account_id: int) -> int:
@@ -81,9 +81,9 @@ class SqlFamilyRepository(IFamilyRepository):
 
 
 def _validated_rules(rules: str | None) -> str | None:
-    """空・空白だけの入力は「書いていない」として NULL に寄せる（ADR-0027）。
+    """Normalize empty or whitespace-only input to NULL, meaning "not set" (ADR-0027).
 
-    残しておくと、画面には何も出ないのに「ルールあり」の家族が生まれる。
+    Otherwise a family would "have rules" while nothing shows on screen.
     """
     if rules is None or not rules.strip():
         return None

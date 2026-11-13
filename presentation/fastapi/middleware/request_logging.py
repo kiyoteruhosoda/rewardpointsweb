@@ -1,16 +1,18 @@
-"""リクエスト単位の構造化ログ（``requestId`` の採番と伝播）。
+"""Per-request structured logging (assigning and propagating ``requestId``).
 
-ログのレベルは応答のステータスコードで決める（:func:`~presentation.fastapi.error_handling.log_level_for_status`）。
-成功だけを INFO で並べても異常は見つからないので、4xx は WARNING、5xx は ERROR
-として、レベルで絞り込めば失敗だけが残るようにする。
+The log level is chosen from the response status code
+(:func:`~presentation.fastapi.error_handling.log_level_for_status`).
+Listing successes at INFO alone does not surface problems, so 4xx is WARNING and 5xx is ERROR;
+filtering by level then leaves only the failures.
 
-**素の ASGI ミドルウェアとして書いている**（``BaseHTTPMiddleware`` を使わない）。
-``BaseHTTPMiddleware`` は下流を**別のタスク**で走らせるため、認証依存関数が設定した
-``user_id_hash`` がログを出す側へ戻らず、``http_request`` の行だけ「誰のリクエストか」
-が空になる（:mod:`presentation.fastapi.middleware.internal_error` と同じ事情）。
+**Written as a plain ASGI middleware** (not ``BaseHTTPMiddleware``).
+``BaseHTTPMiddleware`` runs the downstream in **a separate task**, so the ``user_id_hash``
+set by the auth dependency never comes back to the logging side, and only the ``http_request``
+lines lose "whose request it was" (same reason as :mod:`presentation.fastapi.middleware.internal_error`).
 
-行を出すのは**応答の先頭を送るとき**で、下流が終わるのを待たない。大きなファイルの
-流し読みでも ``duration_ms`` は先頭までの時間のままで、途中で接続が切れても行は残る。
+The line is emitted **when the start of the response is sent**, without waiting for the downstream
+to finish. For large streamed files ``duration_ms`` stays the time to the first byte, and the line
+survives even if the connection drops midway.
 """
 
 from __future__ import annotations
@@ -29,11 +31,11 @@ from shared.kernel.logging.request_context import request_id_var, user_id_hash_v
 
 access_logger = logging.getLogger("app.request")
 
-# 死活監視・メトリクス収集の定期アクセス。Docker の healthcheck は数十秒おきに
-# 叩くため、成功した分まで残すとアプリログがこれで埋まり、本当に見たい行が
-# 押し流される（1 件ずつは「異常が無かった」以上の情報を持たない）。
-# **失敗（4xx/5xx）は残す。** プローブが落ちていること自体が知りたい情報で、
-# ここで捨てると監視の対象が監視できなくなる。
+# Periodic hits from liveness checks and metrics collection. The Docker healthcheck
+# fires every few tens of seconds, so keeping the successful ones floods the app log
+# and pushes out the lines that matter (each one says nothing beyond "nothing was wrong").
+# **Failures (4xx/5xx) are kept.** A failing probe is exactly what we want to know,
+# and dropping it here would leave the monitored thing unmonitored.
 _PROBE_PATHS = frozenset({"/api/health", "/healthz", "/readyz", "/metrics"})
 
 

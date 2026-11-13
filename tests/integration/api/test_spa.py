@@ -1,7 +1,7 @@
-"""SPA 配信（presentation/fastapi/routers/spa.py）のキャッシュの扱い。
+"""Cache handling of the SPA delivery (presentation/fastapi/routers/spa.py).
 
-`frontend/dist` は Backend の CI ではビルドされないため、最小の dist を作って
-`spa.DIST_DIR` を差し替えて検証する。
+`frontend/dist` is not built in the backend CI, so a minimal dist is created and
+`spa.DIST_DIR` is swapped to verify it.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def client(dist: Path) -> Iterator[TestClient]:
 
 @pytest.mark.parametrize("path", ["/", "/index.html", "/sw.js", "/favicon.svg", "/members"])
 def test_mutable_files_must_be_revalidated(client: TestClient, path: str) -> None:
-    """名前が変わらないまま中身が変わるものは、毎回サーバーへ問い合わせさせる。"""
+    """Files whose content changes while the name stays the same must be revalidated with the server every time."""
     response = client.get(path)
 
     assert response.status_code == 200
@@ -46,7 +46,7 @@ def test_mutable_files_must_be_revalidated(client: TestClient, path: str) -> Non
 
 
 def test_hashed_assets_are_cached_forever(client: TestClient) -> None:
-    """内容ハッシュ付きの成果物は URL が中身と 1 対 1 なので期限を切らない。"""
+    """Content-hashed artifacts have URLs that map 1:1 to their content, so they never expire."""
     response = client.get("/assets/index-abc123.js")
 
     assert response.status_code == 200
@@ -54,7 +54,7 @@ def test_hashed_assets_are_cached_forever(client: TestClient) -> None:
 
 
 def test_unchanged_file_answers_304_without_a_body(client: TestClient) -> None:
-    """no-cache は「毎回問い合わせる」であって「毎回落とす」ではない。"""
+    """no-cache means "always revalidate", not "always re-download"."""
     first = client.get("/favicon.svg")
     etag = first.headers["etag"]
 

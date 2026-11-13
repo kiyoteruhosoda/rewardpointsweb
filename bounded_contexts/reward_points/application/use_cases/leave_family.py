@@ -1,15 +1,18 @@
-"""家族から自分の意思で抜ける（脱退。ADR-0013）。
+"""Leave a family voluntarily (ADR-0013).
 
-抜けられるのは親（owner / parent）だけで、他に**アカウントの結び付いた**親が
-残る場合に限る。子（ゲスト）は自分では抜けられない。owner が抜けるときは、
-最も古くから居る parent が owner を引き継ぐ — 家族は管理できる人を失わない。
+Only parents (owner / parent) can leave, and only when another parent **with a
+linked account** remains. Children (guests) cannot leave by themselves. When the
+owner leaves, the longest-standing parent takes over as owner, so the family
+never loses someone who can manage it.
 
-親の participation はアカウントが消えると未紐付けのまま残る
-（``account_id`` の ``SET NULL``）。誰もログインできない参加者は「残る親」にも
-引き継ぎ先にも数えない — 数えると、owner の脱退が管理者不在の家族を作ってしまう。
+A parent's membership stays, unlinked, when its account is deleted
+(``SET NULL`` on ``account_id``). A member nobody can sign in as is counted
+neither as a "remaining parent" nor as a successor; counting it would let the
+owner's leaving create a family with no manager.
 
-抜けた後は初期状態と同じ（どの家族にも所属していない）。台帳の記録は家族に
-残るが、操作者への参照は外れる（``granted_by_membership_id`` は ``SET NULL``）。
+After leaving, the account is back in the initial state (belongs to no family).
+Ledger entries stay with the family, but the reference to the actor is cleared
+(``granted_by_membership_id`` is ``SET NULL``).
 """
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ class LeaveFamilyUseCase:
         if me.role.has_own_ledger:
             raise ChildCannotLeaveFamilyError
         if not me.role.is_guardian:
-            # 表示端末は自分では抜けない。外すのは親か運用管理者（ADR-0047）
+            # A display device does not leave by itself; a parent or an operator removes it (ADR-0047)
             raise FamilyAccessDeniedError
         remaining = [m for m in self._memberships.list_for_family(family_id) if m.id != me.id]
         guardians = [m for m in remaining if m.role.is_guardian and m.is_linked]
@@ -49,7 +52,7 @@ class LeaveFamilyUseCase:
 
 
 def _successor(guardians: list[FamilyMembership]) -> FamilyMembership:
-    """owner を引き継ぐ parent。最も古い参加者（同時なら ID の小さい方）。"""
+    """The parent who takes over as owner: the oldest member (on a tie, the smaller ID)."""
     return min(guardians, key=lambda m: (m.created_at, m.id))
 
 

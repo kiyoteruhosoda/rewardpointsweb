@@ -1,22 +1,22 @@
 /**
- * 家族への入口。まだどこにも所属していない人だけがここに留まる。
+ * Entry to a family. Only people who do not belong to any family yet stay here.
  *
- * 所属できる家族は 1 つまで（ADR-0013）なので、すでに家族があるなら一覧を見せる
- * 意味がない。その場合はそのまま詳細（家族設定）へ送る。作成・参加を出したままに
- * すると、押した先で必ず `already_belongs_to_family` に落ちる。所属を確かめられ
- * なかったとき（読み込み失敗）も同じ理由で出さない。
+ * A person can belong to at most one family (ADR-0013), so listing families makes no sense
+ * when they already have one. In that case send them straight to the details (family settings).
+ * Leaving create/join visible means every tap ends in `already_belongs_to_family`. When
+ * membership could not be confirmed (load failure), they are hidden for the same reason.
  *
- * 家族を作れるのは親（member ロール — 保護者の scope 一式）だけで、作った人が
- * owner になる（ADR-0018）。子（guest）は招待コードで加わるので、この画面に
- * 「作る」は出ない。親の招待コードを子が使うとサーバーが断る
- * （guardian_account_required）。
+ * Only parents (member role — the full guardian scope set) can create a family, and the
+ * creator becomes owner (ADR-0018). Children (guest) join with an invitation code, so this
+ * screen has no "create" for them. If a child uses a parent's invitation code the server
+ * refuses (guardian_account_required).
  *
- * すでにアカウントを持つ人がコードを使う経路はここだけ。アカウント作成の画面から
- * ログインを経て来た場合は URL の断片（`#code=...`）にコードが載っているので
- * （ADR-0025）、参加の欄へ入れておく。
+ * This is the only path for someone who already has an account to use a code. When coming
+ * from the account creation screen via login, the code is in the URL fragment (`#code=...`)
+ * (ADR-0025), so it is prefilled into the join field.
  *
- * バックアップからの復元（ADR-0026）もここに置く。復元は新しい家族を作る操作で、
- * 所属していない状態からしか行えない — 作成と同じ条件なので、同じ画面に並ぶ。
+ * Restore from backup (ADR-0026) also lives here. Restoring creates a new family and is only
+ * possible while not belonging to one — the same condition as creating, so they sit together.
  */
 import { useState, type SubmitEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
@@ -41,15 +41,15 @@ export function FamiliesPage() {
   const navigate = useNavigate()
   const { pathname, hash } = useLocation()
   const carriedCode = readInvitationCode(hash)
-  // 書きかけはログインの往復をまたいで残す（ADR-0058）
+  // Keep unfinished input across the login round trip (ADR-0058)
   const [name, setName] = useSessionValue('families.name', '')
   const [code, setCode] = useState(carriedCode)
 
-  // 作成は保護者の scope 一式が要る（サーバーの入口と同じ条件 — ADR-0018）
+  // Creating requires the full guardian scope set (same condition as the server entry — ADR-0018)
   const canCreate = hasScope('family:view', 'family:manage', 'point:view', 'point:manage')
 
   const enter = async (familyId: number) => {
-    // 先に読み直してから送る。左のナビゲーションと詳細が同時に新しい家族へ変わる。
+    // Reload first, then navigate: the left nav and details switch to the new family at once.
     await reload()
     void navigate(`/families/${String(familyId)}`)
   }
@@ -70,7 +70,7 @@ export function FamiliesPage() {
     try {
       const joined = await families.acceptInvitation(code, null)
       setCode('')
-      // 使い終えたコードを URL に残さない（再読み込みで案内だけが蘇る）
+      // Do not leave the used code in the URL (a reload would bring back only the notice)
       if (carriedCode) void navigate(pathname, { replace: true })
       notify('success', t('families.joined'))
       await enter(joined.family_id)
@@ -80,8 +80,8 @@ export function FamiliesPage() {
   })
 
   if (loading) return <p className="loading">{t('common.loading')}</p>
-  // 読めなかっただけかもしれない。所属していないと決めつけて作成・参加を出すと、
-  // 押した先で必ず `already_belongs_to_family` になる。
+  // It may simply have failed to load. Assuming no membership and showing create/join would
+  // always end in `already_belongs_to_family` when tapped.
   if (failed) return <p className="error">{t('families.unavailable')}</p>
   if (family) return <Navigate to={`/families/${String(family.id)}`} replace />
 
@@ -113,7 +113,7 @@ export function FamiliesPage() {
         </section>
       )}
 
-      {/* 復元も家族を作る操作なので、作成と同じ scope を要求する（ADR-0026） */}
+      {/* Restoring also creates a family, so it requires the same scope as creating (ADR-0026) */}
       {canCreate && <FamilyImportPanel onImported={enter} />}
 
       <section className="card">

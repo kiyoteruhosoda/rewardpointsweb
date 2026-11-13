@@ -1,12 +1,12 @@
 /**
- * テーマ切り替え（ライト / ダーク / OS 追従）。
+ * Theme switching (light / dark / follow OS).
  *
- * 選んだテーマは `<html data-theme>` に載せ、配色は index.css の CSS 変数で
- * 解決する。JavaScript 側は「どの配色を使うか」だけを決め、色そのものは持たない。
+ * The chosen theme goes on `<html data-theme>`, and colors are resolved by CSS variables
+ * in index.css. The JavaScript side only decides which color scheme to use and holds no colors itself.
  *
- * 優先順位は「利用者の選択（localStorage）> サーバーの既定値（DEFAULT_THEME）」。
- * `system` を選んだ場合は OS の設定に追従し、OS 側の切り替えにも即座に反応する。
- * どちらも決まらないときはライトにする（サーバーの既定値と揃える）。
+ * Priority is "user choice (localStorage) > server default (DEFAULT_THEME)".
+ * Choosing `system` follows the OS setting and reacts immediately to OS-side changes.
+ * When neither decides, use light (matching the server default).
  */
 import {
   createContext,
@@ -21,14 +21,14 @@ import {
 import type { UiSettings } from '../services/uiSettings'
 
 export type ThemePreference = 'system' | 'light' | 'dark'
-/** 実際に適用される配色（`system` を解決した結果）。 */
+/** The color scheme actually applied (`system` resolved). */
 export type ResolvedTheme = 'light' | 'dark'
 
 export const THEME_PREFERENCES: ThemePreference[] = ['system', 'light', 'dark']
 
 const STORAGE_KEY = 'theme'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
-/** 何も決まらないときの配色。サーバー側の DEFAULT_THEME と同じ既定。 */
+/** Color scheme when nothing decides. Same default as the server's DEFAULT_THEME. */
 const FALLBACK_PREFERENCE: ThemePreference = 'light'
 
 interface ThemeValue {
@@ -65,8 +65,8 @@ export function ThemeProvider({
     prefersDark() ? 'dark' : 'light',
   )
 
-  // OS 側の切り替えに追従する（`system` 以外を選んでいても購読は続ける。
-  // 途中で `system` に戻したときに古い値が残らないようにするため）。
+  // Follow OS-side changes (keep subscribing even when something other than `system` is chosen,
+  // so no stale value remains after switching back to `system`).
   useEffect(() => {
     const query = window.matchMedia(DARK_QUERY)
     const handle = (event: MediaQueryListEvent) => {
@@ -82,7 +82,7 @@ export function ThemeProvider({
 
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme
-    // フォームコントロール等のブラウザ既定 UI も配色に合わせる
+    // Make browser-default UI such as form controls match the color scheme too
     document.documentElement.style.colorScheme = resolvedTheme
   }, [resolvedTheme])
 

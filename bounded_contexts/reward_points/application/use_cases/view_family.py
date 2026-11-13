@@ -1,7 +1,7 @@
-"""家族の詳細（参加者と、見える範囲の台帳・残高）。
+"""Family details (members, plus the ledgers and balances the caller may see).
 
-``can_manage`` は呼び出し元が ``family:manage`` を持つか。参加者ごとの操作の
-可否（``can_*``）を組み立てるのに要る（ADR-0019）。
+``can_manage`` tells whether the caller has ``family:manage``. It is needed to
+build the per-member permission flags (``can_*``) (ADR-0019).
 """
 
 from __future__ import annotations

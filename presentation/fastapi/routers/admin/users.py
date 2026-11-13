@@ -1,16 +1,16 @@
-"""ユーザー管理 API（要 ``user:manage``）。
+"""User management API (requires ``user:manage``).
 
-アカウントの追加・変更・削除はアプリログへ残す。他人のアカウントに手を入れる
-操作で、後から「いつ誰のアカウントが変わったか」を追えないと困るため。
-**識別子は本文に入れる**——``log`` テーブルへ入るのは列にある項目だけで、
-``extra`` の残りは stdout の JSON にしか出ない。ユーザー名・メールアドレスは
-書かない（CLAUDE.md「ログ」）。
+Creating, changing and deleting accounts is written to the app log. These operations touch other
+people's accounts, and it would be a problem not to be able to trace later "whose account changed
+when". **Identifiers go into the message** — only items with columns go into the ``log`` table,
+and the rest of ``extra`` appears only in the JSON on stdout. User names and email addresses are
+not written (the logging section of CLAUDE.md).
 
-一覧は **「この利用者が入れる手段」**（``entrances``）も返す（ADR-0035）。認証系が
-2 つある以上、開いている口の数は並べて見ないと分からない。材料は
-**それぞれのコンテキストに聞く** ——パスワードは ``users`` の列、TOTP と
-パスキーは account_security、IdP との結び付きは identity_federation、表示端末の
-資格情報は display_devices（ADR-0047）。
+The list also returns **"the ways this user can get in"** (``entrances``; ADR-0035). With two
+authentication systems, the number of open ways in is only clear when listed side by side. The
+data comes from **asking each context** — passwords from the ``users`` columns, TOTP and
+passkeys from account_security, IdP links from identity_federation, display device
+credentials from display_devices (ADR-0047).
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ from shared.kernel.database.session import get_db
 
 logger = logging.getLogger(__name__)
 
-# このルーター自体を開けるための scope。自分からこれを取り上げる変更は拒む。
+# The scope that opens this router itself. Changes that take it away from oneself are refused.
 MANAGE_USERS = "user:manage"
 
 router = APIRouter(
@@ -83,7 +83,7 @@ UserManagerDep = Annotated[AuthenticatedPrincipal, Depends(require_permission(MA
 
 @dataclass(frozen=True)
 class _Inventory:
-    """棚卸しの材料。全員分をまとめて引き、利用者ごとに引き直さない。"""
+    """Data for the inventory. Fetched for everyone at once, not re-fetched per user."""
 
     factors: dict[int, LocalFactors]
     issuers: dict[int, tuple[str, ...]]
@@ -99,7 +99,7 @@ class _Inventory:
 
     @classmethod
     def none(cls) -> _Inventory:
-        """作った直後の利用者。第二要素も結び付きも端末もまだ無い。"""
+        """A just-created user. No second factor, links or devices yet."""
         return cls(factors={}, issuers={})
 
     def entrances_of(self, user: User) -> SignInEntrances:
@@ -128,7 +128,7 @@ def _to_response(user: User, inventory: _Inventory) -> UserResponse:
 
 
 def _changed_fields(body: UserUpdateRequest) -> list[str]:
-    """変更した項目の名前だけを並べる（値は残さない）。"""
+    """List only the names of changed fields (values are not recorded)."""
     candidates = (
         ("display_name", body.display_name),
         ("is_active", body.is_active),
@@ -150,12 +150,12 @@ def _resolve_roles(db: Session, names: list[str]) -> list[Role]:
 
 
 def _reject_self_lockout(principal: AuthenticatedPrincipal, user: User, roles: list[Role]) -> None:
-    """自分自身からユーザー管理の scope を取り上げる変更を拒む。
+    """Refuse changes that take the user management scope away from oneself.
 
-    ロールの付け替えは画面上ではチェックの付け外し 1 つで済む。最後の管理者が
-    自分の管理ロールを外すと、この API を含む管理系すべてが閉じ、画面からは
-    戻せなくなる（DB へ直接入るか、マスタデータの再投入が要る）。他人に対する
-    変更は止めない——引き継ぎのために必要な操作であり、実行者の手は残る。
+    In the UI, changing roles is a single checkbox toggle. If the last administrator removes their
+    own admin role, all admin functions including this API close and cannot be restored from the
+    UI (it takes direct DB access or reseeding the master data). Changes to others are not
+    blocked — they are needed for handovers, and the actor keeps their access.
     """
     if user.id != principal.user_id:
         return
@@ -209,11 +209,11 @@ def create_user(body: UserCreateRequest, db: DbDep) -> UserResponse:
 
 @router.put("/{user_id}", response_model=UserResponse)
 def update_user(user_id: int, body: UserUpdateRequest, db: DbDep, *, principal: UserManagerDep) -> UserResponse:
-    """アカウントを変更する。
+    """Change an account.
 
-    ``roles`` は差分ではなく **変更後の全体** を渡す（省略時はロールを触らない）。
-    権限はロール経由でのみ付く（CLAUDE.md「権限管理」）ので、その人が行えること
-    を変えるにはロールを付け替える。
+    ``roles`` is **the full set after the change**, not a diff (roles are untouched when omitted).
+    Permissions come only via roles (the permissions section of CLAUDE.md), so to change what
+    the person can do, reassign roles.
     """
     user = db.get(User, user_id)
     if user is None:
@@ -231,8 +231,8 @@ def update_user(user_id: int, body: UserUpdateRequest, db: DbDep, *, principal: 
     db.flush()
     logger.info("admin_user_updated: user_id=%s fields=%s", user_id, ",".join(_changed_fields(body)) or "none")
     if body.roles is not None:
-        # ロールは「変わった後の姿」を残す。差分だけでは、後から見たときにその時点で
-        # 誰が何を行えたかを組み立て直せない（roles.py の権限ログと同じ理由）。
+        # Record roles as "the state after the change". A diff alone cannot reconstruct later
+        # who could do what at that point (same reason as the permission log in roles.py).
         logger.info(
             "admin_user_roles_changed: user_id=%s roles=%s",
             user_id,
@@ -243,11 +243,11 @@ def update_user(user_id: int, body: UserUpdateRequest, db: DbDep, *, principal: 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(user_id: int, db: DbDep, deletable: DeletableDep) -> None:
-    """アカウントを削除する。
+    """Delete an account.
 
-    家族の owner として残っているアカウントは削除できない（409）。無効化したい
-    だけなら `is_active` を偽にする。家族への参加と台帳の操作者は、アカウントが
-    消えても外部キーの `ON DELETE` が追随する（ADR-0009）。
+    An account still registered as a family owner cannot be deleted (409). To merely disable it,
+    set `is_active` to false. Family memberships and ledger actors follow the foreign keys'
+    `ON DELETE` when the account is deleted (ADR-0009).
     """
     user = db.get(User, user_id)
     if user is None:

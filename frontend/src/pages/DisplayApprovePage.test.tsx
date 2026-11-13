@@ -1,5 +1,5 @@
 /**
- * 表示端末の承認（運用管理者。ADR-0047）: QR コードから開くとコードが入っていて、家族と名前を選んで承認する。
+ * Approving a display device (operations admin, ADR-0047): opened from the QR code, the code is prefilled; choose a family and a name, then approve.
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -36,7 +36,7 @@ describe('DisplayApprovePage', () => {
     approvePairing.mockResolvedValue(APPROVED)
   })
 
-  it('QR コードから開くと確認コードが入っていて、1 家族なら選ばずに承認できる', async () => {
+  it('prefills the confirmation code from the QR code and approves without choosing when there is one family', async () => {
     renderWithProviders(<DisplayApprovePage />, {
       route: '/admin/displays/approve#KQ7M-3XPA',
       scopes: ['display:approve'],
@@ -60,7 +60,7 @@ describe('DisplayApprovePage', () => {
     })
   })
 
-  it('「キャンセル」では承認しない', () => {
+  it('does not approve on "Cancel"', () => {
     renderWithProviders(<DisplayApprovePage />, { route: '/admin/displays/approve#KQ7M-3XPA' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))

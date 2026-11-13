@@ -1,10 +1,10 @@
 /**
- * パスキーの設定が、いま開いている URL と噛み合っているかを見せる枠。
+ * Box showing whether the passkey settings match the URL currently open.
  *
- * RP ID とオリジンは互いに整合していても（保存の時点でサーバーが確かめる）、
- * 実際に開く URL と食い違っていれば、失敗するのは設定画面ではなく利用者の
- * 「パスキーを追加」になる。開いている URL はブラウザにしか分からないため、
- * 設定を直せる人がその画面を開いているあいだに照らし合わせて出す。
+ * Even if the RP ID and origin are consistent with each other (the server checks on save), if they
+ * differ from the URL actually opened, what fails is not the settings screen but the user's
+ * "add passkey". Only the browser knows the open URL, so compare them and show the result
+ * while someone who can fix the settings has that screen open.
  */
 import { useI18n } from '../i18n'
 import {
@@ -16,24 +16,24 @@ import {
 } from '../services/relyingParty'
 
 interface Props {
-  /** いま画面に入っている値（保存前の編集も含む）。 */
+  /** Values currently in the form (including unsaved edits). */
   settings: RelyingPartySettings
-  /** 照らし合わせる相手。画面からは `window.location` を渡す。 */
+  /** What to compare against. The screen passes `window.location`. */
   location: BrowsingLocation
-  /** 「合わせる」を押されたとき。入力欄へ差し込むだけで、保存はしない。 */
+  /** When "match" is pressed. Only fills the inputs; does not save. */
   onApply: (settings: RelyingPartySettings) => void
 }
 
-/** 値が空のときに、空白ではなく「未設定」と分かる形で出す。 */
+/** Shows an empty value as recognisably "not set" rather than blank. */
 function orPlaceholder(value: string): string {
   return value.trim() || '—'
 }
 
 export function PasskeyDomainNotice({ settings, location, onApply }: Props) {
   const { t } = useI18n()
-  // 値が噛み合っていても、その URL では**そもそも**パスキーが動かないことがある
-  // （http のドメイン名・IP アドレス）。噛み合わせだけを見ると、この場合に何も
-  // 出ないまま「パスキーを追加」だけが失敗する。URL 自体の可否も先に見る。
+  // Even when values match, passkeys may **not work at all** on that URL
+  // (http domain names, IP addresses). Looking only at the match, nothing would be shown
+  // in that case and only "add passkey" would fail. Check whether the URL itself works first.
   if (supportsPasskeys(location) && matchesLocation(settings, location)) return null
 
   const expected = relyingPartyForLocation(location)
@@ -51,7 +51,7 @@ export function PasskeyDomainNotice({ settings, location, onApply }: Props) {
   )
 }
 
-/** 直し方。この URL に合わせられるか・どこで直すかで変わる。 */
+/** How to fix it. Depends on whether we can match this URL and where to fix it. */
 function PasskeyDomainRemedy({
   location,
   expected,
@@ -62,11 +62,11 @@ function PasskeyDomainRemedy({
   onApply: (settings: RelyingPartySettings) => void
 }) {
   const { t } = useI18n()
-  // IP アドレスや http で開いている URL には合わせられない（保存が弾かれる）。
-  // 押せば直るように見えるボタンは出さず、開き直す先を伝える。
+  // Cannot match a URL opened by IP address or over http (saving is rejected).
+  // Don't show a button that looks like it would fix things; tell them where to reopen instead.
   if (!supportsPasskeys(location)) return <p>{t('config.passkeyDomainUnusableUrl')}</p>
-  // ⚠ **環境変数で固定される枝は無くなった**（ADR: 画面の値のほうが強い）。
-  //   compose に値があっても、ここで合わせて保存すればそちらが勝つ。
+  // ⚠ **The branch for values fixed by environment variables is gone** (ADR: the screen value wins).
+  //   Even if compose has a value, matching and saving here wins over it.
   return (
     <button
       type="button"

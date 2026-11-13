@@ -1,4 +1,4 @@
-"""追記型のポイント台帳（ADR-0010）。"""
+"""Append-only point ledger (ADR-0010)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def ledger(client: TestClient, parent: Account) -> Ledger:
 
 @pytest.fixture
 def co_parent(*, client: TestClient, admin_headers: dict[str, str], parent: Account, ledger: Ledger) -> Account:
-    """招待で加わった、owner ではない親（`role = parent`）。"""
+    """A non-owner parent who joined by invitation (`role = parent`)."""
     joined = create_account(client, admin_headers, username="mom", role="member", display_name="おかあさん")
     invitation = issue_invitation(client, parent.headers, ledger.family_id, role="parent")
     response = client.post(
@@ -58,7 +58,7 @@ def test_balance_is_the_sum_of_the_ledger(client: TestClient, parent: Account, l
 
 
 def test_balance_may_go_negative(client: TestClient, parent: Account, ledger: Ledger) -> None:
-    """前借りの運用を認める（消費時の残高検証は行わない）。"""
+    """Borrowing ahead is allowed (no balance check on spending)."""
     ledger.record(client, parent.headers, amount=-50, reason="まえがり", key="k1")
 
     assert _view(client, parent.headers, ledger)["balance"] == -50
@@ -74,7 +74,7 @@ def test_zero_amount_is_rejected(client: TestClient, parent: Account, ledger: Le
 
 
 def test_same_idempotency_key_returns_the_first_record(client: TestClient, parent: Account, ledger: Ledger) -> None:
-    """送信ボタンの二重タップで二重登録しない。"""
+    """A double tap on the submit button does not register twice."""
     first = ledger.record(client, parent.headers, amount=100, reason="おてつだい", key="same")
     second = ledger.record(client, parent.headers, amount=100, reason="おてつだい", key="same")
 
@@ -97,14 +97,14 @@ def test_reversal_adds_an_opposite_row_and_keeps_the_original(
     assert response.status_code == 201, response.text
     reversal = response.json()
     assert reversal["amount"] == -100
-    # 理由は元のレコードから引き継ぐ
+    # The reason is carried over from the original record
     assert reversal["reason"] == "まちがい"
     assert reversal["reversal_of_id"] == original["id"]
 
     view = _view(client, parent.headers, ledger)
     assert view["balance"] == 0
     transactions = {t["id"]: t for t in view["transactions"]}
-    # 元のレコードは消えず、「取り消された」印が付く
+    # The original record is not deleted; it gets a "reversed" mark
     assert len(transactions) == 2
     assert transactions[original["id"]]["is_reversed"] is True
 
@@ -112,14 +112,14 @@ def test_reversal_adds_an_opposite_row_and_keeps_the_original(
 def test_a_parent_who_joined_by_invitation_reverses_the_owners_record(
     *, client: TestClient, parent: Account, co_parent: Account, ledger: Ledger
 ) -> None:
-    """取り消しは owner の特権ではない（ADR-0009 の認可表）。
+    """Reversing is not an owner privilege (ADR-0009 authorization table).
 
-    記録を付けた本人でなくても、同じ家族の親なら取り消せる。日々の記録は
-    どちらの親も付けるので、間違いを直すのに付けた本人の帰りを待たせない。
+    Any parent of the same family can reverse, not just the one who recorded it. Both
+    parents record day to day, so fixing a mistake should not wait for the recorder.
     """
     original = ledger.record(client, parent.headers, amount=100, reason="まちがい", key="k1")
 
-    # 画面の出し分けもこの値だけで決まるので、取り消しボタンが出ることまで含めて確かめる
+    # The UI decides what to show from this value alone, so also check that the undo button appears
     assert _view(client, co_parent.headers, ledger)["can_modify"] is True
 
     response = client.post(
@@ -129,7 +129,7 @@ def test_a_parent_who_joined_by_invitation_reverses_the_owners_record(
     )
     assert response.status_code == 201, response.text
     assert response.json()["amount"] == -100
-    # 打ち消しの行に残るのは取り消した側の親（記録を付けた親ではない）
+    # The reversal row records the parent who reversed it (not the one who recorded it)
     assert response.json()["granted_by"] == "おかあさん"
     assert _view(client, co_parent.headers, ledger)["balance"] == 0
 
@@ -178,7 +178,7 @@ def test_transactions_from_another_ledger_are_not_reachable(
 
 
 def _correct(client: TestClient, headers: dict[str, str], ledger: Ledger, **body: object) -> Any:
-    """訂正を送る。対象は ``transaction_id``、残りはそのまま本文になる。"""
+    """Send a correction. The target is ``transaction_id``; the rest becomes the body as is."""
     transaction_id = body.pop("transaction_id")
     return client.post(
         f"{ledger.path()}/transactions/{transaction_id}/corrections",
@@ -190,7 +190,7 @@ def _correct(client: TestClient, headers: dict[str, str], ledger: Ledger, **body
 def test_correction_undoes_the_original_and_writes_the_new_content(
     client: TestClient, parent: Account, ledger: Ledger
 ) -> None:
-    """訂正は書き換えではなく、打ち消しと書き直しの 2 行（ADR-0022）。"""
+    """A correction is not an overwrite but 2 rows: a reversal and a rewrite (ADR-0022)."""
     original = ledger.record(client, parent.headers, amount=1000, reason="おてつだい", key="k1")
 
     response = _correct(
@@ -212,7 +212,7 @@ def test_correction_undoes_the_original_and_writes_the_new_content(
     view = _view(client, parent.headers, ledger)
     assert view["balance"] == 100
     transactions = {t["id"]: t for t in view["transactions"]}
-    # 元のレコードは消えず、取り消された印が付く
+    # The original record is not deleted; it gets a reversed mark
     assert len(transactions) == 3
     assert transactions[original["id"]]["is_reversed"] is True
 
@@ -244,7 +244,7 @@ def test_correction_keeps_the_original_moment(client: TestClient, parent: Accoun
 
 
 def test_correction_may_move_the_moment(client: TestClient, parent: Account, ledger: Ledger) -> None:
-    """日付の打ち間違いも直せる。"""
+    """A mistyped date can be fixed too."""
     original = ledger.record(client, parent.headers, amount=10, reason="おてつだい", key="k1")
 
     corrected = _correct(
@@ -331,7 +331,7 @@ def test_a_correction_can_be_corrected_again(client: TestClient, parent: Account
 def test_resent_correction_is_refused_rather_than_applied_twice(
     client: TestClient, parent: Account, ledger: Ledger
 ) -> None:
-    """届き直しても二重に効かない（打ち消しの UNIQUE で先に止まる）。"""
+    """A redelivery does not apply twice (the reversal's UNIQUE stops it first)."""
     original = ledger.record(client, parent.headers, amount=100, reason="おてつだい", key="k1")
     for _ in range(2):
         response = _correct(
@@ -351,10 +351,11 @@ def test_resent_correction_is_refused_rather_than_applied_twice(
 def test_step_shaped_keys_are_refused_by_the_ordinary_endpoints(
     client: TestClient, parent: Account, ledger: Ledger
 ) -> None:
-    """訂正が内部で作る鍵の形は外から書けない。
+    """The key shape a correction builds internally cannot be written from outside.
 
-    書けてしまうと、その行が訂正の打ち消し行と同じ鍵になり、``append`` が
-    無関係な既存の行を返す。打ち消しを書いたつもりで書けていない状態になる。
+    If it could, that row would share its key with the correction's reversal row and
+    ``append`` would return an unrelated existing row, leaving the reversal unwritten
+    while appearing to be written.
     """
     response = client.post(
         f"{ledger.path()}/transactions",
@@ -365,7 +366,7 @@ def test_step_shaped_keys_are_refused_by_the_ordinary_endpoints(
 
 
 def test_the_same_key_cannot_correct_two_different_records(client: TestClient, parent: Account, ledger: Ledger) -> None:
-    """別の記録の訂正へ鍵を使い回されても、打ち消し無しの訂正を残さない。"""
+    """Even if a key is reused for correcting another record, no correction is left without its reversal."""
     first = ledger.record(client, parent.headers, amount=100, reason="おてつだい", key="k1")
     second = ledger.record(client, parent.headers, amount=200, reason="そうじ", key="k2")
     _correct(
@@ -389,7 +390,7 @@ def test_the_same_key_cannot_correct_two_different_records(client: TestClient, p
     )
     assert response.status_code == 409
     assert response.json()["detail"]["error"] == "idempotency_key_reused"
-    # 2 件目は打ち消しも訂正後の行も残らない（50 + 200）
+    # The 2nd one leaves neither a reversal nor a corrected row (50 + 200)
     assert _view(client, parent.headers, ledger)["balance"] == 250
 
 
@@ -414,7 +415,7 @@ def test_correction_from_another_ledger_is_not_reachable(client: TestClient, par
 def test_corrected_reason_replaces_the_mistaken_one_in_suggestions(
     client: TestClient, parent: Account, ledger: Ledger
 ) -> None:
-    """書き間違えた理由が候補に出続けると、同じ間違いを選び直してしまう。"""
+    """If a misspelled reason keeps showing up as a suggestion, people pick the same mistake again."""
     original = ledger.record(client, parent.headers, amount=100, reason="おてつだいい", key="k1")
     _correct(
         client,
@@ -442,5 +443,5 @@ def test_backdated_occurred_at_is_accepted(client: TestClient, parent: Account, 
         },
     )
     assert response.status_code == 201, response.text
-    # tz 付きで届いても UTC の naive datetime へ揃える
+    # Even when it arrives tz-aware, it is normalized to a naive UTC datetime
     assert response.json()["occurred_at"].startswith("2026-07-20T00:00:00")

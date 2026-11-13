@@ -1,4 +1,4 @@
-"""決まった間隔で走る常駐処理。"""
+"""Background jobs that run at a fixed interval."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
-"""QR コードの描画。
+"""QR code rendering.
 
-TOTP の ``otpauth://`` URI を認証アプリに読ませるための表示用。SVG で描くため
-画像ライブラリ（Pillow）に依存せず、拡大しても粗くならない。
+For display, so the authenticator app can read the TOTP ``otpauth://`` URI. Drawn as SVG, so it
+does not depend on an image library (Pillow) and does not get blurry when scaled.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from qrcode.image.svg import SvgPathImage
 
 
 def render_qr_code_data_uri(value: str) -> str:
-    """*value* を符号化した QR コードを SVG の data URI で返す。"""
+    """Return a QR code encoding *value* as an SVG data URI."""
     buffer = io.BytesIO()
     qrcode.make(value, image_factory=SvgPathImage).save(buffer)
     encoded = base64.b64encode(buffer.getvalue()).decode("ascii")

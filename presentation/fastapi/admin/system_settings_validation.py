@@ -1,11 +1,11 @@
-"""保存しようとしている設定の突き合わせ検証。
+"""Cross-checks on settings about to be saved.
 
-単独の項目の型（整数か・真偽値か）は Pydantic とフォームが見る。ここで見るのは
-**複数のキーが噛み合っているか**——片方だけを見ても正しさが決まらないもの。
+The type of a single item (integer, boolean) is checked by Pydantic and the form. This checks
+**whether several keys fit together**: things whose correctness cannot be judged from one key alone.
 
-誤った組み合わせを保存できてしまうと、壊れるのは設定画面ではなく利用者の画面
-になる（例: RP ID とオリジンが食い違うと、パスキーの登録がブラウザ側で拒まれる）。
-保存の時点で弾き、直すべきキーが分かるエラーコードを返す。
+If a wrong combination can be saved, what breaks is not the settings screen but the user's screen
+(e.g. if the RP ID and the origin disagree, the browser rejects passkey registration).
+Reject it at save time and return an error code that tells which key to fix.
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ from bounded_contexts.account_security.domain.services.relying_party_configurati
 
 
 def validate_system_settings(effective: Mapping[str, Any]) -> None:
-    """*effective*（保存後に有効となる値）の組み合わせを確かめる。
+    """Check the combination of *effective* values (the values in effect after saving).
 
-    合わない場合は該当コンテキストのドメイン例外を送出する。
+    Raise the relevant context's domain exception if they do not fit.
     """
     validate_relying_party_configuration(
         rp_id=_as_text(effective.get("WEBAUTHN_RP_ID")),

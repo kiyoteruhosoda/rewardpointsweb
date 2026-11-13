@@ -1,10 +1,11 @@
-"""子（ゲスト）の独立を指示する（親メンバー。ADR-0014）。
+"""Propose that a child (guest) become independent (parent members; ADR-0014).
 
-独立は「親メンバーが指示し、子本人が承認する」の 2 段階で成立する。この
-ユースケースは前半。指示しただけでは何も消えず、承認までは取り下げられる。
+Independence takes two steps: a parent member proposes it and the child approves.
+This use case is the first step. Proposing deletes nothing and can be revoked
+until approved.
 
-対象はアカウントの結び付いた子だけ。未紐付けの子は承認のしようがない
-（そもそも本人がログインできない）ので、除名（``RemoveMembershipUseCase``）を使う。
+Only children linked to an account qualify. An unlinked child has no way to
+approve (they cannot even log in), so use removal (``RemoveMembershipUseCase``).
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ class ProposeIndependenceUseCase:
 
 
 class RevokeIndependenceProposalUseCase:
-    """独立の指示を取り下げる（親メンバー。承認前ならいつでも）。"""
+    """Revoke an independence proposal (parent members; any time before approval)."""
 
     def __init__(self, access: FamilyAccessResolver, memberships: IFamilyMembershipRepository) -> None:
         self._access = access

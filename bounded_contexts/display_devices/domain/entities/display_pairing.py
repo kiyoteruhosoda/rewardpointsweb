@@ -1,12 +1,12 @@
-"""ペアリング 1 回（表示端末が確認コードを出してから、資格情報を受け取るまで）。
+"""One pairing (from the display device showing a confirmation code until it receives its credential).
 
-状態は 4 つで、列から導く（状態の列は持たない）。
+There are 4 states, derived from the columns (there is no state column).
 
 ============ ============================================
-まだ         承認も受け取りもされておらず、期限内
-承認済み     ``approved_account_id`` が入り、まだ受け取られていない
-受け取り済み ``claimed_at`` が入った。もう使えない
-期限切れ     ``expires_at`` を過ぎた（承認済みでも受け取れない）
+pending      Neither approved nor claimed, and not expired
+approved     ``approved_account_id`` is set, not yet claimed
+claimed      ``claimed_at`` is set. Can no longer be used
+expired      Past ``expires_at`` (cannot be claimed even if approved)
 ============ ============================================
 """
 
@@ -21,7 +21,7 @@ class DisplayPairing:
     id: int
     expires_at: datetime
     created_at: datetime
-    #: 承認で生まれた表示アカウント。承認前は ``None``
+    #: Display account created on approval. ``None`` before approval
     approved_account_id: int | None = None
     claimed_at: datetime | None = None
 

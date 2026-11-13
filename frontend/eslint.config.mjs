@@ -4,7 +4,7 @@ import sonarjs from 'eslint-plugin-sonarjs'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  // ビルド成果物・依存は解析対象外
+  // Build output and dependencies are not linted
   {
     ignores: ['dist/**', 'coverage/**', 'dev-dist/**', 'node_modules/**'],
   },
@@ -46,8 +46,8 @@ export default tseslint.config(
 
       'sonarjs/cognitive-complexity': ['error', 15],
 
-      // 数値の文字列化は一意で安全（ID を URL に埋める用途）。
-      // このルールの主眼はオブジェクト・null の混入検出にある。
+      // Stringifying numbers is unambiguous and safe (used to embed IDs in URLs).
+      // The point of this rule is catching objects or null slipping in.
       '@typescript-eslint/restrict-template-expressions': [
         'error',
         {
@@ -57,7 +57,7 @@ export default tseslint.config(
     },
   },
 
-  // 設定ファイル（Node 側）は型情報付き解析の対象外
+  // Config files (Node side) are not linted with type information
   {
     files: ['*.config.{ts,mts,mjs}', 'eslint.config.mjs'],
     extends: [tseslint.configs.disableTypeChecked],

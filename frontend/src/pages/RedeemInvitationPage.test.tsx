@@ -1,8 +1,8 @@
 /**
- * 招待コードでのアカウント作成。
+ * Account creation with an invitation code.
  *
- * 入力欄の下限・上限はサーバーのスキーマと同じにする。欠けると、送るまで気付けず
- * 422 で跳ね返る（`InvitationRedeemRequest`）。
+ * Input min/max match the server schema. If missing, the mismatch is not noticed until
+ * submission bounces with 422 (`InvitationRedeemRequest`).
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
@@ -30,29 +30,29 @@ vi.mock('../services/families', () => ({
 }))
 
 describe('RedeemInvitationPage', () => {
-  it('パスワードは 8 文字以上（サーバーの min_length と同じ）', () => {
+  it('password is at least 8 characters (same as the server min_length)', () => {
     renderWithProviders(<RedeemInvitationPage />)
     expect(screen.getByLabelText('Password')).toHaveAttribute('minlength', '8')
   })
 
-  it('ユーザー名は 3〜255 文字（Username の値オブジェクトと同じ）', () => {
+  it('username is 3–255 characters (same as the Username value object)', () => {
     renderWithProviders(<RedeemInvitationPage />)
     const username = screen.getByLabelText('Username')
     expect(username).toHaveAttribute('minlength', '3')
     expect(username).toHaveAttribute('maxlength', '255')
   })
 
-  it('招待コードは 64 文字まで（CodeStr と同じ）', () => {
+  it('invitation code is at most 64 characters (same as CodeStr)', () => {
     renderWithProviders(<RedeemInvitationPage />)
     expect(screen.getByLabelText('Invitation code')).toHaveAttribute('maxlength', '64')
   })
 
-  it('名前は 100 文字まで（DisplayName の MAX_LENGTH と同じ）', () => {
+  it('name is at most 100 characters (same as DisplayName MAX_LENGTH)', () => {
     renderWithProviders(<RedeemInvitationPage />)
     expect(screen.getByLabelText('Name')).toHaveAttribute('maxlength', '100')
   })
 
-  it('入力した名前をそのまま送る', async () => {
+  it('sends the entered name as is', async () => {
     redeemInvitation.mockReset()
     redeemInvitation.mockResolvedValue({
       family_id: 1,
@@ -74,7 +74,7 @@ describe('RedeemInvitationPage', () => {
     })
   })
 
-  it('すでにアカウントがある人には、入力済みのコードを持たせてログインへ送る', () => {
+  it('sends people who already have an account to login, carrying the entered code', () => {
     renderWithProviders(<RedeemInvitationPage />)
 
     fireEvent.change(screen.getByLabelText('Invitation code'), { target: { value: 'CODE 1234' } })
@@ -85,7 +85,7 @@ describe('RedeemInvitationPage', () => {
     )
   })
 
-  it('親の招待で断られたら、ログインして参加するよう伝える（ADR-0048）', async () => {
+  it('when a parent invitation is refused, says to sign in and join (ADR-0048)', async () => {
     redeemInvitation.mockReset()
     redeemInvitation.mockRejectedValue(new ApiError(400, 'guardian_invitation_requires_sign_in'))
     renderWithProviders(<RedeemInvitationPage />, { route: '/join#code=CODE1234' })
@@ -106,13 +106,13 @@ describe('RedeemInvitationPage', () => {
     )
   })
 
-  it('コードが空ならログインへの導線にコードを付けない', () => {
+  it('does not attach the code to the login link when it is empty', () => {
     renderWithProviders(<RedeemInvitationPage />)
 
     expect(screen.getByRole('link', { name: 'Sign in and join' })).toHaveAttribute('href', '/login')
   })
 
-  it('URL で渡されたコードを入れておく（ログインから戻ってきた場合）', () => {
+  it('prefills the code passed in the URL (when coming back from login)', () => {
     renderWithProviders(<RedeemInvitationPage />, { route: '/join#code=CODE1234' })
     expect(screen.getByLabelText('Invitation code')).toHaveValue('CODE1234')
   })

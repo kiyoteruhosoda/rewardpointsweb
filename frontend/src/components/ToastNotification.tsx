@@ -1,4 +1,4 @@
-/** 画面右下の簡易トースト通知。 */
+/** Simple toast notification at the bottom right of the screen. */
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 
 interface Toast {

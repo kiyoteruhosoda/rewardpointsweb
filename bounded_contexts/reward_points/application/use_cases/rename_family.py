@@ -1,4 +1,4 @@
-"""家族名を変える（owner のみ。ADR-0013）。"""
+"""Rename a family (owner only; ADR-0013)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ class RenameFamilyUseCase:
     def execute(self, *, family_id: int, account_id: int, name: str) -> FamilyDetailDTO:
         viewer = self._access.require_owner(family_id=family_id, account_id=account_id)
         family = self._families.update_name(family_id=family_id, name=name)
-        # この入口は family:manage を要求する（router）ので、可否は立場だけで決まる
+        # This entry point requires family:manage (router), so permission depends only on the role
         return detail_of(family, viewer=viewer, memberships=self._overview.build(viewer, can_manage=True))
 
 

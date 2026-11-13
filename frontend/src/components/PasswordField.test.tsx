@@ -1,4 +1,4 @@
-/** パスワード入力欄: 伏せ字の切り替えと、見出し・入力欄の結び付き。 */
+/** Password input: toggling the mask, and linking the caption to the input. */
 import { fireEvent, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -9,12 +9,12 @@ import { PasswordField } from './PasswordField'
 const SHOW_LABEL = 'Show password'
 const HIDE_LABEL = 'Hide password'
 
-/** 見出し付きの入力欄は `getByLabelText` で取れる（type が変わっても同じ）。 */
+/** An input with a caption can be found with `getByLabelText` (same even when type changes). */
 function field(): HTMLInputElement {
   return screen.getByLabelText('Password')
 }
 
-/** 値を親が持つ実際の使われ方。「clear」は送信に成功した画面の後始末に当たる。 */
+/** Real usage where the parent holds the value. "clear" corresponds to cleanup after a successful submit. */
 function Controlled({ initial }: { initial: string }) {
   const [value, setValue] = useState(initial)
   return (
@@ -33,14 +33,14 @@ function Controlled({ initial }: { initial: string }) {
 }
 
 describe('PasswordField', () => {
-  it('はじめは伏せ字にする', () => {
+  it('starts masked', () => {
     renderWithProviders(<PasswordField label="Password" value="s3cret" onChange={vi.fn()} />)
 
     expect(field()).toHaveAttribute('type', 'password')
     expect(screen.getByRole('button', { name: SHOW_LABEL })).toBeInTheDocument()
   })
 
-  it('押すと中身を見せ、もう一度押すと伏せ字へ戻す', () => {
+  it('reveals on press and masks again on a second press', () => {
     renderWithProviders(<PasswordField label="Password" value="s3cret" onChange={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: SHOW_LABEL }))
@@ -50,7 +50,7 @@ describe('PasswordField', () => {
     expect(field()).toHaveAttribute('type', 'password')
   })
 
-  it('切り替えボタンはフォームを送信しない（type=button）', () => {
+  it('the toggle button does not submit the form (type=button)', () => {
     const onSubmit = vi.fn()
     renderWithProviders(
       <form onSubmit={onSubmit}>
@@ -62,7 +62,7 @@ describe('PasswordField', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('入力した文字を親へ渡す', () => {
+  it('passes typed characters to the parent', () => {
     const onChange = vi.fn()
     renderWithProviders(<PasswordField label="Password" value="" onChange={onChange} />)
 
@@ -70,13 +70,13 @@ describe('PasswordField', () => {
     expect(onChange).toHaveBeenCalledWith('typed')
   })
 
-  it('見出しの代わりに placeholder でも読み取れる（横並びのフォーム）', () => {
+  it('is readable via placeholder instead of a caption (inline form)', () => {
     renderWithProviders(<PasswordField placeholder="Password" value="" onChange={vi.fn()} />)
 
     expect(screen.getByPlaceholderText('Password')).toHaveAttribute('type', 'password')
   })
 
-  it('入力欄ごとに id を分ける（同じ画面に 2 つ並べても見出しが混ざらない）', () => {
+  it("uses a separate id per input (captions don't mix with two on the same screen)", () => {
     renderWithProviders(
       <>
         <PasswordField label="Current password" value="" onChange={vi.fn()} />
@@ -89,7 +89,7 @@ describe('PasswordField', () => {
     expect(current.id).not.toBe(next.id)
   })
 
-  it('隣の欄を見せても自分の欄は伏せたままにする', () => {
+  it('keeps its own input masked when the neighbouring one is revealed', () => {
     renderWithProviders(
       <>
         <PasswordField label="Current password" value="" onChange={vi.fn()} />
@@ -104,32 +104,32 @@ describe('PasswordField', () => {
     expect(screen.getByLabelText('New password')).toHaveAttribute('type', 'password')
   })
 
-  it('親が値を空へ戻したら伏せ字へ戻す（送信後に次の入力が見えたままにならない）', () => {
+  it('re-masks when the parent clears the value (the next input does not stay visible after submit)', () => {
     renderWithProviders(<Controlled initial="s3cret" />)
     fireEvent.click(screen.getByRole('button', { name: SHOW_LABEL }))
     expect(field()).toHaveAttribute('type', 'text')
 
-    // 送信に成功した画面のふるまい。部品は置かれたまま値だけが空へ戻る。
+    // Behaviour of a screen after a successful submit. The component stays mounted; only the value is cleared.
     fireEvent.click(screen.getByRole('button', { name: 'clear' }))
     expect(field()).toHaveAttribute('type', 'password')
 
-    // 続けて打った文字も伏せ字のまま
+    // Characters typed next stay masked too
     fireEvent.change(field(), { target: { value: 'next' } })
     expect(field()).toHaveAttribute('type', 'password')
   })
 
-  it('何も打っていない欄でも先に表示へ切り替えられる', () => {
+  it('can switch to visible first on an input with nothing typed', () => {
     renderWithProviders(<Controlled initial="" />)
 
     fireEvent.click(screen.getByRole('button', { name: SHOW_LABEL }))
     expect(field()).toHaveAttribute('type', 'text')
 
-    // 打ち始めても表示のまま（空だからと伏せ字へ戻さない）
+    // Stays visible after typing starts (not re-masked just because it was empty)
     fireEvent.change(field(), { target: { value: 's' } })
     expect(field()).toHaveAttribute('type', 'text')
   })
 
-  it('画面を作り直すと伏せ字へ戻す（表示は持ち越さない）', () => {
+  it('re-masks when the screen is rebuilt (visibility is not carried over)', () => {
     function Toggleable() {
       const [mounted, setMounted] = useState(true)
       return (

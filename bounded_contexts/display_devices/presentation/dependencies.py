@@ -1,4 +1,4 @@
-"""表示端末コンテキストの依存の組み立て（``Depends()`` 用）。"""
+"""Dependency wiring for the display devices context (for ``Depends()``)."""
 
 from __future__ import annotations
 

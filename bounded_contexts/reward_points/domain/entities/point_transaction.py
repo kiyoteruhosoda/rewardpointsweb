@@ -1,12 +1,13 @@
-"""台帳への 1 行（追記専用）。
+"""One ledger row (append-only).
 
-UPDATE も DELETE も行わない。訂正は逆符号の行を追加して表す（ADR-0010）。
-打ち消しの組み立ては :meth:`PointTransaction.plan_reversal` に閉じ込め、符号の
-反転と「打ち消しは打ち消せない」規則を呼び出し側へ散らさない。
+Never UPDATEd or DELETEd. A correction is expressed by appending a row with the
+opposite sign (ADR-0010). Building a reversal is confined to
+:meth:`PointTransaction.plan_reversal`, so sign flipping and the "a reversal
+cannot be reversed" rule are not scattered across callers.
 
-入力の間違いを直したいときは、打ち消しの後に正しい内容をもう一度書く
-（ADR-0022）。その 2 行目は :meth:`PointTransaction.plan_correction` が組み立て、
-``corrects_id`` でどの行の言い直しかを示す。
+To fix an input mistake, write the correct content again after the reversal
+(ADR-0022). That second row is built by :meth:`PointTransaction.plan_correction`,
+and ``corrects_id`` tells which row it restates.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from bounded_contexts.reward_points.domain.value_objects.transaction_reason impo
 
 @dataclass(frozen=True, kw_only=True)
 class ReversalDraft:
-    """まだ台帳へ書かれていない打ち消し行。"""
+    """A reversal row not yet written to the ledger."""
 
     ledger_id: int
     amount: PointAmount
@@ -34,7 +35,7 @@ class ReversalDraft:
 
 @dataclass(frozen=True, kw_only=True)
 class CorrectionDraft:
-    """まだ台帳へ書かれていない訂正後の行。"""
+    """A corrected row not yet written to the ledger."""
 
     ledger_id: int
     amount: PointAmount
@@ -49,13 +50,13 @@ class PointTransaction:
     ledger_id: int
     amount: PointAmount
     reason: TransactionReason
-    # 操作を行った参加者。参加者が家族を離れても記録は残す
+    # The member who performed the operation. The record stays even if they leave the family
     granted_by_membership_id: int | None
-    # 出来事の発生日時（遡って入力できる）と、レコードの作成日時は別物
+    # When the event happened (can be backdated) differs from when the record was created
     occurred_at: datetime
     created_at: datetime
     reversal_of_id: int | None
-    # 訂正後の行なら、言い直した相手の ID（ADR-0022）
+    # For a corrected row, the ID of the row it restates (ADR-0022)
     corrects_id: int | None
 
     @property
@@ -71,7 +72,7 @@ class PointTransaction:
         return self.amount.value
 
     def plan_reversal(self) -> ReversalDraft:
-        """この行を打ち消す行の内容。理由は元の行から引き継ぐ。"""
+        """Content of the row that reverses this one. The reason is carried over from the original."""
         if self.is_reversal:
             raise ReversalOfReversalError
         return ReversalDraft(
@@ -82,10 +83,11 @@ class PointTransaction:
         )
 
     def plan_correction(self, *, amount: int, reason: str, occurred_at: datetime | None = None) -> CorrectionDraft:
-        """この行を言い直す行の内容。打ち消しの行は :meth:`plan_reversal` が別に作る。
+        """Content of the row that restates this one. The reversal row is built separately by :meth:`plan_reversal`.
 
-        ``occurred_at`` を渡さなければ元の行の発生日時を引き継ぐ。量や理由の
-        打ち間違いを直しただけで、出来事そのものが今日へ動いてしまわないように。
+        Without ``occurred_at``, the original row's occurrence time is carried over,
+        so merely fixing a typo in the amount or reason does not move the event
+        itself to today.
         """
         if self.is_reversal:
             raise CorrectionOfReversalError

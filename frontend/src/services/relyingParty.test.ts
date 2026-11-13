@@ -1,4 +1,4 @@
-/** RP ID と、いま開いている URL の噛み合わせ（ブラウザが見る規則と同じもの）。 */
+/** Matching the RP ID with the currently open URL (the same rules the browser applies). */
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -11,36 +11,36 @@ import {
 } from './relyingParty'
 
 describe('isRelyingPartyIdUsable', () => {
-  it('同じドメイン・上位ドメインなら使える', () => {
+  it('allows the same domain or a parent domain', () => {
     expect(isRelyingPartyIdUsable('example.com', 'example.com')).toBe(true)
     expect(isRelyingPartyIdUsable('example.com', 'app.example.com')).toBe(true)
     expect(isRelyingPartyIdUsable('localhost', 'localhost')).toBe(true)
   })
 
-  it('別のドメイン・下位ドメインは使えない', () => {
+  it('rejects another domain or a subdomain', () => {
     expect(isRelyingPartyIdUsable('localhost', 'app.example.com')).toBe(false)
     expect(isRelyingPartyIdUsable('app.example.com', 'example.com')).toBe(false)
     expect(isRelyingPartyIdUsable('example.org', 'example.com')).toBe(false)
-    // 名前の途中で切れているだけの一致は上位ドメインではない
+    // A match that merely cuts a name in the middle is not a parent domain
     expect(isRelyingPartyIdUsable('example.com', 'notexample.com')).toBe(false)
   })
 
-  it('1 ラベルだけの上位ドメイン（公開サフィックス）は使えない', () => {
-    // ブラウザは `com` のような登録できないドメインを RP ID として拒む
+  it('rejects a single-label parent domain (public suffix)', () => {
+    // Browsers reject unregistrable domains such as `com` as an RP ID
     expect(isRelyingPartyIdUsable('com', 'example.com')).toBe(false)
   })
 
-  it('空白・大文字・末尾のドットは揃えてから比べる', () => {
+  it('normalises whitespace, case and a trailing dot before comparing', () => {
     expect(isRelyingPartyIdUsable(' Example.COM ', 'app.example.com.')).toBe(true)
   })
 
-  it('値が空なら使えない（未設定は設定の誤り）', () => {
+  it('rejects an empty value (unset is a misconfiguration)', () => {
     expect(isRelyingPartyIdUsable('', 'example.com')).toBe(false)
   })
 })
 
 describe('isDomainName', () => {
-  it('ドメイン名は真、IP アドレスは偽（RP ID には使えない）', () => {
+  it('is true for domain names and false for IP addresses (not usable as RP ID)', () => {
     expect(isDomainName('app.example.com')).toBe(true)
     expect(isDomainName('localhost')).toBe(true)
     expect(isDomainName('192.168.1.5')).toBe(false)
@@ -51,7 +51,7 @@ describe('isDomainName', () => {
 })
 
 describe('supportsPasskeys', () => {
-  it('https のドメイン・localhost なら使える', () => {
+  it('allows https domains and localhost', () => {
     expect(
       supportsPasskeys({
         hostname: 'app.example.com',
@@ -68,7 +68,7 @@ describe('supportsPasskeys', () => {
     ).toBe(true)
   })
 
-  it('IP アドレス・localhost 以外の http では使えない', () => {
+  it('rejects IP addresses and http other than localhost', () => {
     expect(
       supportsPasskeys({
         hostname: '192.168.1.5',
@@ -76,7 +76,7 @@ describe('supportsPasskeys', () => {
         protocol: 'http:',
       }),
     ).toBe(false)
-    // 安全な文脈でなければ、設定を直してもブラウザが動かさない
+    // Outside a secure context, the browser will not run it even if the config is fixed
     expect(
       supportsPasskeys({ hostname: 'nas.local', origin: 'http://nas.local', protocol: 'http:' }),
     ).toBe(false)
@@ -84,7 +84,7 @@ describe('supportsPasskeys', () => {
 })
 
 describe('relyingPartyForLocation', () => {
-  it('開いている URL からそのまま使える設定を作る', () => {
+  it('builds a working config from the open URL', () => {
     expect(
       relyingPartyForLocation({
         hostname: 'App.Example.com',
@@ -102,20 +102,20 @@ describe('matchesLocation', () => {
     protocol: 'https:',
   }
 
-  it('RP ID とオリジンの両方が噛み合っていれば真', () => {
+  it('is true when both RP ID and origin match', () => {
     expect(
       matchesLocation({ rpId: 'example.com', origin: 'https://app.example.com' }, location),
     ).toBe(true)
   })
 
-  it('オリジンだけ違えば偽（ブラウザが送るオリジンと一致しない）', () => {
-    // ポートが違えば別のオリジン
+  it('is false when only the origin differs (does not match the origin the browser sends)', () => {
+    // A different port is a different origin
     expect(
       matchesLocation({ rpId: 'example.com', origin: 'https://app.example.com:8443' }, location),
     ).toBe(false)
   })
 
-  it('既定ポート・末尾のドットは書き方の違いにすぎない（サーバーも落とす）', () => {
+  it('treats default port and trailing dot as mere notation (the server drops them too)', () => {
     expect(
       matchesLocation({ rpId: 'example.com', origin: 'https://app.example.com:443' }, location),
     ).toBe(true)
@@ -124,7 +124,7 @@ describe('matchesLocation', () => {
     ).toBe(true)
   })
 
-  it('RP ID だけ違えば偽', () => {
+  it('is false when only the RP ID differs', () => {
     expect(
       matchesLocation({ rpId: 'localhost', origin: 'https://app.example.com' }, location),
     ).toBe(false)
@@ -132,17 +132,17 @@ describe('matchesLocation', () => {
 })
 
 describe('relyingPartyIdOf', () => {
-  it('登録のオプションは rp.id から取る', () => {
+  it('takes registration options from rp.id', () => {
     expect(relyingPartyIdOf({ rp: { id: 'example.com', name: 'rewardpointsweb' } })).toBe(
       'example.com',
     )
   })
 
-  it('認証のオプションは rpId から取る', () => {
+  it('takes authentication options from rpId', () => {
     expect(relyingPartyIdOf({ rpId: 'example.com' })).toBe('example.com')
   })
 
-  it('入っていなければ空（ブラウザが開いているドメインを使う）', () => {
+  it('is empty when absent (the browser uses the open domain)', () => {
     expect(relyingPartyIdOf({})).toBe('')
     expect(relyingPartyIdOf({ rp: { name: 'rewardpointsweb' } })).toBe('')
     expect(relyingPartyIdOf({ rp: null })).toBe('')

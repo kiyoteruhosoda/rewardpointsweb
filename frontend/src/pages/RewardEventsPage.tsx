@@ -1,15 +1,15 @@
 /**
- * 1 人の子のイベント（がんばりカード）を 1 画面に並べる（ADR-0042）。
+ * Shows one child's events (effort cards) on a single screen (ADR-0042).
  *
- * カードは格子に並べ、挑戦中を先に、達成したものをその後ろに置く。「達成」を押すと
- * その場でシールが貼られ（返事を待たずに見せる）、返事が来たらサーバーの姿で
- * 置き換える。失敗したら読み直して、貼ったように見えたシールを戻す。
+ * Cards sit in a grid, in-progress first and completed ones after. Tapping "achieved"
+ * puts a sticker on the spot (shown without waiting for the reply), then replaced by the
+ * server's version once the reply arrives. On failure, reload and remove the sticker shown.
  *
- * 最後の 1 枚で台帳にポイントが入るので、達成したら家族（ナビゲーションと
- * ダッシュボードの残高の出所。ADR-0021）も読み直す。
+ * The last sticker puts points into the ledger, so after completion also reload the family
+ * (the source of balances in the navigation and dashboard; ADR-0021).
  *
- * 期限（ADR-0043）のあるカードは期限の近い順に先へ出し、期限切れは挑戦中と達成の
- * あいだの棚に分ける（延ばせば挑戦中へ戻る）。
+ * Cards with a deadline (ADR-0043) come first, nearest deadline first; expired ones go on a shelf
+ * between in-progress and completed (extending the deadline returns them to in-progress).
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -30,7 +30,7 @@ import {
 } from '../services/rewardEvents'
 import { useFamily } from '../store/FamilyContext'
 
-/** 直前に貼った 1 枚。その 1 枚にだけ「貼る」動きを付ける。 */
+/** The sticker just placed. Only that one gets the "stick" animation. */
 interface FreshSticker {
   eventId: number
   number: number
@@ -40,7 +40,7 @@ function byCompletion(a: RewardEvent, b: RewardEvent): number {
   return (b.completed_at ?? '').localeCompare(a.completed_at ?? '')
 }
 
-/** 期限の近い順。期限の無いカードは後ろに、作った順で並べる。 */
+/** Nearest deadline first. Cards without a deadline go last, in creation order. */
 function byDeadline(a: RewardEvent, b: RewardEvent): number {
   if (a.deadline !== b.deadline) {
     if (a.deadline === null) return 1
@@ -57,7 +57,7 @@ export function RewardEventsPage() {
   const { reload: reloadFamily } = useFamily()
   const [board, setBoard] = useState<RewardEventBoard | null>(null)
   const [failed, setFailed] = useState(false)
-  // 残り日数を数える「今日」。読んだときの端末の暦で、読み直すたびに進める
+  // "Today" for counting remaining days: the device calendar when loaded, advanced on each reload
   const [today, setToday] = useState('')
   const [fresh, setFresh] = useState<FreshSticker | null>(null)
   const [justCompleted, setJustCompleted] = useState<ReadonlySet<number>>(new Set())
@@ -87,7 +87,7 @@ export function RewardEventsPage() {
     void reload()
   }, [reload])
 
-  // 別の端末で貼られたシールはこの画面には届かない
+  // Stickers placed on another device do not reach this screen
   useRefreshOnReturn(reload)
 
   const replace = (updated: RewardEvent) => {
@@ -101,7 +101,7 @@ export function RewardEventsPage() {
     )
   }
 
-  /** 失敗を伝えて読み直す（貼ったように見せたシールを戻す）。 */
+  /** Report the failure and reload (removing the sticker that was shown as stuck). */
   const recover = async (error: unknown) => {
     notify('error', t(errorMessageKey(error)))
     await reload()
@@ -110,8 +110,8 @@ export function RewardEventsPage() {
   const stick = (event: RewardEvent) => {
     const number = event.stickers.length + 1
     void runForRow(event.id, 'stick', async () => {
-      // 返事を待たずに貼って見せる。押した手応えが遅れると、もう一度押される。
-      // 見せるのは runForRow の中（同じカードへの 2 度目の押下はここまで来ない）
+      // Show the sticker without waiting for the reply. If the tap feels slow, it gets tapped twice.
+      // Shown inside runForRow (a second tap on the same card does not reach here)
       replace({
         ...event,
         stickers: [...event.stickers, { number, stuck_at: new Date().toISOString() }],
@@ -142,7 +142,7 @@ export function RewardEventsPage() {
     })
   }
 
-  /** 期限を決め直す。失敗したら投げ直す（入力欄を開いたまま残す）。 */
+  /** Change the deadline. Rethrow on failure (keeps the input open). */
   const changeDeadline = (event: RewardEvent, deadline: string | null) =>
     runForRow(event.id, 'deadline', async () => {
       try {
@@ -166,7 +166,7 @@ export function RewardEventsPage() {
     })
   }
 
-  /** 作れなかったときは投げ直す（入力欄が内容を残す）。 */
+  /** Rethrow when creation fails (the input keeps its content). */
   const create = async (event: NewRewardEvent) => {
     try {
       await rewardEvents.create(family, ledger, event)
@@ -223,7 +223,7 @@ export function RewardEventsPage() {
       </div>
 
       {board.can_modify && (
-        // まだ 1 枚も無ければ開いておく（最初にすることは作ること）
+        // Keep it open when there are none yet (the first thing to do is create one)
         <details className="card event-create" open={board.events.length === 0}>
           <summary>{t('events.createTitle')}</summary>
           <p className="event-create-hint">{t('events.createHint')}</p>

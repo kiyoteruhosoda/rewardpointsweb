@@ -1,9 +1,9 @@
 /**
- * ロールの呼び名（ADR-0018 のアクター名）。
+ * Display names for roles (actor names from ADR-0018).
  *
- * ロールの名前（`operator` など）は scope と同じく英字の識別子で、それだけでは
- * 何をする人か読み取れない。決まったロールは呼び名を前に出し、名前を括弧で添える。
- * 管理画面で作ったロールは呼び名を持たないので、名前のまま出す。
+ * Role names (such as `operator`) are alphanumeric identifiers like scopes, and on their own
+ * they do not say what the person does. Built-in roles show the display name first, with the name in parentheses.
+ * Roles created in the admin console have no display name, so the name is shown as-is.
  */
 import { knownMessageKey, type TranslationParams } from '../i18n'
 

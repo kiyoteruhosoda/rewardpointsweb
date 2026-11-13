@@ -1,7 +1,7 @@
-"""リクエストコンテキスト（``requestId`` 等）の伝播。
+"""Propagation of request context (``requestId`` etc.).
 
-ミドルウェアが設定した値を ``contextvars`` で保持し、全ログレコードへ
-自動付与する（``logging_config.RequestContextFilter``）。
+Holds values set by the middleware in ``contextvars`` and attaches them to every
+log record automatically (``logging_config.RequestContextFilter``).
 """
 
 from __future__ import annotations

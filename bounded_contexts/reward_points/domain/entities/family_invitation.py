@@ -1,8 +1,9 @@
-"""家族への招待。
+"""An invitation to a family.
 
-コードはハッシュ化して保存する（平文は発行時に 1 度だけ返す。実際のハッシュ化は
-Infrastructure の責務）。``role = child`` の招待では、親が先に作った参加者を
-``target_membership_id`` で指す（ADR-0009 / ADR-0011）。
+The code is stored hashed (the plaintext is returned only once, when issued;
+the actual hashing is Infrastructure's job). A ``role = child`` invitation
+points, via ``target_membership_id``, to the member a parent created
+beforehand (ADR-0009 / ADR-0011).
 """
 
 from __future__ import annotations

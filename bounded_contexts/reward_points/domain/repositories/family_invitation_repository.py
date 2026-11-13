@@ -1,7 +1,7 @@
-"""招待の永続化インターフェース。
+"""Persistence interface for invitations.
 
-コードのハッシュ化はこのポートの実装（Infrastructure）に閉じる。ドメイン側は
-平文のコードだけを扱い、保存形式を知らない。
+Hashing the code stays inside this port's implementation (Infrastructure). The
+domain handles only the plaintext code and does not know the storage format.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from bounded_contexts.reward_points.domain.value_objects.family_role import Fami
 
 @dataclass(frozen=True, kw_only=True)
 class IssuedInvitation:
-    """発行結果。平文のコードはこの 1 回しか取り出せない。"""
+    """Result of issuing. The plaintext code can be retrieved only this once."""
 
     invitation: FamilyInvitation
     code: str
@@ -38,18 +38,19 @@ class IFamilyInvitationRepository(ABC):
 
     @abstractmethod
     def list_pending(self, family_id: int, *, now: datetime) -> list[FamilyInvitation]:
-        """未使用かつ期限内のものだけ。"""
+        """Only unused, unexpired ones."""
 
     @abstractmethod
     def find_in_family(self, *, family_id: int, invitation_id: int) -> FamilyInvitation | None: ...
 
     @abstractmethod
     def consume(self, code: str, *, now: datetime) -> FamilyInvitation | None:
-        """招待を **使用済みにしてから** 返す。使えなければ ``None``。
+        """Return the invitation **after marking it used**. ``None`` if it cannot be used.
 
-        「引いてから使用済みにする」を 2 手に分けると、同じコードで同時に届いた
-        2 つの要求がどちらも「まだ使える」と判断してしまう。1 回きりであることは
-        この 1 手で担保する（実装は条件付き UPDATE の行ロックに委ねる）。
+        Splitting "load, then mark used" into two steps would let two concurrent
+        requests with the same code both decide it is "still usable". This single
+        step guarantees single use (the implementation relies on the row lock of a
+        conditional UPDATE).
         """
 
     @abstractmethod

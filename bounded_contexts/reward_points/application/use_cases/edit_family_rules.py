@@ -1,10 +1,10 @@
-"""家族のルール（約束ごとのメモ）を書き換える（親メンバー。ADR-0027）。
+"""Rewrite the family rules (a memo of agreements) (parent members; ADR-0027).
 
-書けるのは親（owner / parent）。改名や解散と違って家族の構成も台帳も動かさない
-ので、日々の決めごとを直すのに owner を呼ぶ形にはしない。
+Parents (owner / parent) can write them. Unlike renaming or dissolving, this changes
+neither the family's makeup nor any ledger, so fixing everyday rules does not require the owner.
 
-空文字・空白だけの入力は「消す」と同じに扱う（リポジトリが NULL へ寄せる）。
-画面には何も出ないのに「ルールあり」の家族が残らないようにするため。
+Empty or whitespace-only input is treated the same as "clear" (the repository turns it into NULL),
+so that no family is left "with rules" while nothing shows on screen.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ class EditFamilyRulesUseCase:
         if not family_access_policy.can_edit_family_rules(viewer):
             raise FamilyAccessDeniedError
         family = self._families.update_rules(family_id=family_id, rules=rules)
-        # この入口は family:manage を要求する（router）ので、可否は立場だけで決まる
+        # This entry point requires family:manage (router), so permission depends only on the role
         return detail_of(family, viewer=viewer, memberships=self._overview.build(viewer, can_manage=True))
 
 

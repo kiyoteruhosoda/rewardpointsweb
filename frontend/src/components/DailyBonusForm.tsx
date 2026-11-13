@@ -1,12 +1,12 @@
 /**
- * 1 人の子の「毎日のボーナス」を決める入力欄（ADR-0024）。
+ * Input for one child's "daily bonus" (ADR-0024).
  *
- * 決めておくと、日付が変わるたびに決めた量が台帳へ 1 行足される。足すのはサーバー
- * 側で、この入力欄は約束を決める・やめるだけ。決めた瞬間には何も足さないので、
- * 「保存したのに残高が変わらない」と読まれないよう、いつから始まるかを文言で示す。
+ * Once set, the chosen amount is added to the ledger as one row each time the date changes. The server
+ * does the adding; this input only sets or stops the commitment. Nothing is added at the moment it is set,
+ * so the text says when it starts, to avoid it reading as "I saved but the balance didn't change".
  *
- * 量は子ども一人ひとりで違ってよい。並べるのは家族設定の画面（`DailyBonusPanel`）で、
- * ここは 1 人ぶんだけを受け持つ。
+ * The amount may differ per child. Listing them is the family settings screen's job (`DailyBonusPanel`);
+ * this handles just one child.
  */
 import { useState, type SubmitEvent } from 'react'
 
@@ -21,19 +21,19 @@ import { useToast } from './ToastNotification'
 interface Props {
   familyId: number
   ledgerId: number
-  /** 誰のボーナスか。同じ画面に兄弟の欄が並ぶので、名前を欄に添える。 */
+  /** Whose bonus it is. Siblings' inputs appear on the same screen, so the name goes with the input. */
   childName: string
-  /** いまの設定。決めていなければ null。 */
+  /** Current setting. null if not set. */
   bonus: DailyBonus | null
-  /** 保存・停止のあと、家族を読み直す。 */
+  /** Reloads the family after save/stop. */
   onChanged: () => Promise<unknown>
 }
 
 export function DailyBonusForm({ familyId, ledgerId, childName, bonus, onChanged }: Props) {
   const { t } = useI18n()
   const { notify } = useToast()
-  // 開いた時点の設定を初期値にする。保存後は家族を読み直して作り直される
-  // （`key` に設定の有無を渡す。呼び出し側を参照）
+  // Use the setting at open time as the initial value. After saving, the family is reloaded and this is rebuilt
+  // (whether a setting exists is passed as `key`; see the caller)
   const [amount, setAmount] = useState(bonus ? String(bonus.amount) : '')
   const [reason, setReason] = useState(bonus?.reason ?? t('dailyBonus.defaultReason'))
   const reasonRef = useRequiredText(reason, t('common.reasonRequired'))
@@ -80,8 +80,8 @@ export function DailyBonusForm({ familyId, ledgerId, childName, bonus, onChanged
             required
           />
         </label>
-        {/* 記録の入力欄にも「理由」があるので、別の言い回しにする（同じ画面に
-            同じラベルが 2 つ並ぶと、どちらへ打っているのか分からなくなる） */}
+        {/* The record input also has a "reason", so use different wording (with two identical
+            labels on the same screen, you can't tell which one you're typing into) */}
         <label>
           {t('dailyBonus.reason')}
           <input

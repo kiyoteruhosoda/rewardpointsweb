@@ -1,7 +1,7 @@
-"""失敗の控えの永続化インターフェース（実装は Infrastructure 層）。
+"""Persistence interface for failure records (implemented in the infrastructure layer).
 
-プロセスのメモリに置かないのは、Gunicorn が複数ワーカーで動くため
-（ワーカーの数だけ試せてしまう）。WebAuthn のチャレンジと同じ理由（ADR-0055）。
+It is not kept in process memory because Gunicorn runs with multiple workers
+(attempts would be multiplied by the number of workers). Same reason as WebAuthn challenges (ADR-0055).
 """
 
 from __future__ import annotations
@@ -17,13 +17,13 @@ from bounded_contexts.account_security.domain.entities.login_attempts import (
 
 class LoginAttemptRepository(Protocol):
     def get(self, purpose: str, identifier: str) -> LoginAttempts:
-        """控えを返す。無ければ空の控え（失敗 0 回）を返す。"""
+        """Return the record. If none, return an empty record (0 failures)."""
 
     def save(self, attempts: LoginAttempts, now: datetime, policy: ThrottlePolicy) -> None:
-        """控えを書く。**もう意味の無い行はこの機会に掃除する**（専用のジョブを持たない）。"""
+        """Write the record. **Clean up rows that no longer matter at the same time** (there is no dedicated job)."""
 
     def forget(self, purpose: str, identifier: str) -> None:
-        """控えを消す（正しく入れたとき）。"""
+        """Delete the record (on a correct entry)."""
 
 
 __all__ = ["LoginAttemptRepository"]

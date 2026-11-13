@@ -1,9 +1,9 @@
-"""SSO から見たこのアプリの利用者。
+"""A user of this app as seen from SSO.
 
-``shared`` の ``User`` モデルそのものではなく、ID 連携が必要とする項目だけを持つ。
-Domain 層が SQLAlchemy のモデルに触れないようにするための境界で、実体とのやり取りは
-``domain/repositories/federated_user_directory.py`` の
-:class:`FederatedUserDirectory` が行う。
+Not the ``User`` model of ``shared`` itself; it holds only the fields identity federation needs.
+It is a boundary keeping the domain layer from touching SQLAlchemy models; exchange with the real thing is done by
+:class:`FederatedUserDirectory` in
+``domain/repositories/federated_user_directory.py``.
 """
 
 from __future__ import annotations

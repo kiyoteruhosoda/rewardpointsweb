@@ -1,5 +1,5 @@
 /**
- * 表示端末の画面（ADR-0047）: ペアリング → 受け取り → 表示、と、外されたらペアリングへ戻る。
+ * Display device screen (ADR-0047): pairing -> receive -> display; back to pairing if removed.
  */
 import { screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -43,7 +43,7 @@ const STARTED: StartedPairing = {
   user_code: 'KQ7M-3XPA',
   device_code: 'device-secret',
   expires_in: 600,
-  // 試験では待たずに問い合わせる
+  // Poll without waiting in tests
   interval: 0.01,
   qr_code: 'data:image/svg+xml;base64,AAAA',
 }
@@ -90,7 +90,7 @@ describe('DisplayPage', () => {
     openDisplaySession.mockResolvedValue('opened')
   })
 
-  it('資格情報が無ければ確認コードと QR を出し、承認されたら表示に切り替わる', async () => {
+  it('shows a code and QR without credentials, then switches to display on approval', async () => {
     startPairing.mockResolvedValue(STARTED)
     claimPairing.mockResolvedValueOnce({ kind: 'pending' }).mockResolvedValue({
       kind: 'claimed',
@@ -109,11 +109,11 @@ describe('DisplayPage', () => {
     expect(screen.getByText('70 pt')).toBeInTheDocument()
     expect(screen.getByText('おてつだい')).toBeInTheDocument()
     expect(localStorage.getItem('display_credential')).toBe('device-credential')
-    // 操作の入口は出さない
+    // No entry points to actions
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it('期限が切れたら新しいコードで始め直す', async () => {
+  it('starts over with a new code when it expires', async () => {
     startPairing
       .mockResolvedValueOnce(STARTED)
       .mockResolvedValue({ ...STARTED, user_code: 'ABCD-EFGH', interval: 60 })
@@ -126,7 +126,7 @@ describe('DisplayPage', () => {
     })
   })
 
-  it('資格情報があれば、何も入力せずに表示する', async () => {
+  it('displays without any input when credentials exist', async () => {
     localStorage.setItem('display_credential', 'device-credential')
 
     renderWithProviders(<DisplayPage />)
@@ -135,7 +135,7 @@ describe('DisplayPage', () => {
     expect(startPairing).not.toHaveBeenCalled()
   })
 
-  it('外されていたら（session が removed）ペアリングの画面へ戻る', async () => {
+  it('returns to the pairing screen when removed (session is removed)', async () => {
     localStorage.setItem('display_credential', 'device-credential')
     openDisplaySession.mockResolvedValue('removed')
     startPairing.mockResolvedValue({ ...STARTED, interval: 60 })
@@ -145,7 +145,7 @@ describe('DisplayPage', () => {
     expect(await screen.findByTestId('pairing-code')).toHaveTextContent('KQ7M-3XPA')
   })
 
-  it('届かないときは資格情報を残して「つなぎ直しています」を出す', async () => {
+  it('keeps credentials and shows "Reconnecting…" when unreachable', async () => {
     localStorage.setItem('display_credential', 'device-credential')
     openDisplaySession.mockResolvedValue('unreachable')
 
@@ -156,12 +156,12 @@ describe('DisplayPage', () => {
     expect(startPairing).not.toHaveBeenCalled()
   })
 
-  describe('版の表示（task #498）', () => {
+  describe('version display (task #498)', () => {
     afterEach(() => {
       vi.unstubAllGlobals()
     })
 
-    it('動いている版を画面の隅に出す', async () => {
+    it('shows the running version in a corner of the screen', async () => {
       localStorage.setItem('display_credential', 'device-credential')
       vi.stubGlobal(
         'fetch',

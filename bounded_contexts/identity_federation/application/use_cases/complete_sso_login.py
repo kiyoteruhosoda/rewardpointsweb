@@ -1,9 +1,9 @@
-"""SSO ログインの完了（IdP からの戻りを受け取り、引き換え券を発行する）。
+"""Completing an SSO login (receive the return from the IdP and issue an exchange ticket).
 
-控えを 1 回限りで消費し、**送り出したブラウザからの戻りであることを確かめ**、
-認可コードを検証済みのクレームへ換え、利用者を決めてから短命の引き換え券を返す。
-トークンそのものはここでは発行しない（発行は Presentation 層の
-:class:`TokenService`。券をトークンへ換えるのは :class:`ExchangeSsoTicket`）。
+Consume the saved request exactly once, **confirm the return comes from the browser we sent out**,
+exchange the authorization code for verified claims, decide the user, and return a short-lived exchange ticket.
+Tokens themselves are not issued here (issuing is done by
+:class:`TokenService` in the presentation layer; exchanging the ticket for tokens is :class:`ExchangeSsoTicket`).
 """
 
 from __future__ import annotations
@@ -63,15 +63,15 @@ class CompleteSsoLogin:
     claims: ClaimsMapping
     accounts: ResolveFederatedAccount
     ticket_ttl_seconds: int
-    #: 要求した ``acr_values`` と、返ってきた ``acr`` の突き合わせ（ADR-0039）。
+    #: Matching the requested ``acr_values`` against the returned ``acr`` (ADR-0039).
     requested_context: RequestedAuthenticationContext = field(default_factory=RequestedAuthenticationContext)
 
     def execute(self, *, code: str, state: str, browser_binding: str | None) -> SsoHandoffDto:
         provider = require_usable(self.provider)
         session = self.sessions.consume(state)
         if not session.belongs_to(hash_secret(browser_binding or "")):
-            # 別のブラウザで始められた認可要求の戻り（ログイン CSRF）。控えは
-            # 消費済みなので、同じ ``state`` で再挑戦することはできない。
+            # The return of an authorization request started in another browser (login CSRF). The saved request
+            # is already consumed, so retrying with the same ``state`` is not possible.
             raise SsoLoginSessionNotFoundError
         claims = self.gateway.exchange_code(
             CodeExchange(
@@ -81,7 +81,7 @@ class CompleteSsoLogin:
                 nonce=session.nonce,
             )
         )
-        # ⚠ **要求したら確かめる**（ADR-0039）。送るだけでは何の保証にもならない。
+        # ⚠ **If requested, check it** (ADR-0039). Merely sending it guarantees nothing.
         self.requested_context.ensure_satisfied(claims.get("acr"))
         federated_user = self.claims.apply(claims)
         account = self.accounts.execute(issuer=provider.issuer, user=federated_user)
@@ -103,10 +103,10 @@ class CompleteSsoLogin:
 
 
 def _federated_session(issuer: str, subject: str, sid: object) -> FederatedSession:
-    """ID トークンの ``sid`` を宛名へ写す（ADR-0032）。
+    """Map the ID token's ``sid`` to the target (ADR-0032).
 
-    ``sid`` を出さない IdP もあるので、無ければ ``None`` のまま進む
-    （その IdP では**利用者単位でしか**止められない）。
+    Some IdPs do not send ``sid``; if absent, proceed with ``None``
+    (for that IdP, sessions can be stopped **only per user**).
     """
     session_id = sid.strip() if isinstance(sid, str) else ""
     return FederatedSession(issuer=issuer, subject=subject, session_id=session_id or None)

@@ -1,12 +1,13 @@
-"""ドメイン例外 → HTTP 応答の対応付け。
+"""Mapping of domain exceptions to HTTP responses.
 
-ルーターに ``try/except`` を散らさないよう、アプリ全体の例外ハンドラとして一度
-だけ登録する。応答本文はエラーコードのみで、表示文言はフロントエンドが決める
-（CLAUDE.md「国際化」）。
+Registered once as an app-wide exception handler so routers are not littered with
+``try/except``. The response body carries only the error code; the display text is decided
+by the frontend (CLAUDE.md "i18n").
 
-失敗の記録は横断的な受け皿（:func:`~presentation.fastapi.error_handling.log_failed_request`）
-へ委ねる。ここで独自に記録すると、``HTTPException`` 由来の失敗とレベルや
-フィールドの揃わない行が混ざり、ログを絞り込めなくなる。
+Recording failures is left to the cross-cutting sink
+(:func:`~presentation.fastapi.error_handling.log_failed_request`). Logging separately here
+would mix in lines whose level and fields differ from ``HTTPException`` failures, making the
+logs hard to filter.
 """
 
 from __future__ import annotations
@@ -63,7 +64,7 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     InvitationNotFoundError: status.HTTP_404_NOT_FOUND,
     RewardEventNotFoundError: status.HTTP_404_NOT_FOUND,
     DisplayNotFoundError: status.HTTP_404_NOT_FOUND,
-    # 画面が古い姿を見ている（ADR-0042）。読み直せば正しい番号が分かる
+    # The screen is looking at a stale state (ADR-0042). Reloading reveals the right number
     RewardEventCompletedError: status.HTTP_409_CONFLICT,
     StickerOutOfOrderError: status.HTTP_409_CONFLICT,
     RewardEventExpiredError: status.HTTP_409_CONFLICT,
@@ -89,8 +90,8 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     DisplayNameRequiredError: status.HTTP_400_BAD_REQUEST,
     RoleNotInvitableError: status.HTTP_400_BAD_REQUEST,
     InvalidMemberOrderError: status.HTTP_400_BAD_REQUEST,
-    # 控えの中身が辻褄に合わない・読めない版（ADR-0026）。どちらも送られた
-    # ものの問題なので 400。打つ手が違うのでコードは分ける
+    # Archive contents are inconsistent, or its version cannot be read (ADR-0026). Both are
+    # problems with what was sent, so 400. The remedies differ, so the codes are separate
     InvalidFamilyArchiveError: status.HTTP_400_BAD_REQUEST,
     UnsupportedArchiveVersionError: status.HTTP_400_BAD_REQUEST,
 }

@@ -1,16 +1,16 @@
 /**
- * ポイントの推移（残高の折れ線）。
+ * Point trend (line chart of the balance).
  *
- * 残高は記録のたびに段で変わるので、階段状の線で描く（記録と記録のあいだを斜めに
- * つなぐと、存在しない残高を通ったように見える）。線の終わりは「いま」まで伸ばす。
+ * The balance changes in steps at each record, so it is drawn as a step line (connecting records
+ * diagonally would look like it passed through balances that never existed). The line extends to "now".
  *
- * 指（またはマウス）を置くと、いちばん近い記録に縦線が合い、その時点の残高と
- * 何が増減したかが出る。キーボードでは左右の矢印で記録を 1 つずつ移る。数字の
- * 一覧は同じ画面の履歴の表が受け持つ。
+ * Placing a finger (or the mouse) snaps a vertical line to the nearest record and shows the balance at
+ * that point and what changed. With the keyboard, left/right arrows move one record at a time. The
+ * numeric list is handled by the history table on the same screen.
  *
- * 「いま」から先は、これからの見込みを点線で伸ばす（ADR-0053）。直近の増え方が
- * 続いたときの見積もりで、確かな値ではないので実線とは描き分け、グラフの下に
- * 何日後に何 pt かと、見積もりの元（1 日あたりの増え方）を文で添える。
+ * Beyond "now", the expected trend is extended as a dotted line (ADR-0053). It is an estimate assuming the
+ * recent growth continues, not a certain value, so it is drawn differently from the solid line, and below
+ * the chart a sentence states how many pt in how many days and the basis of the estimate (growth per day).
  */
 import {
   useEffect,
@@ -36,20 +36,20 @@ import type { Transaction } from '../services/families'
 
 interface Props {
   transactions: readonly Transaction[]
-  /** 線を伸ばす先（「いま」）。台帳を読んだ時刻を渡す。 */
+  /** Where the line extends to ("now"). Pass the time the ledger was read. */
   asOf: Date
 }
 
 const HEIGHT = 200
 const MARGIN = { top: 14, right: 14, bottom: 26, left: 46 }
-/** 印を打つのは記録がこの数までのとき（多いと線が点で埋まる）。 */
+/** Markers are drawn only up to this many records (with more, the line fills up with dots). */
 const MAX_MARKERS = 40
 
 function withSign(amount: number): string {
   return amount > 0 ? `+${amount}` : String(amount)
 }
 
-/** 描く場所の幅を追う。測れない環境（試験の jsdom 等）では既定の幅で描く。 */
+/** Tracks the width of the drawing area. Where it cannot be measured (e.g. jsdom in tests), draw at the default width. */
 function useWidth(fallback: number) {
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(fallback)
@@ -74,7 +74,7 @@ export function BalanceTrend({ transactions, asOf }: Props) {
   const [frameRef, width] = useWidth(640)
   const forecastId = useId()
   const series = useMemo(() => balanceSeries(transactions), [transactions])
-  // 記録の時刻が読んだ時刻より先にある（端末の時計のずれ）ときも、線は最後の記録まで描く
+  // Even when a record's time is later than the read time (device clock skew), draw the line up to the last record
   const now = Math.max(asOf.getTime(), series.at(-1)?.at ?? 0)
   const view = useMemo(() => trendWindow(series, range, now), [series, range, now])
   const forecast = useMemo(() => balanceForecast(series, now), [series, now])

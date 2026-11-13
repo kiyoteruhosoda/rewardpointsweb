@@ -1,19 +1,19 @@
-"""決まった間隔で処理を回す常駐スレッド。
+"""Background thread that runs a job at a fixed interval.
 
-日付が変わったことに気付いてポイントを配る（ADR-0024）といった、誰の要求も
-きっかけにならない処理のための入口。時計を持つ別のコンテナや外部の cron を
-足さずに済ませるための最小の仕組みで、``RestartWatcher`` と同じ形にしてある。
+The entry point for work no request triggers, such as noticing the date changed and
+granting points (ADR-0024). The minimal mechanism that avoids adding another container
+with a clock or an external cron, shaped the same as ``RestartWatcher``.
 
-守っている約束は 2 つ。
+It keeps two promises.
 
-- **止まらない。** 1 周が例外で終わってもスレッドは生き続ける（DB の一時障害で
-  以後の付与が永久に止まると、誰にも気付かれないまま日が過ぎる）。
-- **すぐ 1 周する。** 起動直後に 1 回走ってから間隔を待つ。止まっていたあいだの
-  取りこぼしを、次の間隔まで待たずに片付けられる。
+- **It does not stop.** The thread survives a round that ends in an exception (if a transient
+  DB failure stopped grants forever, days would pass without anyone noticing).
+- **It runs a round right away.** It runs once right after startup, then waits the interval.
+  Anything missed while it was stopped is caught up without waiting for the next interval.
 
-**この仕組み自体は「1 回だけ実行される」ことを保証しない。** Gunicorn の
-ワーカーは複数あり、それぞれがこのスレッドを持つ。同じ処理が同時に走っても
-壊れないこと（冪等であること）は、渡す処理の側の責任。
+**The mechanism itself does not guarantee "runs exactly once".** Gunicorn has
+several workers and each has this thread. Not breaking when the same job runs concurrently
+(being idempotent) is the responsibility of the job passed in.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class PeriodicRunner:
         self._thread = threading.Thread(target=self._run, name=f"periodic-{self._name}", daemon=True)
         self._thread.start()
         logger.info(
-            "定期実行を開始しました: name=%s interval=%.0fs",
+            "Started periodic job: name=%s interval=%.0fs",
             self._name,
             self._interval_seconds,
             extra={"event": "scheduling.start"},
@@ -51,12 +51,12 @@ class PeriodicRunner:
         self._stop_event.set()
 
     def run_once(self) -> None:
-        """1 周だけ回す。例外はここで止め、記録だけ残す。"""
+        """Run one round. Exceptions stop here and are only recorded."""
         try:
             self._task()
         except Exception:
             logger.warning(
-                "定期実行が失敗しました: name=%s",
+                "Periodic job failed: name=%s",
                 self._name,
                 exc_info=True,
                 extra={"event": "scheduling.failed"},
@@ -69,10 +69,10 @@ class PeriodicRunner:
 
 
 def start_periodic_runner(*, name: str, interval_seconds: float, task: Callable[[], None]) -> PeriodicRunner | None:
-    """定期実行を開始する。テスト実行時（``TESTING``）は何もしない。
+    """Start a periodic job. Does nothing under tests (``TESTING``).
 
-    テストで走らせないのは、``TestClient`` が起動のたびに別スレッドから DB を
-    触りに行くのを避けるため。処理そのものはユースケースを直接呼んで検証する。
+    It does not run under tests so that ``TestClient`` does not touch the DB from another
+    thread on every startup. The job itself is tested by calling the use case directly.
     """
     from shared.kernel.settings.settings import settings
 
@@ -86,7 +86,7 @@ def start_periodic_runner(*, name: str, interval_seconds: float, task: Callable[
 
 
 def stop_periodic_runners() -> None:
-    """起動済みの定期実行を止める（プロセス終了時・テスト後始末用）。"""
+    """Stop a started periodic job (for process exit and test cleanup)."""
     for runner in _runners:
         runner.stop()
     _runners.clear()

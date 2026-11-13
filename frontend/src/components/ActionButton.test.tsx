@@ -1,12 +1,12 @@
 /**
- * 実行中のボタン（ADR-0023）。
+ * Button while an action is running (ADR-0023).
  *
- * 検証するのは「押してから終わるまでスピナーが出て押せなくなる」「終われば元に
- * 戻る」「実行中に続けて押しても 2 度目は走らない」の 3 点。回る見た目そのものは
- * CSS が担うのでここでは見ない。
+ * Checks three things: "after a press, a spinner shows and the button is disabled until it
+ * finishes", "it returns to normal when done", and "pressing again while running does not run a
+ * second time". The spinning look itself is CSS's job, so it is not checked here.
  *
- * ラベルが実行中も要素として残ること（＝ボタンの幅が変わらないこと）もここで守る。
- * 隠すのは CSS の役目だが、ラベルを差し替える実装に戻ると幅が動いてしまう。
+ * Also guards that the label stays as an element while running (= the button width does not change).
+ * Hiding it is CSS's job, but going back to an implementation that swaps the label would move the width.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
@@ -22,7 +22,7 @@ const SETTINGS: UiSettings = {
   default_theme: 'light',
 }
 
-/** `usePendingAction` と組んだ、実際の使い方どおりの最小の画面。 */
+/** Minimal screen combined with `usePendingAction`, the way it is actually used. */
 function Subject({ action }: { action: () => Promise<void> }) {
   const [run, pending] = usePendingAction(action)
   return (
@@ -42,7 +42,7 @@ function renderSubject(action: () => Promise<void>) {
 }
 
 describe('ActionButton', () => {
-  it('実行中はスピナーを出して押せなくし、終われば元に戻る', async () => {
+  it('shows a spinner and disables while running, and returns to normal when done', async () => {
     let finish = (): void => undefined
     const action = () =>
       new Promise<void>((resolve) => {
@@ -58,7 +58,7 @@ describe('ActionButton', () => {
     expect(button).toHaveAttribute('aria-busy', 'true')
     expect(button).toBeDisabled()
     expect(screen.getByText('Processing...')).toBeInTheDocument()
-    // ラベルは place holder として残る（差し替えるとボタンの幅が動く）。
+    // The label stays as a placeholder (swapping it would change the button width).
     expect(screen.getByText('Save')).toBeInTheDocument()
 
     finish()
@@ -69,7 +69,7 @@ describe('ActionButton', () => {
     expect(screen.queryByText('Processing...')).not.toBeInTheDocument()
   })
 
-  it('実行中に続けて押しても 2 度目は走らない', async () => {
+  it('does not run a second time when pressed again while running', async () => {
     let finish = (): void => undefined
     const action = vi.fn(
       () =>
@@ -80,7 +80,7 @@ describe('ActionButton', () => {
     const button = renderSubject(action)
 
     fireEvent.click(button)
-    // `disabled` は描画を待つので、同じフレームで続けて押された分も止まることを見る。
+    // `disabled` waits for rendering, so check that presses in the same frame are also stopped.
     fireEvent.click(button)
     expect(action).toHaveBeenCalledTimes(1)
 

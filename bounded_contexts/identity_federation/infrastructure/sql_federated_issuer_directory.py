@@ -1,4 +1,4 @@
-"""結び付きの棚卸しの SQLAlchemy 実装（ADR-0035）。"""
+"""SQLAlchemy implementation of the link inventory (ADR-0035)."""
 
 from __future__ import annotations
 

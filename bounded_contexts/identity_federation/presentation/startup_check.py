@@ -1,11 +1,11 @@
-"""起動時に SSO の設定を一度だけ確かめてログへ出す。
+"""Check the SSO settings once at startup and log the result.
 
-**秘密鍵は署名のときになって初めて読まれる。** 権限が合っていなくても起動も
-設定画面の確認も通り、利用者が IdP から戻ってきた瞬間だけ失敗する——という形に
-なりやすい（ADR-0029）。ここで一度読んでおくと、デプロイの直後に気付ける。
+**The private key is first read only when signing.** Even with wrong permissions, startup and the
+settings screen check pass, and it fails only at the moment a user returns from the IdP -- that
+pattern is easy to fall into (ADR-0029). Reading it once here makes it noticeable right after deployment.
 
-設定値そのものはログに出さない（CLAUDE.md「ログ」）。出すのは「使える／使えない」と、
-使えない場合の分類だけ。
+Setting values themselves are not logged (CLAUDE.md "Logging"). Only "usable / not usable" and,
+when not usable, the category are logged.
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ logger = logging.getLogger(__name__)
 
 
 def report_sso_configuration() -> None:
-    """SSO を使う設定になっているなら、実際に始められるかを確かめる。"""
+    """If SSO is configured to be used, check that it can actually start."""
     if not settings.oidc_enabled:
         return
     provider = identity_provider()
     if provider is None or not provider.is_usable:
-        # 有効にしたつもりで無効、という食い違いはここでしか気付けない。
+        # A mismatch of "meant to enable it but it is disabled" can only be noticed here.
         logger.error("sso_disabled_by_configuration")
         return
     if not provider.credential.uses_private_key:
@@ -41,7 +41,7 @@ def report_sso_configuration() -> None:
     try:
         read_private_key(provider.credential)
     except SsoNotConfiguredError:
-        # 理由は read_private_key が既に書いている（例外の型だけ）。
+        # The reason is already logged by read_private_key (only the exception type).
         logger.error("sso_private_key_unreadable")
         return
     logger.info("sso_ready")

@@ -1,4 +1,4 @@
-"""マスタデータの整合性（正本ファイル内のドリフト検出）。"""
+"""Master data consistency (detects drift within the source-of-truth files)."""
 
 from shared.domain.auth import master_data
 
@@ -16,7 +16,7 @@ def test_every_role_has_permission_assignment() -> None:
 
 
 def test_admin_role_has_everything_except_family_and_points() -> None:
-    """システム管理者は家族・ポイントに関与せず、家族を端末へ映す承認も持たない（ADR-0018・ADR-0047）。"""
+    """The system admin stays out of families and points and cannot approve display devices (ADR-0018, ADR-0047)."""
     outside = {"family:view", "family:manage", "point:view", "point:manage", "display:approve"}
     granted = set(master_data.ROLE_PERMISSIONS["admin"])
     assert granted == set(master_data.PERMISSION_CODES) - outside
@@ -24,13 +24,13 @@ def test_admin_role_has_everything_except_family_and_points() -> None:
 
 
 def test_only_the_operator_approves_display_devices() -> None:
-    """表示端末の承認は運用管理者だけ（ADR-0047）。"""
+    """Only the operations admin approves display devices (ADR-0047)."""
     holders = {role for role, codes in master_data.ROLE_PERMISSIONS.items() if "display:approve" in codes}
     assert holders == {"operator"}
 
 
 def test_display_role_only_views() -> None:
-    """表示端末は見るだけ。変更の scope を持たない（ADR-0047）。"""
+    """Display devices are view only. They hold no scope for changes (ADR-0047)."""
     granted = set(master_data.ROLE_PERMISSIONS["display"])
     assert {"family:view", "point:view"} <= granted
     assert not {code for code in granted if code.endswith(":manage") or code == "display:approve"}
@@ -41,11 +41,11 @@ def test_default_admin_role_exists() -> None:
 
 
 def test_default_admin_password_hash_matches_documented_password() -> None:
-    """平文とハッシュの食い違いを検出する。
+    """Detect a mismatch between the plaintext and the hash.
 
-    既定パスワードは README・OPERATIONS に載る公開値で、ハッシュはここに直書き
-    してある。片方だけ直すと「ドキュメントどおりに入れてもログインできない」に
-    なるため、両者が一致していることを機械で確かめる。
+    The default password is a public value listed in README and OPERATIONS, and the hash is hard-coded
+    here. Fixing only one would lead to "signing in as documented does not work",
+    so this mechanically checks that the two match.
     """
     from werkzeug.security import check_password_hash
 
@@ -53,5 +53,5 @@ def test_default_admin_password_hash_matches_documented_password() -> None:
 
 
 def test_superseded_hashes_do_not_contain_the_current_default() -> None:
-    """旧既定値に現行値が混ざると、投入のたびにパスワードを上書きし続けてしまう。"""
+    """If the current value is mixed into the old defaults, every seeding would keep overwriting the password."""
     assert master_data.DEFAULT_ADMIN_PASSWORD_HASH not in master_data.SUPERSEDED_ADMIN_PASSWORD_HASHES

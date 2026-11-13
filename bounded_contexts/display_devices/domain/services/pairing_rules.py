@@ -1,19 +1,20 @@
-"""ペアリングと端末の資格情報の時間の決まり（ADR-0047）。
+"""Timing rules for pairings and device credentials (ADR-0047).
 
-設定にしないのは、どれも「表示端末の作り」の一部で、運用で回す値ではないため。
+These are not settings: they are all part of how display devices are built, not values
+tuned in operation.
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
 
-#: 確認コードの有効期限。端末は切れたら新しいコードを出し直す
+#: Lifetime of a confirmation code. When it expires, the device shows a new code
 PAIRING_TTL = timedelta(minutes=10)
-#: 端末が受け取りを問い合わせる間隔（RFC 8628 の ``interval``）
+#: Interval at which the device polls for its credential (``interval`` in RFC 8628)
 POLL_INTERVAL_SECONDS = 5
-#: 期限が切れたペアリングを、この長さを過ぎたら消す（溜めない）
+#: Expired pairings are deleted after this long (so they do not pile up)
 PAIRING_RETENTION = timedelta(days=1)
-#: 使われないまま、この長さを過ぎた資格情報は失効させる。つけっぱなしなら 5 分ごとに使われる
+#: A credential unused for longer than this is revoked. A device left on uses it every 5 minutes
 CREDENTIAL_IDLE_LIMIT = timedelta(days=90)
 
 

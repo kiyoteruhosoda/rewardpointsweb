@@ -1,9 +1,9 @@
-"""アプリケーション再起動 API（要 ``system:manage``）。
+"""Application restart API (requires ``system:manage``).
 
-起動時にしか読まれない設定（ログ・CORS 等）を管理画面から反映するための
-再起動要求を受け付ける。要求は DB に置かれ、各プロセスが自分宛かを判定して
-自らを終了させる。復帰はコンテナの restart policy に任せる
-（:mod:`shared.kernel.restart`）。
+Accepts restart requests so that settings only read at startup (logging, CORS, etc.) can be
+applied from the admin console. Requests are stored in the DB; each process decides whether
+one is meant for it and exits itself. Coming back up is left to the container's restart policy
+(:mod:`shared.kernel.restart`).
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def _to_response(request: RestartRequest) -> RestartRequestResponse:
 
 @router.get("/restart", response_model=RestartStatusResponse)
 async def restart_status(_principal: SystemManagerDep) -> RestartStatusResponse:
-    """スコープごとの直近の再起動要求と、指定できるスコープの一覧を返す。"""
+    """Return the latest restart request per scope and the list of scopes that can be specified."""
     stored = RestartRequestStore().load_all()
     return RestartStatusResponse(
         available_scopes=[scope.value for scope in ALL_RESTART_SCOPES],
@@ -69,10 +69,10 @@ def request_restart(
     principal: SystemManagerDep,
     db: DbDep,
 ) -> RestartCommandResponse:
-    """再起動を要求する。
+    """Request a restart.
 
-    ``scopes`` を省略した場合は全サービスが対象。要求は監視スレッドが拾って
-    処理するため、応答が返った時点ではまだ再起動していない。
+    If ``scopes`` is omitted, all services are targeted. A watcher thread picks up and
+    handles the request, so nothing has restarted yet when the response returns.
     """
     if body.scopes is None:
         scopes: tuple[RestartScope, ...] = ALL_RESTART_SCOPES
@@ -89,12 +89,12 @@ def request_restart(
         requests = RestartRequestStore().save(
             db,
             scopes,
-            # 要求者はログにも残るため、PII を含まない主体識別子を記録する
+            # The requester also ends up in logs, so record a principal identifier without PII
             requested_by=f"user:{principal.user_id}",
             reason=reason,
         )
     except Exception:
-        logger.exception("再起動要求の保存に失敗しました")
+        logger.exception("Failed to save the restart request")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "restart_request_failed"},

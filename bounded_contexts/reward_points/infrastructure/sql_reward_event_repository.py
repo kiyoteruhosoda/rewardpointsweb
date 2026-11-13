@@ -1,9 +1,9 @@
-"""``IRewardEventRepository`` の SQLAlchemy 実装（ADR-0042）。
+"""SQLAlchemy implementation of ``IRewardEventRepository`` (ADR-0042).
 
-シールは 1 枚 1 行で、``UNIQUE (event_id, number)`` が二重貼りを止める。2 人の
-親が同時に同じ番号を貼ると、負けた側は一意制約に当たる。そこで 500 にせず
-「もう貼られていた」と返す（台帳への追記 ``SqlPointTransactionRepository.append``
-と同じ形）。
+One row per sticker; ``UNIQUE (event_id, number)`` prevents placing it twice. When two
+parents place the same number at once, the loser hits the unique constraint. Instead of a 500
+we then return "already placed" (the same shape as the ledger append
+``SqlPointTransactionRepository.append``).
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ class SqlRewardEventRepository(IRewardEventRepository):
         )
         self._session.add(row)
         self._session.flush()
-        # 値オブジェクトを通して返す（列の CHECK と同じ不変条件をドメイン側でも守る）
+        # Return through the value object (the domain enforces the same invariant as the column CHECK)
         return self._to_events([row])[0]
 
     def stick(self, *, event_id: int, number: int, stuck_at: datetime, stuck_by_membership_id: int) -> bool:
@@ -66,7 +66,7 @@ class SqlRewardEventRepository(IRewardEventRepository):
             stuck_by_membership_id=stuck_by_membership_id,
         )
         try:
-            # SAVEPOINT の中で書く。衝突しても巻き戻るのはこの 1 行だけ
+            # Write inside a SAVEPOINT. On a conflict only this one row is rolled back
             with self._session.begin_nested():
                 self._session.add(row)
         except IntegrityError:
@@ -100,7 +100,7 @@ class SqlRewardEventRepository(IRewardEventRepository):
         self._session.execute(delete(RewardEventModel).where(RewardEventModel.id == event_id))
 
     def _to_events(self, rows: Sequence[RewardEventModel]) -> list[RewardEvent]:
-        """シールはイベントの数によらず 1 回で引く。"""
+        """Fetch stickers in one query regardless of the number of events."""
         stickers: dict[int, list[EventSticker]] = defaultdict(list)
         if rows:
             for sticker in self._session.scalars(

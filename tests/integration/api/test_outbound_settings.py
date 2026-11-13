@@ -1,4 +1,4 @@
-"""通信先の URL と鍵の場所は環境変数だけで決める（ADR-0056）。"""
+"""Outbound URLs and key locations are decided by environment variables only (ADR-0056)."""
 
 from __future__ import annotations
 

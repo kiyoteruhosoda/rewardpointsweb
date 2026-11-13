@@ -1,8 +1,8 @@
-"""``IFamilyInvitationRepository`` の SQLAlchemy 実装。
+"""SQLAlchemy implementation of ``IFamilyInvitationRepository``.
 
-招待コードは平文を保存せず SHA-256 ハッシュだけを保存する（パスワードリセット
-トークンと同じ扱い）。ハッシュ化の知識はこの層に閉じ、ドメイン側は平文しか
-知らない。
+Invitation codes are never stored in plaintext; only their SHA-256 hash is stored (same as
+password reset tokens). Knowledge of hashing stays in this layer; the domain only knows
+the plaintext.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from bounded_contexts.reward_points.domain.repositories.family_invitation_reposi
 from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
 from bounded_contexts.reward_points.infrastructure.reward_points_models import FamilyInvitationModel
 
-# 子どもが手で入力する前提のため、紛らわしい文字（0/O・1/I/l）を外した英数字を使う。
+# Children type these by hand, so use alphanumerics without confusable characters (0/O, 1/I/l).
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 _CODE_LENGTH = 10
 
@@ -89,15 +89,15 @@ class SqlFamilyInvitationRepository(IFamilyInvitationRepository):
         return _to_invitation(row) if row else None
 
     def consume(self, code: str, *, now: datetime) -> FamilyInvitation | None:
-        """条件付き UPDATE で「まだ使えるなら使用済みにする」を 1 手で行う。
+        """Do "mark as used if still usable" in one step with a conditional UPDATE.
 
-        ``used_at IS NULL`` を条件に含めるので、同時に届いた 2 つ目は 0 行に
-        なる（先の更新が行ロックを持ち、解放後に条件を評価し直すため）。
-        更新できた場合だけ招待を返す。
+        Because ``used_at IS NULL`` is part of the condition, a second concurrent request
+        updates 0 rows (the first update holds the row lock and the condition is re-evaluated
+        after release). Returns the invitation only if the update succeeded.
         """
         code_hash = _hash_code(code)
-        # 何行更新できたかが「勝ったか」の答え。``Session.execute`` の戻り値は
-        # 型の上では ``Result`` だが、UPDATE では ``CursorResult`` が返る。
+        # The number of updated rows answers "did we win". ``Session.execute`` is typed to
+        # return ``Result``, but for UPDATE it returns a ``CursorResult``.
         updated = cast(
             "CursorResult[Any]",
             self._session.execute(

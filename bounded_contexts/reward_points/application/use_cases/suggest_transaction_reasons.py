@@ -1,10 +1,10 @@
-"""その家族でよく使われている理由を返す。
+"""Return the reasons frequently used in the family.
 
-同じ言い回しを毎回打ち直さずに済ませるための候補で、認可の単位は家族。
-他家族の理由は混ざらない（リポジトリが ``family_id`` で絞る）。
+These are suggestions so the same wording need not be retyped every time; authorization
+is per family. Reasons from other families never mix in (the repository filters by ``family_id``).
 
-親だけが呼ぶ。理由の文言は他の子の記録から来ることがあり、兄弟間の非公開
-（ADR-0009）と噛み合わないため、子には返さない。
+Only parents call this. Reason texts may come from other children's records, which would
+conflict with privacy between siblings (ADR-0009), so they are not returned to children.
 """
 
 from __future__ import annotations

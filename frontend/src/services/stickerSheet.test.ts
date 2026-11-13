@@ -12,11 +12,11 @@ describe('gridColumns', () => {
     [20, 5],
     [30, 6],
     [50, 10],
-  ])('%i マスは %i 列に並ぶ', (count, columns) => {
+  ])('%i cells are laid out in %i columns', (count, columns) => {
     expect(gridColumns(count)).toBe(columns)
   })
 
-  it('上限より多くは横に並べない', () => {
+  it('does not lay out more than the maximum across', () => {
     for (let count = 1; count <= 50; count++) {
       expect(gridColumns(count)).toBeLessThanOrEqual(10)
     }
@@ -24,15 +24,15 @@ describe('gridColumns', () => {
 })
 
 describe('stickerLook', () => {
-  it('同じカードの同じ番号はいつも同じ見た目になる', () => {
+  it('the same number on the same card always looks the same', () => {
     expect(stickerLook(7, 3)).toEqual(stickerLook(7, 3))
   })
 
-  it('隣り合う番号は違う形になる', () => {
+  it('adjacent numbers get different shapes', () => {
     expect(stickerLook(7, 3).shape).not.toBe(stickerLook(7, 4).shape)
   })
 
-  it('傾きは手で貼った程度に収まる', () => {
+  it('the tilt stays within what hand-placing would give', () => {
     for (let number = 1; number <= 50; number++) {
       expect(Math.abs(stickerLook(3, number).tilt)).toBeLessThanOrEqual(12)
     }

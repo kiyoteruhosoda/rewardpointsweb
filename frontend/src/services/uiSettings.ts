@@ -1,9 +1,9 @@
 /**
- * 画面の初期設定（言語・テーマ）。
+ * Initial screen settings (language and theme).
  *
- * 管理画面で運用者が決めた既定値をサーバーから受け取り、利用者がまだ何も
- * 選んでいないときの初期値として使う。ログイン前の画面でも必要なため、
- * 認証前に一度だけ取得する（`main.tsx`）。
+ * Receives the defaults chosen by the operator in the admin console from the server and uses them
+ * as initial values while the user has not chosen anything. They are needed before login too,
+ * so they are fetched once before authentication (`main.tsx`).
  */
 
 export interface UiSettings {
@@ -12,7 +12,7 @@ export interface UiSettings {
   default_theme: string
 }
 
-/** サーバーへ到達できない場合でも画面は出す。そのときの保険。 */
+/** Fallback so the screen still renders when the server is unreachable. */
 export const FALLBACK_UI_SETTINGS: UiSettings = {
   languages: ['en', 'ja'],
   default_locale: 'en',

@@ -1,7 +1,7 @@
-"""台帳へ 1 回で動かす量（符号付き）。
+"""Amount moved on a ledger in one entry (signed).
 
-加算は正、消費は負で表す。0 は台帳に意味を持たないため許さない
-（``CHECK (amount <> 0)`` と同じ不変条件をドメイン側でも守る。ADR-0010）。
+Additions are positive, spending is negative. Zero is not allowed since it means nothing
+on a ledger (the domain enforces the same invariant as ``CHECK (amount <> 0)``; ADR-0010).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ class PointAmount:
 
     @property
     def negated(self) -> PointAmount:
-        """打ち消しに使う逆符号の量。"""
+        """The opposite-sign amount used for a reversal."""
         return PointAmount(-self.value)
 
 

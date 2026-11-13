@@ -1,7 +1,7 @@
-"""example コンテキストの API（Item CRUD）。
+"""API of the example context (Item CRUD).
 
-コンテキスト固有のルーター・スキーマ・依存関数は presentation/ 配下に
-まとめる。認可は scope（``item:view`` / ``item:manage``）で宣言する。
+Context-specific routers, schemas and dependency functions live under
+presentation/. Authorization is declared by scope (``item:view`` / ``item:manage``).
 """
 
 from __future__ import annotations

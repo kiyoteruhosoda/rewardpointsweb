@@ -1,10 +1,10 @@
-"""ログインの往復で使う 1 回限りの値の生成と、その保存形。
+"""Generation of one-time values used in the login round trip, and their stored form.
 
-``state`` / ``nonce`` / PKCE の ``code_verifier`` / 引き換え券はいずれも
-「推測できないこと」だけが要件で、生成の仕方をばらけさせる理由が無い。1 か所に集める。
+``state`` / ``nonce`` / PKCE ``code_verifier`` / exchange tickets all have only one requirement,
+"unguessable", so there is no reason to vary how they are generated. Keep it in one place.
 
-引き換え券は持ち主へ渡す資格情報なので、DB へは SHA-256 のハッシュだけを置く
-（漏れた控えからそのままログインできないようにする）。
+An exchange ticket is a credential handed to its holder, so only its SHA-256 hash goes to the DB
+(so that a leaked record cannot be used to sign in directly).
 """
 
 from __future__ import annotations
@@ -13,33 +13,33 @@ import base64
 import hashlib
 import secrets
 
-# 128 bit 以上あれば総当たりは現実的でない。RFC 7636 は code_verifier に
-# 43〜128 文字を求めており、32 バイトの base64url（43 文字）はその下限を満たす。
+# 128 bits or more makes brute force impractical. RFC 7636 requires 43-128 characters for
+# code_verifier, and 32 bytes in base64url (43 characters) meets that lower bound.
 _TOKEN_BYTES = 32
 
 
 def new_secret() -> str:
-    """推測できない URL 安全な文字列を作る（state / nonce / 引き換え券）。"""
+    """Make an unguessable URL-safe string (state / nonce / exchange ticket)."""
     return secrets.token_urlsafe(_TOKEN_BYTES)
 
 
 def new_code_verifier() -> str:
-    """PKCE の ``code_verifier``（RFC 7636）。"""
+    """PKCE ``code_verifier`` (RFC 7636)."""
     return secrets.token_urlsafe(_TOKEN_BYTES)
 
 
 def code_challenge_of(code_verifier: str) -> str:
-    """``code_verifier`` から ``S256`` の ``code_challenge`` を作る。
+    """Make the ``S256`` ``code_challenge`` from a ``code_verifier``.
 
-    ``plain`` は使わない。認可要求を覗ける相手がそのまま検証値を得てしまい、
-    PKCE の意味が無くなる。
+    ``plain`` is not used: anyone who can see the authorization request would get the verifier as is,
+    defeating PKCE.
     """
     digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 def hash_secret(value: str) -> str:
-    """保存用のハッシュ。突き合わせは常にハッシュ同士で行う。"""
+    """Hash for storage. Matching is always done hash to hash."""
     return hashlib.sha256(value.encode()).hexdigest()
 
 

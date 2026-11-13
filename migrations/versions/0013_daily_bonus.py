@@ -1,13 +1,13 @@
 """daily bonus
 
-子の台帳ごとに「毎日いくつ足すか」を持たせる（ADR-0024）。台帳が消えれば設定も
-消えるよう ``ON DELETE CASCADE`` にしてある（家族の解散・参加者の削除・独立の成立）。
+Gives each child's ledger a "how many to add every day" setting (ADR-0024). It is ``ON DELETE CASCADE``
+so the setting goes away with the ledger (family dissolved, participant deleted, independence taken effect).
 
-``granted_through`` は渡し終えた最後の日。アプリが止まっていた日は、次に動いた
-ときにここを起点にまとめて追いつく。既存の台帳には行が入らないので、
-このリビジョンの前後で見え方は変わらない。
+``granted_through`` is the last day already granted. Days on which the app was down are caught up
+in one go from here the next time it runs. Existing ledgers get no row, so
+nothing looks different before and after this revision.
 
-定義の正本は ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``。
+The definitions' source of truth is ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``.
 
 Revision ID: daily_bonus
 Revises: point_transaction_correction
@@ -47,6 +47,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # 索引は表と一緒に消える。外部キーが使う索引を先に落とすと MariaDB が拒む
-    # （CLAUDE.md「DDL 管理」）
+    # Indexes go away with the table. Dropping an index a foreign key uses first is rejected by MariaDB
+    # (CLAUDE.md "DDL management")
     op.drop_table("daily_bonuses")

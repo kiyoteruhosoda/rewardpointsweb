@@ -1,11 +1,11 @@
-"""利用者（``users``）への窓口。
+"""Gateway to users (``users``).
 
-ID 連携から見ると、利用者を引くのは「外の仕組み」に当たる。Domain 層が SQLAlchemy
-のモデルへ触れないよう、必要な操作だけをここで宣言し、実装（Infrastructure 層）が
-``shared`` のモデルへ橋渡しする。
+From identity federation's point of view, looking up users is an "external system". So that the Domain
+layer does not touch SQLAlchemy models, only the needed operations are declared here, and the
+implementation (Infrastructure layer) bridges to the ``shared`` models.
 
-**作るのは、初めての相手の口座 1 種類だけ**（ADR-0041）。誰に作ってよいかは assay の
-アプリの割り当てが決めていて、こちらは code を持って戻ってきた相手を迎えるだけである。
+**The only thing it creates is an account for a first-time user** (ADR-0041). Who may get one is decided by
+assay's application assignments; this side merely welcomes whoever comes back holding a code.
 """
 
 from __future__ import annotations
@@ -19,43 +19,43 @@ from bounded_contexts.identity_federation.domain.entities.federated_account impo
 
 class FederatedUserDirectory(Protocol):
     def find_by_id(self, user_id: int) -> FederatedAccount | None:
-        """利用者を内部 ID で引く。無ければ ``None``。"""
+        """Look up a user by internal ID. ``None`` if absent."""
 
     def find_by_email(self, email: str) -> FederatedAccount | None:
-        """利用者をメールアドレスで引く（初回の結び付けの手掛かり）。
+        """Look up a user by email address (a hint for the first link).
 
-        メールアドレスは任意項目なので、持っていない利用者は決して当たらない
-        （ADR-0011）。識別子がメールアドレスの口座は、呼び出し側が
-        ``find_by_username`` でも探す。
+        Email is optional, so users without one never match
+        (ADR-0011). For accounts whose identifier is an email address, the caller
+        also searches with ``find_by_username``.
         """
 
     def find_by_username(self, username: str) -> FederatedAccount | None:
-        """利用者をログイン識別子で引く（正規化済みの値を渡す）。無ければ ``None``。"""
+        """Look up a user by login identifier (pass the normalized value). ``None`` if absent."""
 
     def provision(self, *, username: str, email: str | None, display_name: str) -> FederatedAccount | None:
-        """初めての相手の口座を作る（ADR-0041）。
+        """Create an account for a first-time user (ADR-0041).
 
-        作る口座は、管理画面で作るときの既定と同じ **親（``member``）・家族なし**
-        （ADR-0018）。⚠ **ローカルのパスワードは持たせない**（ADR-0034 の NULL）
-        ——入り口は IdP だけである。
+        The account gets the same defaults as one created in the admin screen: **parent (``member``), no family**
+        (ADR-0018). ⚠ **It has no local password** (NULL per ADR-0034)
+        -- the only way in is the IdP.
 
-        ⚠ **一意の列がぶつかったら作らずに ``None`` を返す。** 直前に確かめていても、
-        同じ相手の往復が 2 本同時に戻ると追い越される。
+        ⚠ **If a unique column collides, create nothing and return ``None``.** Even if checked just before,
+        two concurrent round trips of the same person returning can overtake each other.
         """
 
     def refresh_profile(self, user_id: int, *, email: str | None, display_name: str) -> None:
-        """IdP が名乗った名前とメールアドレスを写しへ上書きする（ADR-0038）。
+        """Overwrite the copy with the name and email address the IdP asserted (ADR-0038).
 
-        ⚠ **写しは IdP を正とする**（idp の ADR-0049 I5）。書かないと、向こうで
-        改名・メール変更をしても**こちらの表示は永久に古いまま**になる。
+        ⚠ **The IdP is the source of truth for the copy** (idp ADR-0049 I5). Without writing it,
+        a rename or email change over there would leave **the display here stale forever**.
 
-        ⚠ **他の利用者とぶつかる値は書かない。** ``users.email`` は一意なので、
-        ぶつかったまま書くと**ログインが 500 で落ちる** ——写しの更新でログインを
-        壊してはいけないので、その項目だけ黙って見送る。
+        ⚠ **Do not write a value that collides with another user.** ``users.email`` is unique, so
+        writing a colliding value would **make login fail with 500** -- updating the copy must not
+        break login, so just that field is silently skipped.
 
-        ⚠ **名乗っていない項目は消さない。** ``email`` が ``None`` なのは
-        「空にしてほしい」ではなく「今回は分からない」である（ADR-0011 の、
-        メールアドレスを持たない利用者をここで壊さないためでもある）。
+        ⚠ **Do not clear fields that were not asserted.** ``email`` being ``None`` means
+        "unknown this time", not "please empty it" (this also avoids breaking users without an
+        email address, per ADR-0011).
         """
 
 

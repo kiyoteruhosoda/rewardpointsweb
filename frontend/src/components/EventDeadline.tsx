@@ -1,11 +1,11 @@
 /**
- * カードの期限（ADR-0043）の札と、決め直す入力欄。
+ * The deadline badge on a card (ADR-0043) and the input to reset it.
  *
- * 札は残りの日数で言い方と色を変える（あと N 日／あしたまで／今日まで／期限切れ）。
- * 期限切れかどうかはサーバーの `is_expired` で決め、日数は端末の暦で数える。
+ * The badge changes wording and colour by days left (N days left / until tomorrow / until today / expired).
+ * Whether it is expired comes from the server's `is_expired`; days are counted on the device calendar.
  *
- * 親には「期限を変える」を出す。期限切れのカードも、延ばせばまた貼れる。過ぎた日は
- * 選べない（`min` を今日にする。サーバーも断る）。
+ * Parents get "change deadline". Even an expired card can be stuck again once extended. Past dates
+ * cannot be chosen (`min` is today; the server also refuses).
  */
 import { useState, type SubmitEvent } from 'react'
 
@@ -16,12 +16,12 @@ import { ActionButton } from './ActionButton'
 
 interface Props {
   event: RewardEvent
-  /** 端末の暦での今日（YYYY-MM-DD）。 */
+  /** Today on the device calendar (YYYY-MM-DD). */
   today: string
   canModify: boolean
   pending: boolean
   disabled: boolean
-  /** 決め直す（null で期限なし）。失敗したら投げ直す（入力を開いたままにする）。 */
+  /** Resets the deadline (null means no deadline). Rethrows on failure (keeps the input open). */
   onChange: (deadline: string | null) => Promise<void>
 }
 
@@ -43,7 +43,7 @@ export function EventDeadline({ event, today, canModify, pending, disabled, onCh
       await onChange(deadline)
       setEditing(false)
     } catch {
-      // 伝えるのは呼び出し側。入力欄は開いたまま残す
+      // Reporting is the caller's job. Keep the input open
     }
   }
 

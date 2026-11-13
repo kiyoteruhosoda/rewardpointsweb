@@ -1,10 +1,12 @@
-"""毎日のボーナス（ADR-0024）。
+"""Daily bonus (ADR-0024).
 
-設定の API は利用者と同じ道（HTTP）で確かめる。配る側は定期実行から呼ばれる
-ものなので、ユースケースを直接呼び、``now`` を渡して日付を動かす。
+The settings API is checked through the same path users take (HTTP). Granting is
+invoked by the periodic runner, so we call the use case directly and pass ``now`` to
+move the date.
 
-日付は設定が返す ``starts_on``（最初に渡す日）を基点に組み立てる。実行した日の
-暦に寄りかかると、日が変わった瞬間に落ちるテストになる。
+Dates are built from the ``starts_on`` (first grant day) returned by the settings.
+Relying on the calendar of the day the test runs would make it fail right as the
+date changes.
 """
 
 from __future__ import annotations
@@ -48,10 +50,10 @@ _TOKYO = ZoneInfo("Asia/Tokyo")
 
 @dataclass(frozen=True, kw_only=True)
 class Home:
-    """親と、その子の台帳。
+    """A parent and their child's ledger.
 
-    どのテストも「親が子の台帳を触る」ところから始まるので 1 つにまとめる
-    （引数を 3 つに収める意味もある。ADR-0016）。
+    Every test starts from "a parent touches the child's ledger", so they are bundled
+    into one (also keeps the arguments at three. ADR-0016).
     """
 
     parent: Account
@@ -80,7 +82,7 @@ def _member_of(client: TestClient, home: Home, *, display_name: str) -> dict[str
 
 
 def _sign_in_as(client: TestClient, home: Home, *, membership: dict[str, Any], username: str) -> dict[str, str]:
-    """その子として本人ログインできるようにする（招待コード。ADR-0011）。"""
+    """Let the child log in as themselves (invitation code. ADR-0011)."""
     invitation = issue_invitation(
         client,
         home.headers,
@@ -120,7 +122,7 @@ def _starting_day(bonus: dict[str, Any]) -> date:
 
 
 def _noon(day: date, *, plus_days: int = 0) -> datetime:
-    """その日の昼（UTC の naive datetime）。区切りをまたぐ心配のない時刻。"""
+    """Noon of that day (naive UTC datetime). A time safely away from the day boundary."""
     return datetime.combine(day + timedelta(days=plus_days), time(12, 0))
 
 
@@ -138,7 +140,7 @@ def _grant(
     catch_up_days: int = 31,
     boundary: DayBoundary | None = None,
 ) -> GrantedDailyBonuses:
-    """定期実行の 1 周分。"""
+    """One round of the periodic runner."""
     use_case = GrantDueDailyBonusesUseCase(
         bonuses=SqlDailyBonusRepository(db_session),
         transactions=SqlPointTransactionRepository(db_session),
@@ -150,7 +152,7 @@ def _grant(
     return result
 
 
-# --- 設定 --------------------------------------------------------------------
+# --- Settings --------------------------------------------------------------
 
 
 def test_a_guardian_decides_how_many_points_arrive_each_day(client: TestClient, home: Home) -> None:
@@ -159,12 +161,12 @@ def test_a_guardian_decides_how_many_points_arrive_each_day(client: TestClient, 
     assert bonus["amount"] == 10
     assert bonus["reason"] == "まいにちボーナス"
     assert bonus["granted_through"] is None
-    # 決めただけでは台帳は動かない（配るのは日付の変わり目）
+    # Setting it alone does not touch the ledger (grants happen at the date change)
     assert _view(client, home.headers, home.ledger)["balance"] == 0
 
 
 def test_the_setting_comes_back_with_the_ledger(client: TestClient, home: Home) -> None:
-    """設定を出すためだけに 2 往復させない。"""
+    """Do not require 2 round trips just to show the settings."""
     assert _view(client, home.headers, home.ledger)["daily_bonus"] is None
 
     _configure(client, home.headers, home.ledger, amount=25)
@@ -173,9 +175,9 @@ def test_the_setting_comes_back_with_the_ledger(client: TestClient, home: Home) 
 
 
 def test_the_setting_comes_back_with_the_family(client: TestClient, home: Home) -> None:
-    """決めるのは家族設定の画面なので、家族の詳細にも載る（ADR-0027）。
+    """It is set on the family settings screen, so it is also in the family details (ADR-0027).
 
-    子どもごとに量が違ってよいので、家族ではなく参加者ごとに付く。
+    The amount may differ per child, so it belongs to each member, not the family.
     """
     hana = add_child(client, home.headers, home.ledger.family_id, display_name="はなこ")
     hana_ledger = Ledger(family_id=home.ledger.family_id, ledger_id=int(str(hana["ledger_id"])))
@@ -188,12 +190,12 @@ def test_the_setting_comes_back_with_the_family(client: TestClient, home: Home) 
     amounts = {
         member["display_name"]: (member["daily_bonus"] or {}).get("amount") for member in detail.json()["memberships"]
     }
-    # 親は台帳を持たないので設定も持たない
+    # Parents have no ledger, so they have no setting either
     assert amounts == {"おとうさん": None, "たろう": 25, "はなこ": 5}
 
 
 def test_a_child_sees_only_their_own_setting_in_the_family(client: TestClient, home: Home) -> None:
-    """兄弟の台帳は見えないので、その子の設定も返らない（ADR-0009）。"""
+    """Siblings' ledgers are not visible, so their settings are not returned either (ADR-0009)."""
     hana = add_child(client, home.headers, home.ledger.family_id, display_name="はなこ")
     hana_ledger = Ledger(family_id=home.ledger.family_id, ledger_id=int(str(hana["ledger_id"])))
     _configure(client, home.headers, home.ledger, amount=25)
@@ -230,7 +232,7 @@ def test_stopping_leaves_the_points_already_given(client: TestClient, home: Home
 
 
 def test_stopping_a_bonus_that_was_never_set_succeeds(client: TestClient, home: Home) -> None:
-    """やめたいという求めはすでに満たされている。"""
+    """The request to stop is already satisfied."""
     assert client.delete(_bonus_path(home.ledger), headers=home.headers).status_code == 204
 
 
@@ -241,7 +243,7 @@ def test_a_bonus_that_takes_points_away_is_rejected(client: TestClient, home: Ho
 
 
 def test_a_child_cannot_decide_their_own_bonus(client: TestClient, home: Home) -> None:
-    """子は自分の台帳でも変更できない（``can_modify`` と同じ範囲）。"""
+    """A child cannot change it even on their own ledger (same scope as ``can_modify``)."""
     child = add_child(client, home.headers, home.ledger.family_id, display_name="はなこ")
     invitation = issue_invitation(
         client,
@@ -277,7 +279,7 @@ def test_another_familys_ledger_is_out_of_reach(client: TestClient, home: Home, 
     assert response.status_code == 403
 
 
-# --- 配る --------------------------------------------------------------------
+# --- Granting --------------------------------------------------------------
 
 
 def test_the_bonus_lands_once_a_day(client: TestClient, home: Home, db_session: Session) -> None:
@@ -292,7 +294,7 @@ def test_the_bonus_lands_once_a_day(client: TestClient, home: Home, db_session: 
 
 
 def test_running_twice_in_the_same_day_adds_nothing(client: TestClient, home: Home, db_session: Session) -> None:
-    """ワーカーが複数あっても、途中で落ちて再開しても 1 日 1 行。"""
+    """One row per day, even with multiple workers or a crash and restart midway."""
     start = _starting_day(_configure(client, home.headers, home.ledger, amount=10))
 
     _grant(db_session, now=datetime.combine(start, time(1, 0)))
@@ -306,7 +308,7 @@ def test_days_missed_while_the_app_was_down_are_caught_up(client: TestClient, ho
     start = _starting_day(_configure(client, home.headers, home.ledger, amount=10))
     _grant(db_session, now=_noon(start))
 
-    # 3 日止まってから起動した
+    # Started after being stopped for 3 days
     result = _grant(db_session, now=_noon(start, plus_days=3))
 
     assert result.granted == 3
@@ -314,7 +316,7 @@ def test_days_missed_while_the_app_was_down_are_caught_up(client: TestClient, ho
 
 
 def test_a_long_outage_is_capped_and_reported(client: TestClient, home: Home, db_session: Session) -> None:
-    """久しぶりに開いた台帳が何百行ものボーナスで埋まらないようにする。"""
+    """Keep a ledger opened after a long time from being flooded with hundreds of bonus rows."""
     start = _starting_day(_configure(client, home.headers, home.ledger, amount=10))
 
     result = _grant(db_session, now=_noon(start, plus_days=51), catch_up_days=3)
@@ -324,7 +326,7 @@ def test_a_long_outage_is_capped_and_reported(client: TestClient, home: Home, db
 
 
 def test_the_entry_says_nobody_recorded_it(client: TestClient, home: Home, db_session: Session) -> None:
-    """誰の操作でもないので記録者は空。画面には「—」で並ぶ。"""
+    """Nobody performed it, so the recorder is empty. The screen shows "—"."""
     start = _starting_day(_configure(client, home.headers, home.ledger, amount=10))
     _grant(db_session, now=_noon(start))
 
@@ -332,8 +334,8 @@ def test_the_entry_says_nobody_recorded_it(client: TestClient, home: Home, db_se
 
     assert entry["granted_by"] is None
     assert entry["reason"] == "まいにちボーナス"
-    # 出来事はその日の始まりに置く（追いついた分もそれぞれの日付に収まる）。
-    # 末尾の Z は契約（HANDOVER §14）。付いていないとブラウザがローカル時刻として読む。
+    # The event is placed at the start of its day (catch-up rows also land on their own dates).
+    # The trailing Z is part of the contract (HANDOVER §14). Without it the browser reads local time.
     assert entry["occurred_at"] == f"{start.isoformat()}T00:00:00Z"
 
 
@@ -362,7 +364,7 @@ def test_changing_the_amount_does_not_re_give_the_days_already_granted(
 
 
 def test_removing_the_child_takes_the_setting_with_it(client: TestClient, home: Home, db_session: Session) -> None:
-    """台帳が消えれば設定も消える（残ると宛先の無い付与が回り続ける）。"""
+    """When the ledger goes, the setting goes too (otherwise grants with no target keep running)."""
     child = add_child(client, home.headers, home.ledger.family_id, display_name="じろう")
     theirs = Ledger(family_id=home.ledger.family_id, ledger_id=int(str(child["ledger_id"])))
     start = _starting_day(_configure(client, home.headers, theirs, amount=10))
@@ -374,7 +376,7 @@ def test_removing_the_child_takes_the_setting_with_it(client: TestClient, home: 
 
 
 def test_the_day_boundary_follows_the_configured_time_zone(client: TestClient, home: Home, db_session: Session) -> None:
-    """東京では、UTC の 15:30 はもう翌日。"""
+    """In Tokyo, 15:30 UTC is already the next day."""
     start = _starting_day(_configure(client, home.headers, home.ledger, amount=10))
 
     _grant(db_session, now=datetime.combine(start, time(15, 30)), boundary=DayBoundary(_TOKYO))
@@ -384,20 +386,21 @@ def test_the_day_boundary_follows_the_configured_time_zone(client: TestClient, h
 
 
 def test_nothing_arrives_before_the_starting_day(client: TestClient, home: Home, db_session: Session) -> None:
-    """開始日より前へは遡らない。"""
+    """Never goes back before the start date."""
     start = _starting_day(_configure(client, home.headers, home.ledger, amount=10))
 
     assert _grant(db_session, now=_noon(start, plus_days=-1)).granted == 0
 
 
 def test_nothing_arrives_on_the_day_it_was_decided(client: TestClient, home: Home, db_session: Session) -> None:
-    """決めた当日には渡さない。
+    """Nothing is granted on the day it is set.
 
-    当日から渡すと、決めた時刻によって受け取り方が変わる（夜遅くに決めれば
-    数分の間に 2 日分が並ぶ）。画面の「次に日付が変わったときから」とも食い違う。
+    Granting from that day would make the outcome depend on the time of setting (set
+    it late at night and 2 days' worth appear within minutes). It would also contradict
+    the screen's "from the next date change".
 
-    実際の時計で確かめる — ここだけは「決めた瞬間から見た今日」が要るので、
-    組み立てた日付では条件を再現できない。
+    Checked with the real clock — only here we need "today as seen at the moment of
+    setting", which built dates cannot reproduce.
     """
     decided_at = utcnow()
     _configure(client, home.headers, home.ledger, amount=10)
@@ -408,13 +411,13 @@ def test_nothing_arrives_on_the_day_it_was_decided(client: TestClient, home: Hom
 def test_a_row_made_outside_this_request_is_replaced_not_duplicated(
     client: TestClient, home: Home, db_session: Session
 ) -> None:
-    """別の経路ですでに行があっても、``PUT`` は置き換えとして通る。
+    """Even if a row already exists via another path, ``PUT`` goes through as a replacement.
 
-    台帳につき 1 件（``UNIQUE (ledger_id)``）なので、2 件目を足しに行けば一意制約に
-    当たる。同時に最初の ``PUT`` が 2 つ届いた場合の競り負けも同じ制約に当たり、
-    こちらは ``SqlDailyBonusRepository._add_row`` が勝った行を読み直して書き換える
-    （SQLite の in-memory は接続を 1 本しか持たないので、その競り合いそのものは
-    ここでは再現できない）。
+    There is one per ledger (``UNIQUE (ledger_id)``), so trying to add a 2nd would hit
+    the unique constraint. Losing the race when two first ``PUT`` requests arrive at once
+    hits the same constraint; there ``SqlDailyBonusRepository._add_row`` re-reads the
+    winning row and updates it (in-memory SQLite has only one connection, so that race
+    itself cannot be reproduced here).
     """
     SqlDailyBonusRepository(db_session).save(
         DailyBonusDraft(ledger_id=home.ledger.ledger_id, amount=5, reason="さきに", starts_on=date(2026, 1, 1))
@@ -424,6 +427,6 @@ def test_a_row_made_outside_this_request_is_replaced_not_duplicated(
     saved = _configure(client, home.headers, home.ledger, amount=30, reason="あとから")
 
     assert (saved["amount"], saved["reason"]) == (30, "あとから")
-    # 開始日は動かさない（量を直しただけで渡し方の起点が変わってはいけない）
+    # The start date stays (fixing the amount must not move the starting point of grants)
     assert saved["starts_on"] == "2026-01-01"
     assert db_session.scalar(select(func.count()).select_from(DailyBonusModel)) == 1

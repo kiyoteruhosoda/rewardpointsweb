@@ -1,8 +1,8 @@
-"""パスキー（WebAuthn）の登録・一覧・削除・ログイン。
+"""Passkey (WebAuthn) registration, listing, deletion and sign-in.
 
-実際の認証器は使えないため、``WebAuthnRelyingParty`` を偽の実装へ差し替えて
-アプリケーション側の流れ（チャレンジの発行・消費、資格情報の保存、トークン
-発行）を検証する。署名検証そのものはライブラリの責務。
+Since a real authenticator is not available, ``WebAuthnRelyingParty`` is swapped for a fake
+to verify the application-side flow (issuing and consuming challenges, storing credentials,
+issuing tokens). Signature verification itself is the library's job.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from bounded_contexts.account_security.presentation.dependencies import (
 
 @dataclass
 class FakeRelyingParty:
-    """チャレンジを固定し、``credential`` の中身をそのまま信じる偽 RP。"""
+    """A fake RP that fixes the challenge and trusts the contents of ``credential`` as is."""
 
     challenge: str = "Y2hhbGxlbmdl"
     accepted_challenges: list[str] = field(default_factory=list)
@@ -121,7 +121,7 @@ def test_passkey_list_requires_authentication(client: TestClient, relying_party:
 
 
 def test_real_relying_party_produces_browser_ready_options(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """偽物を挟まず、設定値から実際の WebAuthn オプションが組み立てられること。"""
+    """Without a fake in between, real WebAuthn options are built from the settings."""
     response = client.post("/api/account/security/passkeys/registration", headers=admin_headers)
     assert response.status_code == 200, response.text
     public_key = response.json()["public_key"]
@@ -131,17 +131,17 @@ def test_real_relying_party_produces_browser_ready_options(client: TestClient, a
     assert public_key["pubKeyCredParams"]
 
     login_options = client.post("/api/auth/passkey/challenge").json()["public_key"]
-    # ログインは資格情報を指定しない（メールアドレスの入力が不要になる）
+    # Sign-in does not specify credentials (no need to enter an email address)
     assert login_options["allowCredentials"] == []
 
 
 def test_relying_party_options_use_the_normalized_settings(
     client: TestClient, admin_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """設定に紛れた空白・大文字・既定ポートは、発行するオプションに出さない。
+    """Stray whitespace, uppercase and default ports in the settings are not put in the issued options.
 
-    そのまま渡すとブラウザ側の ``rp.id`` 照合が外れ、検証は通っているのに
-    登録できない、という同じ症状に戻る。
+    Passing them through makes the browser's ``rp.id`` check fail, bringing back the same symptom:
+    verification passes but registration still fails.
     """
     monkeypatch.setenv("WEBAUTHN_RP_ID", " Example.COM ")
     monkeypatch.setenv("WEBAUTHN_ORIGIN", " HTTPS://Example.com:443 ")
@@ -154,10 +154,10 @@ def test_relying_party_options_use_the_normalized_settings(
 def test_misconfigured_relying_party_refuses_to_issue_a_challenge(
     client: TestClient, admin_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RP ID がオリジンと噛み合わないなら、チャレンジを発行せずエラーを返す。
+    """If the RP ID does not match the origin, return an error without issuing a challenge.
 
-    発行してしまうとブラウザが ``SecurityError`` で拒み、画面には原因の分からない
-    失敗だけが出る。設定の誤りだと分かるコードを返して切り分けられるようにする。
+    Issuing one would make the browser reject it with ``SecurityError``, and the screen would show
+    only an unexplained failure. Return a code that identifies a configuration error so it can be isolated.
     """
     monkeypatch.setenv("WEBAUTHN_RP_ID", "rewardpointsweb")
     monkeypatch.setenv("WEBAUTHN_ORIGIN", "https://rewardpointsweb.com")
@@ -166,7 +166,7 @@ def test_misconfigured_relying_party_refuses_to_issue_a_challenge(
     assert response.status_code == 500
     assert response.json()["detail"]["error"] == "invalid_webauthn_rp_id"
 
-    # ログイン側も同じ（使えない資格情報を配らない）
+    # Same for sign-in (do not hand out unusable credentials)
     assert client.post("/api/auth/passkey/challenge").status_code == 500
 
 
@@ -209,10 +209,10 @@ def test_registration_excludes_already_registered_credentials(
 def test_registration_rejects_another_users_challenge(
     *, client: TestClient, admin_headers: dict[str, str], relying_party: FakeRelyingParty, db_session: Session
 ) -> None:
-    """他人宛に発行されたチャレンジでは登録できない。
+    """Registration fails with a challenge issued to someone else.
 
-    ここを見ないと、A の challenge_id を握った B が「A 向けに発行された
-    資格情報」を B のアカウントへ保存でき、以後それで B としてログインできる。
+    Without this check, B holding A's challenge_id could save "a credential issued for A"
+    to B's account and from then on sign in as B with it.
     """
     from bounded_contexts.account_security.infrastructure.account_security_models import (
         WebAuthnChallengeRecord,
@@ -220,7 +220,7 @@ def test_registration_rejects_another_users_challenge(
 
     challenge = client.post("/api/account/security/passkeys/registration", headers=admin_headers).json()
 
-    # 発行後に持ち主だけを別ユーザーへ書き換える（他人のチャレンジを掴んだ状態）
+    # After issuing, rewrite only the owner to another user (holding someone else's challenge)
     record = db_session.get(WebAuthnChallengeRecord, challenge["challenge_id"])
     assert record is not None
     record.user_id = None
@@ -300,5 +300,5 @@ def test_failed_verification_is_reported_as_unauthorized(
     response = _register(client, admin_headers, "reject")
     assert response.status_code == 401
     assert response.json()["detail"]["error"] == "passkey_verification_failed"
-    # 検証に失敗した資格情報は保存されない
+    # A credential that failed verification is not saved
     assert client.get("/api/account/security/passkeys", headers=admin_headers).json() == []

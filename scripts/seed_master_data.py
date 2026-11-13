@@ -1,16 +1,16 @@
-"""マスタデータ投入スクリプト（冪等・デプロイ後の再実行可）。
+"""Master data seeding script (idempotent; safe to rerun after a deploy).
 
-使い方::
+Usage::
 
     uv run python scripts/seed_master_data.py
     uv run python scripts/seed_master_data.py --reset-admin-password
 
-``--reset-admin-password`` を付けると、既存の初期管理者のパスワードを
-``ADMIN_INITIAL_PASSWORD``（未設定なら既定値）へ戻す。管理画面へ入れなくなった
-ときの復旧経路なので、明示的に指定したときだけ実行する。
+With ``--reset-admin-password``, the existing initial admin's password is reset to
+``ADMIN_INITIAL_PASSWORD`` (or the default when unset). This is the recovery path for when
+the admin UI can no longer be entered, so it runs only when explicitly requested.
 
-値の正本は ``shared/domain/auth/master_data.py``、投入ロジックは
-``shared/infrastructure/master_data_seeder.py``（マイグレーションと共用）。
+The source of truth for the values is ``shared/domain/auth/master_data.py``; the seeding logic is
+``shared/infrastructure/master_data_seeder.py`` (shared with migrations).
 """
 
 from __future__ import annotations

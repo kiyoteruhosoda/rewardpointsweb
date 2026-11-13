@@ -1,4 +1,4 @@
-"""ログ閲覧 API（要 ``log:view``）。"""
+"""Log viewer API (requires ``log:view``)."""
 
 from __future__ import annotations
 

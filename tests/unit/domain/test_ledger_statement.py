@@ -1,4 +1,4 @@
-"""残高の導出と、打ち消しの見え方（ADR-0010）。"""
+"""Deriving the balance, and how reversals appear (ADR-0010)."""
 
 from __future__ import annotations
 

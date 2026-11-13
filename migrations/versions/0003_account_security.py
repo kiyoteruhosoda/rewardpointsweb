@@ -1,8 +1,8 @@
 """account security (TOTP / passkey)
 
-二要素認証（TOTP 共有鍵）とパスキー（WebAuthn 資格情報・チャレンジ）の
-テーブルを追加する。定義の正本は
-``bounded_contexts/account_security/infrastructure/account_security_models.py``。
+Adds the tables for two-factor authentication (TOTP shared secrets) and passkeys (WebAuthn
+credentials and challenges). The definitions' source of truth is
+``bounded_contexts/account_security/infrastructure/account_security_models.py``.
 
 Revision ID: account_security
 Revises: seed_master_data
@@ -22,7 +22,7 @@ branch_labels = None
 depends_on = None
 
 _BIGINT = sa.BigInteger().with_variant(sa.Integer(), "sqlite")
-# DB ネイティブ ENUM は使わない（CHECK 制約付き VARCHAR になる）
+# Do not use DB-native ENUM (it becomes a VARCHAR with a CHECK constraint)
 _CHALLENGE_PURPOSE = sa.Enum(
     "registration",
     "authentication",
@@ -78,8 +78,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # 索引はテーブルと一緒に消えるので落とさない（MariaDB は外部キー列の索引を
-    # 単独で DROP できない）
+    # Do not drop the indexes; they go away with the tables (MariaDB cannot DROP an index on a
+    # foreign key column on its own)
     op.drop_table("webauthn_challenges")
     op.drop_table("passkey_credentials")
     op.drop_table("totp_secrets")

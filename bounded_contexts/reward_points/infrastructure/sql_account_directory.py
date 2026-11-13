@@ -1,13 +1,15 @@
-"""``IAccountDirectory`` / ``IAccountProvisioning`` の SQLAlchemy 実装。
+"""SQLAlchemy implementations of ``IAccountDirectory`` / ``IAccountProvisioning``.
 
-アカウントはアプリ共通のユーザー（``shared/infrastructure/models/user.py``）。
-このコンテキストが必要とするのは「ID から表示に必要な値を引く」「招待の受諾で
-アカウントを作る」「一時パスワードを発行する」の 3 つだけで、一覧を配る口は
-用意しない（``user:manage`` を持たない親に全アカウントを見せないため）。
+Accounts are the app-wide users (``shared/infrastructure/models/user.py``).
+This context needs only three things: "look up display values by ID", "create
+an account when an invitation is accepted" and "issue a temporary password".
+There is no entry point that hands out a list (so parents without
+``user:manage`` cannot see every account).
 
-家族の中での立場から、付与するアプリケーションロールを決める。親（メンバー）は
-``member``、子（ゲスト）は ``guest``（ADR-0018。ADR-0009 の認可表と、ロールへの
-権限付与が対応する）。
+The application role to grant is decided from the role in the family: parents
+(members) get ``member``, children (guests) get ``guest`` (ADR-0018; the
+permissions granted to the roles correspond to the authorization table of
+ADR-0009).
 """
 
 from __future__ import annotations
@@ -39,13 +41,13 @@ _ROLE_FOR_FAMILY_ROLE = {
     FamilyRole.DISPLAY: "display",
 }
 
-# 表示端末のログイン識別子の頭。人が打たないので、見て端末と分かれば足りる
+# Prefix of display devices' login identifiers. Nobody types it, so it only needs to be recognizable as a device
 _DISPLAY_USERNAME_PREFIX = "display-"
 
-# 保護者に必要な scope の全部。これらが全て揃っているアカウントに昇格は不要
+# All scopes a guardian needs. An account that has all of them needs no promotion
 _GUARDIAN_SCOPES = frozenset({"family:view", "family:manage", "point:view", "point:manage"})
 
-# 一時パスワードは親が口頭で伝える前提。読み間違えにくい英数字だけを使う。
+# Temporary passwords are meant to be read out by a parent, so use only hard-to-misread alphanumerics.
 _TEMPORARY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 _TEMPORARY_LENGTH = 10
 
@@ -76,9 +78,9 @@ class SqlAccountProvisioning(IAccountProvisioning):
         chosen_name = display_name.strip() if display_name else ""
         user = User(
             username=normalized,
-            # 子アカウントはメールアドレスを収集しない（ADR-0011）
+            # Child accounts do not collect an email address (ADR-0011)
             email=None,
-            # 名乗りたい名前が無ければログイン識別子をそのまま出す
+            # Without a preferred name, show the login identifier as is
             display_name=chosen_name or normalized,
             password_hash=generate_password_hash(password),
             is_active=True,
@@ -95,7 +97,7 @@ class SqlAccountProvisioning(IAccountProvisioning):
             username=f"{_DISPLAY_USERNAME_PREFIX}{secrets.token_hex(8)}",
             email=None,
             display_name=display_name,
-            # ⚠ パスワードという入口を持たない（ADR-0034・ADR-0047）
+            # ⚠ Has no password entry point (ADR-0034, ADR-0047)
             password_hash=None,
             is_active=True,
         )
@@ -108,11 +110,11 @@ class SqlAccountProvisioning(IAccountProvisioning):
 
     def grant_guardian_permissions(self, account_id: int) -> None:
         user = self._session.get(User, account_id)
-        if user is None:  # 呼び出し側が membership から引いた ID なので通常は起きない
+        if user is None:  # Normally cannot happen: the caller got the ID from a membership
             raise ValueError(f"account not found: {account_id}")
-        # admin のように保護者の scope を全て持つアカウントには何もしない。
-        # ロールの構成へ触れる前に判定する — 判定より先に member を外すと、
-        # 保護者側のロールが持たない scope（閲覧等）を黙って失い得る
+        # Do nothing for an account that already has every guardian scope, such as admin.
+        # Check before touching the roles: removing member before the check could
+        # silently drop scopes (viewing etc.) that the guardian role does not have
         held = {permission.code for role in user.roles for permission in role.permissions}
         if held >= _GUARDIAN_SCOPES:
             return
@@ -127,16 +129,16 @@ class SqlAccountProvisioning(IAccountProvisioning):
 
     def delete_account(self, account_id: int) -> None:
         user = self._session.get(User, account_id)
-        if user is None:  # 呼び出し側が membership から引いた ID なので通常は起きない
+        if user is None:  # Normally cannot happen: the caller got the ID from a membership
             raise ValueError(f"account not found: {account_id}")
-        # 付随データ（パスキー・一時パスワード等）は外部キーの ON DELETE が追随する
+        # Dependent data (passkeys, temporary passwords etc.) follows via the foreign keys' ON DELETE
         user.roles = []
         self._session.delete(user)
         self._session.flush()
 
     def issue_temporary_password(self, account_id: int) -> TemporaryPassword:
         user = self._session.get(User, account_id)
-        if user is None:  # 呼び出し側が membership から引いた ID なので通常は起きない
+        if user is None:  # Normally cannot happen: the caller got the ID from a membership
             raise ValueError(f"account not found: {account_id}")
         password = "".join(secrets.choice(_TEMPORARY_ALPHABET) for _ in range(_TEMPORARY_LENGTH))
         expires_at = utcnow() + timedelta(seconds=settings.temporary_password_ttl_seconds)

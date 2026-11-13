@@ -1,4 +1,4 @@
-"""設定変更に伴う自己再起動 API。"""
+"""Self-restart API triggered by settings changes."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def test_requesting_a_restart_records_the_request(client: TestClient, admin_head
     assert body["requested"] is True
     assert [item["scope"] for item in body["requests"]] == ["web"]
     assert body["requests"][0]["reason"] == "log level changed"
-    # 要求者は PII を含まない主体識別子で記録する
+    # The requester is recorded by a subject identifier that contains no PII
     assert body["requests"][0]["requested_by"] == "user:1"
 
     status = client.get("/api/admin/system/restart", headers=admin_headers).json()

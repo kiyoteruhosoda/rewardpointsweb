@@ -1,4 +1,4 @@
-"""連携先の設定が「使える」と言えるかの判断。"""
+"""Deciding whether an IdP configuration can be called "usable"."""
 
 from __future__ import annotations
 
@@ -42,13 +42,13 @@ def test_secret_and_private_key_are_judged_separately() -> None:
 
     assert _provider(with_secret).is_usable is True
     assert _provider(with_key).is_usable is True
-    # 材料が方式と噛み合っていない
+    # The inputs do not match the method
     assert _provider(ClientCredential(method=PRIVATE_KEY_JWT, secret="s")).is_usable is False
     assert _provider(ClientCredential(method=CLIENT_SECRET_BASIC, private_key_file="/k")).is_usable is False
 
 
 def test_an_unknown_method_is_a_gap_not_a_default() -> None:
-    """綴り違いを既定の方式へ落とすと、IdP からは ``invalid_client`` しか返らない。"""
+    """Falling back to the default method on a misspelling only gets ``invalid_client`` back from the IdP."""
     assert ClientCredential(method="private-key-jwt", private_key_file="/k").is_complete is False
 
 

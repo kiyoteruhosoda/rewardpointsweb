@@ -1,10 +1,11 @@
-"""家族の一生 — 改名・脱退・解散（ADR-0013）。
+"""A family's lifecycle -- rename, leave, dissolve (ADR-0013).
 
-- 家族名は owner だけが変えられる。
-- 親は他に親が残るなら抜けられ、抜けた後は初期状態（作り直しも招待の受け直しもできる）。
-- owner が抜けると最も古い parent が owner を引き継ぐ。
-- 子（ゲスト）は自分では抜けられない。
-- 解散は owner のみ、自分以外の参加者がいない場合だけ。
+- Only the owner can change the family name.
+- A parent can leave if another parent remains, and afterwards is back to the initial state
+  (can create a new family or accept an invitation again).
+- When the owner leaves, the oldest parent takes over as owner.
+- A child (guest) cannot leave on their own.
+- Only the owner can dissolve, and only when there are no other members.
 """
 
 from __future__ import annotations
@@ -58,7 +59,7 @@ def _child_login(client: TestClient, owner: Account, family_id: int, *, username
     return login(client, username=username, password=f"{username}-pass-123")
 
 
-# --- 改名 --------------------------------------------------------------------
+# --- Rename --------------------------------------------------------------------
 
 
 def test_owner_renames_the_family(client: TestClient, owner: Account) -> None:
@@ -87,7 +88,7 @@ def test_blank_family_name_is_rejected(client: TestClient, owner: Account) -> No
     assert client.patch(f"/api/families/{family_id}", headers=owner.headers, json={"name": "  "}).status_code == 422
 
 
-# --- 脱退 --------------------------------------------------------------------
+# --- Leave --------------------------------------------------------------------
 
 
 def test_parent_leaves_and_returns_to_the_initial_state(
@@ -99,10 +100,10 @@ def test_parent_leaves_and_returns_to_the_initial_state(
     left = client.post(f"/api/families/{family_id}/leave", headers=second_parent.headers)
     assert left.status_code == 204
 
-    # 初期状態と同じ: 所属は無く、元の家族には届かない（縁が切れる）
+    # Same as the initial state: no membership, and the old family is out of reach (the tie is cut)
     assert client.get("/api/families", headers=second_parent.headers).json() == []
     assert client.get(f"/api/families/{family_id}", headers=second_parent.headers).status_code == 403
-    # 作り直すことも、招待を受け直すこともできる
+    # Can create a new family, or accept an invitation again
     assert client.post("/api/families", headers=second_parent.headers, json={"name": "じぶんの家"}).status_code == 201
 
 
@@ -118,7 +119,7 @@ def test_leaving_parent_disappears_from_history_but_records_remain(
     assert client.post(f"/api/families/{family_id}/leave", headers=second_parent.headers).status_code == 204
 
     view = client.get(ledger.path(), headers=owner.headers).json()
-    # 記録は台帳のものとして残り、操作者への参照だけが外れる
+    # The records stay as the ledger's, and only the reference to the operator is removed
     assert view["balance"] == 10
     assert [t["granted_by"] for t in view["transactions"]] == [None]
 
@@ -139,10 +140,10 @@ def test_leaving_owner_hands_the_family_to_the_oldest_parent(
 def test_owner_cannot_leave_when_the_other_parent_lost_their_account(
     *, client: TestClient, admin_headers: dict[str, str], owner: Account, second_parent: Account
 ) -> None:
-    """アカウントの消えた親（未紐付けの参加）は「残る親」に数えない。
+    """A parent whose account is gone (an unlinked membership) does not count as a "remaining parent".
 
-    数えてしまうと、owner の脱退が誰もログインできない owner を生み、家族を
-    管理も解散もできなくしてしまう。
+    Counting it would let the owner's leaving produce an owner nobody can sign in as, leaving the family
+    impossible to manage or dissolve.
     """
     family_id = create_family(client, owner.headers)
     _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
@@ -156,7 +157,7 @@ def test_owner_cannot_leave_when_the_other_parent_lost_their_account(
 def test_leaving_owner_skips_parents_without_an_account(
     *, client: TestClient, admin_headers: dict[str, str], owner: Account, second_parent: Account
 ) -> None:
-    """引き継ぎ先は、古さより先にアカウントの結び付きで絞る。"""
+    """The successor is narrowed by account linkage before age."""
     family_id = create_family(client, owner.headers)
     _join_as_parent(client, owner, family_id, joiner=second_parent, name="おかあさん")
     grandma = create_account(client, admin_headers, username="grandma", role="member")
@@ -165,7 +166,7 @@ def test_leaving_owner_skips_parents_without_an_account(
 
     assert client.post(f"/api/families/{family_id}/leave", headers=owner.headers).status_code == 204
 
-    # より古い「おかあさん」はアカウントが無いので飛ばし、おばあちゃんが owner になる
+    # The older one (mom) has no account so is skipped, and grandma becomes the owner
     detail = client.get(f"/api/families/{family_id}", headers=grandma.headers).json()
     assert detail["my_role"] == "owner"
 
@@ -188,7 +189,7 @@ def test_child_cannot_leave_the_family(client: TestClient, owner: Account) -> No
     assert response.json()["detail"]["error"] == "child_cannot_leave_family"
 
 
-# --- 解散 --------------------------------------------------------------------
+# --- Dissolve --------------------------------------------------------------------
 
 
 def test_owner_alone_dissolves_the_family(client: TestClient, owner: Account) -> None:
@@ -197,7 +198,7 @@ def test_owner_alone_dissolves_the_family(client: TestClient, owner: Account) ->
     response = client.delete(f"/api/families/{family_id}", headers=owner.headers)
     assert response.status_code == 204
 
-    # 初期状態と同じ: 一覧は空になり、作り直せる
+    # Same as the initial state: the list is empty, and a new family can be created
     assert client.get("/api/families", headers=owner.headers).json() == []
     assert client.post("/api/families", headers=owner.headers, json={"name": "つぎの家"}).status_code == 201
 
@@ -212,7 +213,7 @@ def test_family_with_a_member_cannot_be_dissolved(client: TestClient, owner: Acc
 
 
 def test_family_with_a_guest_cannot_be_dissolved(client: TestClient, owner: Account) -> None:
-    """子（ゲスト）が残っていても解散できない。台帳ごと消える経路を作らない。"""
+    """Cannot dissolve while a child (guest) remains. Do not create a path that deletes the ledger along with it."""
     family_id = create_family(client, owner.headers)
     add_child(client, owner.headers, family_id, display_name="たろう")
 

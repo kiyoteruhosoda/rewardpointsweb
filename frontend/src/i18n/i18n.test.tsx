@@ -1,4 +1,4 @@
-/** 言語の初期選択・切り替え・プレースホルダ差し込み。 */
+/** Initial language choice, switching, and placeholder substitution. */
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -34,37 +34,37 @@ describe('I18nProvider', () => {
     localStorage.clear()
   })
 
-  it('利用者の選択（localStorage）を最優先する', () => {
+  it('gives top priority to the user choice (localStorage)', () => {
     localStorage.setItem('locale', 'ja')
     renderWith(settingsOf({ default_locale: 'en' }))
     expect(screen.getByTestId('locale').textContent).toBe('ja')
   })
 
-  it('選べない言語が保存されていればサーバーの既定値へ落ちる', () => {
+  it('falls back to the server default when the saved language is not selectable', () => {
     localStorage.setItem('locale', 'ja')
     renderWith(settingsOf({ languages: ['en'], default_locale: 'en' }))
     expect(screen.getByTestId('locale').textContent).toBe('en')
   })
 
-  it('未知の言語しか設定されていなければ en に落ちる', () => {
+  it('falls back to en when only unknown languages are set', () => {
     renderWith(settingsOf({ languages: ['fr'], default_locale: 'fr' }))
     expect(screen.getByTestId('locale').textContent).toBe('en')
     expect(screen.getByTestId('locales').textContent).toBe('en')
   })
 
-  it('<html lang> を選択中の言語に合わせる', () => {
+  it('sets <html lang> to the selected language', () => {
     localStorage.setItem('locale', 'ja')
     renderWith(settingsOf())
     expect(document.documentElement.lang).toBe('ja')
   })
 
-  it('辞書に無いキーはキー自身を返す', () => {
+  it('returns the key itself for keys missing from the dictionary', () => {
     renderWith(settingsOf())
     expect(screen.getByTestId('missing').textContent).toBe('no.such.key')
   })
 })
 
-describe('t のプレースホルダ差し込み', () => {
+describe('placeholder substitution in t', () => {
   function Interpolated({ params }: { params: Record<string, string | number> }) {
     const { t } = useI18n()
     return <span data-testid="out">{t('{greeting}, {name}! ({count})', params)}</span>
@@ -74,7 +74,7 @@ describe('t のプレースホルダ差し込み', () => {
     localStorage.clear()
   })
 
-  it('{name} 形式のプレースホルダを置き換える', () => {
+  it('replaces {name}-style placeholders', () => {
     render(
       <I18nProvider settings={settingsOf()}>
         <Interpolated params={{ greeting: 'Hello', name: 'Ada', count: 3 }} />
@@ -83,7 +83,7 @@ describe('t のプレースホルダ差し込み', () => {
     expect(screen.getByTestId('out').textContent).toBe('Hello, Ada! (3)')
   })
 
-  it('渡されなかったプレースホルダはそのまま残す', () => {
+  it('leaves placeholders that were not passed as is', () => {
     render(
       <I18nProvider settings={settingsOf()}>
         <Interpolated params={{ greeting: 'Hi' }} />
@@ -94,7 +94,7 @@ describe('t のプレースホルダ差し込み', () => {
 })
 
 describe('useI18n', () => {
-  it('Provider の外で使うと例外を投げる', () => {
+  it('throws when used outside the Provider', () => {
     withSuppressedRenderErrors(() => {
       expect(() => render(<Probe />)).toThrow(/I18nProvider/)
     })

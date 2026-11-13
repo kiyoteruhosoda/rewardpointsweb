@@ -1,7 +1,8 @@
-"""発行済みの招待を取り消す。
+"""Revoke an issued invitation.
 
-取り消せる立場は発行と同じ（ADR-0020）。子ども宛は親メンバー、親宛は owner。
-配れる人が取り消せないと、渡し間違えたコードを止められない。
+Who may revoke is the same as who may issue (ADR-0020): a parent member for a child
+invitation, the owner for a parent invitation. If the people who hand out codes could
+not revoke them, a code given to the wrong person could not be stopped.
 """
 
 from __future__ import annotations

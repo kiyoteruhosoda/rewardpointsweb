@@ -1,154 +1,154 @@
-"""ID 連携コンテキストのドメイン例外。
+"""Domain exceptions of the identity federation context.
 
-``code`` がそのまま API のエラーコード（表示文言はフロントエンド）になる。
-ブラウザの往復の途中で起きた失敗は、ログイン画面へ ``?sso_error=<code>`` として
-返る（ADR-0029）。
+``code`` becomes the API error code as is (the display text is up to the frontend).
+A failure in the middle of the browser round trip comes back to the login screen as
+``?sso_error=<code>`` (ADR-0029).
 """
 
 from __future__ import annotations
 
 
 class IdentityFederationError(Exception):
-    """このコンテキストの基底例外。"""
+    """Base exception of this context."""
 
     code = "sso_error"
 
 
 class SsoNotConfiguredError(IdentityFederationError):
-    """SSO が無効、または接続先（issuer / client）が埋まっていない。"""
+    """SSO is disabled, or the connection target (issuer / client) is not filled in."""
 
     code = "sso_not_configured"
 
 
 class SsoLoginSessionNotFoundError(IdentityFederationError):
-    """認可要求の控えが見つからない（``state`` の不一致・期限切れ・使用済み）。"""
+    """The saved authorization request is not found (``state`` mismatch, expired, or already used)."""
 
     code = "sso_state_invalid"
 
 
 class SsoTicketNotFoundError(IdentityFederationError):
-    """引き換え券が見つからない（期限切れ・使用済み）。"""
+    """The exchange ticket is not found (expired or already used)."""
 
     code = "sso_ticket_invalid"
 
 
 class IdentityProviderUnavailableError(IdentityFederationError):
-    """IdP と話せない（discovery・トークン交換の通信／応答の失敗）。"""
+    """Cannot talk to the IdP (communication / response failure in discovery or token exchange)."""
 
     code = "sso_provider_unavailable"
 
 
 class InvalidIdTokenError(IdentityFederationError):
-    """ID トークンの検証に失敗した（署名・発行者・対象者・nonce）。"""
+    """ID token verification failed (signature, issuer, audience, nonce)."""
 
     code = "sso_invalid_id_token"
 
 
 class InvalidLogoutTokenError(IdentityFederationError):
-    """``logout_token`` の検証に失敗した（署名・発行者・対象者・期限・形）。
+    """``logout_token`` verification failed (signature, issuer, audience, expiry, shape).
 
-    **理由は外へ出さない。** この口は未認証で叩けるので、細かく答えると
-    「どこまで通ったか」を総当たりの手掛かりにできる。
+    **Do not expose the reason.** This endpoint can be called unauthenticated, so a detailed answer
+    would give brute-force attempts a hint about "how far it got".
     """
 
     code = "sso_invalid_logout_token"
 
 
 class SsoAcrNotSatisfiedError(IdentityFederationError):
-    """要求した認証の強度（``acr_values``）が満たされていない（ADR-0039）。
+    """The requested authentication strength (``acr_values``) is not satisfied (ADR-0039).
 
-    ``acr`` が返ってこない場合もこれになる。要求したのに保証が得られていない以上、
-    通してはいけない。
+    This also applies when no ``acr`` comes back. We asked for it and got no assurance,
+    so it must not pass.
     """
 
     code = "sso_acr_not_satisfied"
 
 
 class SsoEmailNotAllowedError(IdentityFederationError):
-    """許可されていないメールドメイン。"""
+    """Email domain is not allowed."""
 
     code = "sso_email_not_allowed"
 
 
 class SsoAccountNotLinkedError(IdentityFederationError):
-    """同じメールアドレスの口座が既にあるが、この IdP とはまだ結び付いていない（ADR-0041）。
+    """An account with the same email address already exists but is not yet linked to this IdP (ADR-0041).
 
-    ⚠ **作らずに断る。** 作ると同じ人の口座が 2 つになる（``users.email`` は一意なので、
-    メールアドレス無しの 2 つ目になる）。メールで寄せる設定（ADR-0033）は既定で閉じて
-    いるので、本人がその口座へパスワードで入り、設定画面から結び付ける（ADR-0036）。
+    ⚠ **Refuse instead of creating one.** Creating it would give the same person two accounts (``users.email`` is
+    unique, so the second one would have no email address). Merging by email (ADR-0033) is off by default,
+    so the person signs in to that account with a password and links it from the settings screen (ADR-0036).
     """
 
     code = "sso_account_not_linked"
 
 
 class SsoUsernameUnavailableError(IdentityFederationError):
-    """初めての相手の口座を作ろうとしたが、``username`` を決められない（ADR-0041）。
+    """Tried to create an account for a first-time user, but cannot decide the ``username`` (ADR-0041).
 
-    IdP の ``preferred_username`` が無い・このアプリの識別子の規則に合わない・
-    既に別の利用者が使っている、のいずれか。⚠ **黙って連番や別の値を付けない**
-    ——ログインの識別子が、本人の知らない値になる。
+    The IdP's ``preferred_username`` is missing, does not match this app's identifier rules,
+    or is already used by another user. ⚠ **Do not silently add a sequence number or another value**
+    -- the login identifier would become a value the person does not know.
     """
 
     code = "sso_username_unavailable"
 
 
 class SsoIdentityTakenError(IdentityFederationError):
-    """その IdP アカウントは**別の利用者**に結び付いている（ADR-0036）。
+    """That IdP account is linked to **another user** (ADR-0036).
 
-    ⚠ **横取りになるので断る。** 付け替えを許すと、IdP 側で 1 つの口座を共有して
-    いる相手が、後からこのアプリの別人の入り口を奪える。
+    ⚠ **Refuse, since it would be a takeover.** If re-linking were allowed, someone sharing one account
+    on the IdP side could later steal another person's way into this app.
     """
 
     code = "sso_identity_taken"
 
 
 class SsoAlreadyLinkedError(IdentityFederationError):
-    """この利用者には、その IdP の結び付きが**既にある**（ADR-0036）。
+    """This user **already has** a link to that IdP (ADR-0036).
 
-    別の ``subject`` へ差し替えたいなら、いったん解除してから結び直す。黙って
-    上書きすると、前の結び付きで入っていた経路が予告なく消える。
+    To switch to another ``subject``, unlink first and then link again. Silently
+    overwriting it would remove the route that used the previous link without notice.
     """
 
     code = "sso_already_linked"
 
 
 class SsoIdentityNotLinkedError(IdentityFederationError):
-    """解除しようとしたが、その IdP との結び付きが無い。"""
+    """Tried to unlink, but there is no link to that IdP."""
 
     code = "sso_identity_not_linked"
 
 
 class SsoLastEntranceError(IdentityFederationError):
-    """解除すると、この利用者が**どこからも入れなくなる**（ADR-0036）。
+    """Unlinking would leave this user with **no way to sign in at all** (ADR-0036).
 
-    ⚠ **締め出しを作らない。** ローカルのパスワードもパスキーも無い利用者から
-    IdP を外すと、残るのは管理者による復旧だけになる。
+    ⚠ **Do not create a lockout.** Removing the IdP from a user with neither a local password
+    nor a passkey leaves recovery by an administrator as the only option.
     """
 
     code = "sso_last_entrance"
 
 
 class SsoLinkSessionMismatchError(IdentityFederationError):
-    """連携の往復を始めた利用者と、戻ってきたときのセッションが違う。
+    """The user who started the linking round trip differs from the session that came back.
 
-    往復の途中でサインアウトした・別の利用者で入り直した場合に起きる。
-    **どちらの口座へ結び付けるべきか決められない**ので、やり直してもらう。
+    Happens when the user signed out mid-round-trip or signed in again as another user.
+    **We cannot decide which account to link**, so the user has to start over.
     """
 
     code = "sso_link_session_mismatch"
 
 
 class SsoAccountInactiveError(IdentityFederationError):
-    """アカウントが無効化されている。"""
+    """The account is deactivated."""
 
     code = "sso_account_inactive"
 
 
 class MachineNotBoundToApplicationError(IdentityFederationError):
-    """名乗ったサービスアカウントが、assay でどのアプリにも結び付いていない（管理 API の 403。ADR-0040）。
+    """The service account we identify as is not bound to any app in assay (403 from the admin API. ADR-0040).
 
-    ⚠ **障害ではなく「まだ準備されていない」。** どのアプリの名簿を返すかは assay が
-    呼び出し元のサービスアカウントから決めるので、結び付けるまで毎回この形で返る。
+    ⚠ **Not an outage but "not set up yet".** assay decides whose roster to return from
+    the calling service account, so this comes back every time until it is bound.
     """
 
     code = "machine_not_bound_to_application"

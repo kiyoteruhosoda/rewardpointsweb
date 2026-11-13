@@ -6,14 +6,14 @@ interface Info {
 }
 
 /**
- * 版の表示。main の版は短い SHA そのもの（`695ff03`）なので、SHA と同じなら 1 度だけ出す。
- * 前に `v` は付けない（`v695ff03` のように版の番号に見せない）。
+ * Version label. A main build's version is the short SHA itself (`695ff03`), so when it equals the SHA show it only once.
+ * No `v` prefix (so `v695ff03` does not look like a version number).
  */
 function versionLabel(info: Info): string {
   return info.version === info.git_sha ? info.version : `${info.version} (${info.git_sha})`
 }
 
-/** 動いている版の表示（`/info` から。取れなければ空）。フッターと表示の画面（task #498）が使う。 */
+/** The running version label (from `/info`; empty when unavailable). Used by the footer and the display screen (task #498). */
 export function useVersionLabel(): string {
   const [info, setInfo] = useState<Info | null>(null)
 

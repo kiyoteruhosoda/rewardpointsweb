@@ -1,7 +1,7 @@
-"""認証系の Pydantic スキーマ。
+"""Pydantic schemas for authentication.
 
-ログインの識別子は ``username``。メールアドレスは任意項目なので、識別子には
-使えない（ADR-0011）。
+The login identifier is ``username``. Email address is optional, so it cannot be
+used as an identifier (ADR-0011).
 """
 
 from __future__ import annotations
@@ -18,17 +18,17 @@ DISPLAY_NAME_MAX_LENGTH = 100
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=USERNAME_MAX_LENGTH)
     password: str = Field(max_length=PASSWORD_MAX_LENGTH)
-    # 二要素認証が有効なアカウントでのみ必須（未提示なら totp_required を返す）
+    # Required only for accounts with two-factor auth enabled (returns totp_required if missing)
     totp_code: str | None = None
 
 
 class TokenResponse(BaseModel):
     access_token: str
-    #: SSO で入ったログインには出さない（``None``。ADR-0058）
+    #: Not issued for SSO logins (``None``. ADR-0058)
     refresh_token: str | None = None
     token_type: str
     expires_in: int
-    # 一時パスワードでのログイン。画面はパスワード変更へ誘導する（ADR-0011）
+    # Login with a temporary password. The UI leads the user to change the password (ADR-0011)
     must_change_password: bool = False
 
 
@@ -43,20 +43,21 @@ class MeResponse(BaseModel):
     email: str | None
     scopes: list[str]
     must_change_password: bool
-    # パスワードという入り口を持っているか（ADR-0034）。⚠ **偽のとき、画面は
-    # パスワード変更の導線を出さない**——出すと「今のパスワード」を入力できない
-    # 利用者に、絶対に通らないフォームを見せることになる。
+    # Whether the user has a password entrance (ADR-0034). ⚠ **When false, the UI does not
+    # offer password change**: otherwise a user who cannot enter a "current password"
+    # would be shown a form that can never succeed.
     has_password: bool = True
-    # 表示端末（サイネージ）のセッションか（ADR-0047）。真なら画面は表示の画面（/display）だけを出す
+    # Whether this is a display device (signage) session (ADR-0047).
+    # If true, the UI shows only the display screen (/display)
     display_device: bool = False
 
 
 class ProfileUpdateRequest(BaseModel):
-    """表示名とメールアドレスの変更。
+    """Change of display name and email address.
 
-    ``email`` に ``null`` を送るとメールアドレスを外す。省略した場合は現状の
-    まま（「``null`` を送った」と「送らなかった」は ``model_fields_set`` で
-    区別する）。
+    Sending ``null`` for ``email`` removes the email address. Omitting it leaves it
+    unchanged ("sent ``null``" and "did not send" are told apart via
+    ``model_fields_set``).
     """
 
     display_name: str | None = Field(default=None, min_length=1, max_length=DISPLAY_NAME_MAX_LENGTH)
@@ -79,9 +80,9 @@ class ChangePasswordRequest(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
-    """ログイン識別子で申し込む。
+    """Request by login identifier.
 
-    メールアドレスは任意項目なので、それを起点にはできない（ADR-0011）。
+    Email address is optional, so it cannot be the starting point (ADR-0011).
     """
 
     username: str = Field(min_length=1, max_length=USERNAME_MAX_LENGTH)

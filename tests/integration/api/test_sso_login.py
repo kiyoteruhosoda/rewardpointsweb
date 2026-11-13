@@ -1,8 +1,8 @@
-"""SSO ログインの往復（ADR-0029）。
+"""The SSO sign-in round trip (ADR-0029).
 
-IdP との通信はゲートウェイを差し替えて止める。ここで確かめるのは**このアプリ側の
-組み立て**——控えの往復、ブラウザの結び付け、引き換え券、そして初めての相手の口座を
-「作れるときだけ作る」こと（ADR-0041）。
+Communication with the IdP is stopped by swapping the gateway. What this checks is **how this app
+puts it together** -- the stored-state round trip, binding to the browser, the exchange ticket, and creating
+an account for a first-time visitor "only when it can be created" (ADR-0041).
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ EMAIL = "parent@example.com"
 
 @dataclass
 class FakeGateway:
-    """IdP の代わり。受け取った要求を控え、決まったクレームを返す。"""
+    """Stand-in for the IdP. Records the requests it receives and returns fixed claims."""
 
     claims: dict[str, Any]
     seen: list[CodeExchange] = field(default_factory=list)
@@ -57,7 +57,7 @@ def sso_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OIDC_CLIENT_ID", CLIENT_ID)
     monkeypatch.setenv("OIDC_CLIENT_SECRET", "client-secret")
     monkeypatch.setenv("OIDC_REDIRECT_URI", "https://app.example/api/auth/sso/callback")
-    # ⚠ 寄せるのは既定ではない（ADR-0033）。ここは往復そのものを見たいので開ける。
+    # ⚠ Linking by email is not the default (ADR-0033). Enabled here because we want to see the round trip itself.
     monkeypatch.setenv("OIDC_LINK_BY_EMAIL", "true")
 
 
@@ -68,7 +68,7 @@ def gateway() -> FakeGateway:
 
 @pytest.fixture
 def required_acr(monkeypatch: pytest.MonkeyPatch) -> None:
-    """⚠ **要求したら確かめる**（ADR-0039）。要求する運用へ切り替える。"""
+    """⚠ **If you request it, verify it** (ADR-0039). Switch to the mode that requests it."""
     monkeypatch.setenv("OIDC_ACR_VALUES", '["urn:assay:ac:mfa"]')
 
 
@@ -79,7 +79,7 @@ def sso_client(
     sso_settings: None,
 ) -> Iterator[TestClient]:
     app.dependency_overrides[dependencies.oidc_gateway] = lambda: gateway
-    # IdP からの戻りは 303 の連なりで、追いかけると Location を確かめられない
+    # The return from the IdP is a chain of 303s; following it would hide the Location to check
     with TestClient(app, follow_redirects=False) as client:
         yield client
     app.dependency_overrides.clear()
@@ -87,7 +87,7 @@ def sso_client(
 
 @pytest.fixture
 def parent(engine: sa.Engine) -> int:
-    """メールアドレスを持つ既存の利用者（SSO で寄せる先）。"""
+    """An existing user with an email address (the target SSO links to)."""
     session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
     user = User(
         username="parent",
@@ -103,7 +103,7 @@ def parent(engine: sa.Engine) -> int:
 
 
 def _start(client: TestClient, redirect_to: str = "/families") -> str:
-    """送り出しまで進め、控えの ``state`` を返す。"""
+    """Proceed up to sending the user out, and return the stored ``state``."""
     response = client.get("/api/auth/sso/login", params={"redirect_to": redirect_to})
     assert response.status_code == 303, response.text
     assert SSO_BINDING_COOKIE in response.cookies
@@ -112,7 +112,7 @@ def _start(client: TestClient, redirect_to: str = "/families") -> str:
 
 
 def _callback(client: TestClient, state: str) -> str:
-    """戻りまで進め、SPA へ渡された引き換え券を返す。"""
+    """Proceed through the return, and return the exchange ticket handed to the SPA."""
     response = client.get("/api/auth/sso/callback", params={"code": "authorization-code", "state": state})
     assert response.status_code == 303, response.text
     location = response.headers["location"]
@@ -143,10 +143,10 @@ def test_signs_in_an_existing_user_and_returns_to_where_it_started(
     body = session.json()
     assert body["redirect_to"] == "/families"
     assert body["must_change_password"] is False
-    # 発行したトークンは本人のもの
+    # The issued token belongs to that person
     me = sso_client.get("/api/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"})
     assert me.json()["user_id"] == parent
-    # PKCE の検証値と nonce は控えのものが渡っている
+    # The PKCE verifier and nonce passed are the stored ones
     assert gateway.seen[0].code_verifier
     assert gateway.seen[0].nonce
 
@@ -156,7 +156,7 @@ def test_the_second_sign_in_goes_through_the_stored_link(
     gateway: FakeGateway,
     parent: int,
 ) -> None:
-    """1 度結び付けば、IdP 側でメールアドレスが変わっても入れる。"""
+    """Once linked, sign-in works even if the email address changes at the IdP."""
     sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))})
 
     gateway.claims = {"email": "renamed@example.com", "email_verified": True, "name": "親"}
@@ -170,9 +170,12 @@ def test_the_second_sign_in_goes_through_the_stored_link(
 
 
 def test_a_first_visit_creates_the_account(sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine) -> None:
-    """assay から戻ってきた相手＝割り当てられた人。初めてなら口座を作って迎える（ADR-0041）。
+    """Whoever comes back from assay is someone assigned to the app.
 
-    ⚠ 作る口座は管理画面の既定と同じ**親（``member``）・家族なし**で、**パスワードを持たない**。
+    On a first visit, create an account to welcome them (ADR-0041).
+
+    ⚠ The created account matches the admin console default: **a parent (``member``) with no family**,
+    and **no password**.
     """
     before = _user_count(engine)
     gateway.claims = {
@@ -196,7 +199,7 @@ def test_a_first_visit_creates_the_account(sso_client: TestClient, gateway: Fake
 def test_the_created_account_is_found_by_its_link_next_time(
     sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine
 ) -> None:
-    """2 回目は ``(issuer, subject)`` で決まる。⚠ 2 つ目の口座を作らない。"""
+    """The second time is resolved by ``(issuer, subject)``. ⚠ Do not create a second account."""
     gateway.claims = {
         "email": "new@example.com",
         "email_verified": True,
@@ -219,7 +222,10 @@ def test_the_created_account_is_found_by_its_link_next_time(
 def test_a_taken_username_is_refused_instead_of_renamed(
     sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine
 ) -> None:
-    """⚠ **衝突したら作らずに断る**（ADR-0041）。黙って連番を付けると、本人の知らない識別子になる。"""
+    """⚠ **On a collision, refuse instead of creating** (ADR-0041).
+
+    Silently appending a number would give an identifier the person does not know.
+    """
     _other_user(engine, username="newcomer", email="someone-else@example.com")
     before = _user_count(engine)
     gateway.claims = {"email": "new@example.com", "email_verified": True, "preferred_username": "NewComer"}
@@ -237,7 +243,7 @@ def test_a_taken_username_is_refused_instead_of_renamed(
 def test_an_unusable_username_is_refused(
     *, sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine, claims: dict[str, Any]
 ) -> None:
-    """``preferred_username`` が無い・識別子の規則に合わない。どちらも作らない。"""
+    """``preferred_username`` is missing, or does not fit the identifier rules. Neither creates an account."""
     before = _user_count(engine)
     gateway.claims = claims
 
@@ -258,9 +264,9 @@ def test_an_address_an_unlinked_account_already_has_is_refused(
     parent: int,
     engine: sa.Engine,
 ) -> None:
-    """⚠ **意図して断る**（ADR-0041）。作ると同じ人の口座が 2 つになる。
+    """⚠ **Refused on purpose** (ADR-0041). Creating one would give the same person two accounts.
 
-    寄せる設定は既定で閉じている（ADR-0033）。本人がその口座へ入って結び付ける（ADR-0036）。
+    Linking by email is closed by default (ADR-0033). The person signs in to that account and links it (ADR-0036).
     """
     monkeypatch.setenv("OIDC_LINK_BY_EMAIL", "false")
     before = _user_count(engine)
@@ -282,9 +288,12 @@ def test_an_address_an_invited_account_holds_as_its_username_is_refused(
     gateway: FakeGateway,
     engine: sa.Engine,
 ) -> None:
-    """⚠ 招待で作った口座は ``email`` を持たない（ADR-0011）。識別子がそのアドレスなら同じ人である。
+    """⚠ Accounts created by invitation have no ``email`` (ADR-0011).
 
-    見落とすと 2 つ目の口座ができ、本人が家族から外れる（2026-10-05 に本番で起きた）。
+    If the identifier is that address, it is the same person.
+
+    Missing this creates a second account and drops the person out of their family
+    (happened in production on 2026-10-05).
     """
     monkeypatch.setenv("OIDC_LINK_BY_EMAIL", "false")
     session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
@@ -319,7 +328,8 @@ def test_an_unverified_address_is_refused(
 
 
 def test_a_callback_from_another_browser_is_refused(sso_client: TestClient, parent: int) -> None:
-    """攻撃者が始めた認可要求を踏まされても、被害者は攻撃者としてログインしない。"""
+    """Even if tricked into following an authorization request the attacker started, the victim does
+    not sign in as the attacker."""
     state = _start(sso_client)
     sso_client.cookies.delete(SSO_BINDING_COOKIE)
 
@@ -348,7 +358,7 @@ def test_the_ticket_is_good_for_one_exchange(sso_client: TestClient, parent: int
 
 
 def test_an_error_from_the_idp_is_reflected_only_when_it_is_a_plain_code(sso_client: TestClient) -> None:
-    """IdP のエラーコードはそのまま画面の URL へ載る。素性の分かる形だけを通す。"""
+    """The IdP's error code goes straight into the screen URL. Only let through values of a known shape."""
     plain = sso_client.get("/api/auth/sso/callback", params={"error": "access_denied"})
     crafted = sso_client.get("/api/auth/sso/callback", params={"error": "https://phishing.example"})
 
@@ -393,7 +403,7 @@ def _user(engine: sa.Engine, user_id: int) -> User:
 
 
 def _other_user(engine: sa.Engine, *, username: str, email: str) -> None:
-    """写しの更新がぶつかる相手（``users.email`` は一意）。"""
+    """The one the copy update collides with (``users.email`` is unique)."""
     session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
     session.add(User(username=username, email=email, display_name=username, password_hash=None))
     session.commit()
@@ -412,10 +422,10 @@ def test_the_profile_copy_follows_the_idp(
     parent: int,
     engine: sa.Engine,
 ) -> None:
-    """⚠ **写しは IdP を正とする**（ADR-0038）。
+    """⚠ **The copy treats the IdP as the source of truth** (ADR-0038).
 
-    書き直さないと、向こうで改名・メール変更をしても**こちらの表示は永久に古いまま**
-    になる。⚠ ``username``（ログインの識別子）は動かさない。
+    Without rewriting it, a rename or email change over there would leave **the display here stale forever**.
+    ⚠ ``username`` (the login identifier) is not touched.
     """
     sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))})
     gateway.claims = {"email": "renamed@example.com", "email_verified": True, "name": "改名した親"}
@@ -433,7 +443,7 @@ def test_a_name_another_user_already_has_is_not_written(
     parent: int,
     engine: sa.Engine,
 ) -> None:
-    """⚠ **ぶつかる値は書かない。** 写しの更新でログインを壊してはいけない。"""
+    """⚠ **Do not write a colliding value.** Updating the copy must not break sign-in."""
     sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))})
     _other_user(engine, username="sibling", email="taken@example.com")
     gateway.claims = {"email": "taken@example.com", "email_verified": True, "name": "親"}
@@ -448,7 +458,7 @@ def test_a_linked_user_signs_in_without_an_email_claim(
     gateway: FakeGateway,
     parent: int,
 ) -> None:
-    """鍵は ``(issuer, subject)``。⚠ **メールが無くても、結び付いていれば入れる**（ADR-0038）。"""
+    """The key is ``(issuer, subject)``. ⚠ **Even without an email, a linked account can sign in** (ADR-0038)."""
     sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))})
     gateway.claims = {"name": "親"}
 
@@ -464,7 +474,10 @@ def test_a_linked_user_signs_in_without_an_email_claim(
 def test_a_first_visit_without_an_email_claim_still_creates_the_account(
     sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine
 ) -> None:
-    """メールアドレスは鍵ではない（ADR-0038）。無くても作れる ——要るのは ``username`` である。"""
+    """The email address is not the key (ADR-0038).
+
+    An account can be created without one -- what is needed is ``username``.
+    """
     gateway.claims = {"name": "親", "preferred_username": "no-mail"}
 
     body = sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))}).json()
@@ -474,7 +487,7 @@ def test_a_first_visit_without_an_email_claim_still_creates_the_account(
 
 
 def test_nothing_is_requested_of_the_idp_by_default(sso_client: TestClient, gateway: FakeGateway) -> None:
-    """⚠ 既定は要求しない（ADR-0039）。予約語を持たない IdP でも従来どおり動く。"""
+    """⚠ Not requested by default (ADR-0039). IdPs without the reserved values keep working as before."""
     _start(sso_client)
 
     assert gateway.sent[0].acr_values == ()
@@ -496,7 +509,7 @@ def test_the_requested_strength_is_sent_and_checked(
 
 @pytest.mark.usefixtures("required_acr")
 def test_a_weaker_sign_in_is_refused(sso_client: TestClient, gateway: FakeGateway, parent: int) -> None:
-    """⚠ **ここが肝。** 送るだけでは何の保証にもならない（ADR-0039）。"""
+    """⚠ **This is the crux.** Merely sending it guarantees nothing (ADR-0039)."""
     gateway.claims = {"email": EMAIL, "email_verified": True, "acr": "urn:assay:ac:single"}
 
     response = sso_client.get(
@@ -509,7 +522,7 @@ def test_a_weaker_sign_in_is_refused(sso_client: TestClient, gateway: FakeGatewa
 
 @pytest.mark.usefixtures("required_acr")
 def test_an_absent_acr_is_refused_too(sso_client: TestClient, gateway: FakeGateway, parent: int) -> None:
-    """返ってこないものを「満たした」と読むと、要求は送っただけになる。"""
+    """Reading a missing value as "satisfied" would mean the request was only sent."""
     response = sso_client.get(
         "/api/auth/sso/callback",
         params={"code": "authorization-code", "state": _start(sso_client)},
@@ -519,7 +532,7 @@ def test_an_absent_acr_is_refused_too(sso_client: TestClient, gateway: FakeGatew
 
 
 def _start_silently(client: TestClient, redirect_to: str = "/families") -> str:
-    """ログイン画面が開いたときの試し（ADR-0052）を出し、``state`` を返す。"""
+    """Start the trial run made when the login screen opens (ADR-0052), and return ``state``."""
     response = client.get("/api/auth/sso/login", params={"prompt": "none", "redirect_to": redirect_to})
     assert response.status_code == 303, response.text
     return str(parse_qs(urlparse(response.headers["location"]).query)["state"][0])
@@ -528,7 +541,7 @@ def _start_silently(client: TestClient, redirect_to: str = "/families") -> str:
 def test_a_silent_attempt_asks_the_idp_not_to_show_a_screen(sso_client: TestClient, gateway: FakeGateway) -> None:
     _start_silently(sso_client)
     assert gateway.sent[-1].silent is True
-    # ふつうの往復には付けない
+    # Not attached to an ordinary round trip
     _start(sso_client)
     assert gateway.sent[-1].silent is False
 
@@ -540,7 +553,7 @@ def test_a_silent_attempt_asks_the_idp_not_to_show_a_screen(sso_client: TestClie
 def test_a_declined_silent_attempt_returns_to_the_login_screen_without_an_error(
     sso_client: TestClient, error: str
 ) -> None:
-    """IdP で入っていなかった。失敗ではないので ``sso_error`` を付けず、行き先は持ち帰る。"""
+    """Not signed in at the IdP. Not a failure, so no ``sso_error``; the destination is carried back."""
     state = _start_silently(sso_client, "/families")
     back = sso_client.get("/api/auth/sso/callback", params={"error": error, "state": state})
     assert back.status_code == 303
@@ -548,14 +561,14 @@ def test_a_declined_silent_attempt_returns_to_the_login_screen_without_an_error(
 
 
 def test_a_declined_ordinary_attempt_is_still_an_error(sso_client: TestClient) -> None:
-    """ボタンで始めた往復の ``login_required`` は今までどおりエラーで返す。"""
+    """``login_required`` on a round trip started from the button still comes back as an error, as before."""
     state = _start(sso_client)
     back = sso_client.get("/api/auth/sso/callback", params={"error": "login_required", "state": state})
     assert "sso_error=login_required" in back.headers["location"]
 
 
 def test_a_declined_silent_attempt_from_another_browser_is_still_an_error(sso_client: TestClient) -> None:
-    """合言葉の Cookie が無い戻りは、試した往復でも黙って飲み込まない。"""
+    """A return without the shared-secret cookie is not silently swallowed, even on a trial round trip."""
     state = _start_silently(sso_client)
     sso_client.cookies.clear()
     back = sso_client.get("/api/auth/sso/callback", params={"error": "login_required", "state": state})

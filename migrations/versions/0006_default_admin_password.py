@@ -1,12 +1,12 @@
 """default admin password
 
-初期管理者の既定パスワードをメールアドレスと同じ文字列へ変更したことを、既存の
-環境へも反映する。既定値のまま使われているアカウント（``password_hash`` が過去の
-既定ハッシュと一致）だけを対象にし、運用者が自分で決めたパスワードには触れない。
-値の正本は ``shared/domain/auth/master_data.py``（ここへ直書きしない）。
+Applies to existing environments the change of the initial administrator's default password
+to the same string as the email address. Only accounts still using the default (whose
+``password_hash`` matches a past default hash) are targeted; passwords operators chose are left alone.
+The source of truth for the values is ``shared/domain/auth/master_data.py`` (do not hard-code them here).
 
-このリビジョン時点では ``users`` の識別子はまだメールアドレスなので、対象は
-``email`` で引く（``username`` が識別子になるのは 0007 以降）。
+At this revision the ``users`` identifier is still the email address, so the target is
+looked up by ``email`` (``username`` becomes the identifier from 0007 on).
 
 Revision ID: default_admin_password
 Revises: seed_reward_points
@@ -41,7 +41,7 @@ def upgrade() -> None:
     else:
         target_hash = master_data.DEFAULT_ADMIN_PASSWORD_HASH
 
-    # 既定値のまま使われているアカウントだけを新しい既定値へ追随させる
+    # Move only accounts still on the default value to the new default
     op.get_bind().execute(
         _users.update()
         .where(
@@ -53,10 +53,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """既定値のままの管理者を、直前の既定ハッシュへ戻す。
+    """Revert administrators still on the default to the previous default hash.
 
-    どのハッシュへ戻すかは ``SUPERSEDED_ADMIN_PASSWORD_HASHES`` の末尾（最も新しい
-    旧既定値）を使う。ここでも、既定値以外のパスワードには触れない。
+    The hash to revert to is the last entry of ``SUPERSEDED_ADMIN_PASSWORD_HASHES`` (the newest
+    old default). Here too, passwords other than the default are left alone.
     """
     from shared.domain.auth import master_data
 

@@ -1,21 +1,21 @@
 /**
- * 招待コードの発行と取り消し（親メンバー）。
+ * Issuing and revoking invitation codes (parent members).
  *
- * 出せる招待は立場で分かれる（ADR-0020）。子ども宛のコードは親（owner / parent）
- * なら配れるが、親を入れるコードは owner だけ — 誰をこの家族へ入れるかは owner が
- * 決める。
+ * Which invitations can be issued depends on role (ADR-0020). Codes for children can be handed out by
+ * parents (owner / parent), but codes that add a parent are owner only — the owner decides who joins
+ * this family.
  *
- * 宛先は 2 通り。**すでにいる参加者を指す**コード（その人がログインできるように
- * なるだけで、顔ぶれは変わらない）と、**新しい人を入れる**コード（親のみ）。
- * バックアップから復元した家族では owner 以外が全員未紐付けで戻るので、指せる
- * 相手には子だけでなく親も並ぶ（ADR-0026）。
+ * Two kinds of target. A code **pointing at an existing participant** (it only lets that person log in;
+ * the membership doesn't change) and a code that **adds a new person** (parents only).
+ * In a family restored from backup, everyone except the owner comes back unlinked, so the targets
+ * that can be pointed at include parents as well as children (ADR-0026).
  *
- * 平文のコードは発行の応答にしか現れないので、受け取った直後だけ画面に出す。
- * 一覧へ戻ると二度と読めない（保存されているのはハッシュだけ。ADR-0009）。
+ * The plaintext code appears only in the issue response, so it is shown only right after receiving it.
+ * Once back on the list it can never be read again (only the hash is stored; ADR-0009).
  *
- * 渡すのはコードそのものより、コードを載せた URL を主にする。受け取った人は開く
- * だけで入力済みの状態から始められる（`invitationLink.ts`）。コードも併せて出す —
- * URL を開けない相手（口頭・別の端末）には打ち込んでもらう必要がある。
+ * What is handed out is primarily the URL containing the code rather than the code itself. Recipients
+ * just open it and start with it pre-filled (`invitationLink.ts`). The code is shown too —
+ * recipients who cannot open the URL (by voice, another device) need to type it in.
  */
 import { useEffect, useState } from 'react'
 
@@ -30,14 +30,14 @@ import { useToast } from './ToastNotification'
 interface Props {
   familyId: number
   /**
-   * アカウント未紐付けの参加者。宛先を指す招待は必ずこのどれかを指す。
+   * Participants not linked to an account. An invitation with a target always points at one of these.
    *
-   * 子だけとは限らない。バックアップから復元した家族では、owner 以外は全員
-   * 未紐付けで戻る（ADR-0026）。その人を指して配れば、台帳の「記録した人」が
-   * 元のまま残る — 新しく入れ直すと参照が外れる。
+   * Not necessarily only children. In a family restored from backup, everyone except the owner
+   * comes back unlinked (ADR-0026). Handing out a code that points at that person keeps the ledger's
+   * "recorded by" intact — re-adding them anew would break the reference.
    */
   unlinkedMembers: Membership[]
-  /** もう 1 人の親を招けるか（owner のみ）。宛先を指す親宛のコードも owner だけ。 */
+  /** Whether another parent can be invited (owner only). Codes for parents with a target are owner only too. */
   canInviteParent: boolean
   onChanged: () => Promise<void>
 }
@@ -47,8 +47,8 @@ export function InvitationPanel({ familyId, unlinkedMembers, canInviteParent, on
   const { notify } = useToast()
   const [pending, setPending] = useState<Invitation[]>([])
   const [issued, setIssued] = useState<Invitation | null>(null)
-  // 発行中の宛先（親宛は `'parent'`、子宛はその参加 ID）と取り消し中の招待。
-  // 押したボタンにだけスピナーを出すため、どれを実行中かまで持つ。
+  // The target being issued (`'parent'` for parents, the participant ID for children) and the invitation being revoked.
+  // Keep which one is running so the spinner shows only on the pressed button.
   const [issuingFor, setIssuingFor] = useState<number | 'parent' | null>(null)
   const [revokingId, setRevokingId] = useState<number | null>(null)
 
@@ -67,7 +67,7 @@ export function InvitationPanel({ familyId, unlinkedMembers, canInviteParent, on
     if (issuingFor !== null) return
     setIssuingFor(target?.id ?? 'parent')
     try {
-      // 宛先を指す場合の立場は、その参加者のもの（子には子、親には親のコード）
+      // When pointing at a target, the role is that participant's (child code for a child, parent code for a parent)
       const invitation = await families.issueInvitation(
         familyId,
         target === null ? 'parent' : target.role,
@@ -97,22 +97,22 @@ export function InvitationPanel({ familyId, unlinkedMembers, canInviteParent, on
     }
   }
 
-  // 親宛のコードを配れるのは owner だけ（ADR-0020）。押してから断られる操作を出さない
+  // Only the owner can hand out parent codes (ADR-0020). Don't show actions that get refused after pressing
   const invitableMembers = unlinkedMembers.filter(
     (member) => member.role === 'child' || (member.role === 'parent' && canInviteParent),
   )
 
-  // 出す URL は「いま見ている入口」から作る。別の宛先を持ち出すと、手元では
-  // 開けるのに配った先で届かない URL になり得る。
+  // Build the URL from "the entry currently being viewed". Using another origin could produce a URL
+  // that opens locally but does not reach the recipients.
   const issuedLink = issued?.code
     ? { code: issued.code, url: invitationUrl(issued.code, issued.role, window.location.origin) }
     : null
 
   const [copyUrl, copying] = usePendingAction(async (url: string) => {
     try {
-      // 安全でない出所（http のまま開いた場合など）ではクリップボードを触れない。
-      // 参照した時点で例外になるので、失敗はここでまとめて拾う。URL は画面に
-      // 出したままなので、手で選んで写すことはできる。
+      // On insecure origins (e.g. opened over plain http) the clipboard is not accessible.
+      // Accessing it throws, so failures are caught here together. The URL stays on screen,
+      // so it can still be selected and copied by hand.
       await navigator.clipboard.writeText(url)
       notify('success', t('invitations.linkCopied'))
     } catch {

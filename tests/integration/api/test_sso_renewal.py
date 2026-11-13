@@ -1,8 +1,9 @@
-"""SSO で入ったログインはリフレッシュトークンを持たず、切れたら画面を出さずに続ける（ADR-0058）。
+"""A sign-in via SSO holds no refresh token and, when it expires, continues without showing a screen (ADR-0058).
 
-IdP との通信はゲートウェイを差し替えて止める。続ける往復は、画面が見えない枠で開く
-``/api/auth/sso/renew`` から始まり、戻り（``/callback``）が引き換え券を付けて結果の頁へ送る。
-画面は券を ``POST /api/auth/sso/token``（``continuing: true``）でトークンへ換える。
+Communication with the IdP is stopped by swapping the gateway. The continuation round trip starts at
+``/api/auth/sso/renew``, opened in an invisible frame, and the return (``/callback``) sends a claim ticket
+to the result page.
+The screen exchanges the ticket for tokens with ``POST /api/auth/sso/token`` (``continuing: true``).
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ RENEWED = "/api/auth/sso/renewed"
 
 @dataclass
 class FakeGateway:
-    """ID トークンを、検証済みのクレームとして返すだけの IdP。送り出した要求を覚える。"""
+    """An IdP that just returns the ID token as verified claims. Remembers the requests sent to it."""
 
     requests: list[AuthorizationRequest] = field(default_factory=list)
 
@@ -85,7 +86,7 @@ def sso_client(app: FastAPI, gateway: FakeGateway, monkeypatch: pytest.MonkeyPat
 
 @pytest.fixture
 def parent(engine: sa.Engine) -> int:
-    """メールアドレスを持つ既存の利用者（SSO で寄せる先）。"""
+    """An existing user with an email address (the account SSO merges into)."""
     session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
     user = User(username="parent", email=EMAIL, display_name="親", password_hash=generate_password_hash("password"))
     session.add(user)
@@ -112,7 +113,7 @@ def _sign_in_with_sso(client: TestClient) -> dict[str, Any]:
 
 
 def _renew(client: TestClient, params: dict[str, str] | None = None) -> Any:
-    """続ける往復（枠の中で開く口 → IdP → 戻り）。戻りの応答を返す。"""
+    """The continuation round trip (endpoint opened in the frame → IdP → return). Returns the return response."""
     start = client.get("/api/auth/sso/renew")
     assert start.status_code == 303, start.text
     query = {"code": "authorization-code", **(params or {}), "state": _state_of(start.headers["location"])}
@@ -153,7 +154,7 @@ def test_an_sso_login_hands_out_no_refresh_token(sso_client: TestClient, parent:
 
 
 def test_a_password_login_still_refreshes(sso_client: TestClient, engine: sa.Engine, parent: int) -> None:
-    """パスワード・パスキーで入ったログインは変えない（IdP に問い合わせる先が無い）。"""
+    """Sign-ins via password or passkey are not changed (there is no IdP to ask)."""
     with Session(engine) as db:
         user = db.get(User, parent)
         assert user is not None
@@ -186,7 +187,7 @@ def test_renewing_hands_a_ticket_to_the_result_page(sso_client: TestClient, pare
     assert exchanged.status_code == 200, exchanged.text
     assert exchanged.json()["refresh_token"] is None
     assert _claims(exchanged.json()["access_token"])["sub"] == str(parent)
-    # 券は 1 回限り
+    # The ticket is single-use
     assert (
         sso_client.post("/api/auth/sso/token", json={"ticket": result["ticket"], "continuing": True}).status_code == 401
     )
@@ -199,7 +200,7 @@ def test_renewing_without_a_previous_token_signs_in_afresh(sso_client: TestClien
 
 
 def test_renewing_is_refused_when_someone_else_comes_back(sso_client: TestClient, parent: int) -> None:
-    """IdP で別の人に入り直していたら続けない。開いている画面は前の人のものだから。"""
+    """Do not continue if the IdP is now signed in as someone else. The open screen belongs to the previous person."""
     other = _expired(_sign_in_with_sso(sso_client))
     other["sub"] = str(parent + 1000)
     result = _result_of(_renew(sso_client))
@@ -211,7 +212,7 @@ def test_renewing_is_refused_when_someone_else_comes_back(sso_client: TestClient
 
 
 def test_an_ordinary_login_ignores_a_stale_token_of_someone_else(sso_client: TestClient, parent: int) -> None:
-    """ボタンで入り直すときは、手元に別の人の古いトークンが残っていても入れる。"""
+    """When signing in again via the button, it works even if another person's old token is left locally."""
     other = _expired(_sign_in_with_sso(sso_client))
     other["sub"] = str(parent + 1000)
     start = sso_client.get("/api/auth/sso/login", params={"redirect_to": "/families"})
@@ -244,7 +245,7 @@ def test_an_expired_token_carries_the_session_only_within_the_window(sso_client:
     stale = _expired(_sign_in_with_sso(sso_client), ago=timedelta(seconds=RENEWAL_CARRY_SECONDS + 60))
     stale["sub"] = str(parent + 1000)
     result = _result_of(_renew(sso_client))
-    # 古すぎて読まない ——別の人のトークンでも、新しいログインとして入る（断らない）
+    # Too old to read: even another person's token gets in as a new sign-in (not refused)
     exchanged = sso_client.post(
         "/api/auth/sso/token", json={"ticket": result["ticket"], "continuing": True}, headers=_bearer_of(stale)
     )

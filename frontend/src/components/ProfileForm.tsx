@@ -1,11 +1,11 @@
 /**
- * 表示名とメールアドレスの変更。
+ * Changing the display name and email address.
  *
- * ログイン識別子（`username`）はここでは変えない。変えるとログインの手順が
- * 変わり、家族から本人へ伝えた ID とも食い違う（ADR-0011）。
+ * The login identifier (`username`) is not changed here. Changing it would change the login steps
+ * and mismatch the ID the family told the person (ADR-0011).
  *
- * メールアドレスは任意項目。空にして保存すると外れる — メールアドレスを持たない
- * アカウントは、パスワードのリセットを親からの一時パスワードで受ける。
+ * The email address is optional. Saving it empty removes it — accounts without an email address
+ * receive password resets as a temporary password from a parent.
  */
 import { useState, type SubmitEvent } from 'react'
 

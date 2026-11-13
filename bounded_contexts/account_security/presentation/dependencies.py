@@ -1,8 +1,8 @@
-"""ユースケースの組み立て（``Depends()`` 用のファクトリ）。
+"""Assembly of use cases (factories for ``Depends()``).
 
-依存の生成をここへ集約し、ルーターは完成したユースケースだけを受け取る
-（CLAUDE.md「設計方針」の依存注入）。設定値は ``settings`` の ``@property``
-経由でのみ読む。
+Dependency creation is gathered here, and routers receive only finished use cases
+(dependency injection per CLAUDE.md "Design principles"). Settings are read only via
+``@property`` on ``settings``.
 """
 
 from __future__ import annotations
@@ -81,22 +81,22 @@ def build_totp_authenticator() -> TotpAuthenticator:
 
 
 def build_relying_party() -> WebAuthnRelyingParty:
-    """RP を組み立てる。設定が WebAuthn の規則に反していれば発行させない。
+    """Build the RP. If the settings violate WebAuthn rules, do not let it issue.
 
-    RP ID とオリジンが噛み合っていないと、チャレンジの発行までは成功したうえで
-    ブラウザが ``SecurityError`` で拒む。原因が画面から分からなくなるため、
-    ここで止めて設定の誤りだと分かるエラーコードを返す。
+    If the RP ID and origin do not match, issuing the challenge succeeds and then
+    the browser rejects it with ``SecurityError``. The cause would not be visible from the screen,
+    so stop here and return an error code that shows it is a configuration mistake.
 
-    渡すのは検証が返した**正規化済みの値**。設定に紛れた空白や既定ポートを
-    そのまま渡すと、``rp.id`` やオリジンの比較がブラウザ側で外れる。
+    Pass the **normalized values** returned by validation. Passing whitespace or a default port
+    from the settings as is makes the ``rp.id`` and origin comparisons fail in the browser.
     """
     rp_id = settings.webauthn_rp_id
     origin = settings.webauthn_origin
     try:
         configuration = validate_relying_party_configuration(rp_id=rp_id, origin=origin)
     except PasskeyConfigurationError as error:
-        # 値そのものを残す。RP ID とオリジンは秘匿情報でなく、これが無いと
-        # 「どちらをどう直すか」がログから分からない。
+        # Log the values themselves. RP ID and origin are not secrets, and without them
+        # the logs do not tell "which one to fix and how".
         logger.error("passkey_misconfigured: %s rp_id=%s origin=%s", error.code, rp_id, origin)
         raise
     return PyWebAuthnRelyingParty(
@@ -106,8 +106,8 @@ def build_relying_party() -> WebAuthnRelyingParty:
     )
 
 
-# 外部要素（TOTP 実装・WebAuthn ライブラリ）は依存として差し込む。テストでは
-# ``app.dependency_overrides`` で偽物へ差し替えられる。
+# External pieces (TOTP implementation, WebAuthn library) are injected as dependencies. In tests
+# they can be replaced with fakes via ``app.dependency_overrides``.
 TotpAuthenticatorDep = Annotated[TotpAuthenticator, Depends(build_totp_authenticator)]
 RelyingPartyDep = Annotated[WebAuthnRelyingParty, Depends(build_relying_party)]
 
@@ -136,7 +136,7 @@ def verify_second_factor(db: DbDep, authenticator: TotpAuthenticatorDep) -> Veri
 
 
 def throttle_policy() -> ThrottlePolicy:
-    """窓・上限・断る長さ。**設定は呼ばれるたびに読む**（再起動を要らなくする）。"""
+    """Window, limit and refusal length. **Settings are read on every call** (so no restart is needed)."""
     return ThrottlePolicy(
         max_failures=settings.login_max_failures,
         window=timedelta(seconds=settings.login_failure_window_seconds),
@@ -145,13 +145,13 @@ def throttle_policy() -> ThrottlePolicy:
 
 
 def throttle_login() -> ThrottleLogin:
-    # ⚠ リクエストのセッションは渡さない。失敗の記録は 401 と一緒に返る（例外で
-    # 抜ける）ので、リクエストのセッションでは rollback で消える。控えは自前の
-    # 短いセッションで commit する（ADR-0055）
+    # ⚠ Do not pass the request's session. Recording a failure goes back with a 401 (exits via
+    # an exception), so with the request's session it would be lost on rollback. Records are committed in
+    # a short session of their own (ADR-0055)
     return ThrottleLogin(SqlLoginAttemptRepository(get_session_factory()), throttle_policy())
 
 
-# --- パスキー -----------------------------------------------------------
+# --- Passkeys -----------------------------------------------------------
 
 
 def list_passkeys(db: DbDep) -> ListPasskeys:

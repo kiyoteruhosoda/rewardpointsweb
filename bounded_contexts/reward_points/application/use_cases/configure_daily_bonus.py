@@ -1,12 +1,12 @@
-"""毎日のボーナスを決める・やめる（ADR-0024）。
+"""Set up or stop the daily bonus (ADR-0024).
 
-台帳を変更できる立場（親）だけが触れる。判定は台帳への記録と同じ
-``modifiable_ledger`` に通す — 毎日 1 行足す約束を結ぶ操作なので、手で 1 行
-足せる人と同じ範囲に置く。
+Only those who can modify the ledger (parents) may do this. The check goes through
+``modifiable_ledger``, the same as recording to the ledger — this sets up a commitment
+to add one row every day, so it is limited to those who can add a row by hand.
 
-「やめる」は設定を消すだけで、渡し終えたポイントには触れない（台帳は追記専用。
-ADR-0010）。すでに設定が無いときも黙って成功させる — やめたいという求めは
-すでに満たされている。
+"Stop" only deletes the setting and leaves already granted points alone (the ledger is
+append-only, ADR-0010). If there is no setting, it still succeeds silently — the wish to
+stop is already satisfied.
 """
 
 from __future__ import annotations
@@ -56,15 +56,16 @@ class ConfigureDailyBonusUseCase:
         return to_dto(bonus)
 
     def _next_day(self) -> date:
-        """最初に渡す日 ＝ **決めた日の翌日**。
+        """First grant day = **the day after it is set up**.
 
-        当日から渡すと、決めた時刻によって受け取り方が変わる。朝に決めれば
-        その日の分が数分後に着き、夜 23 時 50 分に決めれば 10 分の間に 2 日分が
-        並ぶ。「次に日付が変わったときから」と一本に決めておけば、いつ決めても
-        同じで、画面の文言（`dailyBonus.hint`）とも食い違わない。
+        Granting from the same day would make the result depend on the time of setup:
+        set it in the morning and that day's points arrive minutes later; set it at
+        23:50 and two days' worth land within 10 minutes. A single rule of "starting
+        from the next date change" behaves the same whenever it is set, and matches the
+        on-screen text (`dailyBonus.hint`).
 
-        当日にも渡したいときは手で 1 行書く。その方が「今日はこういう理由で
-        足した」という意図が履歴に残る。
+        To grant on the same day too, add a row by hand. That way the intent ("added
+        today for this reason") stays in the history.
         """
         return self._boundary.day_of(utcnow()) + timedelta(days=1)
 

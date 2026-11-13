@@ -1,7 +1,7 @@
-"""manager から log:view を外す (nolumiatask #786)
+"""Remove log:view from manager (nolumiatask #786)
 
-アプリのログは運用の記録で、manager の仕事には要らない。admin だけが見られるようにする。
-シーダーは足すだけで外さないので、今ある環境からはここで外す。
+The app logs are operational records and are not needed for the manager's job. Only admin can see them.
+The seeder only adds and never removes, so it is removed from existing environments here.
 
 Revision ID: manager_without_log_view
 Revises: login_attempts

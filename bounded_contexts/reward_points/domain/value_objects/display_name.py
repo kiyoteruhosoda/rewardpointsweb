@@ -1,7 +1,7 @@
-"""家族の中での呼び名。
+"""The name a member goes by within a family.
 
-アカウントの表示名とは別に持つ。同じ人でも家族ごとに呼ばれ方は変わりうるし、
-まだアカウントを持たない子どもにも呼び名は必要になる（ADR-0010）。
+Kept separate from the account's display name. The same person may be called
+differently in each family, and children without an account still need a name (ADR-0010).
 """
 
 from __future__ import annotations

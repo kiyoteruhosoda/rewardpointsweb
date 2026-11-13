@@ -1,7 +1,7 @@
-"""IdP の名乗りを、このアプリの利用者へ落とすところ。
+"""Mapping the IdP's identity claims onto a user of this app.
 
-初めての相手は口座を作って迎える（ADR-0041）。ここが守っているのは、**作れないときに
-黙って別の形で作らない**こと ——同じメールアドレスの口座がある、``username`` が使えない。
+A first-time visitor gets an account created for them (ADR-0041). What this guards is **not silently creating
+it in some other form when it cannot be created** -- an account with the same email exists, or ``username`` is unusable.
 """
 
 from __future__ import annotations
@@ -65,13 +65,13 @@ class FakeIdentities:
 
 @dataclass
 class FakeDirectory:
-    """メールアドレスを持つ利用者だけを並べた名簿（``users`` の代わり）。"""
+    """A roster listing only users with an email address (stands in for ``users``)."""
 
     by_email: dict[str, FederatedAccount] = field(default_factory=dict)
     refreshed: list[tuple[int, str | None, str]] = field(default_factory=list)
     usernames: set[str] = field(default_factory=set)
     created: list[tuple[str, str | None, str]] = field(default_factory=list)
-    #: 真なら、確かめたあとに別の往復が同じ値を取った（作ると一意の列がぶつかる）。
+    #: If true, another round trip took the same value after the check (creating would collide on a unique column).
     overtaken: bool = False
 
     def find_by_id(self, user_id: int) -> FederatedAccount | None:
@@ -111,7 +111,7 @@ def _user(
 
 
 def _resolve(identities: FakeIdentities, directory: FakeDirectory) -> ResolveFederatedAccount:
-    """⚠ **寄せるのは既定ではない**（ADR-0033）。ここは結び付けの筋道を見たいので開ける。"""
+    """⚠ **Linking by email is not the default** (ADR-0033). Enabled here because we want to see the linking path."""
     return ResolveFederatedAccount(
         identities=identities,
         directory=directory,
@@ -126,12 +126,12 @@ def test_links_a_verified_address_to_the_existing_user() -> None:
     resolved = _resolve(identities, directory).execute(issuer=ISSUER, user=_user())
 
     assert (resolved.user_id, resolved.linked) == (7, True)
-    # 2 回目以降は (issuer, subject) で決まる
+    # From the second time on it is resolved by (issuer, subject)
     assert identities.linked == {(ISSUER, "idp-1"): 7}
 
 
 def test_a_known_identity_wins_even_after_the_address_changed() -> None:
-    """結び付きの鍵は ``(issuer, subject)``。メールアドレスは変わり得る。"""
+    """The linking key is ``(issuer, subject)``. The email address may change."""
     identities = FakeIdentities({(ISSUER, "idp-1"): 7})
     directory = FakeDirectory({"parent@example.com": FederatedAccount(user_id=7, is_active=True)})
 
@@ -142,14 +142,14 @@ def test_a_known_identity_wins_even_after_the_address_changed() -> None:
 
 
 def test_an_unknown_address_gets_a_new_account() -> None:
-    """assay から戻ってきた相手は、割り当てられた人である（ADR-0041）。"""
+    """Whoever comes back from assay is someone assigned to the app (ADR-0041)."""
     identities = FakeIdentities()
     directory = FakeDirectory()
 
     resolved = _resolve(identities, directory).execute(issuer=ISSUER, user=_user(preferred_username="Parent"))
 
     assert (resolved.user_id, resolved.linked, resolved.provisioned) == (101, True, True)
-    # ⚠ ``username`` は識別子の規則で正規化する（小文字）
+    # ⚠ ``username`` is normalized by the identifier rules (lowercase)
     assert directory.created == [("parent", "parent@example.com", "親")]
     assert identities.linked == {(ISSUER, "idp-1"): 101}
 
@@ -160,7 +160,7 @@ def test_an_unverified_address_is_refused_even_if_a_user_has_it() -> None:
     with pytest.raises(SsoAccountNotLinkedError):
         _resolve(FakeIdentities(), directory).execute(issuer=ISSUER, user=_user(verified=False))
 
-    # ⚠ 寄せられないからといって、2 つ目の口座を作らない
+    # ⚠ Being unable to link by email is no reason to create a second account
     assert directory.created == []
 
 
@@ -172,10 +172,10 @@ def test_a_disabled_user_cannot_sign_in_through_the_idp() -> None:
 
 
 def test_a_link_to_a_deleted_user_is_rebuilt_not_trusted() -> None:
-    """利用者が消され、同じアドレスで作り直された場合。
+    """When the user was deleted and recreated with the same address.
 
-    結び付きだけが残っている状態では、その ``user_id`` を信用しない
-    （消えた利用者の ID が別人へ再利用されることがある）。
+    While only the link remains, its ``user_id`` is not trusted
+    (a deleted user's ID can be reused for someone else).
     """
     identities = FakeIdentities({(ISSUER, "idp-1"): 99})
     directory = FakeDirectory({"parent@example.com": FederatedAccount(user_id=7, is_active=True)})
@@ -187,9 +187,9 @@ def test_a_link_to_a_deleted_user_is_rebuilt_not_trusted() -> None:
 
 
 def test_by_default_an_existing_user_is_neither_linked_nor_duplicated() -> None:
-    """⚠ 既定は寄せない（ADR-0033）。⚠ **そして作らない**（ADR-0041）。
+    """⚠ Not linked by email by default (ADR-0033). ⚠ **And not created either** (ADR-0041).
 
-    作ると同じ人の口座が 2 つになる。本人がその口座へ入って結び付ける（ADR-0036）。
+    Creating one would give the same person two accounts. The person signs in to that account and links it (ADR-0036).
     """
     identities = FakeIdentities()
     directory = FakeDirectory({"parent@example.com": FederatedAccount(user_id=7, is_active=True)})
@@ -206,9 +206,9 @@ def test_by_default_an_existing_user_is_neither_linked_nor_duplicated() -> None:
 
 
 def test_an_account_whose_username_is_the_address_is_not_duplicated() -> None:
-    """⚠ 招待で作った口座は ``email`` を持たず、識別子がメールアドレスのことが多い（ADR-0011）。
+    """⚠ Accounts created by invitation have no ``email``, and their identifier is often an email address (ADR-0011).
 
-    ``email`` の列だけで探すと見落として 2 つ目の口座を作り、本人が家族から外れる。
+    Searching only the ``email`` column misses it, creates a second account, and drops the person out of their family.
     """
     identities = FakeIdentities()
     directory = FakeDirectory(usernames={"parent@example.com"})
@@ -225,7 +225,7 @@ def test_an_account_whose_username_is_the_address_is_not_duplicated() -> None:
 
 
 def test_an_account_whose_username_is_the_address_can_be_linked() -> None:
-    """寄せる設定を開けていれば、識別子がそのアドレスの口座へ寄せる（ADR-0033）。"""
+    """With linking by email enabled, link to the account whose identifier is that address (ADR-0033)."""
     identities = FakeIdentities()
     directory = FakeDirectory(usernames={"parent@example.com"})
 
@@ -236,10 +236,10 @@ def test_an_account_whose_username_is_the_address_can_be_linked() -> None:
 
 
 def test_the_profile_copy_is_rewritten_on_every_sign_in() -> None:
-    """⚠ **写しは IdP を正とする**（ADR-0038）。
+    """⚠ **The copy treats the IdP as the source of truth** (ADR-0038).
 
-    上書きしないと、向こうで改名・メール変更をしても表示が永久に古いままになる。
-    ぶつかる値を書かない判断は名簿（実装）の側が持つ。
+    Without overwriting, a rename or email change over there would leave the display stale forever.
+    The decision not to write colliding values belongs to the roster (the implementation).
     """
     identities = FakeIdentities({(ISSUER, "idp-1"): 7})
     directory = FakeDirectory({"parent@example.com": FederatedAccount(user_id=7, is_active=True)})
@@ -250,19 +250,19 @@ def test_the_profile_copy_is_rewritten_on_every_sign_in() -> None:
 
 
 def test_a_linked_user_signs_in_without_an_email_at_all() -> None:
-    """鍵は ``(issuer, subject)`` なので、メールアドレスが無くても通る（ADR-0038）。"""
+    """The key is ``(issuer, subject)``, so it works without an email address (ADR-0038)."""
     identities = FakeIdentities({(ISSUER, "idp-1"): 7})
     directory = FakeDirectory({"parent@example.com": FederatedAccount(user_id=7, is_active=True)})
 
     resolved = _resolve(identities, directory).execute(issuer=ISSUER, user=_user(email=None))
 
     assert (resolved.user_id, resolved.linked) == (7, False)
-    # ⚠ **名乗っていない項目は消さない。** ``None`` は「空にしてほしい」ではない。
+    # ⚠ **Do not erase fields that were not claimed.** ``None`` does not mean "please clear it".
     assert directory.refreshed == [(7, None, "親")]
 
 
 def test_a_first_visit_without_an_email_still_gets_an_account() -> None:
-    """メールアドレスは鍵ではない（ADR-0038）。作るのに要るのは ``username`` である。"""
+    """The email address is not the key (ADR-0038). What creation needs is ``username``."""
     identities = FakeIdentities()
     directory = FakeDirectory({"parent@example.com": FederatedAccount(user_id=7, is_active=True)})
 
@@ -274,7 +274,7 @@ def test_a_first_visit_without_an_email_still_gets_an_account() -> None:
 
 @pytest.mark.parametrize("preferred_username", [None, "ab", "名前", "has space"])
 def test_an_unusable_username_is_refused(preferred_username: str | None) -> None:
-    """無い・短い・規則に合わない。⚠ **黙って別の値を付けない**（ADR-0041）。"""
+    """Missing, too short, or not matching the rules. ⚠ **Do not silently assign another value** (ADR-0041)."""
     identities = FakeIdentities()
     directory = FakeDirectory()
 
@@ -285,7 +285,7 @@ def test_an_unusable_username_is_refused(preferred_username: str | None) -> None
 
 
 def test_a_taken_username_is_refused_instead_of_numbered() -> None:
-    """⚠ **衝突したら作らずに断る**（ADR-0041）。``parent2`` のような連番を付けない。"""
+    """⚠ **On a collision, refuse instead of creating** (ADR-0041). Do not append a number like ``parent2``."""
     directory = FakeDirectory(usernames={"parent"})
 
     with pytest.raises(SsoUsernameUnavailableError):
@@ -295,7 +295,7 @@ def test_a_taken_username_is_refused_instead_of_numbered() -> None:
 
 
 def test_an_account_taken_while_creating_is_refused_too() -> None:
-    """確かめてから作るまでのあいだに、同じ値を別の往復が取った場合。結び付けを残さない。"""
+    """Another round trip took the same value between the check and the creation. Leave no link behind."""
     identities = FakeIdentities()
 
     with pytest.raises(SsoUsernameUnavailableError):

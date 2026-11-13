@@ -1,14 +1,14 @@
-"""トークンエンドポイントへ名乗るときの資格情報（ADR-0029）。
+"""Credentials used to identify ourselves to the token endpoint (ADR-0029).
 
-方式は 2 つある。どちらも「クライアント本人であること」を示す手段で、
-**認可コードの引き換えのときだけ**使う。
+There are two methods. Both prove "this is the client itself" and are
+used **only when redeeming the authorization code**.
 
 ``client_secret_basic``
-    共有された秘密を Basic 認証で送る。設定に秘密そのものを持つ。
+    Send a shared secret via Basic authentication. The settings hold the secret itself.
 ``private_key_jwt``
-    ホスト上の秘密鍵で署名したアサーションを送る（RFC 7523）。設定に載るのは
-    **鍵の在り処**だけで、秘密そのものはアプリの設定にもデプロイの変数にも
-    現れない。
+    Send an assertion signed with a private key on the host (RFC 7523). The settings hold only
+    **where the key is**; the secret itself appears neither in app settings nor in deployment
+    variables.
 """
 
 from __future__ import annotations
@@ -18,16 +18,16 @@ from dataclasses import dataclass
 CLIENT_SECRET_BASIC = "client_secret_basic"
 PRIVATE_KEY_JWT = "private_key_jwt"
 
-#: 設定として受け付ける方式。ここに無い値は「不備」として扱う。
+#: Methods accepted as settings. Any value not listed here is treated as "misconfigured".
 CLIENT_AUTH_METHODS = (CLIENT_SECRET_BASIC, PRIVATE_KEY_JWT)
 
 
 @dataclass(frozen=True)
 class ClientCredential:
-    """方式と、その方式が要る材料。
+    """The method and the material it needs.
 
-    材料は方式ごとに違うので、**揃っているかの判断も方式ごとに変わる**。
-    ここで持たない値（空文字）は「設定されていない」を意味する。
+    The material differs per method, so **whether it is complete also depends on the method**.
+    Values not held here (empty strings) mean "not configured".
     """
 
     method: str
@@ -37,11 +37,11 @@ class ClientCredential:
 
     @property
     def is_complete(self) -> bool:
-        """その方式で名乗れるだけの材料が揃っているか。
+        """Whether there is enough material to identify ourselves with the method.
 
-        綴り違いを既定の方式へ落とさない。``private-key-jwt`` のような値を黙って
-        ``client_secret_basic`` として扱うと、IdP からは理由の分からない
-        ``invalid_client`` が返るだけになる。知らない方式は不備とする。
+        Do not let a misspelling fall back to the default method. Silently treating a value like
+        ``private-key-jwt`` as ``client_secret_basic`` would just get an unexplained
+        ``invalid_client`` back from the IdP. Unknown methods are treated as misconfigured.
         """
         if self.method == PRIVATE_KEY_JWT:
             return bool(self.private_key_file)

@@ -1,8 +1,8 @@
-"""既存アカウントの識別子の移行（ADR-0011）。
+"""Migrating existing accounts' identifiers (ADR-0011).
 
-``users.username`` をログイン識別子にする際、既存の行には **メールアドレスの値**
-を入れる。移行の前後でログインの手順が変わらないようにするための決めごとで、
-これが崩れると全員が締め出される。
+When ``users.username`` becomes the sign-in identifier, existing rows get **the email address value**.
+This rule keeps the sign-in procedure the same before and after the migration;
+if it breaks, everyone is locked out.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from werkzeug.security import generate_password_hash
 from shared.domain.auth import master_data
 from shared.kernel.database import db as db_module
 
-# 識別子を分離する直前のリビジョン（この時点の ``username`` は表示名）
+# The revision just before identifiers are split (at this point ``username`` is the display name)
 _BEFORE_SPLIT = "default_admin_password"
 
 _EXISTING_PASSWORD = "existing-pass-123"
@@ -30,7 +30,7 @@ _EXISTING_PASSWORD = "existing-pass-123"
 
 @pytest.fixture
 def migrated_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[sa.Engine]:
-    """移行前のデータを 1 件仕込んでから head まで上げる。"""
+    """Seed one pre-migration row, then upgrade to head."""
     db_path = tmp_path / "migrated.db"
     monkeypatch.setenv("DATABASE_URI", f"sqlite:///{db_path}")
     config = Config("alembic.ini")
@@ -53,7 +53,7 @@ def migrated_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
             users.insert().values(
                 id=100,
                 email="Parent@Example.com",
-                # 移行前の ``username`` は表示名（識別子ではない）
+                # Before the migration ``username`` is the display name (not an identifier)
                 username="おかあさん",
                 password_hash=generate_password_hash(_EXISTING_PASSWORD),
                 is_active=True,
@@ -72,10 +72,10 @@ def test_existing_account_keeps_its_email_as_the_identifier(migrated_engine: sa.
         row = connection.execute(sa.text("SELECT username, email, display_name FROM users WHERE id = 100")).one()
 
     username, email, display_name = row
-    # 識別子はメールアドレスの値（小文字へ正規化する）
+    # The identifier is the email address value (normalized to lowercase)
     assert username == "parent@example.com"
     assert email == "Parent@Example.com"
-    # それまでの ``username`` は表示名として残る
+    # The previous ``username`` remains as the display name
     assert display_name == "おかあさん"
 
 
@@ -90,7 +90,7 @@ def test_default_admin_matches_the_master_data(migrated_engine: sa.Engine) -> No
 
 
 def test_migrated_account_signs_in_with_the_same_credentials(migrated_engine: sa.Engine) -> None:
-    """移行前と同じ文字列・同じパスワードで通ること。"""
+    """Sign-in works with the same string and the same password as before the migration."""
     from presentation.fastapi.app import create_app
 
     db_module.set_engine(migrated_engine)

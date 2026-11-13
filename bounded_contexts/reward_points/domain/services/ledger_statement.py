@@ -1,11 +1,11 @@
-"""台帳の読み取り結果（履歴と、そこから決まる残高）。
+"""What a ledger read returns (the history and the balance it implies).
 
-残高は保持せず ``SUM(amount)`` で導出する。有効期限・期間リセットが無いため
-集計対象は常に台帳の全レコードで、スナップショットも失効ジョブも要らない
-（ADR-0010）。
+The balance is not stored; it is derived with ``SUM(amount)``. With no expiry and
+no periodic reset, the sum always covers every record in the ledger, so no
+snapshots or expiry jobs are needed (ADR-0010).
 
-打ち消し済みの ID をここで一度だけ数え上げ、画面が「取り消された事実」を
-1 行ずつ引き直さずに表示できるようにする。
+Reversed IDs are enumerated once here so the screen can show "this was undone"
+without looking each row up again.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ class LedgerStatement:
 
     @property
     def transactions(self) -> tuple[PointTransaction, ...]:
-        """渡された順のまま返す（並び順の決定はリポジトリの責務）。"""
+        """Returned in the order given (ordering is the repository's job)."""
         return self._transactions
 
     @property
@@ -31,7 +31,7 @@ class LedgerStatement:
 
     @property
     def reversed_transaction_ids(self) -> frozenset[int]:
-        """打ち消された側の ID。UI は対で表示するためにこれを使う。"""
+        """IDs of the reversed transactions. The UI uses these to show pairs."""
         return frozenset(
             transaction.reversal_of_id for transaction in self._transactions if transaction.reversal_of_id is not None
         )

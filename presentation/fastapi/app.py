@@ -1,4 +1,4 @@
-"""FastAPI アプリケーションファクトリ。"""
+"""FastAPI application factory."""
 
 from __future__ import annotations
 
@@ -74,13 +74,13 @@ from shared.kernel.version import load_build_info
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    # 管理画面からの再起動要求を拾う（起動時にしか読まれない設定の反映用）
+    # Pick up restart requests from the admin console (to apply settings only read at startup)
     start_restart_watcher(RestartScope.WEB)
-    # 日付の変わり目に子の台帳へボーナスを配る（ADR-0024）。止まっていたあいだの
-    # 日は起動直後の 1 周でまとめて追いつく
+    # Grant bonuses to children's ledgers when the date changes (ADR-0024). Days missed while
+    # stopped are caught up in the first pass right after startup
     start_daily_bonus_grants()
-    # IdP で止まった人の SSO のセッションを、毎時聞き直して止める
-    # （MACHINE_CLIENT_ID が空なら何もしない。ADR-0040）
+    # Re-check hourly and stop SSO sessions of people suspended at the IdP
+    # (does nothing if MACHINE_CLIENT_ID is empty. ADR-0040)
     start_sso_reconciliation()
     try:
         yield
@@ -105,21 +105,21 @@ def create_app() -> FastAPI:
     app.state.build_info = build_info
     app.state.startup_time = datetime.now(UTC)
 
-    # SSO は設定が揃っていないと「有効にしたのに使えない」形で静かに外れる。
-    # 秘密鍵に至っては、利用者が IdP から戻ってきた瞬間まで読めるか分からない。
-    # 起動時に一度確かめてログへ残す（ADR-0029）。
+    # With incomplete settings SSO silently fails as "enabled but unusable".
+    # Whether the private key is readable is not even known until a user returns from the IdP.
+    # Check once at startup and log the result (ADR-0029).
     report_sso_configuration()
 
     # Prometheus metrics at /metrics
     Instrumentator(excluded_handlers=["/metrics"]).instrument(app).expose(app, include_in_schema=False)
 
-    # ``add_middleware`` は積み増しなので、**先に足したものほど内側**になる。
-    # 例外を応答へ変える層を最も内側に置き、リクエストログ（500 の行を残す）と
-    # CORS（応答ヘッダーを付ける）が必ずその外側を通るようにする。
+    # ``add_middleware`` stacks, so **whatever is added first ends up innermost**.
+    # Put the layer that turns exceptions into responses innermost, so request logging (which
+    # records the 500 line) and CORS (which adds response headers) always wrap it.
     #
-    # ログの DB 書き込みは、リクエストの DB セッションが閉じた後に行う（途中で
-    # 書くと SQLite でロックが競合して行が失われる。ADR-0012）。まとめ書きを
-    # リクエストログの外側に置くことで、アクセスログの 1 行も同じ書き込みに載る。
+    # Log rows are written to the DB after the request's DB session closes (writing midway
+    # causes lock contention on SQLite and rows are lost. ADR-0012). Placing the batch writer
+    # outside request logging puts the access log line into the same write.
     app.add_middleware(InternalErrorMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(DeferredLogWriteMiddleware)
@@ -132,8 +132,8 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
-    # 失敗の記録（4xx・入力検証）と、ミドルウェアより外側で落ちたとき用の保険。
-    # 個別のドメイン例外ハンドラが優先される。
+    # Logging of failures (4xx, input validation) and a safety net for crashes outside the middleware.
+    # Specific domain exception handlers take precedence.
     register_error_handling(app)
     register_account_security_error_handler(app)
     register_reward_points_error_handler(app)
@@ -146,7 +146,7 @@ def create_app() -> FastAPI:
 
 
 def _include_routers(app: FastAPI) -> None:
-    """経路を登録する。**SPA は必ず最後**（catch-all のため）。"""
+    """Register routes. **The SPA must come last** (it is a catch-all)."""
     for router in (
         health_router,
         ui_settings_router,
@@ -166,7 +166,7 @@ def _include_routers(app: FastAPI) -> None:
     ):
         app.include_router(router)
 
-    # ビルド済みの場合のみ配信する。
+    # Serve only when built.
     if spa.dist_available():
         app.include_router(spa.router)
 

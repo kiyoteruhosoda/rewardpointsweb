@@ -1,7 +1,7 @@
-"""イベント（がんばりカード。ADR-0042）。
+"""Events (effort cards, ADR-0042).
 
-目標・達成でもらえるポイント・達成回数を決めて作り、1 回達成するたびにシールを
-1 枚貼る。マスが全部埋まったら、台帳へ達成のポイントが 1 行入る。
+Create one by setting a goal, the points earned on completion, and the number of completions; each completion
+puts one sticker on it. When every square is filled, one line of completion points goes into the ledger.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from tests.integration.api.family_support import (
 
 @dataclass(frozen=True, kw_only=True)
 class Home:
-    """親と、その子の台帳。"""
+    """A parent and their child's ledger."""
 
     parent: Account
     ledger: Ledger
@@ -59,7 +59,7 @@ def _events_path(ledger: Ledger) -> str:
 
 
 def _create(client: TestClient, home: Home, **fields: object) -> dict[str, Any]:
-    """カードを作る。省いた欄は「はみがき・50 pt・3 回・期限なし」。"""
+    """Create a card. Omitted fields default to "はみがき", 50 pt, 3 times, no deadline."""
     payload: dict[str, object] = {"title": "はみがき", "reward_points": 50, "goal_count": 3} | fields
     if isinstance(payload.get("deadline"), date):
         payload["deadline"] = str(payload["deadline"])
@@ -88,7 +88,7 @@ def _ledger(client: TestClient, home: Home) -> dict[str, Any]:
 
 
 def _child_headers(client: TestClient, home: Home) -> dict[str, str]:
-    """その子として本人ログインできるようにする（招待コード。ADR-0011）。"""
+    """Let the child sign in as themselves (invitation code, ADR-0011)."""
     invitation = issue_invitation(
         client, home.headers, home.ledger.family_id, role="child", target_membership_id=home.child_membership_id
     )
@@ -100,7 +100,7 @@ def _child_headers(client: TestClient, home: Home) -> dict[str, str]:
     return login(client, username="taro", password="taro-pass-123")
 
 
-# --- 作る・見る ----------------------------------------------------------------
+# --- Create and view ----------------------------------------------------------------
 
 
 def test_a_guardian_makes_a_card_with_empty_squares(client: TestClient, home: Home) -> None:
@@ -145,7 +145,7 @@ def test_a_card_that_cannot_be_filled_or_gives_nothing_is_refused(
     assert response.status_code == 422
 
 
-# --- シール --------------------------------------------------------------------
+# --- Stickers --------------------------------------------------------------------
 
 
 def test_each_achievement_sticks_one_sticker(client: TestClient, home: Home) -> None:
@@ -157,7 +157,7 @@ def test_each_achievement_sticks_one_sticker(client: TestClient, home: Home) -> 
     assert [sticker["number"] for sticker in first["stickers"]] == [1]
     assert [sticker["number"] for sticker in second["stickers"]] == [1, 2]
     assert second["completed_at"] is None
-    # まだ埋まっていないので台帳は動かない
+    # Not filled yet, so the ledger does not move
     assert _ledger(client, home)["balance"] == 0
 
 
@@ -177,7 +177,7 @@ def test_filling_the_last_square_adds_the_reward_once(client: TestClient, home: 
 
 
 def test_sending_the_same_sticker_twice_sticks_it_once(client: TestClient, home: Home) -> None:
-    """二重タップ・再送で 2 枚にならない（番号が冪等の鍵になる）。"""
+    """A double tap or a resend does not make two stickers (the number is the idempotency key)."""
     event = _create(client, home, goal_count=2)
 
     _stick(client, home, event, number=1)
@@ -197,7 +197,7 @@ def test_resending_the_last_sticker_does_not_pay_twice(client: TestClient, home:
 
 
 def test_skipping_a_number_is_refused(client: TestClient, home: Home) -> None:
-    """画面が古い姿を見ている。読み直せば次の番号が分かる。"""
+    """The screen is looking at a stale state. Reloading tells it the next number."""
     event = _create(client, home, goal_count=3)
 
     response = client.put(_sticker_path(home, event, 2), headers=home.headers)
@@ -216,11 +216,11 @@ def test_a_full_card_takes_no_more_stickers(client: TestClient, home: Home) -> N
     assert response.json()["detail"]["error"] == "reward_event_already_completed"
 
 
-# --- はがす --------------------------------------------------------------------
+# --- Peel off --------------------------------------------------------------------
 
 
 def test_the_last_sticker_can_be_peeled_off(client: TestClient, home: Home) -> None:
-    """押し間違いを戻す。"""
+    """Undo a mistaken tap."""
     event = _create(client, home, goal_count=3)
     _stick(client, home, event, number=1)
     _stick(client, home, event, number=2)
@@ -252,7 +252,7 @@ def test_peeling_a_sticker_that_is_already_gone_succeeds(client: TestClient, hom
 
 
 def test_a_completed_card_cannot_be_peeled(client: TestClient, home: Home) -> None:
-    """ポイントはもう台帳に入っている。戻したいときは台帳の記録を取り消す。"""
+    """The points are already in the ledger. To undo, cancel the ledger record."""
     event = _create(client, home, goal_count=1)
     _stick(client, home, event, number=1)
 
@@ -262,7 +262,7 @@ def test_a_completed_card_cannot_be_peeled(client: TestClient, home: Home) -> No
     assert response.json()["detail"]["error"] == "reward_event_already_completed"
 
 
-# --- 消す ----------------------------------------------------------------------
+# --- Delete ----------------------------------------------------------------------
 
 
 def test_deleting_a_completed_card_keeps_the_points(client: TestClient, home: Home) -> None:
@@ -282,11 +282,11 @@ def test_deleting_a_card_that_is_already_gone_succeeds(client: TestClient, home:
     assert response.status_code == 204
 
 
-# --- 届く範囲 ------------------------------------------------------------------
+# --- Who can reach it ------------------------------------------------------------------
 
 
 def test_a_child_sees_their_own_cards_but_cannot_stick(client: TestClient, home: Home) -> None:
-    """貼ると台帳にポイントが入るので、貼れるのは記録できる人（親）だけ。"""
+    """Adding a sticker puts points into the ledger, so only those who can record (parents) can add one."""
     event = _create(client, home, goal_count=2)
     child_headers = _child_headers(client, home)
 
@@ -327,7 +327,7 @@ def test_another_familys_cards_are_out_of_reach(client: TestClient, home: Home, 
 
 
 def test_removing_the_child_takes_the_cards_with_them(client: TestClient, home: Home) -> None:
-    """記録の無い子は消せる。カードとシールは台帳と一緒に消える。"""
+    """A child with no records can be deleted. Cards and stickers go away together with the ledger."""
     event = _create(client, home, goal_count=3)
     _stick(client, home, event, number=1)
 
@@ -340,7 +340,10 @@ def test_removing_the_child_takes_the_cards_with_them(client: TestClient, home: 
 
 
 def test_independence_takes_completed_cards_with_the_ledger(client: TestClient, home: Home) -> None:
-    """独立では台帳の行が先に消える。達成の行を指すカードが消す順を妨げない。"""
+    """On becoming independent the ledger lines are deleted first.
+
+    A card pointing at a completion line does not block the deletion order.
+    """
     event = _create(client, home, goal_count=1)
     _stick(client, home, event, number=1)
     child_headers = _child_headers(client, home)
@@ -356,11 +359,11 @@ def test_independence_takes_completed_cards_with_the_ledger(client: TestClient, 
     assert client.get(_events_path(home.ledger), headers=home.headers).status_code == 404
 
 
-# --- 期限（ADR-0043） ---------------------------------------------------------
+# --- Deadline (ADR-0043) ---------------------------------------------------------
 
 
 def _today() -> date:
-    """家族の 1 日の区切りでの今日（サーバーと同じ決め方）。"""
+    """Today by the family's day boundary (decided the same way as the server)."""
     return resolve_day_boundary().day_of(utcnow())
 
 
@@ -369,7 +372,7 @@ def _deadline_path(home: Home, event: dict[str, Any]) -> str:
 
 
 def _expire(db_session: Session, event: dict[str, Any]) -> None:
-    """期限を昨日へずらす（日付が変わったのと同じ）。"""
+    """Move the deadline to yesterday (same as the date having changed)."""
     db_session.execute(
         update(RewardEventModel).where(RewardEventModel.id == event["id"]).values(deadline=_today() - timedelta(days=1))
     )

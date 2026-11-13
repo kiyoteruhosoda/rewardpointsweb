@@ -1,14 +1,14 @@
 /**
- * パスワード再設定の申し込み。
+ * Requesting a password reset.
  *
- * 申し込みはログイン識別子（ユーザー名）で行う。メールアドレスは任意項目なので、
- * それを起点にできない（ADR-0011）。メールアドレスを持たないアカウント（子ども）
- * にはリンクを送れないが、サーバーは実在しない名前と同じ `accepted` を返す（子どもの
- * ユーザー名が実在するかを外から確かめさせない。task #733）。そのため「送りました」の
- * 文面に、メールアドレスの無いアカウントは親へ頼むよう常に添える。
+ * The request uses the login identifier (username). Email is optional,
+ * so it cannot be the starting point (ADR-0011). Accounts without an email (children)
+ * cannot be sent a link, but the server returns the same `accepted` as for a nonexistent name (so outsiders
+ * cannot check whether a child's username exists; task #733). So the "sent"
+ * message always adds that accounts without an email should ask a parent.
  *
- * メール送信そのものが使えない運用では `mail_unavailable` が返る。ここで「送信
- * しました」と出すと、届かないメールを待たせてしまうので、同じく親へ誘導する。
+ * When email sending itself is unavailable, `mail_unavailable` is returned. Saying "sent"
+ * here would leave the user waiting for an email that never arrives, so likewise guide them to a parent.
  */
 import { useState, type SubmitEvent } from 'react'
 

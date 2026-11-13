@@ -1,15 +1,15 @@
 /**
- * イベント 1 枚ぶんのカード（ADR-0042）。
+ * Card for one event (ADR-0042).
  *
- * 一番上に目標、その下に達成回数ぶんのマス。1 回達成するたびにシールが 1 枚貼られ、
- * マスが全部埋まると判子が押される。マスの並び（列の数）は達成回数から決める
- * （`gridColumns`）ので、10 回なら 5 × 2、30 回なら 6 × 5 のように 1 枚に収まる。
+ * The goal at the top, below it one cell per required achievement. Each achievement sticks one
+ * sticker, and when all cells are filled the stamp is pressed. The cell layout (number of columns) is
+ * derived from the count (`gridColumns`), so 10 fits as 5 x 2, 30 as 6 x 5, and so on, on one card.
  *
- * 貼る・はがす・消すの入口は `canModify` のときだけ出す。子ども本人は同じカードを
- * 見るだけ。
+ * Entries to stick, peel off and delete appear only when `canModify`. The child themself only
+ * views the same card.
  *
- * 期限（ADR-0043）を過ぎたカードは「達成」を出さず、シールを沈めて見せる。親が期限を
- * 延ばせば、また貼れる。
+ * Cards past their deadline (ADR-0043) don't show "complete" and show the stickers dimmed. If a
+ * parent extends the deadline, stickers can be added again.
  */
 import type { CSSProperties } from 'react'
 
@@ -21,21 +21,21 @@ import { ActionButton } from './ActionButton'
 import { EventDeadline } from './EventDeadline'
 import { Hanko, Sticker } from './StickerArt'
 
-/** いま押されている操作。押したボタンにだけスピナーを出す。 */
+/** The action currently pressed. Spinner only on the pressed button. */
 export type RewardEventAction = 'stick' | 'peel' | 'remove' | 'deadline'
 
 interface Props {
   event: RewardEvent
   canModify: boolean
   pending: RewardEventAction | null
-  /** 直前に貼られた番号。その 1 枚だけ「貼る」動きを付ける。 */
+  /** The number just stuck. Only that one gets the "stick" animation. */
   freshNumber: number | null
-  /** この画面で達成したばかりか。判子を押す動きを付ける。 */
+  /** Whether it was just completed on this screen. Adds the stamp-press animation. */
   freshlyCompleted: boolean
-  /** 端末の暦での今日（YYYY-MM-DD）。期限の残り日数を数える。 */
+  /** Today on the device calendar (YYYY-MM-DD). Used to count days left to the deadline. */
   today: string
   onStick: () => void
-  /** 期限を決め直す。失敗したら投げ直す。 */
+  /** Resets the deadline. Rethrows on failure. */
   onChangeDeadline: (deadline: string | null) => Promise<void>
   onPeel: () => void
   onRemove: () => void
@@ -92,7 +92,7 @@ export function RewardEventCard({
         </span>
         {!completed && (
           <EventDeadline
-            // 読み直して期限が変わったら、入力欄を閉じた姿から作り直す
+            // If the deadline changed after reloading, rebuild the input in its closed state
             key={event.deadline ?? 'none'}
             event={event}
             today={today}

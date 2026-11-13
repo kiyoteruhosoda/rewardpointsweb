@@ -1,32 +1,32 @@
-"""管理画面（Config）の設定項目定義。
+"""Setting item definitions for the admin console (Config).
 
-キーを追加したら ``system_settings_defaults.py`` と ``settings.py`` も更新する
-（CLAUDE.md「設定管理」参照）。
+When adding a key, also update ``system_settings_defaults.py`` and ``settings.py``
+(see CLAUDE.md "Settings management").
 
-各項目のキー:
+Keys of each item:
 
-- ``key`` / ``category`` / ``value_type``: 必須。
-- ``label``: 英語の既定ラベル。表示文言の翻訳はフロントエンド側で行う
-  （``config.field.<KEY>`` を辞書に持たせ、無ければこのラベルを使う）。
-- ``secret``: 画面へ値を返さない（``********`` に伏せる）。
-- ``choices``: 選択肢を持つ項目。値と表示用ラベルの組。
-- ``restart_scopes``: **起動時にしか読まれない**設定に付ける。保存時に管理画面が
-  「再起動が必要」と提示し、そこから再起動を要求できる
-  （:mod:`shared.kernel.restart`）。空なら保存と同時に反映される。
+- ``key`` / ``category`` / ``value_type``: required.
+- ``label``: default English label. Display text is translated in the frontend
+  (it keeps ``config.field.<KEY>`` in its dictionary and falls back to this label).
+- ``secret``: the value is never returned to the screen (masked as ``********``).
+- ``choices``: items with choices. Pairs of value and display label.
+- ``restart_scopes``: set on settings **only read at startup**. On save the admin console
+  shows "restart required" and a restart can be requested from there
+  (:mod:`shared.kernel.restart`). If empty, the value takes effect on save.
 """
 
 from __future__ import annotations
 
 from shared.kernel.restart import RestartScope
 
-# 起動時にしか読まれない設定（アプリケーションファクトリで一度だけ評価される）
+# Settings only read at startup (evaluated once in the application factory)
 _RESTART_WEB: tuple[str, ...] = (RestartScope.WEB.value,)
 
 SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
-    # --- 認証 ---
+    # --- Authentication ---
     {
-        # ⚠ **これが「止めたら効くまで」の上限時間になる**（ADR-0037）。検証は DB を
-        #   引かないので、止められた利用者が弾かれるのは次に新しいトークンを出すとき。
+        # ⚠ **This is the upper bound on "time until a suspension takes effect"** (ADR-0037). Verification
+        #   does not hit the DB, so a suspended user is rejected only when the next token is issued.
         "key": "ACCESS_TOKEN_EXPIRES_SECONDS",
         "category": "auth",
         "label": "Access token lifetime (seconds)",
@@ -80,7 +80,7 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "label": "Family invitation code TTL (seconds)",
         "value_type": "integer",
     },
-    # --- 家族（reward_points コンテキスト） ---
+    # --- Families (reward_points context) ---
     {
         "key": "DAILY_BONUS_TIME_ZONE",
         "category": "family",
@@ -93,7 +93,7 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "label": "Daily bonus catch-up limit (days)",
         "value_type": "integer",
     },
-    # --- 二要素認証（TOTP） ---
+    # --- Two-factor authentication (TOTP) ---
     {
         "key": "TOTP_ISSUER",
         "category": "two_factor",
@@ -106,7 +106,7 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "label": "Accepted time-step drift",
         "value_type": "integer",
     },
-    # --- パスキー（WebAuthn） ---
+    # --- Passkeys (WebAuthn) ---
     {"key": "WEBAUTHN_RP_ID", "category": "passkey", "label": "Relying party ID (domain)", "value_type": "string"},
     {"key": "WEBAUTHN_RP_NAME", "category": "passkey", "label": "Relying party name", "value_type": "string"},
     {"key": "WEBAUTHN_ORIGIN", "category": "passkey", "label": "Expected browser origin", "value_type": "string"},
@@ -116,7 +116,7 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "label": "Challenge lifetime (seconds)",
         "value_type": "integer",
     },
-    # --- 外部 IdP（OIDC / SSO）。ADR-0029 ---
+    # --- External IdP (OIDC / SSO). ADR-0029 ---
     {"key": "OIDC_ENABLED", "category": "sso", "label": "Enable SSO (OpenID Connect)", "value_type": "boolean"},
     {"key": "OIDC_DISPLAY_NAME", "category": "sso", "label": "Sign-in button label", "value_type": "string"},
     {"key": "OIDC_ISSUER", "category": "sso", "label": "Issuer URL", "value_type": "string"},
@@ -192,7 +192,7 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "label": "Hand-off ticket lifetime (seconds)",
         "value_type": "integer",
     },
-    # --- 一般 ---
+    # --- General ---
     {"key": "APP_BASE_URL", "category": "general", "label": "Application base URL", "value_type": "string"},
     {"key": "LANGUAGES", "category": "general", "label": "Selectable languages", "value_type": "list"},
     {
@@ -216,7 +216,7 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
         "value_type": "list",
         "restart_scopes": _RESTART_WEB,
     },
-    # --- メール ---
+    # --- Mail ---
     {"key": "MAIL_ENABLED", "category": "mail", "label": "Enable mail sending", "value_type": "boolean"},
     {"key": "MAIL_SERVER", "category": "mail", "label": "SMTP server", "value_type": "string"},
     {"key": "MAIL_PORT", "category": "mail", "label": "SMTP port", "value_type": "integer"},
@@ -225,7 +225,7 @@ SYSTEM_SETTING_DEFINITIONS: list[dict[str, object]] = [
     {"key": "MAIL_USERNAME", "category": "mail", "label": "SMTP username", "value_type": "string"},
     {"key": "MAIL_PASSWORD", "category": "mail", "label": "SMTP password", "value_type": "string", "secret": True},
     {"key": "MAIL_DEFAULT_SENDER", "category": "mail", "label": "Default sender address", "value_type": "string"},
-    # --- ログ ---
+    # --- Logging ---
     {
         "key": "LOG_LEVEL",
         "category": "logging",

@@ -1,4 +1,4 @@
-"""ID 連携ユースケースの入出力（Presentation 層はこれを Pydantic へ写す）。"""
+"""Inputs and outputs of identity federation use cases (the presentation layer maps these to Pydantic)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from bounded_contexts.identity_federation.domain.value_objects.federated_login i
 
 @dataclass(frozen=True)
 class SsoProviderDto:
-    """ログイン画面に「SSO で入る」ボタンを出すかどうかの判断材料。"""
+    """What decides whether the login screen shows a "Sign in with SSO" button."""
 
     enabled: bool
     display_name: str
@@ -20,10 +20,10 @@ class SsoProviderDto:
 
 @dataclass(frozen=True)
 class SsoAuthorizationDto:
-    """IdP へ送り出すための材料。
+    """What is needed to send the browser to the IdP.
 
-    ``browser_binding`` は送り出したブラウザの Cookie へ置く合言葉で、戻ってきた
-    ときに「同じブラウザか」を確かめるために使う（ログイン CSRF を止める）。
+    ``browser_binding`` is a passphrase placed in the sending browser's cookie, used on return
+    to check "is it the same browser" (stops login CSRF).
     """
 
     authorization_url: str
@@ -32,11 +32,11 @@ class SsoAuthorizationDto:
 
 @dataclass(frozen=True)
 class ResolvedAccountDto:
-    """IdP の名乗りを、このアプリの利用者へ落とした結果。
+    """Result of mapping the IdP's assertion to a user of this app.
 
-    ``linked`` は「この往復で初めて結び付いた」ことを示す（ログの区別に使う）。
-    2 回目以降は ``(issuer, subject)`` で決まるので偽になる。``provisioned`` は
-    「結び付けた口座を、この往復で作った」（ADR-0041）。
+    ``linked`` means "linked for the first time in this round trip" (used to tell log lines apart).
+    From the second time on it is decided by ``(issuer, subject)``, so it is false. ``provisioned`` means
+    "the linked account was created in this round trip" (ADR-0041).
     """
 
     user_id: int
@@ -46,7 +46,7 @@ class ResolvedAccountDto:
 
 @dataclass(frozen=True)
 class SsoHandoffDto:
-    """コールバックが SPA へ渡すもの（引き換え券と戻り先）。"""
+    """What the callback hands to the SPA (exchange ticket and return destination)."""
 
     ticket: str
     redirect_to: str
@@ -55,10 +55,10 @@ class SsoHandoffDto:
 
 @dataclass(frozen=True)
 class SsoSessionDto:
-    """引き換え券から取り出したログイン結果。
+    """Login result taken out of the exchange ticket.
 
-    ``login`` は発行するトークンへ刻む（ADR-0032）。刻んでおかないと、停止の通知が
-    届いても**どのトークンを無効にすればよいかが分からない**。
+    ``login`` is stamped into the issued tokens (ADR-0032). Without it, even when a logout notice
+    arrives **we cannot tell which tokens to invalidate**.
     """
 
     user_id: int
@@ -68,9 +68,9 @@ class SsoSessionDto:
 
 @dataclass(frozen=True)
 class FederatedLinkDto:
-    """設定画面に出す「自分の連携の状態」（ADR-0036）。
+    """The "my federation status" shown on the settings screen (ADR-0036).
 
-    ``available`` が偽なら、画面はこの区画そのものを出さない（SSO が無効）。
+    If ``available`` is false, the screen does not show this section at all (SSO is disabled).
     """
 
     available: bool

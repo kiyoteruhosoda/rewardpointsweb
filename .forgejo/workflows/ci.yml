@@ -1,62 +1,62 @@
 name: CI
 
 on:
-  # ⚠ **push で走らせるのは main だけ**（2026-09-30）。枝の検査は pull_request の側で足りる。
-  #   全部の枝で走らせていたころは、PR のある枝（Renovate の枝など）で 1 commit ごとに
-  #   同じ検査が 2 本走り、ランナーの台を 2 倍食ううえ、main の保護が全部の検査の緑を
-  #   求めるため、push 側が 1 度揺らいだだけで PR が赤くなっていた（#20）。
+  # ⚠ **Run on push only for main** (2026-09-30). Branches are checked by pull_request.
+  #   When this ran on every branch, branches with a PR (Renovate branches etc.) ran the
+  #   same checks twice per commit, using twice the runners, and since main protection
+  #   requires every check to be green, one flaky push run turned the PR red (#20).
   push:
     branches: ["main"]
     tags-ignore: ["v*"]
   pull_request:
 
-# 同じ枝（PR）へ続けて push したら、古い実行は取り消して最新の commit だけを検査する。
-# ⚠ **main も取り消す**（2026-09-28 の決定）。間の commit には合否が残らない代わりに、
-#   main への push が続いた日に古い検査がランナーの列を塞がない。副作用のある workflow には当てない。
+# On repeated pushes to the same branch (PR), cancel older runs and check only the latest commit.
+# ⚠ **main is cancelled too** (decided 2026-09-28). Intermediate commits get no result, but
+#   on days with many pushes to main, stale checks do not clog the runner queue. Do not apply this to workflows with side effects.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# 品質ゲート（CLAUDE.md「テスト」／docs/OPERATIONS.md 参照）
+# Quality gate (see CLAUDE.md "Tests" / docs/OPERATIONS.md)
 #   Backend : Ruff Format → Ruff Check → MyPy → PyTest
 #   Frontend: Prettier → ESLint → TypeScript → Vitest
-# いずれかが落ちたらマージできない。各ステップは前段が落ちても実行し、
-# 1 回の実行でまとめて指摘が出るようにする（`if: always()`）。
+# If any of them fails, the PR cannot be merged. Each step runs even if an earlier one failed,
+# so one run reports all problems at once (`if: always()`).
 jobs:
   backend:
     name: Backend (Python)
-    # ⚠ **自前の台で回す**（forge へ移したとき変えた）。
+    # ⚠ **Runs on our own runner** (changed when moving to forge).
     runs-on: [self-hosted, nolumialab]
     env:
-      # Python も forge の置き場から取る（task #171。置いてあるのは cpython 3.11.16・3.12.14・3.14.7 の x86_64 Linux だけ）。
+      # Python is also fetched from forge's mirror (task #171; it only holds cpython 3.11.16, 3.12.14 and 3.14.7 for x86_64 Linux).
       UV_PYTHON_INSTALL_MIRROR: "https://git.nolumia.com/astral-sh/python-build-standalone/releases/download"
-    # ⚠ 既定は 6 時間。ぶら下がったジョブが枠と台を食い潰すので上限を置く。
+    # ⚠ The default is 6 hours. Set a limit so a hung job does not eat up quota and runners.
     timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Python の版が本番のイメージと揃っているか
-        # ⚠ **試験の Python は `.python-version` の版**（uv が読む）。本番のイメージ（Dockerfile の
-        #   `FROM python:X.Y`）とずれたら落とす。Renovate は両方を 1 本の PR で上げる（task #461）。
-        #   CI だけ 3.12 のまま、本番だけ 3.14 に上がっていた。
+      - name: Check Python version matches the production image
+        # ⚠ **Tests use the Python version in `.python-version`** (read by uv). Fail if it drifts from
+        #   the production image (`FROM python:X.Y` in the Dockerfile). Renovate bumps both in one PR (task #461).
+        #   CI had stayed on 3.12 while production had moved to 3.14.
         run: |
           want="$(tr -d '[:space:]' < .python-version)"
           got="$(git ls-files 'Dockerfile' '*/Dockerfile' | xargs grep -hoE '^FROM +python:[0-9]+\.[0-9]+' | sed -E 's/^FROM +python://' | sort -u)"
           echo ".python-version: ${want} / Dockerfile: ${got//$'\n'/ }"
           if [ -z "$got" ] || [ "$got" != "$want" ]; then
-            echo "::error::.python-version（${want}）と Dockerfile の FROM python（${got//$'\n'/ }）が揃っていない"
+            echo "::error::.python-version (${want}) does not match Dockerfile FROM python (${got//$'\n'/ })"
             exit 1
           fi
 
       - name: Set up uv
-        # ⚠ ここだけ完全な版で固定する。setup-uv は v8 以降、
-        #   サプライチェーン対策として `@v10` のような動く major タグの発行をやめた
-        #   （タグを差し替えられる攻撃を避けるため）。上げるときは版を書き換える。
-        # ⚠ **鏡に無いので自前の鏡を完全な URL で指す**（forge へ移したため）。
+        # ⚠ Pin the full version here only. Since v8, setup-uv no longer publishes
+        #   moving major tags like `@v10` as a supply-chain measure
+        #   (to avoid attacks that replace a tag). Rewrite the version to upgrade.
+        # ⚠ **Not in the default mirror, so point at our own mirror by full URL** (since moving to forge).
         uses: https://git.nolumia.com/astral-sh/setup-uv@v10.0.1
         with:
-          # 版は書かない: manifest-file の一覧（forge の写し・毎週取り込み）の最新を使う。manifest-file があれば GitHub の API へは行かない（2026-10-27）。
+          # No version: use the latest in the manifest-file list (forge copy, synced weekly). With manifest-file, the GitHub API is not called (2026-10-27).
           manifest-file: "https://git.nolumia.com/astral-sh/uv/raw/branch/main/uv.ndjson"
           download-from-astral-mirror: false
           enable-cache: true
@@ -64,30 +64,30 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Ruff Format (コード整形)
+      - name: Ruff Format (code formatting)
         run: uv run ruff format --check .
 
-      - name: Ruff Check (静的解析)
+      - name: Ruff Check (static analysis)
         if: always()
         run: uv run ruff check .
 
-      # ネスト深度・位置引数（ADR-0016）。preview ルールのため本体の select に
-      # 入れず、この 2 ルールだけを明示 select して別ステップで検証する。
-      - name: Ruff Check (ネスト深度・位置引数)
+      # Nesting depth and positional arguments (ADR-0016). These are preview rules, so they are not
+      # in the main select; this step selects just these 2 rules explicitly.
+      - name: Ruff Check (nesting depth, positional args)
         if: always()
         run: uv run ruff check --preview --select PLR1702,PLR0917 .
 
-      - name: MyPy (型チェック)
+      - name: MyPy (type check)
         if: always()
         run: uv run mypy
 
-      - name: PyTest (テスト)
+      - name: PyTest (tests)
         if: always()
         run: uv run pytest -v --tb=short
 
   frontend:
     name: Frontend (Node ${{ matrix.node-version }})
-    # ⚠ **自前の台で回す**（forge へ移したとき変えた）。
+    # ⚠ **Runs on our own runner** (changed when moving to forge).
     runs-on: [self-hosted, nolumialab]
     timeout-minutes: 20
     defaults:
@@ -96,14 +96,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 名前の表示用。Node の版は像で決まる（setup-node へは渡さない。下を参照）。
+        # For the display name only. The Node version comes from the image (not passed to setup-node; see below).
         node-version: ["24"]
 
     steps:
       - uses: actions/checkout@v6
 
-      # ⚠ **node-version は渡さない**（task #171）。渡すと mirror を指定しても先に api.github.com の
-      #   一覧を引く。ジョブの像（node:24-bookworm）の Node 24 をそのまま使う。
+      # ⚠ **Do not pass node-version** (task #171). If passed, it queries the api.github.com list first
+      #   even with a mirror set. Use Node 24 from the job image (node:24-bookworm) as is.
       - uses: actions/setup-node@v6
         with:
           cache: npm
@@ -112,18 +112,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prettier (コード整形)
+      - name: Prettier (code formatting)
         run: npm run format:check
 
-      - name: ESLint (静的解析)
+      - name: ESLint (static analysis)
         if: always()
         run: npm run lint
 
-      - name: TypeScript (型チェック)
+      - name: TypeScript (type check)
         if: always()
         run: npm run type-check
 
-      - name: Vitest (テスト)
+      - name: Vitest (tests)
         if: always()
         run: npm run test
 

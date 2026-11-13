@@ -1,46 +1,46 @@
 /**
- * 外部 IdP（OIDC）によるログイン。
+ * Login via an external IdP (OIDC).
  *
- * 開始はブラウザの画面遷移で行う（fetch では IdP のログイン画面を出せない）。
- * IdP から戻ってきた時点でトークンは URL に載っておらず、代わりに 1 回限りの
- * 引き換え券が付く。それをトークンへ換えるのが `exchangeSsoTicket`（ADR-0029）。
+ * It starts with a browser navigation (fetch cannot show the IdP's login screen).
+ * When returning from the IdP the token is not in the URL; instead a one-time
+ * ticket is attached. `exchangeSsoTicket` exchanges it for tokens (ADR-0029).
  */
 import { api } from './api'
 
 export interface SsoProvider {
   enabled: boolean
-  /** ログインボタンに出す名前（IdP の呼び名）。 */
+  /** Name shown on the login button (the IdP's display name). */
   display_name: string
 }
 
 export interface SsoSession {
   access_token: string
-  /** SSO で入ったログインには出ない（ADR-0058）。 */
+  /** Not present for logins made via SSO (ADR-0058). */
   refresh_token: string | null
-  /** SSO を始めた画面（アプリ内の経路）。 */
+  /** Screen where SSO was started (an in-app path). */
   redirect_to: string
 }
 
-/** SSO が使える構成かを問い合わせる（未認証で呼べる）。 */
+/** Ask whether SSO is configured (callable without authentication). */
 export function fetchSsoProvider(): Promise<SsoProvider> {
   return api.get<SsoProvider>('/api/auth/sso/provider')
 }
 
 /**
- * IdP へ送り出す。戻り先は `redirectTo`（アプリ内の経路のみ有効）。
- * `silent` なら `prompt=none` を付ける（ログイン画面が開いたときの試し。ADR-0052）。
+ * Send the user to the IdP. The return destination is `redirectTo` (only in-app paths are valid).
+ * With `silent`, add `prompt=none` (the attempt made when the login screen opens, ADR-0052).
  *
- * `assign` ではなく `replace` を使う。ログイン画面を履歴に残すと、ログイン後の
- * 「戻る」でログイン画面へ戻ってしまうため。
+ * Use `replace`, not `assign`. Leaving the login screen in history would make "back"
+ * after login return to the login screen.
  */
 export function startSsoLogin(redirectTo: string, options: { silent?: boolean } = {}): void {
   const query = new URLSearchParams({ redirect_to: redirectTo })
-  // IdP に画面を出させずに試す（ADR-0052。services/silentSso.ts）
+  // Try without letting the IdP show a screen (ADR-0052, services/silentSso.ts)
   if (options.silent) query.set('prompt', 'none')
   window.location.replace(`/api/auth/sso/login?${query.toString()}`)
 }
 
-/** 引き換え券をトークンへ換える。 */
+/** Exchange the ticket for tokens. */
 export function exchangeSsoTicket(ticket: string): Promise<SsoSession> {
   return api.post<SsoSession>('/api/auth/sso/token', { ticket })
 }

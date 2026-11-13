@@ -1,15 +1,15 @@
 /**
- * 表示端末（サイネージ）の画面（ADR-0047）。
+ * Display device (signage) screen (ADR-0047).
  *
- * ログインの画面を通らない。端末の資格情報が無ければペアリング（確認コードと QR を
- * 大きく出し、承認されたら受け取る）、あれば家族の子どもの残高と最近の記録を全画面で
- * 出し続ける。メニュー・ログアウト・操作のボタンは出さない。
+ * Does not go through the login screen. Without device credentials it shows pairing (a large
+ * confirmation code and QR, then receives credentials once approved); with them it keeps showing
+ * the family's children's balances and recent records full screen. No menu/logout/action buttons.
  *
- * - 資格情報からアクセストークンへの取り直しは `api.ts`（401 の取り直しと同じ入口）
- * - 届かないときは最後の表示を残して「つなぎ直しています」を出す（ADR-0046）。
- *   資格情報を消すのは、サーバーが「外された・失効した」と答えたときだけ
- * - 新しい版は見る人が押せないので、有効になったらすぐ再読み込みする（ADR-0045 の例外）
- * - 画面の消灯を止め（Screen Wake Lock）、保存領域の永続化を頼む（合鍵が消えないように）
+ * - Exchanging the credential for an access token lives in `api.ts` (same entry as the 401 retry)
+ * - When unreachable, keeps the last display and shows "Reconnecting…" (ADR-0046).
+ *   Credentials are cleared only when the server answers "removed / revoked"
+ * - Viewers cannot tap an update, so a new version reloads once active (exception to ADR-0045)
+ * - Keeps the screen on (Screen Wake Lock) and requests persistent storage (so the key stays)
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -27,11 +27,11 @@ import { DISPLAY_UPDATE_CHECK_INTERVAL_MS, watchForUpdate } from '../services/ap
 import { claimPairing, startPairing, type StartedPairing } from '../services/display'
 import { families, parseUtc, type FamilyDetail, type Transaction } from '../services/families'
 
-/** 表示を読み直す間隔。親のスマホで足した記録が 1 分以内に映る。 */
+/** Interval for reloading the board. Records added on a parent's phone appear within 1 minute. */
 export const BOARD_REFRESH_MS = 60 * 1000
-/** 届かないとき・始められないときに聞き直す間隔。 */
+/** Interval for retrying when unreachable or unable to start. */
 export const RETRY_MS = 5 * 1000
-/** 子ごとに出す最近の記録の数。 */
+/** Number of recent records shown per child. */
 const RECENT_RECORDS = 3
 
 interface ChildBoard {
@@ -47,7 +47,7 @@ interface Board {
   updatedAt: Date
 }
 
-/** 打ち消し・打ち消された行は出さない。いま効いている記録だけを並べる。 */
+/** Hide reversals and reversed rows. List only the records currently in effect. */
 function effective(transactions: Transaction[]): Transaction[] {
   return transactions.filter((row) => !row.is_reversed && row.reversal_of_id === null)
 }
@@ -72,14 +72,14 @@ async function loadBoard(): Promise<Board | null> {
   return { familyName: family.name, children, updatedAt: new Date() }
 }
 
-/** 画面を消さない。タブが手前へ戻るたびに取り直す（裏へ回ると外れるため）。 */
+/** Keep the screen on. Re-acquire each time the tab returns to the front (lost in background). */
 function useScreenKeptOn(): void {
   useEffect(() => {
     if (!('wakeLock' in navigator)) return
     const request = () => {
       if (document.visibilityState !== 'visible') return
       navigator.wakeLock.request('screen').catch(() => {
-        // 断られても表示は続ける（設定で自動ロックを切ってもらう。画面に注意を出してある）
+        // Keep displaying if refused (users disable auto-lock in settings; the screen warns)
       })
     }
     request()
@@ -90,7 +90,7 @@ function useScreenKeptOn(): void {
   }, [])
 }
 
-/** 保存領域の永続化を頼む。合鍵（端末の資格情報）がブラウザの片付けで消えないように。 */
+/** Request persistent storage so the key (device credential) is not lost to browser cleanup. */
 function usePersistentStorage(): void {
   useEffect(() => {
     if (!('storage' in navigator)) return
@@ -101,8 +101,8 @@ function usePersistentStorage(): void {
 }
 
 /**
- * 新しい版が有効になったら、押されるのを待たずに再読み込みする。
- * 触られない画面なので、確認は短い間隔で起こす（task #498）。
+ * When a new version becomes active, reload without waiting for a tap.
+ * Nobody touches this screen, so check at a short interval (task #498).
  */
 function useImmediateUpdates(): void {
   useEffect(() => {
@@ -132,7 +132,7 @@ export function DisplayPage() {
   return (
     <div className="display-screen">
       {paired ? <DisplayBoard onRemoved={onRemoved} /> : <Pairing onPaired={onPaired} />}
-      {/* 版が替わったことを画面で見分けられるように（task #498） */}
+      {/* Make a version change visible on screen (task #498) */}
       <p className="display-version" data-testid="display-version">
         {version}
       </p>
@@ -145,7 +145,7 @@ function Pairing({ onPaired }: { onPaired: () => void }) {
   const [pairing, setPairing] = useState<StartedPairing | null>(null)
   const [unreachable, setUnreachable] = useState(false)
 
-  // 始める → 承認を待つ → 期限が切れたら始め直す、を 1 本の流れで回す
+  // Run start -> wait for approval -> start over on expiry as one flow
   useEffect(() => {
     let stopped = false
     let timer = 0
@@ -171,7 +171,7 @@ function Pairing({ onPaired }: { onPaired: () => void }) {
         const outcome = await claimPairing(started.device_code)
         setUnreachable(false)
         if (outcome.kind === 'claimed') {
-          // 同じ端末で人が入っていた跡（トークン・オフライン閲覧）を持ち越さない
+          // Do not carry over traces of a person who used this device (tokens, offline view)
           clearTokens()
           await clearOfflineViewCache()
           rememberDisplayCredential(outcome.credential)
@@ -232,8 +232,8 @@ function DisplayBoard({ onRemoved }: { onRemoved: () => void }) {
   const [empty, setEmpty] = useState(false)
   const [unreachable, setUnreachable] = useState(false)
   const loading = useRef(false)
-  // 起動して最初の 1 回は、手元のトークンに頼らず資格情報から取り直す
-  // （同じ端末に人のトークンが残っていても、その人の家族を映さない）
+  // On the first load after startup, re-fetch from the credential instead of local tokens
+  // (even if a person's token remains on this device, do not show that person's family)
   const opened = useRef(false)
 
   const refresh = useCallback(async () => {
@@ -257,7 +257,7 @@ function DisplayBoard({ onRemoved }: { onRemoved: () => void }) {
       setEmpty(loaded === null)
       setUnreachable(false)
     } catch (error) {
-      // 取り直しで「外された」と分かったら資格情報は消えている（api.ts）
+      // If re-fetching revealed "removed", the credential is already cleared (api.ts)
       if (displayCredential() === null) {
         onRemoved()
         return

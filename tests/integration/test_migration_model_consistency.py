@@ -1,8 +1,8 @@
-"""モデル定義と Alembic マイグレーションの乖離検出。
+"""Detect drift between model definitions and Alembic migrations.
 
-``alembic upgrade head`` で構築したスキーマと、SQLAlchemy モデル
-（``Base.metadata``）から構築したスキーマを SQLite 上で比較する。
-モデルを変更してマイグレーションを追加し忘れると、このテストが落ちる。
+Compares on SQLite the schema built by ``alembic upgrade head`` with the schema
+built from the SQLAlchemy models (``Base.metadata``).
+If you change a model and forget to add a migration, this test fails.
 """
 
 from __future__ import annotations
@@ -54,10 +54,10 @@ def migrated_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
 
 
 def test_every_migration_can_be_rolled_back(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``downgrade()`` を両方向とも通す。
+    """Run ``downgrade()`` in both directions.
 
-    片道しか通らないマイグレーションは、適用してから誤りに気付いたときに
-    戻せない（CLAUDE.md「DDL 管理」）。
+    A migration that only works one way cannot be rolled back when a mistake is found
+    after applying it (CLAUDE.md "DDL management").
     """
     db_path = tmp_path / "roundtrip.db"
     monkeypatch.setenv("DATABASE_URI", f"sqlite:///{db_path}")
@@ -82,10 +82,8 @@ def test_migrations_match_models(migrated_engine: sa.Engine, tmp_path: Path) -> 
     from_models = _schema_snapshot(model_engine)
     model_engine.dispose()
 
-    assert set(migrated) == set(from_models), (
-        "テーブル集合が一致しません。モデル変更にはマイグレーション追加が必要です。"
-    )
+    assert set(migrated) == set(from_models), "The table sets differ. Model changes require adding a migration."
     for table in from_models:
         assert migrated[table] == from_models[table], (
-            f"テーブル {table} の列定義がモデルとマイグレーションで一致しません。"
+            f"Column definitions of table {table} differ between the models and the migrations."
         )

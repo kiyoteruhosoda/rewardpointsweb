@@ -4,7 +4,7 @@ from bounded_contexts.email_sender.domain.email_message import EmailMessage
 
 
 class EmailSendingDisabledError(Exception):
-    """メール送信が無効（``MAIL_ENABLED`` 未設定）のときに送出される。"""
+    """Raised when sending email is disabled (``MAIL_ENABLED`` not set)."""
 
 
 class IEmailSender(ABC):
@@ -13,4 +13,7 @@ class IEmailSender(ABC):
 
     @abstractmethod
     def check_reachable(self) -> None:
-        """送らずに、送り先のサーバーへ届くかだけを確かめる。届かなければ送るときと同じ例外を投げる。"""
+        """Check only that the destination server is reachable, without sending.
+
+        Raises the same exception as send when it is not.
+        """

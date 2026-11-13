@@ -1,24 +1,24 @@
 """realign roles
 
-ロールをアクターに揃える（ADR-0018）。
+Align roles with actors (ADR-0018).
 
-- ``member`` = 親（メンバー）: ``family:manage`` / ``point:manage`` を得る
-- ``guest``  = 子（ゲスト）: ``family:view`` / ``point:view`` を得る
-- ``manager`` = 運用者: family / point 系の scope を失う（家族機能とは無関係になる）
-- ``admin``  = システム管理者: family / point 系の scope を失う（家族・ポイントは
-  家庭の当事者の領分で、システム管理者は関与しない）
+- ``member`` = parent (member): gains ``family:manage`` / ``point:manage``
+- ``guest``  = child (guest): gains ``family:view`` / ``point:view``
+- ``manager`` = operator: loses the family / point scopes (no longer related to the family features)
+- ``admin``  = system administrator: loses the family / point scopes (families and points are
+  the household's own business; the system administrator is not involved)
 
-割り当ての引き直し:
+Reassigning roles:
 
-- 子として家族に結び付いているアカウント（``family_memberships.role = 'child'``）は
-  ``member`` から ``guest`` へ
-- ``manager`` を持つアカウントは ``member`` へ。このリビジョンまで manager は
-  「親」の役だった（運用者という位置付けはここから始まる）ので、保有者は
-  家族への参加の有無に関わらず全員が親として扱われていたアカウントである
+- Accounts linked to a family as a child (``family_memberships.role = 'child'``) move
+  from ``member`` to ``guest``
+- Accounts with ``manager`` move to ``member``. Up to this revision manager was the
+  "parent" role (its meaning as operator starts here), so every holder was an account
+  treated as a parent, whether or not it had joined a family
 
-このリビジョン時点の姿を固定するため、付与の増減はこのファイルが持つ定数で
-行う（0005 と同じ方針）。正本（master_data）は「今あるべき姿」を表すもので、
-過去のリビジョンの姿ではない。
+To pin down the state as of this revision, grants are added and removed using constants this
+file holds (same approach as 0005). The source of truth (master_data) describes "how things should be now",
+not how they were at past revisions.
 
 Revision ID: realign_roles
 Revises: password_reset_cascade
@@ -40,7 +40,7 @@ depends_on = None
 
 _FAMILY_SCOPES = ("family:view", "family:manage", "point:view", "point:manage")
 
-# このリビジョンで増える付与 / 消える付与（ロール名 -> scope）
+# Grants added / removed in this revision (role name -> scope)
 _ADDED_GRANTS: dict[str, tuple[str, ...]] = {
     "member": ("family:manage", "point:manage"),
     "guest": ("family:view", "point:view"),
@@ -57,16 +57,16 @@ _user_roles = sa.table("user_roles", sa.column("user_id"), sa.column("role_id"))
 _memberships = sa.table("family_memberships", sa.column("account_id"), sa.column("role"))
 
 
-# 組み込みロールの id。``ROLES``（正本）が「id は外部参照の安定キー」と定めている
-# とおり、名前ではなく id で引く。名前は ``PUT /api/admin/roles/{role_id}`` で
-# 運用者が変えられる可変の値で、改名された環境では名前での検索が空振りする。
-# 空振りすると付与の増減も割り当ての引き直しも黙って飛ばされ、権限を変えたつもりで
-# 変わっていない状態のまま移行が通ってしまう。
+# Ids of the built-in roles. As ``ROLES`` (the source of truth) states that "the id is the stable key
+# for external references", look them up by id, not by name. Names are mutable values operators can change
+# via ``PUT /api/admin/roles/{role_id}``, so a lookup by name finds nothing in an environment where one was renamed.
+# If it finds nothing, the grant changes and the reassignment are silently skipped, and the migration
+# passes with the permissions unchanged even though they were meant to change.
 _BUILTIN_ROLE_IDS: dict[str, int] = {"admin": 1, "manager": 2, "member": 3, "guest": 4}
 
 
 def _role_id(bind: Connection, name: str) -> int | None:
-    """組み込みロールの id。そのロールが消されている環境では ``None``。"""
+    """Id of a built-in role. ``None`` in an environment where that role has been deleted."""
     found = bind.scalar(sa.select(_roles.c.id).where(_roles.c.id == _BUILTIN_ROLE_IDS[name]))
     return None if found is None else int(str(found))
 
@@ -143,12 +143,12 @@ def upgrade() -> None:
     guest = _role_id(bind, "guest")
     if manager is None or member is None or guest is None:
         return
-    # 子として結び付いているアカウント: member -> guest
+    # Accounts linked as a child: member -> guest
     children = _accounts_with_membership(bind, roles=("child",))
     _reassign(
         bind, user_ids=[uid for uid in _holders_of(bind, member) if uid in children], from_role=member, to_role=guest
     )
-    # これまで親に使っていた manager: -> member
+    # manager, used for parents until now: -> member
     _reassign(bind, user_ids=_holders_of(bind, manager), from_role=manager, to_role=member)
 
 
@@ -158,8 +158,8 @@ def downgrade() -> None:
     member = _role_id(bind, "member")
     guest = _role_id(bind, "guest")
     if manager is not None and member is not None and guest is not None:
-        # 親（owner / parent の参加を持つ member）: -> manager。
-        # 参加を持たない member は旧姿でどちらだったか判別できないため member のまま残す
+        # Parents (members with an owner / parent membership): -> manager.
+        # Members without a membership cannot be told apart in the old state, so they stay member
         guardians = _accounts_with_membership(bind, roles=("owner", "parent"))
         _reassign(
             bind,
@@ -167,7 +167,7 @@ def downgrade() -> None:
             from_role=member,
             to_role=manager,
         )
-        # 子: guest -> member
+        # Children: guest -> member
         children = _accounts_with_membership(bind, roles=("child",))
         _reassign(
             bind,

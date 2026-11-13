@@ -1,8 +1,8 @@
-"""アカウントセキュリティ API（ログイン中の利用者が自分の設定を操作する）。
+"""Account security API (the logged-in user manages their own settings).
 
-対象は「自分自身」のみ。他人のアカウントは扱わないため scope は要求せず、
-認証済みであることだけを条件にする（他人の二要素認証を触る管理操作は
-``/api/admin/users`` 側の責務）。
+Only "oneself" is in scope. Other people's accounts are not handled, so no scope is required;
+being authenticated is the only condition (admin operations touching someone else's two-factor authentication
+are the responsibility of ``/api/admin/users``).
 """
 
 from __future__ import annotations
@@ -47,11 +47,11 @@ from shared.kernel.timestamps import isoformat_utc
 
 router = APIRouter(prefix="/api/account/security", tags=["account-security"])
 
-# 一時パスワードでのログイン中は通さない。第二の要素を本人より先に
-# 差し替えられないようにする（ADR-0011）。
-#: ⚠ **資格情報を変える経路の関門**（ADR-0037）。ここだけは行を読み直す ——一時
-#: パスワードの印はトークンに焼かれた値なので、立てた直後に二要素やパスキーを
-#: 差し替えられては意味が無い（ADR-0011）。
+# Not allowed while logged in with a temporary password, so that the second factor cannot be
+# replaced before the actual user does it (ADR-0011).
+#: ⚠ **Gate for routes that change credentials** (ADR-0037). Only here is the row re-read -- the temporary
+#: password flag is a value baked into the token, so it would be pointless if two-factor or passkeys could be
+#: replaced right after it was set (ADR-0011).
 PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_settled_principal)]
 
 
@@ -66,7 +66,7 @@ def _to_passkey_response(summary: PasskeySummaryDto) -> PasskeyResponse:
 
 
 # ---------------------------------------------------------------------------
-# 二要素認証（TOTP）
+# Two-factor authentication (TOTP)
 # ---------------------------------------------------------------------------
 
 
@@ -84,7 +84,7 @@ def start_two_factor_enrollment(
     principal: PrincipalDep,
     use_case: Annotated[StartTotpEnrollment, Depends(dependencies.start_totp_enrollment)],
 ) -> TotpEnrollmentResponse:
-    """共有鍵を発行する。この時点ではまだ二要素認証は有効にならない。"""
+    """Issue a shared key. Two-factor authentication is not enabled yet at this point."""
     enrollment = use_case.execute(user_id=principal.user_id, account_name=principal.username)
     return TotpEnrollmentResponse(
         secret=enrollment.secret,
@@ -99,7 +99,7 @@ def confirm_two_factor_enrollment(
     principal: PrincipalDep,
     use_case: Annotated[ConfirmTotpEnrollment, Depends(dependencies.confirm_totp_enrollment)],
 ) -> StatusResponse:
-    """認証アプリのコードを検証し、二要素認証を有効にする。"""
+    """Verify the authenticator app's code and enable two-factor authentication."""
     use_case.execute(user_id=principal.user_id, code=body.code)
     return StatusResponse(status="ok")
 
@@ -115,7 +115,7 @@ def disable_two_factor(
 
 
 # ---------------------------------------------------------------------------
-# パスキー（WebAuthn）
+# Passkeys (WebAuthn)
 # ---------------------------------------------------------------------------
 
 
@@ -132,7 +132,7 @@ def start_passkey_registration(
     principal: PrincipalDep,
     use_case: Annotated[StartPasskeyRegistration, Depends(dependencies.start_passkey_registration)],
 ) -> PasskeyChallengeResponse:
-    """登録用のチャレンジを発行する（``navigator.credentials.create`` 用）。"""
+    """Issue a registration challenge (for ``navigator.credentials.create``)."""
     challenge = use_case.execute(
         user_id=principal.user_id,
         user_name=principal.username,

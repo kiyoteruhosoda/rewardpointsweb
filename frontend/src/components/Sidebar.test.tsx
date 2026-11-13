@@ -1,4 +1,4 @@
-/** ナビゲーション: scope による出し分けと、狭い画面での引き出しの閉じ方。 */
+/** Navigation: showing items by scope, and how the drawer closes on narrow screens. */
 import { fireEvent, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -10,7 +10,7 @@ import { Sidebar } from './Sidebar'
 const CLOSE_LABEL = 'Close the menu'
 
 describe('Sidebar', () => {
-  it('家族の子をダッシュボードの下に並べる（台帳への入口）', () => {
+  it("lists the family's children under the dashboard (entries to their ledgers)", () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
       scopes: ['dashboard:view', 'family:view'],
       family: familyOf('owner', [
@@ -24,14 +24,14 @@ describe('Sidebar', () => {
       'href',
       '/families/1/ledgers/20',
     )
-    // 台帳を持たない参加者（親）は並べない
+    // Participants without a ledger (parents) are not listed
     expect(screen.queryByRole('link', { name: 'おとうさん' })).not.toBeInTheDocument()
-    // 並びはサーバーが返した順（家族が決めた並び順）のまま
+    // The order stays as returned by the server (the order the family chose)
     const links = screen.getAllByRole('link').map((link) => link.textContent)
     expect(links).toEqual(['Dashboard', 'ハナ', 'タロウ', 'Family settings', 'Profile & settings'])
   })
 
-  it('家族がなければ子の入口は出さない', () => {
+  it('shows no child entries without a family', () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
       scopes: ['dashboard:view', 'family:view'],
     })
@@ -43,7 +43,7 @@ describe('Sidebar', () => {
     ])
   })
 
-  it('scope を持つ項目だけを出す', () => {
+  it('shows only items the user has the scope for', () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
       scopes: ['family:view'],
     })
@@ -51,7 +51,7 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
   })
 
-  it('システム管理は scope を持つ人にだけ独立した節として出す', () => {
+  it('shows system administration as a separate section only to people with the scope', () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
       scopes: ['family:view', 'user:manage', 'admin:system-settings', 'log:view'],
     })
@@ -59,11 +59,11 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('href', '/admin/users')
     expect(screen.getByRole('link', { name: 'System settings' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'System logs' })).toBeInTheDocument()
-    // scope の無い項目（ロール・権限）は出さない
+    // Items without the scope (roles, permissions) are not shown
     expect(screen.queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument()
   })
 
-  it('システム管理の scope が無ければ節そのものを出さない', () => {
+  it('does not show the section at all without the system administration scope', () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
       scopes: ['family:view'],
     })
@@ -71,7 +71,7 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
   })
 
-  it('閉じているあいだは背景を出さない', () => {
+  it('does not show the backdrop while closed', () => {
     renderWithProviders(<Sidebar open={false} onClose={vi.fn()} />, {
       scopes: ['family:view'],
     })
@@ -79,12 +79,12 @@ describe('Sidebar', () => {
     expect(screen.getByRole('navigation')).not.toHaveClass('sidebar-open')
   })
 
-  it('開いているあいだは sidebar-open を付ける', () => {
+  it('adds sidebar-open while open', () => {
     renderWithProviders(<Sidebar open onClose={vi.fn()} />, { scopes: ['family:view'] })
     expect(screen.getByRole('navigation')).toHaveClass('sidebar-open')
   })
 
-  it('背景に触れると閉じる', () => {
+  it('closes when the backdrop is touched', () => {
     const onClose = vi.fn()
     renderWithProviders(<Sidebar open onClose={onClose} />, { scopes: ['family:view'] })
 
@@ -92,7 +92,7 @@ describe('Sidebar', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('項目を選ぶと閉じる（引き出しが本文に被さったままにならない）', () => {
+  it('closes when an item is chosen (the drawer does not stay over the content)', () => {
     const onClose = vi.fn()
     renderWithProviders(<Sidebar open onClose={onClose} />, { scopes: ['family:view'] })
 
@@ -100,7 +100,7 @@ describe('Sidebar', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('Escape で閉じる', () => {
+  it('closes with Escape', () => {
     const onClose = vi.fn()
     renderWithProviders(<Sidebar open onClose={onClose} />, { scopes: ['family:view'] })
 
@@ -108,7 +108,7 @@ describe('Sidebar', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('閉じているときは Escape を拾わない', () => {
+  it('ignores Escape while closed', () => {
     const onClose = vi.fn()
     renderWithProviders(<Sidebar open={false} onClose={onClose} />, {
       scopes: ['family:view'],
@@ -118,25 +118,25 @@ describe('Sidebar', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('開くと先頭の項目へ焦点を移す', () => {
+  it('moves focus to the first item when opened', () => {
     renderWithProviders(<Sidebar open onClose={vi.fn()} />, {
       scopes: ['dashboard:view', 'family:view'],
     })
     expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Dashboard' }))
   })
 
-  it('最後の要素から Tab すると先頭へ戻す（背後の操作子へ抜けない）', () => {
+  it('Tab from the last element goes back to the first (does not escape to controls behind)', () => {
     renderWithProviders(<Sidebar open onClose={vi.fn()} />, {
       scopes: ['dashboard:view', 'family:view'],
     })
-    // 巡回の最後は背景の「閉じる」ボタン
+    // The last in the cycle is the backdrop's "close" button
     screen.getByRole('button', { name: CLOSE_LABEL }).focus()
 
     fireEvent.keyDown(window, { key: 'Tab' })
     expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Dashboard' }))
   })
 
-  it('先頭から Shift+Tab すると末尾へ回す', () => {
+  it('Shift+Tab from the first goes around to the last', () => {
     renderWithProviders(<Sidebar open onClose={vi.fn()} />, {
       scopes: ['dashboard:view', 'family:view'],
     })
@@ -145,8 +145,8 @@ describe('Sidebar', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: CLOSE_LABEL }))
   })
 
-  it('閉じると開いた操作子（ヘッダーの開閉ボタン）へ焦点を戻す', () => {
-    // 開閉ボタンの代役。引き出しを開いた時点で焦点を持っている前提。
+  it('returns focus to the control that opened it (the header toggle) when closed', () => {
+    // Stand-in for the toggle button. Assumes it holds focus when the drawer is opened.
     const opener = document.createElement('button')
     document.body.append(opener)
     opener.focus()

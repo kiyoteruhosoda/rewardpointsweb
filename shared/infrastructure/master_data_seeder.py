@@ -1,7 +1,7 @@
-"""マスタデータ投入（冪等）。
+"""Master data seeding (idempotent).
 
-値の正本は ``shared/domain/auth/master_data.py``。ここには投入ロジックのみを
-置き、``scripts/seed_master_data.py``・マイグレーション・テストから共用する。
+The source of truth for the values is ``shared/domain/auth/master_data.py``. Only the seeding logic
+lives here, shared by ``scripts/seed_master_data.py``, migrations and tests.
 """
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ def seed_master_data(
     admin_password: str | None = None,
     reset_admin_password: bool = False,
 ) -> None:
-    """ロール・権限・初期管理者を投入する（冪等）。
+    """Seed roles, permissions and the initial admin (idempotent).
 
-    既存のロール・権限・管理者アカウントそのものは作り直さない。管理者の
-    パスワードだけは :func:`reconcile_default_admin` の規則に従って追随する。
+    Existing roles, permissions and the admin account itself are not recreated. Only the
+    admin's password follows the rules of :func:`reconcile_default_admin`.
     """
     roles = _seed_roles(session)
     permissions = _seed_permissions(session)
@@ -46,17 +46,17 @@ def reconcile_default_admin(
     admin_password: str | None = None,
     reset_password: bool = False,
 ) -> bool:
-    """既定の管理者アカウントを現在の既定値へ揃える。変更したら True を返す。
+    """Bring the default admin account in line with the current defaults. Returns True if changed.
 
-    パスワードを上書きするのは次の場合だけで、運用者が自分で決めたパスワードを
-    黙って壊さない。
+    The password is overwritten only in the following cases, so a password the operator
+    chose is never silently broken.
 
-    - アカウントがまだ無い（新規作成）
-    - 既定値のまま使われている（``SUPERSEDED_ADMIN_PASSWORD_HASHES`` に一致）。
-      既定値を変更したときに、既存の環境も新しい既定値へ追随させるため。
-    - *reset_password* が真（締め出されたときの復旧経路。呼び出し側が明示する）
+    - The account does not exist yet (new creation)
+    - It still uses a default value (matches ``SUPERSEDED_ADMIN_PASSWORD_HASHES``).
+      So that existing environments follow a new default when the default changes.
+    - *reset_password* is true (recovery path after a lockout; the caller asks for it explicitly)
 
-    *admin_password* を渡すとその平文が、渡さなければ既定のハッシュが使われる。
+    If *admin_password* is given its plaintext is used, otherwise the default hash.
     """
     admin = session.scalar(select(User).where(User.username == master_data.DEFAULT_ADMIN_USERNAME))
     password_hash = (

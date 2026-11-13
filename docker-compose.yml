@@ -1,6 +1,6 @@
-# compose プロジェクト名。無指定だと配置ディレクトリ名になり、リポジトリを
-# 別名のディレクトリへ clone しただけでコンテナ・ネットワークの名前が変わる。
-# `-p` を渡せばそちらが優先される（-p > COMPOSE_PROJECT_NAME > この name > ディレクトリ名）。
+# compose project name. Without it, the directory name is used, so just cloning the repository
+# into a differently named directory changes the container and network names.
+# `-p` takes precedence when passed (-p > COMPOSE_PROJECT_NAME > this name > directory name).
 name: rewardpointsweb
 
 services:
@@ -27,20 +27,20 @@ services:
     container_name: ${DB_CONTAINER_NAME:-rewardpointsweb-mariadb}
     environment:
       - TZ=UTC
-      # 初期設定のみ（.env 未作成／項目未記入）でも DB が初期化されるようデフォルト値を
-      # 持つ。既定の資格情報は開発向け。外部公開する環境では .env で必ず上書きすること。
+      # Defaults are provided so the DB initializes even with no setup (no .env / empty entries).
+      # The default credentials are for development. Always override them in .env when exposed externally.
       - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD:-template123}
       - MARIADB_USER=${MARIADB_USER:-web_user}
       - MARIADB_PASSWORD=${MARIADB_PASSWORD:-template123}
       - MARIADB_DATABASE=${MARIADB_DATABASE:-appdb}
-    # ホストへは公開しない。到達できるのは同じ Docker ネットワークの中だけで、
-    # 保守用の接続も `docker compose exec db` でコンテナ内から行う
-    # （手順は docs/OPERATIONS.md「DB に直接つなぎたいとき」）。
+    # Not exposed to the host. Reachable only from within the same Docker network;
+    # maintenance connections are also made from inside the container with `docker compose exec db`
+    # (steps in docs/OPERATIONS.md "DB に直接つなぎたいとき").
     expose:
       - "3306"
-    # ここは短い書式のまま置く。`required:` を使う長い書式は Compose 2.24.0 以降で、
-    # 古い Compose（Synology の Container Manager 等）では読み込み前に弾かれる。
-    # .env を任意にするのは docker-compose.override.yml（手元だけ）。
+    # Keep the short syntax here. The long syntax with `required:` needs Compose 2.24.0+,
+    # and older Compose (e.g. Synology Container Manager) rejects it before loading.
+    # .env is made optional in docker-compose.override.yml (local only).
     env_file:
       - .env
     volumes:
@@ -51,15 +51,15 @@ services:
       init-paths:
         condition: service_completed_successfully
     healthcheck:
-      # $$ でエスケープし、compose にパスワードを展開させずコンテナ内シェルの環境変数
-      # 参照のまま渡す。--protocol=tcp を明示: ソケット経由だと初回初期化時の一時
-      # ブートストラップサーバーにも ping が通り、healthy と誤判定されるのを防ぐ。
+      # Escape with $$ so compose does not expand the password and it is passed as a reference
+      # to the in-container shell's environment variable. --protocol=tcp is explicit: over the socket,
+      # ping also succeeds against the temporary bootstrap server during first init, causing a false healthy.
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --protocol=tcp -u root -p\"$$MARIADB_ROOT_PASSWORD\" --silent"]
       interval: 10s
       timeout: 10s
-      # 初回起動（空 db_data）はシステムテーブル初期化に数分かかることがある。
-      # start_period 中も probe は interval ごとに走り、成功すれば即 healthy になる
-      # ので、長めに取っても2回目以降の起動は遅くならない。
+      # The first start (empty db_data) can take several minutes to initialize system tables.
+      # The probe still runs every interval during start_period and turns healthy as soon as it succeeds,
+      # so a long value does not slow down later starts.
       retries: 30
       start_period: 600s
 
@@ -68,13 +68,13 @@ services:
     init: true
     stop_grace_period: 60s
     command: web
-    # 公開ポートは nginx が受け持つ。web はネットワーク内部からのみ到達可能にする。
+    # nginx owns the public port. web is reachable only from inside the network.
     expose:
       - "8000"
     environment:
       - TZ=UTC
       - DATABASE_URI=mysql+pymysql://${MARIADB_USER:-web_user}:${MARIADB_PASSWORD:-template123}@db:3306/${MARIADB_DATABASE:-appdb}?charset=utf8mb4
-    # 短い書式で置く理由は db と同じ（配置先の Compose 版を選ばない）。
+    # Short syntax for the same reason as db (works with any Compose version at the deployment).
     env_file:
       - .env
     depends_on:
@@ -87,14 +87,14 @@ services:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')\""]
       interval: 30s
       timeout: 10s
-      # web は db が healthy になった後も DB 接続待ち + alembic upgrade head を
-      # こなしてから起動する。初回（空 DB）はスキーマ構築まで含むため長めに取る。
+      # Even after db is healthy, web waits for a DB connection and runs alembic upgrade head
+      # before starting. The first run (empty DB) also builds the schema, so allow extra time.
       retries: 5
       start_period: 300s
 
   nginx:
     image: nginx:1.30-alpine
-    # 公開フロント。外部リバースプロキシからはこのポートへ接続する。
+    # Public front. External reverse proxies connect to this port.
     ports:
       - "${WEB_BIND_ADDR:-127.0.0.1}:${WEB_HOST_PORT:-8080}:80"
     environment:

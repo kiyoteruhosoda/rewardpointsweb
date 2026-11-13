@@ -1,13 +1,13 @@
 /**
- * 書きかけをタブの中（sessionStorage）に残す（ADR-0058）。
+ * Keeps drafts in the tab (sessionStorage) (ADR-0058).
  *
- * SSO で入ったログインが続けられないと、画面はログイン画面へ移り、IdP と全画面で往復してから
- * 元の画面へ戻る。React の状態は往復で消えるので、**書きかけは書くたびにここへ写しておく。**
- * 戻ってきたときに同じ鍵で読み直せば、閉じていた入力の窓もそのまま開く。
+ * When an SSO login cannot continue, the app moves to the login screen, does a full-page round trip with the IdP,
+ * then returns to the original screen. React state is lost on the round trip, so **copy the draft here on every edit.**
+ * Reading it back with the same key on return also reopens the input dialog that was open.
  *
- * - 値が `null` になったら（保存した・閉じた）消す
- * - サインアウトしたら全部消す（{@link clearSessionDrafts}。同じタブで別の人が入ることがある）
- * - 読めない・書けないブラウザでは、ふつうの状態としてだけ振る舞う
+ * - Cleared when the value becomes `null` (saved or closed)
+ * - Everything is cleared on sign-out ({@link clearSessionDrafts}; another person may use the same tab)
+ * - In browsers where it cannot be read or written, behaves as plain state only
  */
 import { useCallback, useState } from 'react'
 
@@ -27,7 +27,7 @@ function write(key: string, value: unknown): void {
     if (value === null) window.sessionStorage.removeItem(PREFIX + key)
     else window.sessionStorage.setItem(PREFIX + key, JSON.stringify(value))
   } catch {
-    // 残せなくても書きかけは画面に残っている
+    // Even if it cannot be kept, the draft is still on screen
   }
 }
 
@@ -48,10 +48,10 @@ export function useSessionDraft<T>(key: string, initial: T | null = null) {
 }
 
 /**
- * 入力欄 1 つ分の書きかけ（{@link useSessionDraft} の、空にならない版）。
+ * Draft for a single input field (a version of {@link useSessionDraft} that is never empty).
  *
- * このアプリの入力の窓は欄ごとに状態を持つので、欄ごとにこれで持つ。読めなければ `initial`。
- * ⚠ **パスワードには使わない**（sessionStorage に平文で残る）。
+ * Input dialogs in this app hold state per field, so use this per field. `initial` when unreadable.
+ * ⚠ **Do not use for passwords** (they stay in sessionStorage in plain text).
  */
 export function useSessionValue<T>(key: string, initial: T) {
   const [value, setValue] = useSessionDraft<T>(key)
@@ -62,20 +62,20 @@ export function useSessionValue<T>(key: string, initial: T) {
         return typeof next === 'function' ? (next as (current: T) => T)(base) : next
       })
     },
-    // `initial` は空の値（'' や []）。描くたびに作り直されても結果は同じなので見ない
+    // `initial` is the empty value ('' or []). Recreating it on every render gives the same result, so it is not a dependency
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [setValue],
   )
   return [value ?? initial, update] as const
 }
 
-/** 書きかけを全部消す（サインアウトしたとき）。 */
+/** Clears all drafts (on sign-out). */
 export function clearSessionDrafts(): void {
   try {
     for (const key of Object.keys(window.sessionStorage)) {
       if (key.startsWith(PREFIX)) window.sessionStorage.removeItem(key)
     }
   } catch {
-    // 消せなくても、次に保存すれば上書きされる
+    // Even if it cannot be cleared, the next save overwrites it
   }
 }

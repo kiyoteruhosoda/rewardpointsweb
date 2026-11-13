@@ -1,4 +1,4 @@
-"""reward_points の値オブジェクトが守る不変条件。"""
+"""Invariants enforced by reward_points value objects."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def test_non_zero_amounts_are_accepted(amount: int) -> None:
 
 
 def test_zero_is_rejected() -> None:
-    """0 は台帳に意味を持たない（``CHECK (amount <> 0)`` と同じ規則）。"""
+    """0 has no meaning in the ledger (the same rule as ``CHECK (amount <> 0)``)."""
     with pytest.raises(ValueError, match="must not be zero"):
         PointAmount(0)
 
@@ -43,7 +43,7 @@ def test_negation_produces_the_opposite_sign() -> None:
 
 
 def test_steps_of_one_operation_get_different_keys() -> None:
-    """訂正は 1 回の要求で 2 行書く。同じ鍵だと 2 行目が 1 行目の使い回しになる。"""
+    """A correction writes two rows in one request. With the same key the second row would reuse the first."""
     key = IdempotencyKey("abc")
 
     assert key.for_step("reversal").value != key.for_step("correction").value
@@ -60,13 +60,13 @@ def test_a_split_key_still_fits_the_column() -> None:
 
 
 def test_a_split_key_is_recognisable_as_one() -> None:
-    """区切り文字は分割の予約。この形の鍵は API 側で受け取らない。"""
+    """The separator is reserved for splitting. Keys of this form are not accepted by the API."""
     assert is_derived(IdempotencyKey("abc").for_step("reversal").value)
     assert not is_derived("abc")
 
 
 def test_a_key_too_long_to_split_is_rejected() -> None:
-    """API 側の上限（MAX_BASE_LENGTH）を抜けてきた鍵で黙って壊れないこと。"""
+    """A key that got past the API's limit (MAX_BASE_LENGTH) does not silently break things."""
     with pytest.raises(ValueError, match="to be split"):
         IdempotencyKey("k" * (MAX_BASE_LENGTH + 1)).for_step("reversal")
 

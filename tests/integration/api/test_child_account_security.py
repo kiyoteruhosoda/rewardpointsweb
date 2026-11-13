@@ -1,7 +1,7 @@
-"""メールアドレスを持たない子アカウントでも二要素・パスキーが使えること。
+"""Child accounts without an email address can still use two-factor and passkeys.
 
-TOTP も WebAuthn もメールアドレスに依存しない（ADR-0011）。既定では有効化
-されていないことも併せて確かめる。
+Neither TOTP nor WebAuthn depends on an email address (ADR-0011). Also checks that
+they are not enabled by default.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from tests.integration.api.family_support import (
 )
 from tests.integration.api.software_authenticator import SoftwareAuthenticator
 
-# 既定の WEBAUTHN_RP_ID / WEBAUTHN_ORIGIN と揃える
+# Match the default WEBAUTHN_RP_ID / WEBAUTHN_ORIGIN
 RP_ID = "localhost"
 ORIGIN = "http://localhost:5173"
 
@@ -29,7 +29,7 @@ CHILD_PASSWORD = "taro-pass-123"
 
 @pytest.fixture
 def child_headers(client: TestClient, admin_headers: dict[str, str]) -> dict[str, str]:
-    """招待コードで作った、メールアドレスを持たない子アカウント。"""
+    """A child account without an email address, created with an invitation code."""
     parent: Account = create_account(client, admin_headers, username="dad", role="member")
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
@@ -57,7 +57,7 @@ def test_totp_can_be_enrolled_and_used(client: TestClient, child_headers: dict[s
     enrollment = client.post("/api/account/security/two-factor/enrollment", headers=child_headers)
     assert enrollment.status_code == 200, enrollment.text
     secret = str(enrollment.json()["secret"])
-    # 発行者名にはログイン識別子を使う（メールアドレスが無くても成立する）
+    # The issuer name uses the sign-in identifier (works even without an email address)
     assert "taro" in enrollment.json()["otpauth_uri"]
 
     confirmation = client.post(

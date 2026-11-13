@@ -7,10 +7,10 @@ import { defineConfig } from 'vitest/config'
 import type { Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// アイコンは `public/` に固定の名前で置く（scripts/generate_app_icons.py が書き出す）。
-// 絵柄を差し替えても URL が同じままだと、ブラウザは手元のアイコンを使い続け、
-// インストール済みの PWA は manifest が変わっていないと見なして古い絵を出し続ける。
-// 中身から作った版を問い合わせに付け、絵柄が変われば URL も変わるようにする。
+// Icons live in `public/` under fixed names (written by scripts/generate_app_icons.py).
+// If the artwork changes but the URL stays the same, browsers keep using their local icon,
+// and installed PWAs treat the manifest as unchanged and keep showing the old artwork.
+// Add a version derived from the content to the query so the URL changes with the artwork.
 const PUBLIC_DIR = fileURLToPath(new URL('./public', import.meta.url))
 const ICON_LINKS_IN_HTML = ['favicon.svg', 'apple-touch-icon.png'] as const
 
@@ -21,7 +21,7 @@ const iconUrl = (name: string): string => {
   return `/${name}?v=${digest.slice(0, 8)}`
 }
 
-/** index.html のアイコン参照にも版を付ける（manifest 側は icons で付ける）。 */
+/** Also version the icon references in index.html (the manifest side does it via icons). */
 const versionIconUrls = (): Plugin => ({
   name: 'version-icon-urls',
   transformIndexHtml: (html: string): string =>
@@ -37,8 +37,8 @@ export default defineConfig({
     react(),
     versionIconUrls(),
     VitePWA({
-      // 登録は自前で行う（services/appUpdate.ts。ADR-0045）。プラグインの登録コードは
-      // 有効になった瞬間に黙って再読み込みし、入力の途中の内容を消すので使わない
+      // We register it ourselves (services/appUpdate.ts, ADR-0045). The plugin's registration code
+      // silently reloads the moment it activates and wipes in-progress input, so it is not used
       registerType: 'autoUpdate',
       injectRegister: false,
       manifest: {
@@ -54,9 +54,9 @@ export default defineConfig({
         icons: [
           { src: iconUrl('pwa-192x192.png'), sizes: '192x192', type: 'image/png' },
           { src: iconUrl('pwa-512x512.png'), sizes: '512x512', type: 'image/png' },
-          // maskable は端まで塗り、図柄を内側 80%（セーフゾーン）に収めた別画像を渡す。
-          // 角丸のアイコンをそのまま maskable にすると、ランチャー側の切り抜きで
-          // 角が削れて縁が欠ける。
+          // For maskable, pass a separate image painted to the edges with the design inside the inner 80% (safe zone).
+          // Using the rounded icon as-is for maskable lets the launcher's crop
+          // shave the corners and chip the border.
           {
             src: iconUrl('pwa-maskable-512x512.png'),
             sizes: '512x512',
@@ -66,19 +66,19 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // 新しい版は配られたらすぐ有効にする（ADR-0045）。待機させないので、リロードすれば
-        // 新しい版になる。⚠ プラグインは injectRegister: false のときこの 2 つを自動では
-        // 付けない（付くのは自前の登録をしないときだけ）ので、ここで明示する
+        // Activate a new version as soon as it is delivered (ADR-0045). Since it does not wait, a reload
+        // brings in the new version. ⚠ With injectRegister: false the plugin does not add these two
+        // automatically (only when we do not register ourselves), so set them explicitly here
         skipWaiting: true,
         clientsClaim: true,
-        // SPA のシェル（ビルド成果物）だけを precache する。API・自動生成ドキュメント・
-        // 運用エンドポイントはナビゲーションフォールバックの対象外にし、SW が
-        // index.html を返して JSON 応答を壊さないようにする。
+        // Precache only the SPA shell (build output). API, auto-generated docs and
+        // operational endpoints are excluded from the navigation fallback so the SW
+        // does not return index.html and break JSON responses.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,json}'],
-        // アイコンは precache しない。参照はすべて版付き URL（`?v=` 付き）になり
-        // precache の登録名とは一致しないため、置いても使われないまま SW の更新の
-        // たびに 110KB を落とすだけになる。圏外で取れなくても、ブラウザとランチャーは
-        // インストール時のアイコンを使うので画面には影響しない。
+        // Icons are not precached. Every reference is a versioned URL (with `?v=`), which
+        // never matches the precache entry name, so they would sit unused and only cost
+        // 110KB on every SW update. Offline misses do not matter on screen, since browsers
+        // and launchers use the icon from install time.
         globIgnores: ['favicon.svg', 'apple-touch-icon.png', 'pwa-*.png'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [
@@ -91,12 +91,12 @@ export default defineConfig({
           /^\/readyz/,
           /^\/info/,
         ],
-        // 閲覧系の GET だけオフライン閲覧用にキャッシュする（ADR-0015）。
-        // network-first なのでオンラインの表示は常に最新で、キャッシュが出るのは
-        // オフラインのときだけ。画面は応答の Date ヘッダーで取得時刻を示す。
-        // 書き込み・招待・管理系はキャッシュしない（オフラインでは従来通り失敗）。
-        // キャッシュ名は frontend/src/services/api.ts の OFFLINE_VIEW_CACHE と対
-        // （ログアウト時にそちらから削除する）。
+        // Cache only read-only GETs for offline viewing (ADR-0015).
+        // Network-first, so online views are always fresh and the cache is only served
+        // when offline. The screen shows the fetch time from the response's Date header.
+        // Writes, invitations and admin endpoints are not cached (offline they fail as before).
+        // The cache name pairs with OFFLINE_VIEW_CACHE in frontend/src/services/api.ts
+        // (deleted from there on logout).
         runtimeCaching: [
           {
             urlPattern: /\/api\/(?:auth\/me|families(?:\/\d+(?:\/ledgers\/\d+)?)?)$/,
@@ -115,7 +115,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // 開発時はバックエンド（uv run python main.py）へプロキシする
+      // In development, proxy to the backend (uv run python main.py)
       '/api': { target: 'http://localhost:8000', changeOrigin: true },
     },
   },
@@ -124,7 +124,7 @@ export default defineConfig({
     sourcemap: true,
   },
   test: {
-    // jsdom: React コンポーネントの描画を伴うテスト用
+    // jsdom: for tests that render React components
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],

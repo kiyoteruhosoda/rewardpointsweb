@@ -1,16 +1,16 @@
-"""RP ID とオリジンの整合性（WebAuthn の規則）。
+"""Consistency of RP ID and origin (WebAuthn rules).
 
-ブラウザは ``navigator.credentials.create()`` の時点で「``rp.id`` が呼び出し元の
-実効ドメインと一致するか、その登録可能なサフィックスであること」を確かめ、
-外れていれば ``SecurityError`` を投げる。設定が食い違っていても登録の開始まで
-は成功してしまうため、サーバー側で先に弾かないと「保存はできたのに、利用者の
-画面でだけ失敗する」状態になる。
+At ``navigator.credentials.create()`` the browser checks that "``rp.id`` equals the caller's
+effective domain or is a registrable suffix of it", and throws ``SecurityError`` if not.
+Even with mismatched settings, starting the registration still succeeds,
+so unless the server rejects it first we end up with "saving worked, but it fails only on the
+user's screen".
 
-検証と同時に**正規化した値を返す**。設定に入った空白や既定ポート（``:443``）を
-そのまま authenticator へ渡すと、検証は通ったのにブラウザの送るオリジンと
-一致しない、という別のずれ方をする。RP を組み立てる側は必ず戻り値を使う。
+Along with validation, it **returns the normalized values**. Passing whitespace from the settings or a default port
+(``:443``) to the authenticator as is causes another kind of mismatch: validation passes but it does not
+match the origin the browser sends. Whoever builds the RP must always use the return value.
 
-判定はドメインの規則そのもの（フレームワーク・DB に依らない）なのでここへ置く。
+The decision is the domain rule itself (independent of framework and DB), so it lives here.
 """
 
 from __future__ import annotations
@@ -25,31 +25,31 @@ from bounded_contexts.account_security.domain.exceptions import (
     InvalidWebAuthnRelyingPartyIdError,
 )
 
-# WebAuthn は安全なコンテキストでしか動かない。http を許すのはブラウザが例外的に
-# 安全とみなすループバックだけ（OPERATIONS.md「パスキーを使う前に」参照）。
+# WebAuthn only works in a secure context. http is allowed only for loopback, which browsers
+# treat as secure as an exception (see OPERATIONS.md "Before using passkeys").
 _HTTP_ALLOWED_HOSTS = frozenset({"localhost"})
 
-# ブラウザの送るオリジンには既定ポートが付かない（``https://example.com:443`` ではなく
-# ``https://example.com``）。合わせて落とさないと検証で外れる。
+# The origin the browser sends carries no default port (``https://example.com``, not
+# ``https://example.com:443``). Unless we drop it too, verification fails.
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 
-# ラベルは英数字とハイフン。国際化ドメインは punycode（``xn--``）へ変換済みの形で持つ。
+# Labels are alphanumerics and hyphens. Internationalized domains are kept in punycode (``xn--``) form.
 _LABEL = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 
 
 @dataclass(frozen=True)
 class RelyingPartyConfiguration:
-    """検証済み・正規化済みの RP 設定。"""
+    """Validated and normalized RP settings."""
 
     rp_id: str
     origin: str
 
 
 def validate_relying_party_configuration(*, rp_id: str, origin: str) -> RelyingPartyConfiguration:
-    """``rp_id`` が ``origin`` のドメインに対して使えるかを確かめ、正規化して返す。
+    """Check that ``rp_id`` can be used for the domain of ``origin``, and return them normalized.
 
-    合わない場合は :class:`InvalidWebAuthnOriginError` か
-    :class:`InvalidWebAuthnRelyingPartyIdError` を送出する。
+    If they do not match, raise :class:`InvalidWebAuthnOriginError` or
+    :class:`InvalidWebAuthnRelyingPartyIdError`.
     """
     canonical_origin, host = _canonical_origin(origin)
     identifier = _normalize_domain(rp_id)
@@ -59,7 +59,7 @@ def validate_relying_party_configuration(*, rp_id: str, origin: str) -> RelyingP
 
 
 def _canonical_origin(origin: str) -> tuple[str, str]:
-    """``scheme://host[:port]`` へ揃えた文字列と、そのホスト名を返す。"""
+    """Return the string normalized to ``scheme://host[:port]`` and its host name."""
     parts = urlsplit(origin.strip())
     _reject_non_origin(parts)
     host = _normalize_domain(parts.hostname or "")
@@ -71,11 +71,11 @@ def _canonical_origin(origin: str) -> tuple[str, str]:
 
 
 def _reject_non_origin(parts: SplitResult) -> None:
-    """オリジンは scheme・ホスト・ポートだけ。それ以外が付いた値は使えない。
+    """An origin is only scheme, host and port. Values with anything else cannot be used.
 
-    パス・クエリ・フラグメント・認証情報の付いた URL は、ブラウザが
-    ``clientDataJSON`` へ入れるオリジンと決して一致しない。ここで弾かないと、
-    ブラウザ側の登録は通るのにサーバーの検証だけが落ちる。
+    A URL with a path, query, fragment or credentials never matches the origin the browser
+    puts into ``clientDataJSON``. Unless rejected here, registration passes in the
+    browser but only the server-side verification fails.
     """
     if parts.scheme not in _DEFAULT_PORTS:
         raise InvalidWebAuthnOriginError
@@ -86,18 +86,18 @@ def _reject_non_origin(parts: SplitResult) -> None:
 def _explicit_port(parts: SplitResult) -> str:
     try:
         port = parts.port
-    except ValueError as error:  # ポートが数値でない・範囲外
+    except ValueError as error:  # port is not numeric or out of range
         raise InvalidWebAuthnOriginError from error
     return "" if port is None or port == _DEFAULT_PORTS[parts.scheme] else f":{port}"
 
 
 def _normalize_domain(value: str) -> str:
-    """比較用に揃える（前後の空白・大文字・末尾のドットを落とす）。"""
+    """Normalize for comparison (drop surrounding whitespace, uppercase and trailing dot)."""
     return value.strip().rstrip(".").lower()
 
 
 def _is_domain(value: str) -> bool:
-    """RP ID として使える形か。IP アドレス・ポート・パス付きは使えない。"""
+    """Whether it is usable as an RP ID. IP addresses and values with a port or path cannot be used."""
     if not value or _is_ip_address(value):
         return False
     return all(_LABEL.match(label) for label in value.split("."))
@@ -112,16 +112,16 @@ def _is_ip_address(value: str) -> bool:
 
 
 def _is_registrable_suffix(rp_id: str, host: str) -> bool:
-    """``host`` が ``rp_id`` 自身か、その下のドメインか。
+    """Whether ``host`` is ``rp_id`` itself or a domain below it.
 
-    RP ID に使えるのは**登録できる**ドメインだけ。``example.com`` に対する ``com``
-    のような公開サフィックスはブラウザが拒む。ここではラベルが 1 つだけの RP ID を
-    落として、その大半（``com`` / ``jp`` 等）を弾く。``localhost`` のようにホスト
-    そのものが 1 ラベルの場合は一致とみなす。
+    Only **registrable** domains can be used as an RP ID. Browsers reject a public suffix such as
+    ``com`` for ``example.com``. Here we drop RP IDs with a single label,
+    which rejects most of them (``com`` / ``jp`` etc.). When the host itself has one label,
+    like ``localhost``, it counts as a match.
 
-    ``co.uk`` のような多段の公開サフィックスまでは判定しない（公開サフィックス
-    リストが要る）。この設定を選ぶのは現実的でなく、外した場合もブラウザ側で
-    拒まれるだけなので、リストを抱える代わりに割り切る。
+    Multi-level public suffixes such as ``co.uk`` are not detected (that would need the public suffix
+    list). Choosing such a setting is unrealistic, and if it slips through the browser just
+    rejects it, so we accept that instead of carrying the list.
     """
     if host == rp_id:
         return True

@@ -1,5 +1,5 @@
 /**
- * scope の無い人は URL を直接開いても画面に入れず、入口へ戻る（ADR-0047）。
+ * People without the scope cannot enter the screen even by opening the URL directly; they go back to the entry (ADR-0047).
  */
 import { screen } from '@testing-library/react'
 import { Route } from 'react-router-dom'
@@ -25,12 +25,12 @@ function renderAt(scopes: string[]) {
 }
 
 describe('RequireScope', () => {
-  it('scope を持つ人には画面を出す', () => {
+  it('shows the screen to people with the scope', () => {
     renderAt(['display:approve'])
     expect(screen.getByText('displays')).toBeInTheDocument()
   })
 
-  it('scope の無い人は入口へ戻す', () => {
+  it('sends people without the scope back to the entry', () => {
     renderAt(['user:manage', 'family:manage'])
     expect(screen.getByText('home')).toBeInTheDocument()
     expect(screen.queryByText('displays')).not.toBeInTheDocument()

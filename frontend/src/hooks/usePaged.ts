@@ -1,8 +1,8 @@
 /**
- * 一覧を *size* 件ずつのページに分ける。
+ * Splits a list into pages of *size* items.
  *
- * 読み直して件数が減った（取り消し・別の端末での変更）ときは、はみ出したページに
- * 取り残されないよう最後のページへ寄せる。
+ * When a reload shrinks the count (a cancellation, a change on another device), move to
+ * the last page so the view is not stranded on a page past the end.
  */
 import { useState } from 'react'
 

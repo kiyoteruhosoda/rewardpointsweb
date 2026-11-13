@@ -1,92 +1,92 @@
-"""アカウントセキュリティ・コンテキストのドメイン例外。
+"""Domain exceptions of the account security context.
 
-Presentation 層はこれらを HTTP ステータス＋エラーコードへ変換する
-（表示文言への変換はフロントエンド。CLAUDE.md「国際化」参照）。
+The presentation layer converts these into HTTP status + error code
+(conversion to display text is done by the frontend; see CLAUDE.md "Internationalization").
 """
 
 from __future__ import annotations
 
 
 class AccountSecurityError(Exception):
-    """このコンテキストの基底例外。``code`` がそのまま API のエラーコードになる。"""
+    """Base exception of this context. ``code`` becomes the API error code as is."""
 
     code = "account_security_error"
 
 
 class TotpAlreadyEnabledError(AccountSecurityError):
-    """すでに二要素認証が有効なアカウントで登録を始めようとした。"""
+    """Tried to start enrollment on an account that already has two-factor authentication enabled."""
 
     code = "totp_already_enabled"
 
 
 class TotpNotEnrolledError(AccountSecurityError):
-    """登録手続きが始まっていない（確認コードの検証先が無い）。"""
+    """Enrollment has not started (nothing to verify the confirmation code against)."""
 
     code = "totp_not_enrolled"
 
 
 class InvalidTotpCodeError(AccountSecurityError):
-    """確認コードが一致しない。"""
+    """The confirmation code does not match."""
 
     code = "invalid_totp"
 
 
 class TotpRequiredError(AccountSecurityError):
-    """二要素認証が有効なのにコードが提示されなかった。"""
+    """Two-factor authentication is enabled but no code was presented."""
 
     code = "totp_required"
 
 
 class ChallengeNotFoundError(AccountSecurityError):
-    """WebAuthn チャレンジが見つからない（期限切れ・使用済み・別プロセス）。"""
+    """WebAuthn challenge not found (expired, already used, or in another process)."""
 
     code = "challenge_not_found"
 
 
 class PasskeyVerificationError(AccountSecurityError):
-    """WebAuthn の署名検証に失敗した。"""
+    """WebAuthn signature verification failed."""
 
     code = "passkey_verification_failed"
 
 
 class PasskeyAlreadyRegisteredError(AccountSecurityError):
-    """同じ資格情報が他のアカウントに登録済み。"""
+    """The same credential is already registered to another account."""
 
     code = "passkey_already_registered"
 
 
 class PasskeyNotFoundError(AccountSecurityError):
-    """指定されたパスキーが存在しない（他人のものを含む）。"""
+    """The specified passkey does not exist (including ones owned by someone else)."""
 
     code = "passkey_not_found"
 
 
 class PasskeyConfigurationError(AccountSecurityError):
-    """パスキーの設定（RP ID・オリジン）が WebAuthn の規則に合っていない。
+    """The passkey settings (RP ID, origin) do not follow WebAuthn rules.
 
-    利用者の操作ではなく設定の誤り。パスキーの発行を止め、管理者に直させる。
+    A configuration mistake, not a user action. Stop issuing passkeys and have an administrator fix it.
     """
 
     code = "passkey_misconfigured"
 
 
 class InvalidWebAuthnOriginError(PasskeyConfigurationError):
-    """``WEBAUTHN_ORIGIN`` が URL として使えない（scheme・ホストの誤り）。"""
+    """``WEBAUTHN_ORIGIN`` cannot be used as a URL (wrong scheme or host)."""
 
     code = "invalid_webauthn_origin"
 
 
 class InvalidWebAuthnRelyingPartyIdError(PasskeyConfigurationError):
-    """``WEBAUTHN_RP_ID`` がオリジンのドメインと噛み合っていない。"""
+    """``WEBAUTHN_RP_ID`` does not match the origin's domain."""
 
     code = "invalid_webauthn_rp_id"
 
 
 class TooManyAttemptsError(AccountSecurityError):
-    """短い時間に失敗しすぎたので、しばらく断る（ADR-0055）。
+    """Rejected for a while after too many failures in a short time (ADR-0055).
 
-    ``401`` に紛れ込ませない。断られていることが分からないと、正しいパスワードを
-    入れても弾かれ続けて「忘れた」と誤解し、再設定へ流れる。
+    Do not hide this in ``401``. If the user cannot tell they are being refused, they keep getting
+    rejected even with the right password, assume they "forgot" it, and head to a reset.
     """
 
     code = "too_many_attempts"

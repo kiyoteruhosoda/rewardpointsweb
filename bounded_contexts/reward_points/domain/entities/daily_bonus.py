@@ -1,20 +1,23 @@
-"""毎日のボーナス（ADR-0024）。
+"""Daily bonus (ADR-0024).
 
-子の台帳 1 つにつき 1 つ。「毎日いくつ足すか」を持ち、日付が変わったら台帳へ
-1 行追記される。追記そのものは台帳の決まりに従うので、ここは **どの日がまだ
-渡っていないか** だけを受け持つ。
+One per child ledger. It holds "how many points to add each day", and when the
+date changes one row is appended to the ledger. The append itself follows the
+ledger's rules, so this only handles **which days have not been granted yet**.
 
-渡した所までを ``granted_through`` で覚える。次に動いたときは翌日から今日までを
-まとめて渡すので、アプリが止まっていた日も飛ばない。ただし長く止まっていた分を
-際限なく取り戻すと、久しぶりに開いた台帳が数百行のボーナスで埋まる。遡る日数には
-上限を置き、超えた分は捨てたことを呼び出し側が言えるよう数で返す。
+``granted_through`` remembers how far it has granted. The next run grants
+everything from the following day through today, so days when the app was down
+are not skipped. But recovering an unlimited backlog after a long outage would
+fill a long-unopened ledger with hundreds of bonus rows. So the number of days
+to go back is capped, and the excess is returned as a count so the caller can
+say it was dropped.
 
-二重付与は冪等キーで止める（``UNIQUE (ledger_id, idempotency_key)``。ADR-0010）。
-キーは日付そのものから決まるので、同じ日を 2 度渡そうとしても台帳には 1 行しか
-入らない — 複数のワーカーが同時に動いても、追いつきが途中で落ちて再開しても同じ。
-段階付きの鍵（``daily-bonus#2026-08-09``）にしてあるのは、利用者が送る鍵には
-``#`` が現れないから（:func:`~...idempotency_key.is_derived`）。ボーナスの行と
-手で書いた行が同じ鍵にぶつかることは無い。
+Double grants are stopped by an idempotency key (``UNIQUE (ledger_id,
+idempotency_key)``; ADR-0010). The key is derived from the date itself, so even
+granting the same day twice puts only one row in the ledger, whether several
+workers run at once or a catch-up dies midway and restarts. It is a stepped key
+(``daily-bonus#2026-08-09``) because keys sent by users never contain ``#``
+(:func:`~...idempotency_key.is_derived`). A bonus row and a hand-written row
+never collide on the same key.
 """
 
 from __future__ import annotations
@@ -26,21 +29,21 @@ from bounded_contexts.reward_points.domain.value_objects.idempotency_key import 
 from bounded_contexts.reward_points.domain.value_objects.point_amount import PointAmount
 from bounded_contexts.reward_points.domain.value_objects.transaction_reason import TransactionReason
 
-#: 冪等キーの土台。日付を段階として足した形（``daily-bonus#2026-08-09``）で使う
+#: Base of the idempotency key. Used with the date added as a step (``daily-bonus#2026-08-09``)
 IDEMPOTENCY_BASE = "daily-bonus"
 
 
 def idempotency_key_for(day: date) -> str:
-    """*day* の付与を表す冪等キー。同じ日からは必ず同じ値が出る。"""
+    """Idempotency key for the grant of *day*. The same day always yields the same value."""
     return IdempotencyKey(IDEMPOTENCY_BASE).for_step(day.isoformat()).value
 
 
 @dataclass(frozen=True, kw_only=True)
 class DueDays:
-    """まだ渡していない日と、上限で切り捨てた日数。"""
+    """Days not yet granted, and the number of days dropped by the cap."""
 
     days: tuple[date, ...]
-    #: 遡る上限を超えたため渡さない日の数。0 なら取りこぼしなし
+    #: Number of days not granted because they exceed the look-back cap. 0 means nothing was missed
     skipped: int
 
 
@@ -50,22 +53,22 @@ class DailyBonus:
     ledger_id: int
     amount: PointAmount
     reason: TransactionReason
-    #: 最初に渡す日。これより前へは遡らない（決めるのは Application 層）
+    #: First day to grant. Never goes back before it (the Application layer decides it)
     starts_on: date
-    #: 渡し終えた最後の日。まだ 1 日も渡していなければ ``None``
+    #: Last day already granted. ``None`` if no day has been granted yet
     granted_through: date | None
 
     def __post_init__(self) -> None:
-        # 毎日減っていく設定は「ボーナス」ではない。消費は手で記録する
+        # A setting that subtracts every day is not a "bonus". Spending is recorded by hand
         if self.amount.value <= 0:
             raise ValueError("Daily bonus must add points")
 
     def due_days(self, *, today: date, limit: int) -> DueDays:
-        """*today* までに渡すべき日を、古い順に返す。
+        """Return the days due up to *today*, oldest first.
 
-        ``limit`` を超える場合は **新しい方から** ``limit`` 日だけを渡す。久しぶりに
-        動かしたときに古い日から埋めると、上限に当たるたびに何日も前の行が増え続け、
-        今日のボーナスが着くまでに何周もかかる。
+        If there are more than ``limit``, grant only the **newest** ``limit`` days.
+        Filling from the oldest after a long pause would keep adding rows from days
+        ago each time the cap is hit, taking many rounds before today's bonus lands.
         """
         first = self.granted_through + timedelta(days=1) if self.granted_through else self.starts_on
         if today < first:

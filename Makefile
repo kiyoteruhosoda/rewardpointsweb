@@ -9,10 +9,10 @@
 	lint-frontend typecheck-frontend test-frontend
 
 # --------------------------------
-# イメージ（手元での確認用）
+# Image (for local checks)
 # --------------------------------
-# 本番の成果物は deck の build が焼いてレジストリへ push する（ADR-0028）。
-# ここで作るのは Dockerfile が壊れていないかを手元で確かめるためのもの。
+# Production artifacts are built by deck's build and pushed to the registry (ADR-0028).
+# This target only checks locally that the Dockerfile is not broken.
 IMAGE ?= rewardpointsweb:dev
 
 image:
@@ -20,7 +20,7 @@ image:
 	docker build -t $(IMAGE) .
 
 # --------------------------------
-# 品質ゲート（CI と同じ順序・同じコマンドを流す）
+# Quality gate (same order and commands as CI)
 # --------------------------------
 
 check: check-backend check-frontend
@@ -38,7 +38,7 @@ check-frontend:
 	cd frontend && npm run type-check
 	cd frontend && npm run test
 
-# 個別に回したいとき
+# To run individual checks
 lint:
 	uv run ruff check .
 	uv run ruff check --preview --select PLR1702,PLR0917 .
@@ -59,7 +59,7 @@ test-frontend:
 	cd frontend && npm run test
 
 # --------------------------------
-# 自動整形（コミット前に流す）
+# Auto-format (run before committing)
 # --------------------------------
 
 format: format-backend format-frontend

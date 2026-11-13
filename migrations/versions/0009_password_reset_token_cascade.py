@@ -1,14 +1,14 @@
-"""password_reset_tokens.user_id を ON DELETE CASCADE にする
+"""Make password_reset_tokens.user_id ON DELETE CASCADE
 
-``password_reset_tokens.user_id`` → ``users.id`` の外部キーに ``ON DELETE`` が
-無く、パスワード再設定を一度でも申請したアカウントの削除が本番（MariaDB）で
-外部キーに阻まれて失敗していた。削除時に消してよいトークンなので、拒否では
-なく追随（CASCADE）させる（docs/Progress.md T3）。
+The ``password_reset_tokens.user_id`` -> ``users.id`` foreign key had no ``ON DELETE``, so in
+production (MariaDB) deleting any account that had ever requested a password reset
+failed on the foreign key. The tokens may be deleted along with the account, so make it
+follow (CASCADE) rather than reject (docs/Progress.md T3).
 
-ベースライン（0001）はこの外部キーを無名で作っている。SQLite は無名の制約を
-名前で落とせないため、``naming_convention`` を渡した batch モードで決め打ちの
-名前を与えて落とす。MariaDB では実際に付いた名前（``…_ibfk_1`` 等）を
-リフレクションで拾って使う。
+The baseline (0001) creates this foreign key without a name. SQLite cannot drop an unnamed
+constraint by name, so batch mode with a ``naming_convention`` gives it a fixed name
+to drop it by. On MariaDB the actual name (``…_ibfk_1`` etc.) is picked up
+by reflection and used.
 
 Revision ID: password_reset_cascade
 Revises: membership_independence

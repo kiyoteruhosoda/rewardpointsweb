@@ -1,15 +1,15 @@
-"""連携の完了 ——戻ってきた ``(issuer, subject)`` を**往復を始めた利用者**へ結び付ける。
+"""Completing a link -- link the returned ``(issuer, subject)`` to **the user who started the round trip**.
 
-ログインの完了（:class:`CompleteSsoLogin`）との違いは、利用者を**探さない**ことに
-ある。誰に結び付けるかは往復を始めた時点で決まっていて、ここで決め直す余地は無い
-（ADR-0036）。
+The difference from completing a login (:class:`CompleteSsoLogin`) is that it does **not look up**
+the user. Who to link to was decided when the round trip started, and there is no room to decide again here
+(ADR-0036).
 
-断るのは 4 つ。
+There are 4 reasons to refuse.
 
-- 控えが無い・期限切れ —— 送り出した往復ではない
-- 合言葉が合わない —— 別のブラウザで始められた往復（ログイン CSRF）
-- 往復を始めた利用者と、いまのセッションが違う —— どちらへ結び付けるか決められない
-- その ``(issuer, subject)`` が**別の利用者**に結び付いている —— 横取りになる
+- No saved request, or expired -- not a round trip we sent out
+- Passphrase mismatch -- a round trip started in another browser (login CSRF)
+- The user who started the round trip differs from the current session -- cannot decide whom to link
+- That ``(issuer, subject)`` is linked to **another user** -- it would be a takeover
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class CompleteSsoLink:
     sessions: SsoLoginSessionRepository
     identities: FederatedIdentityRepository
     claims: ClaimsMapping
-    #: 要求した ``acr_values`` と、返ってきた ``acr`` の突き合わせ（ADR-0039）。
+    #: Matching the requested ``acr_values`` against the returned ``acr`` (ADR-0039).
     requested_context: RequestedAuthenticationContext = field(default_factory=RequestedAuthenticationContext)
 
     def execute(self, *, callback: SsoCallback, user_id: int) -> FederatedIdentity:
@@ -67,8 +67,8 @@ class CompleteSsoLink:
         if not session.belongs_to(hash_secret(callback.browser_binding or "")):
             raise SsoLoginSessionNotFoundError
         if not session.started_by(user_id):
-            # ⚠ 往復の途中でサインアウトした・別の利用者で入り直した。**いまの
-            #   セッションへ結び付け直さない** ——始めた本人以外の口座に入り口が生える。
+            # ⚠ Signed out mid-round-trip, or signed in again as another user. **Do not re-link
+            #   to the current session** -- an entrance would appear on an account other than the one who started it.
             raise SsoLinkSessionMismatchError
         claims = self.gateway.exchange_code(
             CodeExchange(
@@ -78,8 +78,8 @@ class CompleteSsoLink:
                 nonce=session.nonce,
             )
         )
-        # ⚠ **連携でも確かめる**（ADR-0039）。ここを素通しにすると、弱い認証で
-        #   通った往復がそのまま新しい入り口になる。
+        # ⚠ **Check it for linking too** (ADR-0039). If this were let through, a round trip that
+        #   passed with weak authentication would directly become a new entrance.
         self.requested_context.ensure_satisfied(claims.get("acr"))
         subject = self.claims.apply(claims).subject
         self._ensure_free(provider.issuer, subject, user_id)
@@ -91,7 +91,7 @@ class CompleteSsoLink:
             raise SsoIdentityTakenError
         mine = self.identities.find_for_user(issuer, user_id)
         if mine is not None and mine.subject != subject:
-            # 差し替えは黙って通さない。前の結び付きで入っていた経路が消えるため。
+            # Do not silently allow a replacement, since the route that used the previous link would disappear.
             raise SsoAlreadyLinkedError
 
 

@@ -1,12 +1,12 @@
 /**
- * IdP から戻ってきた直後の中継画面（ADR-0029）。
+ * Relay screen right after returning from the IdP (ADR-0029).
  *
- * URL に載っているのは 1 回限りの引き換え券だけで、トークンではない。ここで
- * トークンへ換え、SSO を始めた画面へ送る。券は 1 回しか使えないため、
- * 再描画（開発時の StrictMode を含む）で 2 回目を投げないようにする。
+ * The URL carries only a one-time exchange ticket, not a token. Here it is
+ * exchanged for tokens and the user is sent to the screen where SSO started. The ticket works only once,
+ * so re-renders (including StrictMode in development) must not send it a second time.
  *
- * 招待コードを持ったまま SSO へ回った人は、IdP の画面を挟んだぶん URL の断片を
- * 失っている。ログイン画面が預けたコードをここで拾い直す（ADR-0025）。
+ * Someone who went to SSO holding an invitation code lost the URL fragment while passing
+ * through the IdP screens. Pick up the code that the login screen stashed (ADR-0025).
  */
 import { useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -34,14 +34,14 @@ export function SsoCallbackPage() {
     }
     loginWithSsoTicket(ticket)
       .then((redirectTo) => {
-        // 招待コードは IdP への往復で断片ごと消えている。預けたものを付け直す
-        // （サーバーを通す ``redirect_to`` には載せられない。ADR-0025）
+        // The invitation code was lost with the fragment on the IdP round trip. Reattach the stashed one
+        // (it cannot ride on the server-side ``redirect_to``; ADR-0025)
         const code = takeRememberedInvitationCode()
-        // 履歴に残さない（「戻る」で使用済みの券へ戻らないようにする）
+        // Keep it out of history ("Back" must not return to the used ticket)
         void navigate(code ? invitationAcceptPath(code) : redirectTo, { replace: true })
       })
       .catch((error: unknown) => {
-        // 失敗もログイン画面で伝える（この画面は中継で、そのまま抜ける）
+        // Failures are also reported on the login screen (this screen is only a relay and leaves right away)
         const code = error instanceof ApiError ? error.code : 'sso_error'
         void navigate(`/login?sso_error=${encodeURIComponent(code)}`, { replace: true })
       })

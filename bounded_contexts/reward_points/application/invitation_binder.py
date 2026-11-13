@@ -1,12 +1,12 @@
-"""招待コードを 1 つの参加へ変える、共通の処理。
+"""Shared logic that turns an invitation code into one membership.
 
-招待の受諾には 2 つの入口がある。
+There are two entry points for accepting an invitation:
 
-- すでにアカウントを持つ人が家族へ加わる（``accept``）
-- 子が自分の端末でアカウントを作って加わる（``redeem``。ADR-0011）
+- Someone who already has an account joins the family (``accept``)
+- A child creates an account on their own device and joins (``redeem``, ADR-0011)
 
-違うのは「アカウントをどう用意するか」だけで、コードの検証・参加の作成・
-使用済みの記録は同じ。両方から呼べるようにここへ切り出す。
+The only difference is how the account is prepared; code verification, membership
+creation and marking the code as used are the same. Extracted here so both can call it.
 """
 
 from __future__ import annotations
@@ -42,16 +42,17 @@ class InvitationBinder:
         self._ledgers = ledgers
 
     def bind(self, *, code: str, account_id: int, display_name: str | None) -> FamilyMembership:
-        # 参加を作る前に使用済みにする。同じコードで同時に 2 つ届いても、
-        # ここを通れるのは 1 つだけ。以降で弾かれた場合はトランザクションごと
-        # 巻き戻るので、使えるはずのコードが無駄に消えることもない。
+        # Mark the code as used before creating the membership. Even if two requests with
+        # the same code arrive at once, only one gets past here. If a later check rejects
+        # it, the whole transaction rolls back, so a still-valid code is not wasted.
         #
-        # 「存在しない」「期限切れ」「使用済み」を区別しない（総当たりの手がかりを残さない）
+        # "Not found", "expired" and "already used" are not distinguished (no hints for brute force)
         invitation = self._invitations.consume(code, now=utcnow())
         if invitation is None:
             raise InvitationNotFoundError
-        # 所属できる家族は 1 つまで（ADR-0013）。同じ家族への二重参加と、別の
-        # 家族に所属したままの参加を区別して断る（画面の案内が変わるため）。
+        # An account can belong to at most one family (ADR-0013). Joining the same family
+        # twice and joining while still in another family are rejected separately (the
+        # on-screen guidance differs).
         existing = self._memberships.list_for_account(account_id)
         if any(membership.family_id == invitation.family_id for membership in existing):
             raise AccountAlreadyInFamilyError

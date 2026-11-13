@@ -1,4 +1,4 @@
-"""ポイント台帳の永続化インターフェース。"""
+"""Persistence interface for point ledgers."""
 
 from __future__ import annotations
 

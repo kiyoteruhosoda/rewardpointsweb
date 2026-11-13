@@ -1,4 +1,4 @@
-/** 書きかけをログインの往復をまたいで残す（ADR-0058）。 */
+/** Keeps drafts across the login round trip (ADR-0058). */
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -9,7 +9,7 @@ describe('useSessionDraft', () => {
     window.sessionStorage.clear()
   })
 
-  it('書いた値は、画面を作り直しても（往復から戻っても）残る', () => {
+  it('keeps a written value even when the screen is rebuilt (back from the round trip)', () => {
     const first = renderHook(() => useSessionDraft<{ title: string }>('notes'))
     act(() => {
       first.result.current[1]({ title: '書きかけ' })
@@ -20,7 +20,7 @@ describe('useSessionDraft', () => {
     expect(again.result.current[0]).toEqual({ title: '書きかけ' })
   })
 
-  it('null にしたら（保存した・閉じた）消す', () => {
+  it('clears it when set to null (saved or closed)', () => {
     const { result } = renderHook(() => useSessionDraft<{ title: string }>('notes'))
     act(() => {
       result.current[1]({ title: 'x' })
@@ -31,7 +31,7 @@ describe('useSessionDraft', () => {
     expect(window.sessionStorage.getItem('draft:notes')).toBeNull()
   })
 
-  it('関数で更新できる', () => {
+  it('can be updated with a function', () => {
     const { result } = renderHook(() => useSessionDraft<{ n: number }>('count', { n: 1 }))
     act(() => {
       result.current[1]((current) => ({ n: (current?.n ?? 0) + 1 }))
@@ -39,7 +39,7 @@ describe('useSessionDraft', () => {
     expect(result.current[0]).toEqual({ n: 2 })
   })
 
-  it('サインアウトしたら全部消す（ほかの値は残す）', () => {
+  it('clears everything on sign-out (other values are kept)', () => {
     window.sessionStorage.setItem('draft:a', '{}')
     window.sessionStorage.setItem('ssoSilentTried', '1')
     clearSessionDrafts()
@@ -47,7 +47,7 @@ describe('useSessionDraft', () => {
     expect(window.sessionStorage.getItem('ssoSilentTried')).toBe('1')
   })
 
-  it('欄 1 つ分は空の値から始まり、書いた値が戻ってきても残る', () => {
+  it('a single field starts from the empty value and keeps a written value when coming back', () => {
     const first = renderHook(() => useSessionValue('users.email', ''))
     expect(first.result.current[0]).toBe('')
     act(() => {
@@ -59,7 +59,7 @@ describe('useSessionDraft', () => {
     expect(again.result.current[0]).toBe('a@example.com')
   })
 
-  it('欄 1 つ分も関数で更新できる', () => {
+  it('a single field can also be updated with a function', () => {
     const { result } = renderHook(() => useSessionValue<string[]>('users.roles', []))
     act(() => {
       result.current[1]((current) => [...current, 'member'])

@@ -1,10 +1,11 @@
-"""家族を解散する（owner のみ。ADR-0013）。
+"""Dissolve a family (owner only; ADR-0013).
 
-解散できるのは自分以外の参加者がいない場合だけ。親も子も、誰かが残っている
-うちは解散できない — 台帳ごと黙って消える経路を作らない（ADR-0010）。子の
-参加は、台帳が空であれば除名（``RemoveMembershipUseCase``）で先に外せる。
+Only possible when there are no members other than the owner. While anyone,
+parent or child, remains, the family cannot be dissolved; there must be no path
+that silently deletes ledgers along with it (ADR-0010). A child's membership
+can be removed first (``RemoveMembershipUseCase``) if its ledger is empty.
 
-未使用の招待は家族と一緒に消える（外部キーの CASCADE）。
+Unused invitations go with the family (foreign key CASCADE).
 """
 
 from __future__ import annotations
@@ -33,8 +34,8 @@ class DissolveFamilyUseCase:
         others = [m for m in self._memberships.list_for_family(family_id) if m.id != owner.id]
         if others:
             raise FamilyNotEmptyError
-        # CASCADE に頼らず自分の参加も明示的に消す（開発用 SQLite は外部キーを
-        # 検査しない設定で動くことがあり、残骸が残るため）
+        # Delete our own membership explicitly instead of relying on CASCADE (the dev
+        # SQLite may run without foreign key checks, which would leave leftovers)
         self._memberships.delete(owner.id)
         self._families.delete(family_id)
 

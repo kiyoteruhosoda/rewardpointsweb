@@ -1,11 +1,11 @@
 /**
- * イベントを作る入力欄（ADR-0042）。
+ * Input for creating an event (ADR-0042).
  *
- * 目標・達成でもらえるポイント・達成回数と、任意の期限（ADR-0043）。達成回数を打つと、できあがる
- * カードのマスの並び（何列 × 何行）を添える — 「1 画面で見渡せるか」を作る前に
- * 確かめられるように。
+ * Goal, points earned on completion, required count, and an optional deadline (ADR-0043). Typing the count
+ * shows the resulting card's cell layout (columns x rows) — so "does it fit on one screen" can be
+ * checked before creating it.
  *
- * 失敗したときは入力を残す（打ち直させない）。通ったら空にして次を作れるようにする。
+ * On failure the input is kept (no retyping). On success it is cleared so the next one can be made.
  */
 import { type SubmitEvent } from 'react'
 
@@ -18,9 +18,9 @@ import { gridColumns } from '../services/stickerSheet'
 import { ActionButton } from './ActionButton'
 
 interface Props {
-  /** 送る。失敗したら投げ直す（入力を残すため）。 */
+  /** Sends. Rethrows on failure (to keep the input). */
   onCreate: (event: NewRewardEvent) => Promise<void>
-  /** 端末の暦での今日（YYYY-MM-DD）。過ぎた日を期限に選ばせない。 */
+  /** Today on the device calendar (YYYY-MM-DD). Past dates cannot be chosen as the deadline. */
   today: string
 }
 
@@ -28,11 +28,11 @@ const DEFAULT_GOAL = '10'
 
 export function RewardEventForm({ onCreate, today }: Props) {
   const { t } = useI18n()
-  // 書きかけはログインの往復をまたいで残す（ADR-0058）
+  // A draft survives the login round trip (ADR-0058)
   const [title, setTitle] = useSessionValue('events.title', '')
   const [reward, setReward] = useSessionValue('events.reward', '')
   const [goal, setGoal] = useSessionValue('events.goal', DEFAULT_GOAL)
-  // 空なら期限なし
+  // Empty means no deadline
   const [deadline, setDeadline] = useSessionValue('events.deadline', '')
   const titleRef = useRequiredText(title, t('events.titleRequired'))
 
@@ -50,7 +50,7 @@ export function RewardEventForm({ onCreate, today }: Props) {
         deadline: deadline === '' ? null : deadline,
       })
     } catch {
-      // 伝えるのは呼び出し側。入力はそのまま残す
+      // Reporting is the caller's job. Keep the input as is
       return
     }
     setTitle('')

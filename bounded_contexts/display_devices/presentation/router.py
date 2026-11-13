@@ -1,21 +1,21 @@
-"""表示端末（サイネージ）の API（ADR-0047）。
+"""API for display devices (signage) (ADR-0047).
 
-端末の側（認証なし）:
+Device side (no authentication):
 
-- ``POST /api/display/pairings`` ——ペアリングを始める（確認コードと端末の秘密）
-- ``POST /api/display/pairings/claim`` ——承認されたら端末の資格情報を 1 度だけ受け取る
-- ``POST /api/display/session`` ——端末の資格情報を 5 分のアクセストークンに換える
+- ``POST /api/display/pairings`` -- start pairing (confirmation code and device secret)
+- ``POST /api/display/pairings/claim`` -- once approved, receive the device credential exactly once
+- ``POST /api/display/session`` -- exchange the device credential for a 5-minute access token
 
-運用管理者の側（``display:approve``。付けられるのは自分が owner / parent の家族だけ。task #758）:
+Operations admin side (``display:approve``; only for families where they are owner / parent; task #758):
 
-- ``POST /api/display/pairings/approve`` ——映す家族と名前を決めて承認する
-- ``GET /api/display/families`` ——映す先として選べる家族
-- ``GET /api/display/devices`` / ``DELETE /api/display/devices/{account_id}`` ——一覧と、外す
+- ``POST /api/display/pairings/approve`` -- approve, choosing the family to show and a name
+- ``GET /api/display/families`` -- families that can be chosen as the target
+- ``GET /api/display/devices`` / ``DELETE /api/display/devices/{account_id}`` -- list, and remove
 
-表示アカウントそのもの（家族の参加・アカウント）は reward_points が持つ。ここは
-reward_points の名簿（:class:`DisplayRoster`）と、ペアリング・資格情報をつなぐ。
-承認・外す・失効は、どの家族のどの端末かを監査ログへ残す（識別子は本文に入れる。
-``log`` テーブルへ入るのは本文だけ）。
+The display account itself (family membership, account) is owned by reward_points. This module
+connects the reward_points roster (:class:`DisplayRoster`) with pairing and credentials.
+Approvals, removals and revocations record which device of which family in the audit log (the
+identifiers go into the message text; only the message text goes into the ``log`` table).
 """
 
 from __future__ import annotations
@@ -60,24 +60,24 @@ from shared.application.authenticated_principal import AuthenticatedPrincipal
 from shared.kernel.database.session import get_db
 
 router = APIRouter(prefix="/api/display", tags=["display"])
-# 承認の画面（フロントエンド）。QR コードはここを指す
+# The approval screen (frontend). The QR code points here
 APPROVE_PATH = "/admin/displays/approve"
 logger = logging.getLogger(__name__)
 
 DbDep = Annotated[Session, Depends(get_db)]
-# 表示端末を承認する・一覧を見る・外す。運用管理者だけが持つ（ADR-0047）
+# Approve, list and remove display devices. Held only by operations admins (ADR-0047)
 DisplayApprover = Annotated[AuthenticatedPrincipal, Depends(require_permission("display:approve"))]
 
 
-# --- 端末の側（認証なし） ---------------------------------------------------
+# --- Device side (no authentication) -------------------------------------
 
 
 @router.post("/pairings", status_code=status.HTTP_201_CREATED, response_model=PairingStartResponse)
 def start_pairing(use_case: StartPairingDep, body: PairingStartRequest | None = None) -> PairingStartResponse:
-    """ペアリングを始める。確認コードを画面に出し、端末の秘密で受け取りを問い合わせる。
+    """Start pairing. Show the confirmation code on screen; poll for the claim with the device secret.
 
-    ``origin`` を送ると、承認の画面を指す QR コードも返す。確認コードは URL の ``#`` の後ろに
-    置く（ADR-0025 と同じ理由。サーバーのログ・Referer に載せない）。
+    When ``origin`` is sent, also return a QR code pointing at the approval screen. The confirmation
+    code goes after the ``#`` in the URL (same reason as ADR-0025: keep it out of server logs and Referer).
     """
     started = use_case.execute()
     origin = body.origin if body is not None else None
@@ -92,10 +92,10 @@ def start_pairing(use_case: StartPairingDep, body: PairingStartRequest | None = 
 
 @router.post("/pairings/claim", response_model=PairingClaimResponse)
 def claim_pairing(body: PairingClaimRequest, use_case: ClaimPairingDep) -> PairingClaimResponse:
-    """承認されていれば、端末の資格情報を 1 度だけ返す。
+    """If approved, return the device credential exactly once.
 
-    まだなら 400 ``authorization_pending``（間隔を空けて問い合わせ続ける）、期限切れ・
-    受け取り済みなら 400 ``expired_token``（ペアリングをやり直す）。RFC 8628 §3.5。
+    If not yet approved, 400 ``authorization_pending`` (keep polling at the interval); if expired or
+    already claimed, 400 ``expired_token`` (start pairing again). RFC 8628 §3.5.
     """
     return PairingClaimResponse(device_credential=use_case.execute(body.device_code))
 
@@ -109,15 +109,15 @@ def open_session(
     roster: DisplayRosterDep,
     db: DbDep,
 ) -> DisplaySessionResponse | JSONResponse:
-    """端末の資格情報を、5 分のアクセストークンに換える（リフレッシュトークンは出さない）。
+    """Exchange the device credential for a 5-minute access token (no refresh token is issued).
 
-    ⚠ **毎回 DB を引く**（ADR-0037）。外された端末・止められたアカウント・家族から
-    外れた端末は 401 で、端末はペアリングの画面へ戻る。
+    ⚠ **Hits the DB every time** (ADR-0037). A removed device, a disabled account, or a device
+    no longer in the family gets 401, and the device goes back to the pairing screen.
     """
     try:
         account_id = use_case.execute(body.device_credential)
     except DeviceCredentialExpiredError as error:
-        # ⚠ 例外で抜けると外した結果まで巻き戻るので、応答を組み立てて返す
+        # ⚠ Leaving via an exception would roll back the removal too, so build and return a response
         detached = roster.detach(error.account_id)
         logger.info("display_expired: family_id=%s account_id=%s", detached.family_id, detached.account_id)
         return _unauthorized(error.code)
@@ -134,7 +134,7 @@ def _unauthorized(code: str) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": {"error": code}})
 
 
-# --- 運用管理者の側（display:approve） --------------------------------------
+# --- Operations admin side (display:approve) ------------------------------
 
 
 @router.post("/pairings/approve", status_code=status.HTTP_201_CREATED, response_model=DisplayDeviceResponse)
@@ -145,11 +145,11 @@ def approve_pairing(
     roster: DisplayRosterDep,
     principal: DisplayApprover,
 ) -> DisplayDeviceResponse:
-    """確認コードを承認し、映す家族へ表示端末を加える。
+    """Approve the confirmation code and add the display device to the family to show.
 
-    確認コードが無い・承認済みなら 404 ``pairing_not_found``、期限切れなら 410
-    ``pairing_expired``。承認する人が映す家族の owner / parent でなければ 403
-    ``family_access_denied``（task #758）。どのときも表示アカウントは作らない。
+    If the confirmation code does not exist or is already approved, 404 ``pairing_not_found``; if
+    expired, 410 ``pairing_expired``. If the approver is not owner / parent of the family, 403
+    ``family_access_denied`` (task #758). In none of these cases is a display account created.
     """
     attached: list[DisplayDTO] = []
 
@@ -173,7 +173,7 @@ def approve_pairing(
 
 @router.get("/families", response_model=list[DisplayableFamilyResponse])
 def list_families(roster: DisplayRosterDep, principal: DisplayApprover) -> list[DisplayableFamilyResponse]:
-    """映す先として選べる家族（名前だけ。台帳は載せない）。承認する人が owner / parent の家族だけ。"""
+    """Families selectable as the target (names only, no ledger). Only those where the approver is owner / parent."""
     return [
         DisplayableFamilyResponse(id=family.id, name=family.name)
         for family in roster.families_to_display(principal.user_id)
@@ -184,16 +184,16 @@ def list_families(roster: DisplayRosterDep, principal: DisplayApprover) -> list[
 def list_devices(
     roster: DisplayRosterDep, credentials: DescribeDisplayCredentialsDep, _principal: DisplayApprover
 ) -> list[DisplayDeviceResponse]:
-    """全ての家族の表示端末と、最後に使った日時。"""
+    """Display devices of all families, with when each was last used."""
     last_used = credentials.last_used()
     return [_to_device(display, last_used_at=last_used.get(display.account_id)) for display in roster.list_all()]
 
 
 @router.delete("/devices/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_device(account_id: int, roster: DisplayRosterDep, principal: DisplayApprover) -> None:
-    """表示端末を外す。参加・アカウント・資格情報を消す。
+    """Remove a display device. Deletes the membership, account and credential.
 
-    ⚠ 端末の手元のアクセストークンは寿命（5 分）まで通る（ADR-0037 と同じ上限）。
+    ⚠ The access token already on the device keeps working until it expires (5 min; same limit as ADR-0037).
     """
     detached = roster.detach(account_id)
     logger.info(

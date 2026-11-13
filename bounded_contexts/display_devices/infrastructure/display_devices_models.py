@@ -1,9 +1,9 @@
-"""表示端末コンテキストの SQLAlchemy モデル（ADR-0047）。
+"""SQLAlchemy models for the display devices context (ADR-0047).
 
-``migrations/env.py`` と ``tests/conftest.py`` がこのモジュールを import して
-メタデータへ登録する（コンテキスト固有モデルの扱い。CLAUDE.md「DDL 管理」）。
+``migrations/env.py`` and ``tests/conftest.py`` import this module to register it in
+the metadata (how context-specific models are handled; CLAUDE.md "DDL management").
 
-確認コード・端末の秘密・端末の資格情報は、どれも SHA-256 のハッシュだけを置く。
+Confirmation codes, device secrets and device credentials are all stored only as SHA-256 hashes.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from shared.kernel.database.db import Base
 
 
 class DisplayPairingRecord(Base):
-    """ペアリング 1 回。期限切れの行は次に始めるときに消える（1 日残す）。"""
+    """One pairing attempt. Expired rows are removed when the next one starts (kept for 1 day)."""
 
     __tablename__ = "display_pairings"
 
@@ -25,7 +25,7 @@ class DisplayPairingRecord(Base):
     device_code_hash: Mapped[str] = mapped_column(sa.String(64), unique=True, nullable=False)
     expires_at = mapped_column(sa.DateTime(), nullable=False, index=True)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
-    # 承認で生まれた表示アカウント。承認前は NULL。アカウントが消えたら行も要らない
+    # Display account created on approval. NULL before approval. The row is not needed once the account is gone
     approved_account_id: Mapped[int | None] = mapped_column(
         BigIntPk, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
     )
@@ -34,7 +34,7 @@ class DisplayPairingRecord(Base):
 
 
 class DisplayCredentialRecord(Base):
-    """端末の資格情報。1 表示アカウントに 1 つ。アカウントを消せば一緒に消える。"""
+    """Device credential. One per display account; deleted along with the account."""
 
     __tablename__ = "display_credentials"
 

@@ -1,4 +1,4 @@
-"""ヘルスチェック・運用プローブ（k8s / Docker healthcheck 用）。"""
+"""Health checks and operational probes (for k8s / Docker healthcheck)."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ class LivenessResponse(BaseModel):
 
 class ReadinessResponse(BaseModel):
     status: str
-    # key = チェック名, value = "ok" | "ng"。依存が増えたらここへ追加する
+    # key = check name, value = "ok" | "ng". Add new dependencies here
     checks: dict[str, str]
     timestamp_utc: str
 

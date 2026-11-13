@@ -1,13 +1,13 @@
-"""API スキーマで使う型。
+"""Types used in API schemas.
 
-`UtcDatetime` は保存値（naive な UTC）を、必ず ``Z`` で終わる ISO 文字列として
-返すための注釈付き型。素の ``datetime`` のまま返すとオフセットが付かず、
-ブラウザの ``new Date()`` がローカル時刻として読むため表示が 9 時間ずれる
-（HANDOVER §14 / CLAUDE.md「時刻の契約」）。
+`UtcDatetime` is an annotated type that returns stored values (naive UTC) as ISO strings
+that always end in ``Z``. Returning a bare ``datetime`` carries no offset, and the browser's
+``new Date()`` reads it as local time, shifting the display by 9 hours
+(HANDOVER §14 / CLAUDE.md "time contract").
 
-レスポンスに時刻を足すときは ``datetime`` ではなくこの型を使う。
-リクエスト側（絞り込み条件など）は素の ``datetime`` でよい。入力の tz は
-``shared.kernel.timestamps.to_naive_utc()`` が吸収する。
+When adding a time to a response, use this type instead of ``datetime``.
+Request-side values (filters and such) can be a bare ``datetime``; the input tz is
+absorbed by ``shared.kernel.timestamps.to_naive_utc()``.
 """
 
 from __future__ import annotations

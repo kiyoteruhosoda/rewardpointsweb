@@ -1,9 +1,9 @@
 /**
- * プロフィール設定。自分のアカウント・表示設定（言語・テーマ）・セキュリティを
- * 集める。システム管理への入口は Sidebar の独立した節にある。
+ * Profile settings. Gathers your own account, display settings (language, theme) and
+ * security. The entry to system administration is a separate section in the Sidebar.
  *
- * 言語とテーマの保存先は localStorage で、サーバーへは送らない
- * （i18n/index.tsx・theme/index.tsx）。
+ * Language and theme are stored in localStorage and are not sent to the server
+ * (i18n/index.tsx, theme/index.tsx).
  */
 import { Link } from 'react-router-dom'
 

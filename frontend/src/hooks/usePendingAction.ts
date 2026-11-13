@@ -1,15 +1,15 @@
 /**
- * 押されてから終わるまでを「実行中」として持つ（ADR-0023）。
+ * Holds the span from press to completion as "in progress" (ADR-0023).
  *
- * 画面ごとに `busy` の useState を書き足すと、置き忘れた画面だけ無反応に見える。
- * 実行中かどうかは `ActionButton` の `pending` へ渡し、二重送信の防止もここで行う
- * （実行中の再呼び出しは無視する）。
+ * Adding a `busy` useState to each screen makes the screens that forgot it look unresponsive.
+ * The in-progress flag goes to `ActionButton`'s `pending`, and double submission is also prevented here
+ * (calls made while in progress are ignored).
  *
- * 返り値の `run` は `void` を返すので、`onSubmit` / `onClick` にそのまま渡せる
- * （`no-misused-promises` に触れない）。
+ * The returned `run` returns `void`, so it can be passed straight to `onSubmit` / `onClick`
+ * (without tripping `no-misused-promises`).
  *
- * エラーは握り潰さない（渡した関数の中で扱う）。ここが担うのは実行中かどうかだけで、
- * 失敗しても必ず解除する。
+ * Errors are not swallowed (handle them in the passed function). This only tracks whether it is in progress,
+ * and always clears it even on failure.
  */
 import { useEffect, useRef, useState } from 'react'
 
@@ -17,8 +17,8 @@ export function usePendingAction<A extends unknown[]>(
   action: (...args: A) => Promise<void>,
 ): [run: (...args: A) => void, pending: boolean] {
   const [pending, setPending] = useState(false)
-  // 実行中かどうかは state と別に ref でも持つ。state の更新は次の描画までに
-  // 反映されないので、続けて押されたときの判定には間に合わない。
+  // Track in-progress in a ref as well as state. State updates are not reflected until
+  // the next render, too late to judge a quick second press.
   const running = useRef(false)
   const mounted = useRef(true)
 
@@ -35,7 +35,7 @@ export function usePendingAction<A extends unknown[]>(
     setPending(true)
     void action(...args).finally(() => {
       running.current = false
-      // 成功して別画面へ移った後は更新しない（この部品はもう無い）。
+      // Don't update after succeeding and moving to another screen (this component is gone).
       if (mounted.current) setPending(false)
     })
   }

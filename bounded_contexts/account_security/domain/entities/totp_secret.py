@@ -1,9 +1,9 @@
-"""TOTP シークレット（時刻ベース・ワンタイムパスワードの共有鍵）。
+"""TOTP secret (shared key of a time-based one-time password).
 
-ユーザー 1 人につき 1 つ。``confirmed_at`` が入って初めて二要素認証が
-「有効」になる。登録操作の途中（QR を表示しただけ）で有効化してしまうと、
-認証アプリへの登録に失敗した利用者がログインできなくなるため、確認コードの
-検証に成功するまでは未確認のまま保持する。
+One per user. Two-factor authentication becomes "enabled" only once ``confirmed_at``
+is set. Enabling it mid-enrollment (just showing the QR code) would keep users
+whose registration in the authenticator app failed from logging in, so it stays
+unconfirmed until the confirmation code is verified.
 """
 
 from __future__ import annotations

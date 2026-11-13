@@ -1,47 +1,47 @@
 /**
- * 新しい版が配られたことの検出（Service Worker の更新。ADR-0045）。
+ * Detecting that a new version has been delivered (Service Worker update, ADR-0045).
  *
- * 新しい Service Worker は配られたらすぐ有効になる（`skipWaiting` / `clientsClaim`）。
- * 待機させないので、**リロードすれば必ず新しい版になる**。
+ * A new Service Worker activates as soon as it is delivered (`skipWaiting` / `clientsClaim`).
+ * Since it does not wait, **a reload always brings the new version**.
  *
- * ただし、開いている画面の JavaScript は差し替わらない（SPA は画面を描き替えるだけで
- * 読み込み直さない）。そこで制御が新しい Service Worker へ移った（`controllerchange`）
- * ことを画面へ伝え、再読み込みは利用者が押したときに行う。黙って再読み込みすると、
- * 打っている途中の内容が消える。
+ * However, the JavaScript of an open page is not replaced (an SPA only redraws the screen and
+ * does not reload). So tell the screen that control moved to the new Service Worker (`controllerchange`)
+ * and reload only when the user presses the button. Reloading silently would lose
+ * whatever is being typed.
  *
- * ⚠ 待つだけでは気付けない。ブラウザが Service Worker の更新を確認するのは
- * **ページ遷移のとき**で、SPA の画面切り替えはページ遷移ではない。ここで
- * 定期的に・タブが手前へ戻ったときに確認を起こす。
+ * ⚠ Just waiting will not notice it. Browsers check for Service Worker updates
+ * **on page navigation**, and SPA screen changes are not page navigations. So we
+ * trigger the check periodically and when the tab comes back to the foreground.
  */
 
-/** 更新を確認する間隔。 */
+/** Interval between update checks. */
 export const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000
 
 /**
- * 表示の画面（`/display`）の確認の間隔。操作もタブの出入りも無いので、確認は間隔だけが頼り。
- * 配ってから数分で入れ替わるよう短く取る（task #498。確認は `sw.js` を 1 本取るだけ）。
+ * Check interval for the display screen (`/display`). There is no interaction or tab switching, so the interval is all we have.
+ * Kept short so it switches over within minutes of delivery (task #498; a check only fetches `sw.js`).
  */
 export const DISPLAY_UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 1000
 
-/** 確認どうしの最短間隔（タブの出入りを繰り返しても頻繁には叩かない）。 */
+/** Minimum gap between checks (repeated tab switching does not hit it often). */
 const MIN_CHECK_GAP_MS = 60 * 1000
 
-/** vite-plugin-pwa が書き出す Service Worker。 */
+/** Service Worker written out by vite-plugin-pwa. */
 const SERVICE_WORKER_URL = '/sw.js'
 
-/** 新しい版へ入れ替える（現在の画面を再読み込みする）。 */
+/** Switch to the new version (reload the current page). */
 export type ApplyUpdate = () => void
 
-/** 新しい版が有効になったときに呼ばれる。 */
+/** Called when a new version becomes active. */
 export type UpdateReadyListener = (apply: ApplyUpdate) => void
 
-/** 見張り方。 */
+/** How to watch. */
 export interface WatchOptions {
-  /** 更新を確認する間隔（既定は `UPDATE_CHECK_INTERVAL_MS`）。 */
+  /** Interval between update checks (defaults to `UPDATE_CHECK_INTERVAL_MS`). */
   checkIntervalMs?: number
 }
 
-/** 新しい版を見張る。 */
+/** Watch for a new version. */
 export type WatchForUpdate = (onUpdateReady: UpdateReadyListener, options?: WatchOptions) => void
 
 function scheduleChecks(registration: ServiceWorkerRegistration, intervalMs: number): void {
@@ -49,11 +49,11 @@ function scheduleChecks(registration: ServiceWorkerRegistration, intervalMs: num
 
   const check = (): void => {
     const now = Date.now()
-    // 取得中・オフライン・直前に確認済みのときは起こさない。
+    // Do not trigger while fetching, offline, or right after a check.
     if (registration.installing || !navigator.onLine || now - checkedAt < MIN_CHECK_GAP_MS) return
     checkedAt = now
     void registration.update().catch(() => {
-      // 確認できなくても画面には出さない（次の機会に取り直す）。
+      // Even if the check fails, show nothing on screen (retry at the next opportunity).
     })
   }
 
@@ -64,12 +64,12 @@ function scheduleChecks(registration: ServiceWorkerRegistration, intervalMs: num
 }
 
 export const watchForUpdate: WatchForUpdate = (onUpdateReady, options = {}) => {
-  // 開発サーバーでは Service Worker を作らない（vite-plugin-pwa の既定と同じ）
+  // No Service Worker on the dev server (same as the vite-plugin-pwa default)
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return
   const workers = navigator.serviceWorker
 
-  // 初めて開いた画面は、登録した Service Worker に制御されるときにも合図が来る。
-  // それは新しい版ではないので、すでに制御されていた画面の合図だけを知らせる
+  // A page opened for the first time also gets the signal when the registered Service Worker takes control.
+  // That is not a new version, so only report the signal for pages that were already controlled
   let controlled = workers.controller !== null
   workers.addEventListener('controllerchange', () => {
     if (controlled) {
@@ -86,6 +86,6 @@ export const watchForUpdate: WatchForUpdate = (onUpdateReady, options = {}) => {
       scheduleChecks(registration, options.checkIntervalMs ?? UPDATE_CHECK_INTERVAL_MS)
     })
     .catch(() => {
-      // 登録できなくても画面は動く（オフライン閲覧と版の知らせが無いだけ）。
+      // The page works even if registration fails (just without offline viewing and version notices).
     })
 }

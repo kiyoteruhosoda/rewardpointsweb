@@ -1,23 +1,23 @@
 /**
- * 台帳の履歴から残高の推移を組み立てる（ポイントの推移グラフ）。
+ * Builds the balance history from the ledger entries (the points trend chart).
  *
- * 残高は履歴の合計として導出する（ADR-0010）ので、推移も同じく履歴を古い順に
- * 足していけば出る。打ち消し・訂正の行も 1 行として足す（台帳の残高と同じ数に
- * なる）。サーバーには何も足していない。
+ * The balance is derived as the sum of entries (ADR-0010), so the trend likewise comes from adding
+ * entries oldest first. Reversal and correction rows are added as rows too (giving the same number as the
+ * ledger balance). Nothing extra is added on the server.
  *
- * 打ち消しの行と、打ち消された記録は、組にして推移から外す（ADR-0050）。
- * 打ち消しは「その記録は無かった」という意味なので、合計は 0 で、残高の推移にも
- * 現れないのが実態に合う。同じ時点に「元の記録・打ち消し・訂正後の行」を順に
- * 並べると、点を結ぶ線が一瞬だけ元の値まで跳ねる（+100 を 10 に直すと 185 まで
- * 上がって 95 へ戻る）。履歴の表は打ち消した日時のまま出す（いつ直したかは表で分かる）。
- * 打ち消した相手が手元に無いとき（届いていない等）だけ、打ち消しを自分の日時に置く。
+ * A reversal row and the record it reverses are paired and left out of the trend (ADR-0050).
+ * A reversal means "that record never happened", so the sum is 0 and it matching reality means
+ * it does not appear in the trend either. Placing "original record, reversal, corrected row" in order at the same instant
+ * makes the connecting line spike briefly to the original value (fixing +100 to 10 goes up to 185
+ * and back to 95). The history table keeps the reversal's own time (the table shows when it was fixed).
+ * Only when the reversed record is not at hand (not delivered etc.) is the reversal placed at its own time.
  */
 import { parseUtc, type Transaction } from './families'
 
 export interface BalancePoint {
-  /** 発生日時（ミリ秒）。 */
+  /** When it happened (milliseconds). */
   at: number
-  /** この行を足した後の残高。 */
+  /** Balance after adding this row. */
   balance: number
   change: number
   reason: string
@@ -30,7 +30,7 @@ export const TREND_RANGES: TrendRange[] = ['month', 'quarter', 'all']
 const DAY = 24 * 60 * 60 * 1000
 const RANGE_DAYS: Record<Exclude<TrendRange, 'all'>, number> = { month: 30, quarter: 90 }
 
-/** 古い順に並べ、行ごとの残高を出す。打ち消し合う組は描かない。 */
+/** Sort oldest first and compute the balance per row. Pairs that cancel out are not drawn. */
 export function balanceSeries(transactions: readonly Transaction[]): BalancePoint[] {
   const ids = new Set(transactions.map((row) => row.id))
   const cancelled = new Set(
@@ -54,12 +54,12 @@ export function balanceSeries(transactions: readonly Transaction[]): BalancePoin
 export interface TrendWindow {
   start: number
   end: number
-  /** 期間の始まりの時点での残高（期間より前の行の合計）。 */
+  /** Balance at the start of the period (sum of rows before the period). */
   startBalance: number
   points: BalancePoint[]
 }
 
-/** 期間で切り出す。期間より前の行は、始まりの残高として持ち越す。 */
+/** Cut out a period. Rows before the period carry over as the starting balance. */
 export function trendWindow(
   series: readonly BalancePoint[],
   range: TrendRange,
@@ -77,7 +77,7 @@ export function trendWindow(
   }
 }
 
-/** 軸の目盛り。1・2・5 の 10 のべき乗倍で、*count* 本前後に収める。 */
+/** Axis ticks. Powers of 10 times 1, 2 or 5, about *count* of them. */
 export function niceTicks(min: number, max: number, count = 4): number[] {
   const span = max - min || 1
   const raw = span / count
@@ -89,29 +89,29 @@ export function niceTicks(min: number, max: number, count = 4): number[] {
   return Array.from({ length: steps + 1 }, (_, index) => Math.round(first + index * step))
 }
 
-/** 予測の見積もりに使う過去の長さ（日）。 */
+/** How far back (days) to look when estimating the forecast. */
 export const FORECAST_BASIS_DAYS = 30
-/** これより記録が短いと、増え方を見積もらない（数日の記録だと 1 回の加算で大きく振れる）。 */
+/** With a shorter history than this, do not estimate the growth (a few days of records swing widely on one addition). */
 export const FORECAST_MIN_HISTORY_DAYS = 7
-/** 予測を出す先（日後）。グラフは最後の先まで点線で伸ばす。 */
+/** How far ahead (days) to forecast. The chart extends a dotted line to the furthest one. */
 export const FORECAST_HORIZONS = [7, 30] as const
 
 export interface BalanceForecast {
-  /** 見積もった 1 日あたりの増減（小数のまま）。 */
+  /** Estimated change per day (kept as a fraction). */
   perDay: number
-  /** 見積もりに使った過去の日数。 */
+  /** Number of past days used for the estimate. */
   basisDays: number
-  /** 各先での残高の見込み（四捨五入）。*FORECAST_HORIZONS* と同じ順。 */
+  /** Expected balance at each horizon (rounded). Same order as *FORECAST_HORIZONS*. */
   points: { days: number; at: number; balance: number }[]
 }
 
 /**
- * これからの残高を見積もる（ADR-0053）。
+ * Estimate the future balance (ADR-0053).
  *
- * 直近 *FORECAST_BASIS_DAYS* 日の増え方（毎日のボーナスも、手で付けた・使った分も
- * 込み）がそのまま続いたとして伸ばす。毎日のボーナスだけで伸ばさないのは、使う分を
- * 見ないと見込みが実際より大きく外れるため。記録が *FORECAST_MIN_HISTORY_DAYS* 日に
- * 満たないうちは null（見積もらない）。
+ * Extends the growth over the last *FORECAST_BASIS_DAYS* days (daily bonuses, manual additions and spending
+ * included) as if it continued. It does not extend daily bonuses alone because ignoring spending
+ * makes the forecast far larger than reality. null (no estimate) while the records cover fewer than
+ * *FORECAST_MIN_HISTORY_DAYS* days.
  */
 export function balanceForecast(
   series: readonly BalancePoint[],

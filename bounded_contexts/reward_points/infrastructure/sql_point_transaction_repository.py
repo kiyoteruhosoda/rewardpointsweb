@@ -1,9 +1,10 @@
-"""``IPointTransactionRepository`` の SQLAlchemy 実装。
+"""SQLAlchemy implementation of ``IPointTransactionRepository``.
 
-追記専用のため更新・行単位の削除は実装しない（ADR-0010。台帳ごと消す
-``delete_by_ledger`` だけが独立時の例外 — ADR-0014）。冪等キーの衝突は
-「先に引いて、無ければ書く」で扱い、同時実行で UNIQUE 制約に当たった場合も
-既存行を返す（並行して同じキーが届いたのなら、望まれているのは 1 行だけ）。
+Append-only, so updates and per-row deletes are not implemented (ADR-0010; only
+``delete_by_ledger``, which deletes a whole ledger, is the exception for independence —
+ADR-0014). Idempotency key conflicts are handled by "look up first, write if absent", and
+when concurrent execution hits the UNIQUE constraint the existing row is returned too (if
+the same key arrived in parallel, only one row is wanted).
 """
 
 from __future__ import annotations
@@ -54,8 +55,8 @@ class SqlPointTransactionRepository(IPointTransactionRepository):
         return grouped
 
     def find_in_ledger(self, *, ledger_id: int, transaction_id: int) -> PointTransaction | None:
-        # ledger_id も条件に入れる。ID だけで引けると、閲覧権のある台帳経由で
-        # 他の台帳のレコードを指せてしまう。
+        # Include ledger_id in the condition. If lookup worked by ID alone, records of other
+        # ledgers could be reached via a ledger one may view.
         row = self._session.scalar(
             select(PointTransactionModel).where(
                 PointTransactionModel.id == transaction_id,
@@ -88,8 +89,8 @@ class SqlPointTransactionRepository(IPointTransactionRepository):
             corrects_id=new_transaction.corrects_id,
         )
         try:
-            # SAVEPOINT の中で書く。衝突しても巻き戻るのはこの 1 行だけで、
-            # 同じリクエストの他の書き込みは失われない。
+            # Write inside a SAVEPOINT. On conflict only this row is rolled back, and other
+            # writes in the same request are not lost.
             with self._session.begin_nested():
                 self._session.add(row)
         except IntegrityError:
@@ -106,9 +107,9 @@ class SqlPointTransactionRepository(IPointTransactionRepository):
         return total or 0
 
     def delete_by_ledger(self, ledger_id: int) -> None:
-        # 打ち消し行から先に消す。reversal_of_id の自己参照外部キーに ON DELETE が
-        # 無いため、元の行を先に消すと参照が残って拒まれる。訂正の corrects_id は
-        # ON DELETE SET NULL なので、残りは 1 文でまとめて消せる。
+        # Delete reversal rows first. The self-referencing foreign key reversal_of_id has no
+        # ON DELETE, so deleting the original first leaves a reference and is refused. The
+        # correction's corrects_id is ON DELETE SET NULL, so the rest go in one statement.
         self._session.execute(
             delete(PointTransactionModel).where(
                 PointTransactionModel.ledger_id == ledger_id,
@@ -126,15 +127,15 @@ class SqlPointTransactionRepository(IPointTransactionRepository):
             .join(PointLedgerModel, PointLedgerModel.id == PointTransactionModel.ledger_id)
             .where(
                 PointLedgerModel.family_id == family_id,
-                # 打ち消しは元の理由をそのまま引き継ぐので、数えると二重になる
+                # Reversals inherit the original reason as-is, so counting them would double it
                 PointTransactionModel.reversal_of_id.is_(None),
-                # 訂正で言い直された理由も候補にしない。書き間違いを直しても、
-                # 元の文言が候補に出続けると同じ間違いを選び直してしまう
-                # （打ち消しただけの理由は残す。文言が誤りだったとは限らない）
+                # Reasons restated by a correction are not suggested either. Even after fixing a
+                # typo, if the original wording kept appearing it would be chosen again by mistake
+                # (reasons that were only reversed stay; the wording was not necessarily wrong)
                 PointTransactionModel.id.not_in(corrected_ids),
             )
             .group_by(PointTransactionModel.reason)
-            # 同数のときは文字列順。並びが実行のたびに変わらないようにする
+            # Ties are ordered by string so the order does not change between runs
             .order_by(occurrences.desc(), PointTransactionModel.reason)
             .limit(limit)
         ).all()

@@ -1,8 +1,8 @@
 /**
- * scope を持たない人を入口へ戻す（ルートの包み）。
+ * Sends people without the scope back to the entry (route wrapper).
  *
- * メニューに出さないだけだと、URL を直接開いた人に画面の枠と操作のボタンが出て、
- * 押すと 403 になる。表示端末の画面は運用管理者だけのもの（ADR-0047）。
+ * Merely hiding it from the menu would show the screen frame and action buttons to people who open the
+ * URL directly, and pressing would give 403. Display-device screens are for operators only (ADR-0047).
  */
 import { Navigate, Outlet } from 'react-router-dom'
 

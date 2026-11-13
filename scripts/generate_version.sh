@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# shared/kernel/version.json を作る。/info・システムステータス画面・entrypoint の
-# 起動ログが「どのコミットのイメージが動いているか」を答えるための唯一の出どころ。
+# Generates shared/kernel/version.json. The single source /info, the system status screen and the
+# entrypoint's startup log use to answer "which commit's image is running".
 #
-# 呼ばれる場所は 3 つ:
-#   1. build の「版を刻む」段（本番の経路）— クローン済みリポジトリで git から作り、
-#      その出力が Docker ビルドコンテキストへ入る（ADR-0023）
-#   2. Dockerfile の RUN — 1 が動いていれば **何もしない**。無ければ dev と刻む
-#   3. 手元での確認（`make image` / 直接実行）
+# Called from 3 places:
+#   1. The "stamp the version" step of the build (the production path) — generated from git in
+#      the cloned repository, and the output goes into the Docker build context (ADR-0023)
+#   2. RUN in the Dockerfile — does **nothing** if 1 ran. Otherwise stamps dev
+#   3. Local checks (`make image` / running it directly)
 #
-# 優先順位: **git > 既にある version.json > dev**
+# Priority: **git > existing version.json > dev**
 #
-# ⚠ git が引ける場所では必ず作り直す。ビルドディレクトリを使い回す作りだと、
-#   version.json は .gitignore 済みで `git pull` でも消えないため、「既存を尊重する」
-#   にすると2回目以降のビルドが**初回の版を名乗り続ける**。
-# ⚠ 逆にイメージの中（.git が無い）では既存を絶対に上書きしない。上書きにすると
-#   pre_build が作った本物の版を Dockerfile の RUN が dev に潰す。
+# ⚠ Always regenerate where git is available. When the build directory is reused,
+#   version.json is in .gitignore and survives `git pull`, so "respecting the existing one"
+#   would make every build after the first **keep claiming the first build's version**.
+# ⚠ Conversely, inside the image (no .git) never overwrite the existing file. Overwriting would
+#   let the Dockerfile's RUN clobber the real version created by pre_build with dev.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 VERSION_FILE="$PROJECT_ROOT/shared/kernel/version.json"
 
-# --- 1. git から作る（引ける場所では必ず作り直す）-----------------------------
-# ⚠ `-c safe.directory=*` が要る。ビルドする側はクローンした所有者と別 UID で
-#   pre_build を走らせることがあり、無いと "dubious ownership" で git が黙って落ちる。
+# --- 1. Generate from git (always regenerate where git is available) ---------
+# ⚠ `-c safe.directory=*` is required. The builder may run pre_build under a different UID from
+#   the owner of the clone, and without it git silently fails with "dubious ownership".
 if command -v git >/dev/null 2>&1 && [ -d "$PROJECT_ROOT/.git" ]; then
     GIT=(git -c "safe.directory=*" --git-dir="$PROJECT_ROOT/.git" --work-tree="$PROJECT_ROOT")
 
@@ -32,8 +32,8 @@ if command -v git >/dev/null 2>&1 && [ -d "$PROJECT_ROOT/.git" ]; then
     BRANCH=$("${GIT[@]}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
     COMMIT_DATE=$("${GIT[@]}" log -1 --format=%ci 2>/dev/null || echo "unknown")
 
-    # detached HEAD（CI のチェックアウト等）では BRANCH が "HEAD" になる。
-    # 呼び出し側がブランチ名を知っているなら BRANCH_OVERRIDE で補う。
+    # On a detached HEAD (e.g. a CI checkout) BRANCH becomes "HEAD".
+    # If the caller knows the branch name, it supplies it via BRANCH_OVERRIDE.
     if [ -n "${BRANCH_OVERRIDE:-}" ] && { [ "$BRANCH" = "HEAD" ] || [ "$BRANCH" = "unknown" ]; }; then
         BRANCH="$BRANCH_OVERRIDE"
     fi
@@ -45,12 +45,12 @@ if command -v git >/dev/null 2>&1 && [ -d "$PROJECT_ROOT/.git" ]; then
     fi
     SOURCE="git"
 elif [ -s "$VERSION_FILE" ] && grep -q '"commit_hash"' "$VERSION_FILE"; then
-    # --- 2. git が無い＝イメージの中。ビルド前に置かれた内容が正 -----------------
-    echo "[version] 既存の version.json を使います: $VERSION_FILE"
+    # --- 2. No git = inside the image. The content placed before the build wins --
+    echo "[version] Using the existing version.json: $VERSION_FILE"
     cat "$VERSION_FILE"
     exit 0
 else
-    # --- 3. どちらでもない（`docker build` を素で叩いた等）----------------------
+    # --- 3. Neither (e.g. a bare `docker build`) ---------------------------------
     COMMIT_HASH="dev"
     COMMIT_HASH_FULL="dev"
     BRANCH="unknown"
@@ -59,7 +59,7 @@ else
     SOURCE="default"
 fi
 
-BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)   # 契約: 時刻は UTC・末尾は Z（HANDOVER §14）
+BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)   # Contract: times are UTC, ending in Z (HANDOVER §14)
 
 mkdir -p "$(dirname "$VERSION_FILE")"
 cat > "$VERSION_FILE" << JSON
@@ -73,4 +73,4 @@ cat > "$VERSION_FILE" << JSON
 }
 JSON
 
-echo "[version] $SOURCE から生成しました: $VERSION ($COMMIT_HASH, $BRANCH) → $VERSION_FILE"
+echo "[version] Generated from $SOURCE: $VERSION ($COMMIT_HASH, $BRANCH) → $VERSION_FILE"

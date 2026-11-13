@@ -1,12 +1,12 @@
 """seed reward points permissions
 
-``member:*`` / ``point:*`` の権限コードと、ロールへの付与を投入する。
+Seeds the ``member:*`` / ``point:*`` permission codes and their grants to roles.
 
-``member:*`` はこの後 ADR-0009 で ``family:*`` へ置き換わる（0007）。ここでは
-**そのリビジョン時点のコード** を投入する必要があるため、正本
-（``shared/domain/auth/master_data.py``）の一覧ではなく、このファイルが持つ
-``_ADDED_PERMISSION_CODES`` を使う。正本は「今あるべき姿」を表すもので、
-過去のリビジョンの姿ではない。
+``member:*`` is later replaced by ``family:*`` in ADR-0009 (0007). This revision must seed
+**the codes as of that revision**, so instead of the list in the source of truth
+(``shared/domain/auth/master_data.py``) it uses this file's own
+``_ADDED_PERMISSION_CODES``. The source of truth describes "how things should be now",
+not how they were at past revisions.
 
 Revision ID: seed_reward_points
 Revises: reward_points
@@ -27,7 +27,7 @@ branch_labels = None
 depends_on = None
 
 _ADDED_PERMISSION_CODES = ("member:view", "member:manage", "point:view", "point:manage")
-# このリビジョン時点の付与（``manager`` は全て、``member`` は閲覧のみ）
+# Grants as of this revision (``manager`` gets everything, ``member`` gets read-only)
 _GRANTS: dict[str, tuple[str, ...]] = {
     "admin": _ADDED_PERMISSION_CODES,
     "manager": _ADDED_PERMISSION_CODES,

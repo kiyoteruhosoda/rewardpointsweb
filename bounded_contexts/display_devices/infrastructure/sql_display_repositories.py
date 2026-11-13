@@ -1,4 +1,4 @@
-"""``IDisplayPairingRepository`` / ``IDisplayCredentialRepository`` の SQLAlchemy 実装。"""
+"""SQLAlchemy implementations of ``IDisplayPairingRepository`` / ``IDisplayCredentialRepository``."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ class SqlDisplayPairingRepository(IDisplayPairingRepository):
 
     def _require(self, pairing_id: int) -> DisplayPairingRecord:
         row = self._session.get(DisplayPairingRecord, pairing_id)
-        if row is None:  # 同じ要求の中で引いた行なので通常は起きない
+        if row is None:  # Normally cannot happen: the row was loaded earlier in the same request
             raise ValueError(f"pairing not found: {pairing_id}")
         return row
 

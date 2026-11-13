@@ -1,6 +1,6 @@
-"""ポイント残高。
+"""Point balance.
 
-マイナスを許容する（前借りの運用を認める。ADR-0010）。
+Negative values are allowed (borrowing ahead is permitted; ADR-0010).
 """
 
 from __future__ import annotations

@@ -1,21 +1,21 @@
-"""password is optional (ローカル認証を持たない利用者をデータで表せるようにする)
+"""password is optional (let the data represent users without local authentication)
 
-``users.password_hash`` を NULL 許容へ移し、**SSO で作られた利用者に入っていた
-ランダム値を NULL へ落とす**（ADR-0034）。
+Makes ``users.password_hash`` nullable and **sets the random values stored for users created
+by SSO to NULL** (ADR-0034).
 
-⚠ **列を緩めるだけでは直らない。** ランダム値を残すと「パスワードが無い」と
-「誰も知らないパスワードがある」が区別できないままで、パスワードリセットを通した
-利用者にローカル認証が生える。
+⚠ **Relaxing the column alone does not fix it.** If the random values stay, "has no password"
+and "has a password nobody knows" remain indistinguishable, and a user who goes through a
+password reset gains local authentication.
 
-⚠ **どの行がランダム値かは、値からは分からない。** 手掛かりは
-**利用者の行と IdP との結び付きが同時に作られたか**しかない ——SSO で作った
-（``provision``）場合だけ、この 2 つが同じトランザクションで生まれる。既存の口座へ
-後から寄せた利用者は、結び付きのほうが何日もあとに作られる。ここでは
-**60 秒**を境にする。
+⚠ **Which rows hold a random value cannot be told from the value.** The only clue is
+**whether the user row and the link to the IdP were created at the same time** - only when
+created by SSO (``provision``) are the two born in the same transaction. For users later linked
+to an existing account, the link is created days afterwards. Here the threshold is
+**60 seconds**.
 
-⚠ **取り違えても入れなくなるだけで、増えることはない。** 落としすぎた場合、その
-利用者は管理者にパスワードを設定してもらうことになる（気付ける失敗）。逆に残した
-場合は黙って入り口が 1 つ増える（気付けない）。非対称なので、落とす側へ倒す。
+⚠ **A misclassification can only lock someone out, never add a way in.** If too many are cleared, those
+users have an administrator set a password for them (a failure you notice). If too few are cleared,
+an entrance silently stays open (a failure you do not notice). Since this is asymmetric, err on the side of clearing.
 
 Revision ID: password_is_optional
 Revises: backchannel_logout
@@ -34,10 +34,10 @@ down_revision = "backchannel_logout"
 branch_labels = None
 depends_on = None
 
-#: 利用者の行と結び付きが「同時に作られた」と見なす幅（秒）。
+#: Window (seconds) within which the user row and the link count as "created at the same time".
 _PROVISIONED_WITHIN_SECONDS = 60
 
-#: 秒差を出す式は方言ごとに違う（``TIMESTAMPDIFF`` は SQLite に無い）。
+#: The expression for a difference in seconds differs by dialect (SQLite has no ``TIMESTAMPDIFF``).
 _ELAPSED_SECONDS = {
     "sqlite": "(julianday(f.created_at) - julianday(u.created_at)) * 86400",
     "postgresql": "EXTRACT(EPOCH FROM (f.created_at - u.created_at))",
@@ -47,16 +47,16 @@ _ELAPSED_SECONDS = {
 
 
 def upgrade() -> None:
-    # ⚠ **素の ``alter_column`` は SQLite で作れない SQL になる** ——
-    #   ``ALTER TABLE users ALTER COLUMN ... DROP NOT NULL`` が出る（MariaDB では
-    #   ``MODIFY`` に化けるので、本番だけ見ていると気付けない）。alembic の版に
-    #   よって通ったり通らなかったりするので、テーブルを作り直す形で固定する。
+    # ⚠ **A bare ``alter_column`` produces SQL that SQLite cannot run** -
+    #   it emits ``ALTER TABLE users ALTER COLUMN ... DROP NOT NULL`` (on MariaDB it turns into
+    #   ``MODIFY``, so you cannot notice by looking only at production). Whether it works depends on
+    #   the alembic version, so pin it down by rebuilding the table.
     with op.batch_alter_table("users") as batch:
         batch.alter_column("password_hash", existing_type=sa.String(length=255), nullable=True)
     elapsed = _ELAPSED_SECONDS.get(op.get_bind().dialect.name)
     if elapsed is None:
-        # 知らない方言では触らない。**黙って全員のパスワードを落とすより、
-        # 何もしないほうがましである**（手当ては docs/OPERATIONS.md）。
+        # Do not touch unknown dialects. **Doing nothing is better than silently
+        # clearing everyone's password** (remedy in docs/OPERATIONS.md).
         return
     op.execute(
         sa.text(
@@ -72,8 +72,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # ⚠ **落とした値は戻らない。** NULL のまま NOT NULL へ戻すと通らないので、
-    #   入れ直せない行には**誰も知らない値**を入れる（元の形に合わせる）。
+    # ⚠ **Cleared values do not come back.** Going back to NOT NULL with NULLs fails, so
+    #   rows that cannot be refilled get **a value nobody knows** (matching the original shape).
     op.execute(sa.text("UPDATE users SET password_hash = 'pbkdf2:sha256:unusable' WHERE password_hash IS NULL"))
     with op.batch_alter_table("users") as batch:
         batch.alter_column("password_hash", existing_type=sa.String(length=255), nullable=False)

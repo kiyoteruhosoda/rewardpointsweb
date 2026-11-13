@@ -1,7 +1,7 @@
-"""毎日のボーナスの決まり（ADR-0024）。
+"""Rules of the daily bonus (ADR-0024).
 
-「どの日がまだ渡っていないか」と「1 日の区切り」の 2 つを見る。どちらも
-時計にも DB にも触らないので、日付を直接渡して確かめる。
+Looks at two things: "which days have not been granted yet" and "where a day ends". Neither
+touches the clock or the DB, so dates are passed in directly.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def _bonus(*, starts_on: date, granted_through: date | None = None, amount: int 
     )
 
 
-# --- どの日を渡すか -----------------------------------------------------------
+# --- Which days to grant -----------------------------------------------------
 
 
 def test_the_starting_day_is_the_first_one_due() -> None:
@@ -47,7 +47,7 @@ def test_the_starting_day_is_the_first_one_due() -> None:
 
 
 def test_nothing_is_due_before_the_starting_day() -> None:
-    """開始日より前へは遡らない（設定した瞬間に身に覚えのない行が並ばない）。"""
+    """Do not go back before the start date (no unfamiliar rows appear the moment it is set up)."""
     bonus = _bonus(starts_on=date(2026, 8, 9))
 
     assert bonus.due_days(today=date(2026, 8, 8), limit=31).days == ()
@@ -69,10 +69,10 @@ def test_days_missed_while_stopped_are_caught_up_in_order() -> None:
 
 
 def test_a_long_outage_keeps_the_most_recent_days_and_reports_the_rest() -> None:
-    """上限を超えた分は **古い方** を捨てる。
+    """What exceeds the limit drops the **oldest** days.
 
-    古い方から埋めると、上限に当たるたびに何日も前の行が増え続け、今日の分が
-    着くまでに何周もかかる。捨てた日数は呼び出し側がログへ残せるよう返す。
+    Filling from the oldest would keep adding rows from days ago each time the limit is hit,
+    taking many rounds before today's arrives. Returns the dropped day count so the caller can log it.
     """
     bonus = _bonus(starts_on=date(2026, 1, 1))
 
@@ -83,7 +83,7 @@ def test_a_long_outage_keeps_the_most_recent_days_and_reports_the_rest() -> None
 
 
 def test_the_catch_up_limit_never_drops_today() -> None:
-    """上限に 0 以下が設定されていても、今日の分だけは渡す。"""
+    """Even if the limit is set to 0 or less, today's is still granted."""
     bonus = _bonus(starts_on=date(2026, 1, 1))
 
     due = bonus.due_days(today=date(2026, 1, 5), limit=0)
@@ -97,25 +97,25 @@ def test_a_bonus_that_takes_points_away_is_rejected() -> None:
         _bonus(starts_on=date(2026, 8, 9), amount=-10)
 
 
-# --- 冪等キー ----------------------------------------------------------------
+# --- Idempotency key -----------------------------------------------------------
 
 
 def test_the_same_day_always_produces_the_same_key() -> None:
-    """二重付与を止めるのはこの性質（``UNIQUE (ledger_id, idempotency_key)``）。"""
+    """This property (``UNIQUE (ledger_id, idempotency_key)``) is what stops double grants."""
     assert idempotency_key_for(date(2026, 8, 9)) == idempotency_key_for(date(2026, 8, 9))
     assert idempotency_key_for(date(2026, 8, 9)) != idempotency_key_for(date(2026, 8, 10))
 
 
 def test_the_key_cannot_collide_with_one_sent_by_a_client() -> None:
-    """段階付きの鍵（``#`` を含む）は API が受け取らない形。"""
+    """A staged key (containing ``#``) is a form the API does not accept."""
     assert is_derived(idempotency_key_for(date(2026, 8, 9)))
 
 
-# --- 1 日の区切り -------------------------------------------------------------
+# --- Where a day ends ----------------------------------------------------------
 
 
 def test_the_day_is_decided_in_the_configured_time_zone() -> None:
-    """UTC で 8/8 の 15:30 は、東京ではもう 8/9。"""
+    """15:30 on 8/8 in UTC is already 8/9 in Tokyo."""
     moment = datetime(2026, 8, 8, 15, 30)
 
     assert DayBoundary(_TOKYO).day_of(moment) == date(2026, 8, 9)
@@ -123,13 +123,13 @@ def test_the_day_is_decided_in_the_configured_time_zone() -> None:
 
 
 def test_the_entry_lands_at_the_start_of_that_local_day() -> None:
-    """東京の 8/9 0:00 は UTC の 8/8 15:00（保存は naive UTC）。"""
+    """0:00 on 8/9 in Tokyo is 15:00 on 8/8 UTC (stored as naive UTC)."""
     assert DayBoundary(_TOKYO).starts_at(date(2026, 8, 9)) == datetime(2026, 8, 8, 15, 0)
     assert DayBoundary(UTC).starts_at(date(2026, 8, 9)) == datetime(2026, 8, 9, 0, 0)
 
 
 def test_the_boundary_round_trips() -> None:
-    """その日の始まりは、同じ区切りで見れば必ずその日。"""
+    """The start of a day, viewed with the same boundary, is always that day."""
     boundary = DayBoundary(_TOKYO)
     day = date(2026, 8, 9)
 

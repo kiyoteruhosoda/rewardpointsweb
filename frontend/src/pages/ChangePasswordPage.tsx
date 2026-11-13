@@ -1,8 +1,8 @@
 /**
- * パスワードの変更。
+ * Changing the password.
  *
- * 一時パスワードでログインしている間は、他の画面がすべてここへ寄せられる
- * （ADR-0011）。変更が終わると `must_change_password` が下り、通常の画面へ戻る。
+ * While signed in with a temporary password, every other screen redirects here
+ * (ADR-0011). Once changed, `must_change_password` is cleared and normal screens return.
  */
 import { useState, type SubmitEvent } from 'react'
 
@@ -31,15 +31,15 @@ export function ChangePasswordPage() {
       notify('success', t('common.saved'))
       setCurrent('')
       setNext('')
-      // 一時パスワードでの関門を外すため、変更後の状態を読み直す
+      // Reload the state after the change to lift the temporary-password gate
       await refreshMe()
     } catch (err) {
       notify('error', t(errorMessageKey(err)))
     }
   })
 
-  // パスワードを持たない利用者にはフォームを出さない（ADR-0034）。出すと、
-  // 「現在のパスワード」を入力できない相手に、絶対に通らない入力欄を見せることになる。
+  // Don't show the form to users without a password (ADR-0034). Showing it would present
+  // a field that can never pass to someone who cannot enter a "current password".
   if (user && !user.has_password) {
     return (
       <div className="card">

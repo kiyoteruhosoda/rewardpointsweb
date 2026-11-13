@@ -1,4 +1,4 @@
-"""ID トークンのクレーム -> 利用者の対応付け。"""
+"""ID token claims -> user mapping."""
 
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ def test_reads_the_configured_claims() -> None:
 
 
 def test_email_verified_must_be_the_boolean_true() -> None:
-    """``"true"`` のような文字列を真として扱わない。
+    """Do not treat a string like ``"true"`` as true.
 
-    検証済みかどうかは既存アカウントへ寄せてよいかの判断そのもの。IdP が
-    文字列で返してきたときに黙って通すと、未検証のアドレスで他人のアカウントへ
-    入れてしまう。
+    Whether it is verified is the very decision of whether to merge into an existing account. If the IdP
+    returns it as a string and it is silently accepted, an unverified address would get into someone
+    else's account.
     """
     user = ClaimsMapping().apply({"sub": "idp-1", "email": "a@example.com", "email_verified": "true"})
 
@@ -53,11 +53,11 @@ def test_rejects_a_token_without_a_subject() -> None:
 
 
 def test_an_absent_email_is_not_a_failure() -> None:
-    """⚠ **メールアドレスは鍵ではない**（ADR-0038）。
+    """⚠ **The email address is not the key** (ADR-0038).
 
-    結び付きの鍵は ``sub`` なので、既に結び付いている相手はメールが無くても入れる。
-    断るのは「初回に既存の利用者を探す」ときだけで、その判断は
-    :class:`ResolveFederatedAccount` が持つ。
+    The link key is ``sub``, so someone already linked can get in without an email.
+    It is refused only when "looking up an existing user the first time", and that decision
+    belongs to :class:`ResolveFederatedAccount`.
     """
     user = ClaimsMapping().apply({"sub": "s", "email": "   "})
 
@@ -66,14 +66,14 @@ def test_an_absent_email_is_not_a_failure() -> None:
 
 
 def test_falls_back_to_the_subject_when_there_is_no_email_either() -> None:
-    """名乗りの空いた利用者を作らないための最後の手（ADR-0038）。"""
+    """The last resort against creating a user with no name (ADR-0038)."""
     user = ClaimsMapping().apply({"sub": "idp-1"})
 
     assert user.display_name == "idp-1"
 
 
 def test_reads_the_login_name_the_idp_uses() -> None:
-    """口座を作るときの ``username`` の元（ADR-0041）。空白だけの値は「無い」と読む。"""
+    """The source of ``username`` when creating an account (ADR-0041). A whitespace-only value is read as "none"."""
     named = ClaimsMapping().apply({"sub": "s", "preferred_username": " kyon "})
     blank = ClaimsMapping().apply({"sub": "s", "preferred_username": "  "})
 

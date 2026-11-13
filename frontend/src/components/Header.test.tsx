@@ -1,4 +1,4 @@
-/** ヘッダ: アカウントへの入口（狭い画面では頭文字の丸）と引き出しの開閉。 */
+/** Header: the account entry (an initial in a circle on narrow screens) and opening/closing the drawer. */
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -6,10 +6,10 @@ import { renderWithProviders } from '../test-support/renderWithProviders'
 import { Header } from './Header'
 
 describe('Header', () => {
-  it('アカウントへの入口は頭文字の丸と利用者名を持つ', () => {
+  it('the account entry has the initial circle and the user name', () => {
     renderWithProviders(<Header navOpen={false} onToggleNav={vi.fn()} />)
 
-    // 名前は狭い画面で隠れる（index.css）ので、読み上げ用の名前は aria-label に置く
+    // The name is hidden on narrow screens (index.css), so the screen-reader name goes in aria-label
     const account = screen.getByRole('link', { name: 'Account (manager)' })
     expect(account).toHaveAttribute('href', '/profile')
     expect(account).toHaveAttribute('title', 'manager')
@@ -17,7 +17,7 @@ describe('Header', () => {
     expect(account).toHaveTextContent('manager')
   })
 
-  it('引き出しの開閉ボタンは開いているかどうかを伝える', () => {
+  it('the drawer toggle button tells whether it is open', () => {
     const onToggleNav = vi.fn()
     renderWithProviders(<Header navOpen onToggleNav={onToggleNav} />)
 

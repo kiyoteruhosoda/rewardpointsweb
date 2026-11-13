@@ -1,7 +1,7 @@
-"""家族のルール（家族で決めた約束ごと。ADR-0027）。
+"""Family rules (agreements the family has made. ADR-0027).
 
-書けるのは親（owner / parent）で、読めるのは家族の全員。子は自分の台帳の画面で
-同じ文面を読むので、家族の詳細に載ることまでを確かめる。
+Parents (owner / parent) can write them and everyone in the family can read them. A child reads
+the same text on their own ledger screen, so this checks that it shows up in the family details.
 """
 
 from __future__ import annotations
@@ -27,10 +27,10 @@ Json = dict[str, Any]
 
 @dataclass(frozen=True, kw_only=True)
 class Home:
-    """owner と、同じ家族の親・子。
+    """The owner, plus a parent and a child in the same family.
 
-    どのテストも「誰かがこの家族のルールを書こうとする」から始まるので 1 つに
-    まとめる（引数を 3 つに収める意味もある。ADR-0016）。
+    Every test starts with "someone tries to write this family's rules", so they are bundled
+    into one (this also keeps the arguments to 3. ADR-0016).
     """
 
     client: TestClient
@@ -95,7 +95,7 @@ def test_the_owner_writes_the_rules(home: Home) -> None:
 
 
 def test_a_parent_writes_the_rules_too(home: Home) -> None:
-    """改名（owner のみ）と違い、日々の決めごとは親なら書ける（ADR-0027）。"""
+    """Unlike renaming (owner only), any parent can write the day-to-day rules (ADR-0027)."""
     assert home.write(home.parent.headers, "ゲームは 1 日 1 時間").status_code == 200
 
 
@@ -106,7 +106,7 @@ def test_writing_again_replaces_what_was_there(home: Home) -> None:
 
 
 def test_an_empty_body_clears_the_rules(home: Home) -> None:
-    """空白だけの入力は「消す」と同じ。読めない文字だけのルールを残さない。"""
+    """Whitespace-only input is the same as "clear". Do not keep a rule made only of invisible characters."""
     home.write(home.owner.headers, "きえるはず")
 
     assert home.write(home.owner.headers, "   ").json()["rules"] is None
@@ -114,12 +114,12 @@ def test_an_empty_body_clears_the_rules(home: Home) -> None:
 
 
 def test_the_child_reads_the_rules_but_cannot_write_them(home: Home) -> None:
-    """読むのは全員。書き換えるのは親だけ（子の画面には入り口が出ない）。"""
+    """Everyone can read. Only parents can rewrite (the child's screen shows no entry point)."""
     home.write(home.owner.headers, "おかたづけ 10 pt")
 
     assert home.view(home.child_headers)["rules"] == "おかたづけ 10 pt"
     denied = home.write(home.child_headers, "ぜんぶ 100 pt")
-    # 子のアカウントは family:manage を持たない（ADR-0018）
+    # A child account does not have family:manage (ADR-0018)
     assert denied.status_code == 403
     assert home.view(home.owner.headers)["rules"] == "おかたづけ 10 pt"
 

@@ -1,10 +1,10 @@
-"""連携の解除 ——利用者が自分で IdP との結び付きを外す（ADR-0036）。
+"""Unlinking -- the user removes their own link to an IdP (ADR-0036).
 
-⚠ **外したあと入れなくなる利用者を作らない。** ローカルのパスワードもパスキーも
-無い相手から IdP を外すと、残るのは管理者による復旧だけになる。残る入り口が
-あるかどうかは**呼び出し側が数えて渡す** ——第二要素を持っているのは別の
-コンテキスト（``account_security``）で、境界を越えて引きに行かないため
-（ADR-0035 と同じ組み立て方）。
+⚠ **Do not create users who can no longer sign in after removal.** Removing the IdP from someone with neither a local
+password nor a passkey leaves recovery by an administrator as the only option. Whether an entrance
+remains is **counted and passed in by the caller** -- second factors are held by another
+context (``account_security``), and we do not reach across the boundary to look them up
+(same construction as ADR-0035).
 """
 
 from __future__ import annotations

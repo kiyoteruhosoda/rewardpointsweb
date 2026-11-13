@@ -1,17 +1,17 @@
 """family / append-only point ledger / username identifier
 
-ADR-0009・ADR-0010・ADR-0011 に対応するスキーマの置き換え。
+Schema replacement for ADR-0009, ADR-0010, and ADR-0011.
 
-- メンバー単位の共有（``members`` / ``member_shares`` / ``point_entries``）を捨て、
-  家族（``families`` / ``family_memberships`` / ``point_ledgers`` /
-  ``point_transactions`` / ``family_invitations``）へ置き換える。
-  本番稼働前のため移行スクリプトは作らず、テーブルごと入れ替える（ADR-0009）。
-- ``users`` の識別子をメールアドレスから ``username`` へ分離する。既存アカウントの
-  ``username`` にはメールアドレスの値を入れ、それまで ``username`` だった表示名は
-  ``display_name`` へ移す（ADR-0011）。
+- Drop per-member sharing (``members`` / ``member_shares`` / ``point_entries``) and
+  replace it with families (``families`` / ``family_memberships`` / ``point_ledgers`` /
+  ``point_transactions`` / ``family_invitations``).
+  This is before production use, so no data migration is written; the tables are swapped wholesale (ADR-0009).
+- Separate the ``users`` identifier from the email address into ``username``. Existing accounts get
+  the email address value in ``username``, and the display name that used to be ``username``
+  moves to ``display_name`` (ADR-0011).
 
-定義の正本は ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``
-と ``shared/infrastructure/models/user.py``。
+The definitions' source of truth is ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``
+and ``shared/infrastructure/models/user.py``.
 
 Revision ID: family_point_ledger
 Revises: default_admin_password
@@ -32,7 +32,7 @@ branch_labels = None
 depends_on = None
 
 _BIGINT = sa.BigInteger().with_variant(sa.Integer(), "sqlite")
-# DB ネイティブ ENUM は使わない（CHECK 制約付き VARCHAR になる）
+# Do not use DB-native ENUM (it becomes a VARCHAR with a CHECK constraint)
 _FAMILY_ROLE = sa.Enum("owner", "parent", "child", name="family_role", native_enum=False)
 
 _DROPPED_PERMISSION_CODES = ("member:view", "member:manage")
@@ -40,9 +40,9 @@ _ADDED_PERMISSION_CODES = ("family:view", "family:manage")
 
 
 def _drop_legacy_member_tables() -> None:
-    # 索引は落とさない（テーブルと一緒に消える）。外部キー列の索引を単独で DROP
-    # すると MariaDB が拒む: ``Cannot drop index ...: needed in a foreign key
-    # constraint``（エラー 1553）。
+    # Do not drop the indexes (they go away with the tables). Dropping an index on a foreign key column on its own
+    # is rejected by MariaDB: ``Cannot drop index ...: needed in a foreign key
+    # constraint`` (error 1553).
     op.drop_table("point_entries")
     op.drop_table("member_shares")
     op.drop_table("members")
@@ -62,7 +62,7 @@ def _create_family_tables() -> None:
         "family_memberships",
         sa.Column("id", _BIGINT, autoincrement=True, nullable=False),
         sa.Column("family_id", _BIGINT, nullable=False),
-        # 親が作った直後の子はまだアカウントを持たない（ADR-0011）
+        # A child just created by a parent has no account yet (ADR-0011)
         sa.Column("account_id", _BIGINT, nullable=True),
         sa.Column("role", _FAMILY_ROLE, nullable=False),
         sa.Column("display_name", sa.String(length=100), nullable=False),
@@ -85,7 +85,7 @@ def _create_family_tables() -> None:
         sa.ForeignKeyConstraint(["family_id"], ["families.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["membership_id"], ["family_memberships.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        # role = child の membership と 1 対 1（ADR-0009）
+        # One-to-one with the membership whose role = child (ADR-0009)
         sa.UniqueConstraint("membership_id"),
     )
     op.create_index(op.f("ix_point_ledgers_family_id"), "point_ledgers", ["family_id"])
@@ -119,7 +119,7 @@ def _create_family_tables() -> None:
         "family_invitations",
         sa.Column("id", _BIGINT, autoincrement=True, nullable=False),
         sa.Column("family_id", _BIGINT, nullable=False),
-        # 平文は保存しない（発行時に 1 度だけ返す）
+        # Do not store the plaintext (it is returned only once, when issued)
         sa.Column("code_hash", sa.String(length=64), nullable=False),
         sa.Column("role", _FAMILY_ROLE, nullable=False),
         sa.Column("target_membership_id", _BIGINT, nullable=True),
@@ -135,12 +135,12 @@ def _create_family_tables() -> None:
 
 
 def _split_username_from_email() -> None:
-    """``username`` をログイン識別子にし、表示名を ``display_name`` へ移す。"""
+    """Make ``username`` the login identifier and move the display name to ``display_name``."""
     from shared.domain.auth import master_data
 
-    # 改名と、同じ名前の列の追加は 1 つの batch にまとめない。SQLite の batch は
-    # テーブルを作り直すため、同一バッチ内で ``username`` が「消える列」と
-    # 「生える列」の両方になり、列の並び順を決められなくなる。
+    # Do not put the rename and the addition of a column with the same name in one batch. SQLite batches
+    # rebuild the table, so within one batch ``username`` would be both a "disappearing column" and
+    # an "appearing column", and the column order could not be determined.
     with op.batch_alter_table("users") as batch:
         batch.alter_column("username", new_column_name="display_name", existing_type=sa.String(length=100))
 
@@ -150,9 +150,9 @@ def _split_username_from_email() -> None:
         batch.add_column(sa.Column("temporary_password_expires_at", sa.DateTime(), nullable=True))
 
     bind = op.get_bind()
-    # 既存アカウントの識別子はメールアドレスの値（ADR-0011）
+    # Existing accounts' identifier is the email address value (ADR-0011)
     bind.execute(sa.text("UPDATE users SET username = LOWER(email)"))
-    # 既定の管理者だけは正本（master_data）の値へ揃える
+    # Only the default administrator is aligned with the source-of-truth (master_data) value
     bind.execute(
         sa.text("UPDATE users SET username = :username WHERE id = :id"),
         {"username": master_data.DEFAULT_ADMIN_USERNAME, "id": master_data.DEFAULT_ADMIN_ID},
@@ -209,7 +209,7 @@ def _drop_permissions(session: Session, codes: tuple[str, ...]) -> None:
 
 
 def _recreate_legacy_member_tables() -> None:
-    """ADR-0007 時点のテーブルを作り直す（中身は戻らない）。"""
+    """Recreate the tables as of ADR-0007 (their contents are not restored)."""
     point_entry_type = sa.Enum("addition", "consumption", name="point_entry_type", native_enum=False)
     member_access_level = sa.Enum("view", "manage", name="member_access_level", native_enum=False)
 

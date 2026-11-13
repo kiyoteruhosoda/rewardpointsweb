@@ -1,12 +1,12 @@
-"""管理操作とログインの失敗がアプリログへ残ること。
+"""Admin operations and failed sign-ins are recorded in the app log.
 
-このプロジェクトには監査ログ（`audit_log`）が無く、`log` テーブルだけが「いつ何が
-起きたか」の記録になる。アカウント・ロール・システム設定を変える操作と、失敗した
-ログインは、後から必ず問われる出来事なので残す。
+This project has no audit log (`audit_log`); the `log` table is the only record of "when
+what happened". Operations that change accounts, roles or system settings, and failed
+sign-ins, are events that will always be asked about later, so they are recorded.
 
-**識別子は本文に入れる。** `log` テーブルへ入るのは列にある項目
-（`message` / `path` / `method` / `status_code` / `trace`）だけで、`extra` の残りは
-stdout の JSON にしか出ない。管理画面（`/admin/logs`）から読めなければ意味がない。
+**Put identifiers in the message body.** Only the items that are columns go into the `log` table
+(`message` / `path` / `method` / `status_code` / `trace`); the rest of `extra` only goes
+to the stdout JSON. It is useless if it cannot be read from the admin screen (`/admin/logs`).
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def test_creating_a_user_is_logged_with_its_id(
 def test_updating_a_user_logs_the_changed_field_names_only(
     client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """変えた項目の名前だけを残す。値（表示名・パスワード）は残さない。"""
+    """Record only the names of the changed items. Do not record values (display name, password)."""
     created = client.post(
         "/api/admin/users",
         json={"username": "updated-user", "password": "password123", "display_name": "Before", "roles": []},
@@ -79,7 +79,7 @@ def test_deleting_a_user_is_logged(
 def test_changing_a_role_logs_the_resulting_permissions(
     client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """権限は「変わった後の姿」を残す（差分だけでは当時の状態を組み立て直せない）。"""
+    """Record permissions "as they are after the change" (a diff alone cannot rebuild the state at the time)."""
     created = client.post(
         "/api/admin/roles",
         json={"name": "auditor", "permissions": []},
@@ -102,7 +102,7 @@ def test_changing_a_role_logs_the_resulting_permissions(
 def test_saving_system_settings_logs_the_keys_but_not_the_values(
     client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """値には秘匿項目（``MAIL_PASSWORD`` 等）が入るので、キー名だけを残す。"""
+    """Values include secret items (``MAIL_PASSWORD`` etc.), so record only the key names."""
     with caplog.at_level(logging.DEBUG, logger="presentation.fastapi.routers.admin.config"):
         saved = client.put(
             "/api/admin/config",
@@ -119,11 +119,11 @@ def test_saving_system_settings_logs_the_keys_but_not_the_values(
 def test_saving_an_unknown_key_is_not_recorded_as_a_change(
     client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """採り込まなかったキーは記録しない。
+    """Keys that were not taken in are not recorded.
 
-    ``SystemSettingService.save()`` は未知のキーと、伏せ字のまま送り返された秘匿
-    項目を黙って捨てる。要求されたキーをそのまま残すと、何も変えていない保存が
-    「設定を変更した」として残ってしまう。
+    ``SystemSettingService.save()`` silently drops unknown keys and secret items sent back
+    still masked. Recording the requested keys as is would log a save that changed nothing
+    as "settings changed".
     """
     with caplog.at_level(logging.DEBUG, logger="presentation.fastapi.routers.admin.config"):
         saved = client.put(
@@ -141,7 +141,7 @@ def test_saving_an_unknown_key_is_not_recorded_as_a_change(
 def test_saving_only_an_unchanged_secret_records_nothing_changed(
     client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """伏せ字のまま送り返された秘匿項目だけの保存は「変更なし」と残る。"""
+    """A save containing only secret items sent back still masked is recorded as "no change"."""
     with caplog.at_level(logging.DEBUG, logger="presentation.fastapi.routers.admin.config"):
         saved = client.put(
             "/api/admin/config",
@@ -154,7 +154,7 @@ def test_saving_only_an_unchanged_secret_records_nothing_changed(
 
 
 def test_a_failed_passkey_login_is_logged_as_a_warning(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
-    """パスキーのログイン失敗も、パスワードと同じく WARNING で残る。"""
+    """Failed passkey sign-ins are also recorded at WARNING, like passwords."""
     logger_name = "bounded_contexts.account_security.presentation.passkey_login_router"
     with caplog.at_level(logging.DEBUG, logger=logger_name):
         response = client.post(
@@ -169,12 +169,12 @@ def test_a_failed_passkey_login_is_logged_as_a_warning(client: TestClient, caplo
 
 
 def test_a_failed_login_is_logged_as_a_warning(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
-    """試行が続いていないかを運用で見たいので、401 の既定（INFO）より上げる。"""
+    """Ops wants to see whether attempts keep coming, so raise it above the 401 default (INFO)."""
     with caplog.at_level(logging.DEBUG, logger="presentation.fastapi.routers.auth"):
         assert client.post("/api/auth/login", json={"username": "nobody", "password": "wrong"}).status_code == 401
 
     records = [record for record in caplog.records if record.name == "presentation.fastapi.routers.auth"]
     assert [record.levelno for record in records] == [logging.WARNING]
     assert records[0].getMessage() == "login_failed: invalid_credentials"
-    # ユーザー名は残さない（CLAUDE.md「ログ」）
+    # Do not record the username (CLAUDE.md "Logs")
     assert "nobody" not in records[0].getMessage()

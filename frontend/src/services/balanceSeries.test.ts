@@ -18,7 +18,7 @@ function row(id: number, amount: number, occurredAt: string): Transaction {
 }
 
 describe('balanceSeries', () => {
-  it('古い順に足して、行ごとの残高を出す（届く順は新しい順）', () => {
+  it('sums oldest first and gives the balance per row (rows arrive newest first)', () => {
     const series = balanceSeries([
       row(3, -5, '2026-10-03T00:00:00'),
       row(2, 20, '2026-10-02T00:00:00'),
@@ -28,7 +28,7 @@ describe('balanceSeries', () => {
     expect(series.map((point) => point.balance)).toEqual([10, 30, 25])
   })
 
-  it('同じ時刻の行は記録した順に並べる', () => {
+  it('orders rows with the same time in recorded order', () => {
     const series = balanceSeries([
       row(2, -10, '2026-10-01T00:00:00'),
       row(1, 10, '2026-10-01T00:00:00'),
@@ -37,8 +37,8 @@ describe('balanceSeries', () => {
     expect(series.map((point) => point.change)).toEqual([10, -10])
   })
 
-  it('打ち消しと打ち消された記録は組にして描かない（訂正しても元の値まで跳ねない）', () => {
-    // 85 の上に +100 を記録し、あとで 10 に訂正した: 打ち消し −100 と訂正後の +10 が足される
+  it('skips reversal pairs (a correction does not spike back to the old value)', () => {
+    // Recorded +100 on top of 85, later corrected to 10: a reversal −100 and the corrected +10 are added
     const series = balanceSeries([
       { ...row(4, 10, '2026-09-01T00:00:00'), corrects_id: 2 },
       { ...row(3, -100, '2026-10-09T00:00:00'), reversal_of_id: 2 },
@@ -53,7 +53,7 @@ describe('balanceSeries', () => {
     expect(Math.max(...series.map((point) => point.balance))).toBe(95)
   })
 
-  it('取り消した記録は推移に現れない', () => {
+  it('reversed records do not appear in the trend', () => {
     const series = balanceSeries([
       { ...row(3, -50, '2026-10-09T00:00:00'), reversal_of_id: 2 },
       { ...row(2, 50, '2026-09-01T00:00:00'), is_reversed: true },
@@ -63,7 +63,7 @@ describe('balanceSeries', () => {
     expect(series.map((point) => point.balance)).toEqual([100])
   })
 
-  it('同じ時刻に並ぶ訂正後の行と別の記録は、残高を足した順に並べる', () => {
+  it('orders a corrected row and another record at the same time by the order balances were summed', () => {
     const series = balanceSeries([
       { ...row(4, 10, '2026-09-01T00:00:00'), corrects_id: 2 },
       { ...row(3, -100, '2026-10-09T00:00:00'), reversal_of_id: 2 },
@@ -77,7 +77,7 @@ describe('balanceSeries', () => {
     ])
   })
 
-  it('打ち消した相手が無ければ打ち消しの日時に置く', () => {
+  it('places a reversal at its own time when its target is missing', () => {
     const series = balanceSeries([{ ...row(3, -50, '2026-10-09T00:00:00'), reversal_of_id: 2 }])
 
     expect(series[0]?.at).toBe(Date.parse('2026-10-09T00:00:00Z'))
@@ -87,7 +87,7 @@ describe('balanceSeries', () => {
 describe('trendWindow', () => {
   const now = Date.parse('2026-10-03T00:00:00Z')
 
-  it('期間より前の行は始まりの残高として持ち越す', () => {
+  it('carries rows before the period over as the starting balance', () => {
     const series = balanceSeries([
       row(1, 100, '2026-01-01T00:00:00'),
       row(2, 10, '2026-09-30T00:00:00'),
@@ -99,7 +99,7 @@ describe('trendWindow', () => {
     expect(window.points.map((point) => point.balance)).toEqual([110])
   })
 
-  it('すべてを選ぶと最初の行から始まる', () => {
+  it('choosing "all" starts from the first row', () => {
     const series = balanceSeries([row(1, 100, '2026-01-01T00:00:00')])
 
     const window = trendWindow(series, 'all', now)
@@ -110,11 +110,11 @@ describe('trendWindow', () => {
 })
 
 describe('niceTicks', () => {
-  it('きりのよい目盛りで範囲を覆う', () => {
+  it('covers the range with round ticks', () => {
     expect(niceTicks(0, 95)).toEqual([0, 50, 100])
   })
 
-  it('負の残高があれば 0 をまたぐ', () => {
+  it('crosses 0 when there is a negative balance', () => {
     const ticks = niceTicks(-30, 70)
     expect(ticks).toContain(0)
     expect(ticks[0]).toBeLessThanOrEqual(-30)
@@ -125,8 +125,8 @@ describe('niceTicks', () => {
 describe('balanceForecast', () => {
   const now = Date.parse('2026-10-31T00:00:00Z')
 
-  it('直近 30 日の増え方が続いたとして、1 週間後と 1 か月後を出す', () => {
-    // 30 日前より前に 100、その後の 30 日で +60（毎日のボーナス +90 と使った −30）
+  it('projects 1 week and 1 month ahead, assuming the last 30 days of growth continue', () => {
+    // 100 before 30 days ago, then +60 over the 30 days (daily bonus +90 and −30 spent)
     const forecast = balanceForecast(
       balanceSeries([
         row(3, -30, '2026-10-20T00:00:00'),
@@ -144,7 +144,7 @@ describe('balanceForecast', () => {
     ])
   })
 
-  it('記録が 30 日に満たないときは、最初の記録からの日数で割る', () => {
+  it('divides by the days since the first record when records span under 30 days', () => {
     const forecast = balanceForecast(
       balanceSeries([row(2, 50, '2026-10-25T00:00:00'), row(1, 50, '2026-10-21T00:00:00')]),
       now,
@@ -154,7 +154,7 @@ describe('balanceForecast', () => {
     expect(forecast?.perDay).toBe(10)
   })
 
-  it('使う方が多ければ、見込みは減っていく', () => {
+  it('the projection declines when spending exceeds earning', () => {
     const forecast = balanceForecast(
       balanceSeries([row(2, -150, '2026-10-15T00:00:00'), row(1, 300, '2026-09-01T00:00:00')]),
       now,
@@ -163,12 +163,12 @@ describe('balanceForecast', () => {
     expect(forecast?.points.at(-1)?.balance).toBe(0)
   })
 
-  it('記録が 1 週間に満たないうちは見積もらない', () => {
+  it('does not project while records span less than a week', () => {
     expect(balanceForecast(balanceSeries([row(1, 100, '2026-10-26T00:00:00')]), now)).toBeNull()
     expect(balanceForecast([], now)).toBeNull()
   })
 
-  it('取り消した記録は増え方に数えない', () => {
+  it('does not count reversed records in the growth', () => {
     const forecast = balanceForecast(
       balanceSeries([
         { ...row(3, -100, '2026-10-20T00:00:00'), reversal_of_id: 2 },

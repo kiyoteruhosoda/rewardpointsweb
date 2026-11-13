@@ -1,14 +1,17 @@
-"""イベント（がんばりカード）を見る・作る・シールを貼る／はがす・消す（ADR-0042）。
+"""View, create, stick/peel stickers on, and delete events (effort cards) (ADR-0042).
 
-見るのは台帳を見られる人（子ども本人も自分のカードを見る）。作る・貼る・はがす・
-消すは台帳を変更できる人（親）だけ — 最後の 1 枚で台帳にポイントが入るので、
-手で 1 行足せる人と同じ範囲に置く。
+Anyone who can view the ledger can view them (a child sees their own cards too).
+Creating, sticking, peeling and deleting are only for those who can change the
+ledger (parents): the last sticker adds points to the ledger, so the scope matches
+those who can add a row by hand.
 
-最後の 1 枚を貼ると、同じトランザクションで台帳へ達成の 1 行を足す。理由は
-イベントの目標そのもの、記録した人は最後の 1 枚を貼った親。
+Sticking the last sticker adds a completion row to the ledger in the same
+transaction. Its reason is the event's goal itself, and its recorder is the parent
+who stuck the last sticker.
 
-期限（ADR-0043）の「今日」は家族の 1 日の区切り（毎日のボーナスと同じ
-:class:`DayBoundary`）で決める。UTC の日付で切ると、日本の家族では朝 9 時に期限が切れる。
+"Today" for deadlines (ADR-0043) is decided by the family's day boundary (the same
+:class:`DayBoundary` as the daily bonus). Cutting by UTC date would make deadlines
+expire at 9 a.m. for a family in Japan.
 """
 
 from __future__ import annotations
@@ -110,14 +113,14 @@ class ChangeDeadlineCommand:
     ledger_id: int
     event_id: int
     account_id: int
-    #: ``None`` で期限なし
+    #: ``None`` means no deadline
     deadline: date | None
 
 
 class ChangeRewardEventDeadlineUseCase:
-    """期限を決め直す・外す。期限切れのカードも、延ばせばまた貼れる。
+    """Reset or remove the deadline. An expired card can take stickers again once extended.
 
-    達成したカードの期限は動かさない（もう期限の意味が無い）。
+    A completed card's deadline is not changed (it no longer means anything).
     """
 
     def __init__(self, access: FamilyAccessResolver, events: IRewardEventRepository, boundary: DayBoundary) -> None:
@@ -141,14 +144,14 @@ class StickerCommand:
     ledger_id: int
     event_id: int
     account_id: int
-    #: 貼る（はがす）シールの番号。1 から始まる
+    #: Number of the sticker to stick (or peel). Starts at 1
     number: int
 
 
 class StickRewardEventStickerUseCase:
-    """*number* 枚目を貼る。マスが埋まったら台帳へ達成の 1 行を足す。
+    """Stick sticker *number*. When all slots are filled, add a completion row to the ledger.
 
-    同じ番号がもう貼られていれば何もせず、今の姿を返す（同じ押下の再送）。
+    If that number is already stuck, do nothing and return the current state (a resent press).
     """
 
     def __init__(
@@ -177,7 +180,7 @@ class StickRewardEventStickerUseCase:
             stuck_at=now,
             stuck_by_membership_id=found.membership.id,
         )
-        # 同じ番号を同時に貼った相手が勝っていれば、達成の後始末も向こうが行う
+        # If a concurrent request sticking the same number won, it also handles the completion
         if stuck and event.completes_with(command.number):
             awarded = self._transactions.append(
                 NewTransaction(
@@ -194,7 +197,7 @@ class StickRewardEventStickerUseCase:
 
 
 class PeelRewardEventStickerUseCase:
-    """最後の 1 枚をはがす（押し間違いを戻す）。もう無い番号なら何もしない。"""
+    """Peel the last sticker (undo a mistaken press). Do nothing if that number is already gone."""
 
     def __init__(self, access: FamilyAccessResolver, events: IRewardEventRepository, boundary: DayBoundary) -> None:
         self._access = access
@@ -211,9 +214,9 @@ class PeelRewardEventStickerUseCase:
 
 
 class DeleteRewardEventUseCase:
-    """イベントを消す。達成で足したポイントは台帳に残る（台帳は追記専用。ADR-0010）。
+    """Delete an event. Points added on completion stay in the ledger (append-only; ADR-0010).
 
-    もう無いイベントでも成功させる（消したいという求めは満たされている）。
+    Succeeds even if the event is already gone (the wish to delete it is satisfied).
     """
 
     def __init__(self, access: FamilyAccessResolver, events: IRewardEventRepository) -> None:
@@ -231,7 +234,7 @@ def _today(boundary: DayBoundary) -> date:
 
 
 def _ensure_not_passed(deadline: date | None, *, today: date) -> None:
-    """過ぎた日は期限にできない（作った瞬間に期限切れのカードになる）。今日は良い。"""
+    """A past date cannot be a deadline (the card would be expired on creation). Today is fine."""
     if deadline is not None and deadline < today:
         raise RewardEventDeadlinePassedError
 

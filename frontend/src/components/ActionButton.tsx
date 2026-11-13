@@ -1,19 +1,19 @@
 /**
- * 実行中はスピナーを出して押せなくするボタン（ADR-0023）。
+ * Button that shows a spinner and cannot be pressed while running (ADR-0023).
  *
- * サーバーへ問い合わせる操作は、結果が返るまで画面が変わらない。押せたのかどうかが
- * 分からないと利用者は同じボタンを続けて押すので、押した直後に必ず目印を出す。
+ * Operations that query the server do not change the screen until the result comes back. If users
+ * cannot tell whether the press registered they press again, so always show a marker right away.
  *
- * 見た目は素の `<button>` と同じ（`index.css` の指定をそのまま使う）。スピナーは
- * ラベルの上に重ね、ラベルは場所を占めたまま隠す。押した瞬間にボタンの幅が変わると、
- * 隣のボタンが動いて押し間違いの元になるため（`.action-button` の指定を参照）。
+ * Looks the same as a plain `<button>` (uses the `index.css` rules as is). The spinner is
+ * overlaid on the label, and the label is hidden while keeping its space. If the button width changed
+ * on press, neighbouring buttons would shift and cause mis-taps (see the `.action-button` rules).
  */
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 import { useI18n } from '../i18n'
 
 interface ActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** 実行中。スピナーを出し、押せなくする。 */
+  /** Running. Shows a spinner and disables the button. */
   pending: boolean
   children: ReactNode
 }
@@ -38,7 +38,7 @@ export function ActionButton({
       {pending && (
         <>
           <span className="spinner action-button-spinner" aria-hidden="true" />
-          {/* 回る印は目でしか分からないので、読み上げ用の文言を別に置く。 */}
+          {/* The spinner is only visible to the eye, so provide separate text for screen readers. */}
           <span className="visually-hidden">{t('common.processing')}</span>
         </>
       )}

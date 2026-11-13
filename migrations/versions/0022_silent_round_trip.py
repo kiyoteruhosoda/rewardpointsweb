@@ -1,9 +1,9 @@
-"""silent round trip (画面を出さずに試した往復であることを控えに持たせる)
+"""silent round trip (record in the session that the round trip was tried without showing a screen)
 
-``sso_login_sessions`` に ``silent`` を足す（ADR-0052）。真なら ``prompt=none`` で
-送り出した往復で、IdP が ``login_required`` などで戻しても失敗として扱わない。
+Adds ``silent`` to ``sso_login_sessions`` (ADR-0052). When true, the round trip was sent with
+``prompt=none``, and an IdP response such as ``login_required`` is not treated as a failure.
 
-⚠ **移行より前に始まった往復は偽になる。** それはボタンで始めた往復なので正しい。
+⚠ **Round trips started before the migration become false.** They were started by a button, so that is correct.
 
 Revision ID: silent_round_trip
 Revises: display_devices

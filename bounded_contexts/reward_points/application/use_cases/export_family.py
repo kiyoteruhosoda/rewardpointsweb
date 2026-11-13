@@ -1,12 +1,13 @@
-"""家族まるごとを控えとして書き出す（ADR-0026）。
+"""Export a whole family as an archive (ADR-0026).
 
-バックアップのための操作なので、返すのは「その家族の全部」— 参加者も、子どもの
-台帳も、毎日のボーナスの約束も入る。閲覧者ごとの出し分けはしないため、届いて
-よい相手を先に絞る。**親（owner / parent）だけ**が呼べる。子は自分の台帳しか
-見られない（ADR-0009）ので、家族全員分が載る控えは渡せない。
+This is a backup operation, so it returns "everything in the family": members, the
+children's ledgers, and the daily bonus commitments. Output is not tailored per viewer,
+so who may receive it is restricted up front: **only parents (owner / parent)** may call
+it. A child can only see their own ledger (ADR-0009), so they cannot be given an archive
+that contains the whole family.
 
-アカウントは載せない（``FamilyArchiveDTO``）。控えが漏れても、そこからログイン
-できる情報は出てこない。
+Accounts are not included (``FamilyArchiveDTO``). Even if an archive leaks, nothing in it
+can be used to sign in.
 """
 
 from __future__ import annotations

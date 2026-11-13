@@ -1,11 +1,11 @@
-"""ペアリングで使う値の生成と、その保存形（ADR-0047）。
+"""Generating the values used in pairing, and how they are stored (ADR-0047).
 
-- 確認コード（``user_code``）: 人が読み・打つ。紛らわしい字（0/O・1/I/L）を除いた
-  大文字と数字の 8 字で、4 字ずつ ``-`` で区切って見せる
-- 端末の秘密（``device_code``）・端末の資格情報（``device_credential``）: 推測できない
-  ことだけが要件。32 バイトの乱数
+- Confirmation code (``user_code``): read and typed by people. 8 uppercase letters
+  and digits, excluding confusable ones (0/O, 1/I/L), shown as two groups of 4 split by ``-``
+- Device secret (``device_code``) and device credential (``device_credential``): the
+  only requirement is that they cannot be guessed. 32 random bytes
 
-どれも持ち主へ渡す資格情報なので、DB へは SHA-256 のハッシュだけを置く。
+All of these are credentials handed to their holder, so only SHA-256 hashes go into the DB.
 """
 
 from __future__ import annotations
@@ -20,20 +20,20 @@ _SECRET_BYTES = 32
 
 
 def new_user_code() -> str:
-    """確認コード（区切りなしの 8 字）。見せるときは :func:`format_user_code` を通す。"""
+    """A confirmation code (8 characters, no separator). Pass it through :func:`format_user_code` to display."""
     return "".join(secrets.choice(USER_CODE_ALPHABET) for _ in range(USER_CODE_LENGTH))
 
 
 def format_user_code(code: str) -> str:
-    """``KQ7M3XPA`` → ``KQ7M-3XPA``。"""
+    """``KQ7M3XPA`` → ``KQ7M-3XPA``."""
     return f"{code[:_USER_CODE_GROUP]}-{code[_USER_CODE_GROUP:]}"
 
 
 def normalize_user_code(raw: str) -> str | None:
-    """人が打った確認コードを、保存した形（区切りなしの大文字）へ揃える。
+    """Normalize a typed confirmation code to the stored form (uppercase, no separator).
 
-    区切り・空白・小文字は許す。使わない字が混じる・長さが違うなら ``None``
-    （照合するまでもなく存在しない）。
+    Separators, spaces and lowercase are allowed. Returns ``None`` if it contains
+    unused characters or has the wrong length (it cannot exist, no lookup needed).
     """
     code = "".join(ch for ch in raw.upper() if ch.isalnum())
     if len(code) != USER_CODE_LENGTH or any(ch not in USER_CODE_ALPHABET for ch in code):
@@ -42,12 +42,12 @@ def normalize_user_code(raw: str) -> str | None:
 
 
 def new_secret() -> str:
-    """端末の秘密・端末の資格情報。"""
+    """A device secret or device credential."""
     return secrets.token_urlsafe(_SECRET_BYTES)
 
 
 def hash_secret(value: str) -> str:
-    """保存用のハッシュ。突き合わせは常にハッシュ同士で行う。"""
+    """Hash for storage. Comparisons are always hash to hash."""
     return hashlib.sha256(value.encode()).hexdigest()
 
 
