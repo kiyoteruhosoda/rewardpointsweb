@@ -1,9 +1,9 @@
-"""IdP が名乗った利用者を、このアプリの利用者へ結び付けてよいか。
+"""Whether a user asserted by the IdP may be linked to a user of this app.
 
-ここが決めるのは「受け入れてよい相手か」と「既存の利用者へ寄せてよいか」の 2 つだけ。
-寄せる先が無い初めての相手は口座を作って迎える（ADR-0041）が、**誰に作ってよいかは
-ここでは決めない** ——assay のアプリの割り当てが決めていて、割り当てが無い人は
-code を持って戻ってこない。
+This decides only two things: "is this someone we may accept" and "may they be merged into an existing user".
+A first-time user with nothing to merge into is welcomed with a new account (ADR-0041), but **who may get one
+is not decided here** -- assay's application assignments decide that, and people without an assignment
+do not come back holding a code.
 """
 
 from __future__ import annotations
@@ -20,18 +20,18 @@ from bounded_contexts.identity_federation.domain.value_objects.federated_user im
 
 @dataclass(frozen=True)
 class AccountLinkingPolicy:
-    #: ⚠ **既定は寄せない**（ADR-0033）。条件の ``email_verified`` は、assay では
-    #: 「テナント管理者がそう主張している」であって本人の証明ではない。
-    #: ⚠ 閉じていても、**同じメールアドレスの口座があれば作らずに断る**（ADR-0041）。
-    #: 本人がその口座へ入って結び付ける（ADR-0036）。
+    #: ⚠ **Default is not to merge** (ADR-0033). The condition ``email_verified`` in assay means
+    #: "a tenant admin claims so", not proof by the person themselves.
+    #: ⚠ Even when closed, **if an account with the same email exists, refuse instead of creating one** (ADR-0041).
+    #: The person signs in to that account and links it (ADR-0036).
     link_by_email: bool = False
     allowed_email_domains: tuple[str, ...] = ()
 
     def ensure_accepted(self, user: FederatedUser) -> None:
-        """受け入れてよい相手かを確かめる。駄目なら :class:`SsoEmailNotAllowedError`。
+        """Check whether this is someone we may accept. If not, :class:`SsoEmailNotAllowedError`.
 
-        ドメインを絞っていない（空）なら誰でも受け入れる。IdP 側で対象を絞って
-        いる構成が普通なので、既定はここで重ねて絞らない。
+        If no domains are restricted (empty), anyone is accepted. Restricting the audience on the IdP
+        side is the usual setup, so by default no further restriction is layered here.
         """
         if not self.allowed_email_domains:
             return
@@ -39,17 +39,17 @@ class AccountLinkingPolicy:
             raise SsoEmailNotAllowedError
 
     def may_link(self, user: FederatedUser) -> bool:
-        """既存の利用者へ寄せてよいか。
+        """Whether they may be merged into an existing user.
 
-        **既定は寄せない**（ADR-0033）。開けたときも**検証済みのメールアドレスに
-        限る** ——IdP が検証していないアドレスで寄せると、相手のアドレスを名乗るだけで
-        他人のアカウントへ入れてしまう。
+        **Default is not to merge** (ADR-0033). Even when enabled, **only for a verified email
+        address** -- merging on an address the IdP has not verified would let anyone get into
+        someone else's account just by claiming their address.
 
-        ⚠ **``email_verified`` の意味は IdP ごとに違う。** 自前 idp (assay) では
-        この値が真になる経路は自己登録の確認メールだけで、**管理者によるメール変更は
-        この値を維持する**。つまり「本人が所有を証明した」ではなく
-        **「テナント管理者がそう主張している」**である。開けるなら、つないだ IdP で
-        この値がどう立つのかまで確かめること。
+        ⚠ **The meaning of ``email_verified`` differs per IdP.** In our own idp (assay)
+        the only path that sets it true is the self-registration confirmation email, and **an email
+        change by an admin keeps this value**. In other words it means not "the person proved ownership" but
+        **"a tenant admin claims so"**. If enabling this, also check how the value gets set in the
+        connected IdP.
         """
         return self.link_by_email and user.email_verified
 

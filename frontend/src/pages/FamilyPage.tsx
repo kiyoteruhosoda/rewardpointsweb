@@ -1,23 +1,23 @@
 /**
- * 家族の詳細（家族設定）。参加者と、見える範囲の残高が並ぶ。
+ * Family details (family settings). Lists participants and the balances visible to the viewer.
  *
- * 並びは「毎日見るもの → たまに触るもの」の順にする: 参加者 → 家族設定（家族の
- * 決めごと。まいにちのボーナスもここに続く）→ 招待 → 子どもの追加 → 控え。
- * 子どもを増やしたり招待コードを配ったりするのは家族を作る最初だけなので、
- * 日々開く画面の先頭には置かない。
+ * Ordered "things seen daily -> things touched occasionally": participants -> family settings
+ * (family rules; the daily bonus follows here) -> invitations -> adding children -> backup.
+ * Adding children and handing out invitation codes happen only when setting up the family,
+ * so they are not placed at the top of a screen opened every day.
  *
- * 参加者ごとの操作は、サーバーが返す可否（`can_*`）だけで出し分ける。子の追加と
- * 招待は自分の立場から決めるが、これも「サーバーが同じ条件で断る」場所に揃えて
- * ある（ADR-0009 の認可表）。子が開いた場合は自分の台帳への入り口だけが残る
- * （兄弟の残高は最初から返ってこない）。
+ * Per-participant actions are shown solely by the permissions the server returns (`can_*`).
+ * Adding children and inviting are decided by the viewer's role, also aligned with where "the
+ * server refuses under the same conditions" (ADR-0009 authorization table). A child opening it
+ * sees only the entry to their own ledger (siblings' balances are never returned).
  *
- * 子をこの家族から外す道は 2 つある。
+ * There are two ways to remove a child from this family.
  *
- * - **独立**（ADR-0014）… アカウントのある子だけ。親が指示し、子本人が
- *   承認して成立する。指示は承認まで取り下げられる。成立すると参加も記録も
- *   家族から消え、本人のアカウントは所属なしのメンバーとして残る。
- * - **削除** … 台帳に記録が無い参加者だけ。記録が 1 件でもあれば履歴が黙って
- *   消える経路になるので、サーバーが断る（ADR-0010）。画面にも出さない。
+ * - **Independence** (ADR-0014) … only children with an account. A parent requests it and the
+ *   child approves it. The request can be withdrawn until approved. Once done, membership and
+ *   records leave the family, and the child's account remains as a member with no family.
+ * - **Delete** … only participants with no ledger records. Even one record would make this a path
+ *   for silently erasing history, so the server refuses (ADR-0010). The screen hides it too.
  */
 import { useState, type SubmitEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -44,12 +44,12 @@ export function FamilyPage() {
   const { notify } = useToast()
   const { hasScope, logout } = useAuth()
   const { family, loading, reload } = useFamily()
-  // 書きかけはログインの往復をまたいで残す（ADR-0058）
+  // Keep unfinished input across the login round trip (ADR-0058)
   const [childName, setChildName] = useSessionValue('family.childName', '')
   const [issued, setIssued] = useState<TemporaryPassword | null>(null)
   const { pendingActionOf, runForRow } = usePendingRows<MemberAction>()
 
-  /** 失敗はどれも「文言を出して読み直す」で終わる。成否で分岐する呼び出し元は無い。 */
+  /** Every failure ends with "show a message and reload". No caller branches on the outcome. */
   const run = async (action: () => Promise<unknown>) => {
     try {
       await action()
@@ -69,8 +69,8 @@ export function FamilyPage() {
     })
   })
 
-  // 成立すると scope が変わる（guest → member）。scope は JWT に焼き込まれて
-  // いるため、ログアウトして再ログインするまで新しい権限は効かない（ADR-0014）。
+  // Once approved the scope changes (guest -> member). Scopes are baked into the JWT,
+  // so the new permissions apply only after logging out and back in (ADR-0014).
   const [approveIndependence, approving] = usePendingAction(async () => {
     if (!family) return
     if (!window.confirm(t('families.independence.confirmApprove'))) return
@@ -84,7 +84,7 @@ export function FamilyPage() {
   })
 
   if (loading) return <p className="loading">{t('common.loading')}</p>
-  // 所属は 1 家族まで（ADR-0013）。URL が今の所属と違えば、もう見られない家族。
+  // One family per person at most (ADR-0013). A URL for another family is no longer viewable.
   if (!family || family.id !== Number(familyId)) {
     return <p className="error">{t('families.unavailable')}</p>
   }
@@ -92,16 +92,16 @@ export function FamilyPage() {
   const id = family.id
   const isGuardian = family.my_role === 'owner' || family.my_role === 'parent'
   const isOwner = family.my_role === 'owner'
-  // 毎日のボーナスを決める入口は台帳を書き換える操作（point:manage）。立場だけで
-  // 出すと、運用者がロールの権限を編集した後に必ず 403 になるボタンが並ぶ
-  // （ADR-0019 と同じ考え方）
+  // Setting the daily bonus rewrites ledgers (point:manage). Showing it by role alone would
+  // display buttons that always 403 after an operator edits the role's permissions
+  // (same idea as ADR-0019)
   const canManagePoints = hasScope('point:manage')
-  // 未紐付けなのは、親が作ったばかりの子と、バックアップから戻した参加者（ADR-0026）
+  // Unlinked: children a parent just created, and participants restored from a backup (ADR-0026)
   const unlinkedMembers = family.memberships.filter((m) => !m.is_linked && m.role !== 'owner')
   const me = family.memberships.find((m) => m.is_me)
   const independenceProposedToMe = family.my_role === 'child' && me?.independence_proposed === true
 
-  /** 参加者ごとの操作。終わるまでその参加者の次の操作を受け付けない。 */
+  /** Per-participant action. Further actions on that participant wait until it finishes. */
   const runForMember = (
     member: Membership,
     action: MemberAction,
@@ -109,7 +109,7 @@ export function FamilyPage() {
   ) => runForRow(member.id, action, () => run(request))
 
   const remove = (member: Membership) => {
-    // 表示端末は外しても記録もアカウントの持ち主も無い。人の削除とは言い方を変える（ADR-0047）
+    // A display leaves no records or account owner; word it unlike removing a person (ADR-0047)
     const question =
       member.role === 'display' ? 'families.confirmRemoveDisplay' : 'families.confirmRemove'
     if (!window.confirm(t(question, { name: member.display_name }))) return
@@ -168,8 +168,8 @@ export function FamilyPage() {
 
       {isGuardian && <FamilySettingsPanel family={family} onChanged={reload} />}
 
-      {/* 毎日のボーナス（ADR-0024）は家族の決めごとなので家族設定に置く
-          （ADR-0027）。量は子ごとに違ってよく、入力欄も子の数だけ並ぶ */}
+      {/* The daily bonus (ADR-0024) is a family rule, so it lives in family settings
+          (ADR-0027). Amounts may differ per child, with one input per child */}
       {isGuardian && canManagePoints && <DailyBonusPanel family={family} onChanged={reload} />}
 
       {isGuardian && (

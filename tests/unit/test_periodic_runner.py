@@ -1,8 +1,8 @@
-"""定期実行の常駐スレッド（``shared.kernel.scheduling``）。
+"""The resident thread for periodic execution (``shared.kernel.scheduling``).
 
-守らせたいのは「1 周が失敗しても止まらない」こと。止まると、以後の付与が
-誰にも気付かれないまま永久に行われなくなる。実時間を待たずに済ませるため、
-スレッドを起こさず :meth:`PeriodicRunner.run_once` を直接呼んで確かめる。
+What we want to guarantee is "one failed round does not stop it". If it stopped, later grants
+would never happen again without anyone noticing. To avoid waiting real time,
+this calls :meth:`PeriodicRunner.run_once` directly without starting the thread.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def test_a_round_runs_the_task() -> None:
 
 def test_a_failing_round_is_swallowed_and_logged(caplog: pytest.LogCaptureFixture) -> None:
     def explode() -> None:
-        raise RuntimeError("DB へ届かない")
+        raise RuntimeError("DB unreachable")
 
     runner = PeriodicRunner(name="test", interval_seconds=60, task=explode)
 
@@ -37,13 +37,13 @@ def test_a_failing_round_is_swallowed_and_logged(caplog: pytest.LogCaptureFixtur
 
 
 def test_a_failure_does_not_stop_later_rounds() -> None:
-    """1 度の失敗で以後の周が止まらないこと。"""
+    """A single failure does not stop later rounds."""
     calls: list[str] = []
 
     def flaky() -> None:
         calls.append("called")
         if len(calls) == 1:
-            raise RuntimeError("一時的な失敗")
+            raise RuntimeError("temporary failure")
 
     runner = PeriodicRunner(name="test", interval_seconds=60, task=flaky)
 
@@ -54,7 +54,7 @@ def test_a_failure_does_not_stop_later_rounds() -> None:
 
 
 def test_it_does_not_start_during_tests() -> None:
-    """``TESTING`` ではスレッドを立てない（別スレッドから DB を触らせない）。"""
+    """No thread is started under ``TESTING`` (do not let another thread touch the DB)."""
     started = start_periodic_runner(name="test", interval_seconds=60, task=lambda: None)
 
     assert started is None

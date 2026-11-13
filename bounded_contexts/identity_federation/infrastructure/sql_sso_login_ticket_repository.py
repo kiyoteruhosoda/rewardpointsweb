@@ -1,4 +1,4 @@
-"""引き換え券の SQLAlchemy 実装。"""
+"""SQLAlchemy implementation of exchange tickets."""
 
 from __future__ import annotations
 
@@ -68,8 +68,8 @@ class SqlSsoLoginTicketRepository:
             ),
         )
 
-        # 券は 1 回限り。消費は削除の成否で決める（同時に 2 本送られても
-        # トークンを 2 つ得られないようにする）。
+        # A ticket is one-time. Consumption is decided by whether the delete succeeded (so that two
+        # concurrent requests cannot obtain two sets of tokens).
         result = cast(
             "CursorResult[Any]",
             self.session.execute(

@@ -1,4 +1,4 @@
-""""This user's federation status" shown on the settings screen (ADR-0036).
+"""The "this user's federation status" shown on the settings screen (ADR-0036).
 
 It answers **only for oneself**; other people's links are not visible.
 """

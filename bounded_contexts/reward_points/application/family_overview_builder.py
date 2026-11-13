@@ -1,23 +1,24 @@
-"""家族の参加者一覧を、画面が出せる形へ組み立てる。
+"""Assemble the family's member list into a shape the UI can display.
 
-参加者・台帳・残高・アカウント名は別々の入口から来るため、まとめて読んでから
-1 回で突き合わせる（参加者ごとに引き直さない）。
+Members, ledgers, balances and account names come from separate sources, so they are read
+in bulk and matched in one pass (no per-member re-fetching).
 
-台帳 ID・残高・毎日のボーナスの設定は、その参加者の台帳を **見られる相手にだけ**
-載せる。兄弟の残高は相互に参照できない（ADR-0009）。名前は伏せない — 同じ家族に
-誰がいるかは参加している時点で分かってよい。
+Ledger ID, balance and daily bonus settings are included **only for viewers allowed to see**
+that member's ledger. Siblings cannot see each other's balances (ADR-0009). Names are not
+hidden — who is in the same family may be known once you are a member.
 
-毎日のボーナス（ADR-0024）の設定をここに載せるのは、決めるのが家族設定の画面
-だから（ADR-0027）。子ども一人ひとりで量は違うので、参加者ごとに持つ。
+Daily bonus (ADR-0024) settings are included here because they are decided on the family
+settings screen (ADR-0027). The amount differs per child, so it is held per member.
 
-「この人に何ができるか」（一時パスワード・独立の指示・削除）も、ここで決めて載せる。
-画面が立場から組み立て直すと、サーバーが断る操作を出してしまう。
+"What can be done to this person" (temporary password, requesting independence, removal)
+is also decided and included here. If the UI rebuilt it from roles, it would offer
+operations the server refuses.
 
-判断には 2 段の認可（router のモジュール docstring）が両方要る。家族の中での
-立場・台帳の状態に加えて、**呼び出し元が ``family:manage`` を持っているか**
-（``can_manage``）を受け取る。これらの操作の入口はすべて ``family:manage`` を
-要求するので、立場だけで決めると、運用者がロールの権限を編集した後に
-「owner なのに scope が無い」アカウントへ 403 になる操作を出してしまう。
+The decision needs both stages of authorization (see the router module docstring). Besides
+the role within the family and the ledger state, it receives **whether the caller holds
+``family:manage``** (``can_manage``). Every entry point for these operations requires
+``family:manage``, so deciding by role alone would, after an operator edits role
+permissions, offer an account that is "owner but lacks the scope" operations that return 403.
 """
 
 from __future__ import annotations
@@ -47,23 +48,23 @@ from bounded_contexts.reward_points.domain.services.ledger_statement import Ledg
 
 @dataclass(frozen=True, kw_only=True)
 class _LedgerView:
-    """ある参加者の台帳を、閲覧者から見たところ。
+    """A member's ledger as seen by the viewer.
 
-    ``ledger_id`` ・ ``balance`` ・ ``daily_bonus`` は見える相手にだけ入る。
-    ``is_empty`` は見え方に依らない事実で、削除できるかの判断に使う（記録の残る
-    台帳は外せない）。
+    ``ledger_id``, ``balance`` and ``daily_bonus`` are filled only for viewers who may see it.
+    ``is_empty`` is a fact independent of visibility, used to decide whether removal is
+    possible (a ledger with remaining records cannot be removed).
     """
 
     ledger_id: int | None
     balance: int | None
-    # 毎日のボーナスの設定（ADR-0024）。決めていなければ ``None``
+    # Daily bonus settings (ADR-0024). ``None`` if not set
     daily_bonus: DailyBonusDTO | None
     is_empty: bool
 
 
 @dataclass(frozen=True, kw_only=True)
 class _Readings:
-    """台帳 ID から引ける、家族ぶんの読み込み結果。"""
+    """The family's loaded data, looked up by ledger ID."""
 
     entries: Mapping[int, list[PointTransaction]]
     bonuses: Mapping[int, DailyBonus]
@@ -90,8 +91,8 @@ class FamilyOverviewBuilder:
         ledgers = {ledger.membership_id: ledger for ledger in self._ledgers.list_for_family(viewer.family_id)}
         ledger_ids = [ledger.id for ledger in ledgers.values()]
         entries = self._transactions.list_by_ledgers(ledger_ids)
-        # 毎日のボーナスの設定は家族設定に並ぶ（ADR-0027）。参加者ごとに引かず、
-        # 台帳をまとめて 1 回で読む
+        # Daily bonus settings appear in the family settings (ADR-0027). Read them for all
+        # ledgers at once instead of per member
         bonuses = {bonus.ledger_id: bonus for bonus in self._bonuses.list_for_ledgers(ledger_ids)}
         names = self._accounts.describe([m.account_id for m in members if m.account_id is not None])
         return tuple(
@@ -112,7 +113,7 @@ def _ledger_view(
     readings: _Readings,
 ) -> _LedgerView:
     if ledger is None:
-        # 台帳を持たない立場（親）。外すのを妨げる記録も無い
+        # A role without a ledger (parent). No records prevent removal either
         return _LedgerView(ledger_id=None, balance=None, daily_bonus=None, is_empty=True)
     rows = readings.entries.get(ledger.id, [])
     bonus = readings.bonuses.get(ledger.id)

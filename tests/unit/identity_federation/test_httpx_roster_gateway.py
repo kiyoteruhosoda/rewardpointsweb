@@ -1,7 +1,7 @@
-"""assay の名簿を引く実装（ADR-0040）。
+"""Implementation that fetches assay's roster (ADR-0040).
 
-⚠ **引けなかったことを「空」で返さない。** 空の名簿を返すと、呼び出し側は
-「全員辞めた」と読んでしまう。
+⚠ **Do not return a failed fetch as "empty".** Returning an empty roster makes the caller
+read it as "everyone has left".
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ class _Tokens:
 
 
 class _Assay:
-    """``httpx.get`` の代わり。呼ばれた URL と ``subs`` を覚えて、決め打ちの応答を返す。"""
+    """Stand-in for ``httpx.get``. Remembers the called URL and ``subs`` and returns a canned response."""
 
     def __init__(self, status: int = 200, body: object | None = None, *, broken: bool = False) -> None:
         self.status = status
@@ -62,7 +62,7 @@ def _gateway(assay: _Assay, monkeypatch: pytest.MonkeyPatch, tokens: _Tokens | N
 
 
 def test_the_path_asks_for_the_callers_own_application(monkeypatch: pytest.MonkeyPatch) -> None:
-    """⚠ どのアプリの名簿かは assay が名乗りから決める。経路で申告しない。"""
+    """⚠ assay decides whose roster it is from the client's identity. The path does not declare it."""
     assay = _Assay()
 
     _gateway(assay, monkeypatch).fetch(subjects=("a",))
@@ -84,7 +84,7 @@ def test_the_states_are_read_from_the_answer(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_many_subjects_are_asked_in_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
-    """⚠ 上限を超えると 400 になる。"""
+    """⚠ Exceeding the limit gives 400."""
     assay = _Assay()
     subjects = tuple(f"s{index}" for index in range(SUBJECTS_PER_REQUEST + 1))
 
@@ -94,7 +94,7 @@ def test_many_subjects_are_asked_in_chunks(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_a_403_means_the_machine_is_not_bound_yet(monkeypatch: pytest.MonkeyPatch) -> None:
-    """⚠ 結び付けるまで毎周回返る。障害（warning）と分けて知らせる。"""
+    """⚠ Returned every round until bound. Reported separately from failures (warning)."""
     with pytest.raises(MachineNotBoundToApplicationError):
         _gateway(_Assay(status=403), monkeypatch).fetch(subjects=("a",))
 
@@ -106,7 +106,7 @@ def test_other_failures_are_not_an_empty_roster(status: int, monkeypatch: pytest
 
 
 def test_a_401_forgets_the_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """期限内でも、向こうでクライアントを止めた・鍵を替えたときは通らなくなる。"""
+    """Even within its validity, it stops working when the other side disables the client or rotates the key."""
     tokens = _Tokens()
 
     with pytest.raises(IdentityProviderUnavailableError):

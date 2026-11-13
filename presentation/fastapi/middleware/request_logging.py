@@ -1,6 +1,7 @@
 """Per-request structured logging (assigning and propagating ``requestId``).
 
-The log level is chosen from the response status code (:func:`~presentation.fastapi.error_handling.log_level_for_status`).
+The log level is chosen from the response status code
+(:func:`~presentation.fastapi.error_handling.log_level_for_status`).
 Listing successes at INFO alone does not surface problems, so 4xx is WARNING and 5xx is ERROR;
 filtering by level then leaves only the failures.
 

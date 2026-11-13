@@ -1,7 +1,7 @@
-"""ゲスト（子）の独立 — 親メンバーが指示し、子本人が承認して成立する（ADR-0014）。
+"""Guest (child) independence: a parent member initiates it and the child approves it (ADR-0014).
 
-成立すると参加・台帳・記録は家族から消え、アカウントは所属なしのメンバーとなる
-（自分の家族を作ることも、招待をメンバーとして受け直すこともできる）。
+Once it takes effect, the membership, ledger and records disappear from the family and the account becomes
+a member with no family (they can create their own family, or accept an invitation again as a member).
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def parent(client: TestClient, admin_headers: dict[str, str]) -> Account:
 def _linked_child(
     client: TestClient, parent: Account, family_id: int, *, username: str = "taro"
 ) -> tuple[int, dict[str, str]]:
-    """アカウントの結び付いた子を用意し、(membership_id, 子のヘッダ) を返す。"""
+    """Prepare a child with a linked account and return (membership_id, child's headers)."""
     child = add_child(client, parent.headers, family_id, display_name=username)
     invitation = issue_invitation(
         client, parent.headers, family_id, role="child", target_membership_id=int(str(child["id"]))
@@ -50,7 +50,7 @@ def _propose(client: TestClient, headers: dict[str, str], family_id: int, *, mem
     assert response.json()["independence_proposed"] is True
 
 
-# --- 指示 --------------------------------------------------------------------
+# --- Initiating --------------------------------------------------------------
 
 
 def test_parent_proposes_and_the_family_sees_it(client: TestClient, parent: Account) -> None:
@@ -59,14 +59,14 @@ def test_parent_proposes_and_the_family_sees_it(client: TestClient, parent: Acco
 
     _propose(client, parent.headers, family_id, membership_id=membership_id)
 
-    # 子本人にも承認待ちであることが見える
+    # The child can also see that approval is pending
     detail = client.get(f"/api/families/{family_id}", headers=child_headers).json()
     me = next(m for m in detail["memberships"] if m["is_me"])
     assert me["independence_proposed"] is True
 
 
 def test_unlinked_child_cannot_be_proposed(client: TestClient, parent: Account) -> None:
-    """アカウントの無い子は承認のしようがない（除名を使う）。"""
+    """A child without an account has no way to approve (use removal instead)."""
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
 
@@ -99,7 +99,7 @@ def test_independence_cannot_be_proposed_for_a_parent(
 
 
 def test_child_cannot_propose_independence(client: TestClient, parent: Account) -> None:
-    """指示できるのは親メンバーだけ。子は scope（family:manage 無し）で止まる。"""
+    """Only parent members can initiate. A child is stopped by scope (no family:manage)."""
     family_id = create_family(client, parent.headers)
     membership_id, child_headers = _linked_child(client, parent, family_id)
 
@@ -110,7 +110,7 @@ def test_child_cannot_propose_independence(client: TestClient, parent: Account) 
     assert response.status_code == 403
 
 
-# --- 承認と成立 --------------------------------------------------------------
+# --- Approval and taking effect ----------------------------------------------
 
 
 def test_approval_without_a_proposal_is_refused(client: TestClient, parent: Account) -> None:
@@ -149,7 +149,7 @@ def test_approved_independence_removes_the_guest_and_frees_the_account(client: T
     approved = client.post(f"/api/families/{family_id}/independence", headers=child_headers)
     assert approved.status_code == 204
 
-    # 家族から消える: 名簿に居ない・台帳も記録ごと無い
+    # Gone from the family: not on the roster, and the ledger is gone along with its records
     names = [
         m["display_name"]
         for m in client.get(f"/api/families/{family_id}", headers=parent.headers).json()["memberships"]
@@ -157,10 +157,10 @@ def test_approved_independence_removes_the_guest_and_frees_the_account(client: T
     assert names == ["おとうさん"]
     assert client.get(ledger.path(), headers=parent.headers).status_code == 404
 
-    # 所属なしのメンバーとなる: 一覧は空になる
+    # Becomes a member with no family: the list is empty
     assert client.get("/api/families", headers=child_headers).json() == []
 
-    # scope はトークンに焼き込まれているため、昇格した権限は再ログインで有効になる
+    # Scope is baked into the token, so the elevated permissions take effect after signing in again
     fresh_headers = login(client, username="taro", password="taro-pass-123")
     created = client.post("/api/families", headers=fresh_headers, json={"name": "たろうの家"})
     assert created.status_code == 201, created.text
@@ -173,9 +173,9 @@ def test_independent_account_can_rejoin_as_a_member(client: TestClient, parent: 
     _propose(client, parent.headers, family_id, membership_id=membership_id)
     assert client.post(f"/api/families/{family_id}/independence", headers=child_headers).status_code == 204
 
-    # 元の家族から、今度はメンバー（parent）として招待を受け直せる。
-    # 昇格した scope はトークンに焼き込まれるため、再ログインしてから受ける
-    # （画面も独立の成立後にログアウトさせる — ADR-0014）
+    # They can accept an invitation again from the original family, this time as a member (parent).
+    # The elevated scope is baked into the token, so sign in again before accepting
+    # (the screen also signs them out once independence takes effect — ADR-0014)
     fresh_headers = login(client, username="taro", password="taro-pass-123")
     invitation = issue_invitation(client, parent.headers, family_id, role="parent")
     rejoined = client.post(

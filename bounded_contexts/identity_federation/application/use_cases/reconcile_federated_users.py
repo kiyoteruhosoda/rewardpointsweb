@@ -4,12 +4,14 @@ This is the second stage, picking up what the receiving endpoint (ADR-0032) miss
 the same as the endpoint -- **only sessions started via SSO**; the user itself (local password, passkeys)
 is not touched. This template intentionally keeps local accounts (ADR-0035).
 
-⚠ **If the roster cannot be fetched, do nothing.** Do not mix up "the roster cannot be fetched" and "the roster is empty"
+⚠ **If the roster cannot be fetched, do nothing.** Do not mix up "the roster cannot be fetched" and
+"the roster is empty"
 -- mixing them would stop everyone just because assay is having trouble. If it cannot be fetched,
 :class:`~bounded_contexts.identity_federation.domain.exceptions.IdentityProviderUnavailableError`
 is raised and this job ends without changing anything.
 
-⚠ **Write it so that running it any number of times gives the same result.** The periodic run executes concurrently once per worker.
+⚠ **Write it so that running it any number of times gives the same result.** The periodic run executes
+concurrently once per worker.
 """
 
 from __future__ import annotations
@@ -47,7 +49,8 @@ class ReconciliationOutcome:
     """What happened in one reconciliation (counts for logging and tests)."""
 
     checked: int = 0
-    #: Number of people newly revoked. ⚠ People already revoked in a previous run are not counted (the same row is not written).
+    #: Number of people newly revoked. ⚠ People already revoked in a previous run are not counted
+    #: (the same row is not written).
     revoked: int = 0
     unlinked: int = 0
     #: ⚠ Whether it **held back because everyone came back as `unknown`** (decision 3). When true, nothing was changed.
@@ -101,8 +104,9 @@ class ReconcileFederatedUsers:
             outcome = replace(outcome, revoked=outcome.revoked + 1)
         if not state.drops_the_link:
             return outcome
-        # Not present over there = the link's counterpart no longer exists. Keeping the row would connect to someone else
-        # if the same `sub` were reused for another person (it is promised not to be reused, but there is no reason to keep it either).
+        # Not present over there = the link's counterpart no longer exists. Keeping the row would connect to
+        # someone else if the same `sub` were reused for another person (it is promised not to be reused,
+        # but there is no reason to keep it either).
         # ⚠ Revocation records apply to `(issuer, sub)`, not to the link, so they remain after unlinking.
         self.identities.unlink(link)
         logger.info("sso_identity_unlinked_by_reconciliation", extra={"user_id": link.user_id})

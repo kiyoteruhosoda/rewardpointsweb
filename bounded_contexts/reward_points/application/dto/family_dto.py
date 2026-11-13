@@ -1,8 +1,8 @@
-"""家族・参加者・招待の出力 DTO。
+"""Output DTOs for families, members and invitations.
 
-``role`` はドメインの列挙をそのまま載せる。文字列へ落とすと Presentation 層で
-``Literal["owner", "parent", "child"]`` へ戻す変換が必要になり、型検査が効かなく
-なる。JSON へは列挙の値（``"owner"`` 等）が出る。
+``role`` carries the domain enum as-is. Lowering it to a string would require converting
+back to ``Literal["owner", "parent", "child"]`` in the Presentation layer, defeating type
+checking. The enum values (``"owner"`` etc.) appear in the JSON.
 """
 
 from __future__ import annotations
@@ -30,23 +30,25 @@ class MembershipDTO:
     id: int
     display_name: str
     role: FamilyRole
-    # アカウント未紐付けの参加者は、招待コードを渡すまでログインできない
+    # A member not linked to an account cannot log in until given an invitation code
     is_linked: bool
     is_me: bool
     username: str | None
-    # 台帳を持つのは role = child だけ
+    # Only role = child has a ledger
     ledger_id: int | None
     balance: int | None
-    # 独立が指示され、子本人の承認待ちか（ADR-0014）
+    # Whether independence was requested and awaits the child's own approval (ADR-0014)
     independence_proposed: bool = False
-    # 毎日のボーナスの設定（ADR-0024）。設定は家族設定に並ぶので、参加者に載せる
-    # （ADR-0027）。台帳が見えない相手には ``None``。既定が ``None`` なのは
-    # ``can_*`` と同じ理由 — 参加者 1 人を返すだけの応答は台帳まで読まない
+    # Daily bonus settings (ADR-0024). They appear in the family settings, so they ride on
+    # the member (ADR-0027). ``None`` for members whose ledger is not visible. The default is
+    # ``None`` for the same reason as ``can_*`` — responses returning a single member do not
+    # read the ledger
     daily_bonus: DailyBonusDTO | None = None
-    # 見ている人がこの参加者に対して行える操作。画面はこれだけを見て操作を出す
-    # （台帳の ``can_modify`` と同じ考え方 — 押してから断られる操作を出さない）。
-    # 既定はすべて偽。参加者 1 人を作って返すだけの応答（子の追加・独立の指示）は
-    # 家族全体を読み直さないので、可否を答えられる立場にない。
+    # Operations the viewer may perform on this member. The UI shows operations based on
+    # these alone (same idea as the ledger's ``can_modify`` — never offer an operation that
+    # is refused after pressing it). All default to false. Responses that just create and
+    # return one member (adding a child, requesting independence) do not re-read the whole
+    # family, so they are in no position to answer.
     can_reset_password: bool = False
     can_propose_independence: bool = False
     can_remove: bool = False
@@ -56,7 +58,7 @@ class MembershipDTO:
 class FamilyDetailDTO:
     id: int
     name: str
-    # 家族で決めた約束ごと（ADR-0027）。まだ書いていなければ ``None``
+    # Rules agreed in the family (ADR-0027). ``None`` if not written yet
     rules: str | None
     my_membership_id: int
     my_role: FamilyRole
@@ -69,11 +71,11 @@ def detail_of(
     viewer: FamilyMembership,
     memberships: tuple[MembershipDTO, ...],
 ) -> FamilyDetailDTO:
-    """家族の詳細を組み立てる。
+    """Build the family details.
 
-    家族を返す入口は 5 つある（作成・閲覧・改名・並べ替え・ルールの書き換え）。
-    どれも同じ形を返すので、載せる項目が増えたときに 1 つだけ書き漏らさないよう
-    組み立てはここに集める。
+    Five entry points return a family (create, view, rename, reorder, rewrite rules).
+    They all return the same shape, so assembly lives here to avoid missing one when a
+    field is added.
     """
     return FamilyDetailDTO(
         id=family.id,
@@ -92,7 +94,7 @@ class InvitationDTO:
     target_membership_id: int | None
     target_display_name: str | None
     expires_at: datetime
-    # 平文のコードは発行の応答でだけ載る（保存はハッシュのみ）
+    # The plaintext code is only included in the issuing response (only the hash is stored)
     code: str | None
 
 
@@ -102,7 +104,7 @@ class TemporaryPasswordDTO:
     username: str
     password: str
     expires_at: datetime
-    # 発行の事実をログへ残すために返す（応答本文には載せない）
+    # Returned so the issuance can be logged (not included in the response body)
     issued_by_membership_id: int
 
 

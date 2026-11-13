@@ -1,12 +1,12 @@
 /**
- * ログイン画面。招待コードを持ったまま来た場合の動線と、SSO の出し分け。
+ * Login screen: the flow for people arriving with an invitation code, and SSO gating.
  *
- * アカウント作成の画面から回されてきた人は、ログインが終わったところで
- * 「コードで参加する」欄まで運ばれる必要がある。既定の行き先（ダッシュボード）
- * へ落とすと、コードを持っているのに入口が見つからない状態に戻ってしまう。
+ * People sent here from the account creation screen must be carried to the
+ * "join with a code" field once login finishes. Dropping them at the default destination
+ * (dashboard) brings back the state where they hold a code but cannot find the entry.
  *
- * SSO のボタンは、サーバーが「使える」と答えたときにだけ出す。失敗の理由は
- * 画面遷移で戻ってくるため URL に載る（ADR-0029）。
+ * The SSO button is shown only when the server answers "available". Failure reasons
+ * come back via navigation, so they are in the URL (ADR-0029).
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -53,13 +53,13 @@ describe('LoginPage', () => {
     startSsoLogin.mockReset()
     sessionStorage.clear()
     localStorage.clear()
-    // 入口の出し分けを見る試験。ボタンを押さずに入る試し（ADR-0052）は済んだことにする
+    // Tests of entry gating. Treat the no-tap sign-in attempt (ADR-0052) as already done
     sessionStorage.setItem('ssoSilentTried', '1')
-    // 既定は「SSO は使えない」。使える場合は各テストで差し替える
+    // Default is "SSO unavailable". Tests that need it replace this
     fetchSsoProvider.mockResolvedValue({ enabled: false, display_name: '' })
   })
 
-  it('招待コードを持って来た人には、先にログインする理由を出す', () => {
+  it('tells people with an invitation code why they must sign in first', () => {
     renderLogin('/login#code=CODE1234')
 
     expect(
@@ -69,14 +69,14 @@ describe('LoginPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('ログイン後はコードを持ったまま家族の画面へ送る', async () => {
+  it('sends them to the family screen with the code after login', async () => {
     renderLogin('/login#code=CODE1234')
     signIn()
 
     expect(await screen.findByText('families page')).toBeInTheDocument()
   })
 
-  it('コードが無ければ従来どおり最初の画面へ送る', async () => {
+  it('without a code, sends them to the first screen as before', async () => {
     renderLogin('/login')
     signIn()
 
@@ -84,14 +84,14 @@ describe('LoginPage', () => {
     expect(screen.queryByText(/Sign in first/)).not.toBeInTheDocument()
   })
 
-  it('開こうとしていた画面（redirect_to）へ、クエリごと戻す（ADR-0051）', async () => {
+  it('returns to the screen being opened (redirect_to), query included (ADR-0051)', async () => {
     renderLogin('/login?redirect_to=%2Fadmin%2Flogs%3Flevel%3DERROR')
     signIn()
 
     expect(await screen.findByText('logs page')).toBeInTheDocument()
   })
 
-  it('招待コードがあれば、redirect_to より家族の画面を先にする', async () => {
+  it('with an invitation code, prefers the family screen over redirect_to', async () => {
     renderLogin('/login?redirect_to=%2Fadmin%2Flogs#code=CODE1234')
     signIn()
 
@@ -99,7 +99,7 @@ describe('LoginPage', () => {
   })
 
   describe('SSO', () => {
-    it('使える構成のときだけボタンを出す', async () => {
+    it('shows the button only when configured as available', async () => {
       fetchSsoProvider.mockResolvedValue({ enabled: true, display_name: 'Nolumia' })
       renderLogin('/login')
 
@@ -108,15 +108,15 @@ describe('LoginPage', () => {
       ).toBeInTheDocument()
     })
 
-    it('使えないときは出さない', async () => {
+    it('hides it when unavailable', async () => {
       renderLogin('/login')
 
       await screen.findByRole('button', { name: 'Sign in' })
       expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument()
     })
 
-    it('問い合わせが届かなければ伝えて聞き直し、つながったらボタンを出す', async () => {
-      // リリース中はサーバーに届かない。一度で諦めると、戻っても SSO のボタンが出ない（ADR-0046）
+    it('reports and retries when unreachable, then shows the button once connected', async () => {
+      // A release makes the server unreachable. Giving up once means no SSO button later (ADR-0046)
       vi.useFakeTimers({ shouldAdvanceTime: true })
       fetchSsoProvider
         .mockRejectedValueOnce(new Error('offline'))
@@ -124,7 +124,7 @@ describe('LoginPage', () => {
       renderLogin('/login')
 
       expect(await screen.findByText(/Cannot reach the server/)).toBeInTheDocument()
-      // パスワードでのログインは邪魔しない
+      // Does not get in the way of password login
       expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument()
 
@@ -136,13 +136,13 @@ describe('LoginPage', () => {
       vi.useRealTimers()
     })
 
-    it('押したら、ログイン後の行き先を添えて IdP へ送り出す', async () => {
+    it('on tap, sends to the IdP with the post-login destination', async () => {
       fetchSsoProvider.mockResolvedValue({ enabled: true, display_name: 'Nolumia' })
       renderLogin('/login#code=CODE1234')
 
       fireEvent.click(await screen.findByRole('button', { name: 'Sign in with Nolumia' }))
 
-      // 戻り先はサーバーへ届く。招待コードは載せず、同じタブへ預ける（ADR-0025）
+      // The return path reaches the server; the invitation code is kept in this tab (ADR-0025)
       expect(startSsoLogin).toHaveBeenCalledExactlyOnceWith('/families')
       expect(sessionStorage.getItem('pendingInvitationCode')).toBe('CODE1234')
     })
@@ -151,7 +151,7 @@ describe('LoginPage', () => {
       ['/login?redirect_to=%2Fadmin%2Flogs%3Fq%3Da', '/admin/logs?q=a'],
       ['/login', '/'],
       ['/login?redirect_to=https%3A%2F%2Fevil.example%2F', '/'],
-    ])('開こうとしていた画面を IdP の往復に渡す（%s → %s。ADR-0051）', async (entry, expected) => {
+    ])('passes the opened screen through the IdP (%s -> %s, ADR-0051)', async (entry, expected) => {
       fetchSsoProvider.mockResolvedValue({ enabled: true, display_name: 'Nolumia' })
       renderLogin(entry)
 
@@ -160,7 +160,7 @@ describe('LoginPage', () => {
       expect(startSsoLogin).toHaveBeenCalledExactlyOnceWith(expected)
     })
 
-    it('IdP から戻された失敗を出す', () => {
+    it('shows a failure returned from the IdP', () => {
       renderLogin('/login?sso_error=sso_account_not_linked')
 
       expect(
@@ -170,14 +170,14 @@ describe('LoginPage', () => {
       ).toBeInTheDocument()
     })
 
-    it('知らないコードは一般的な文言へ倒す（キーをそのまま出さない）', () => {
+    it('falls back to a generic message for unknown codes (never shows the key)', () => {
       renderLogin('/login?sso_error=something_new')
 
       expect(screen.getByText('Single sign-on failed. Please try again.')).toBeInTheDocument()
     })
   })
 
-  describe('ボタンを押さずに入る試し（ADR-0052）', () => {
+  describe('no-tap sign-in attempt (ADR-0052)', () => {
     beforeEach(() => {
       sessionStorage.clear()
       fetchSsoProvider.mockResolvedValue({ enabled: true, display_name: 'Nolumia' })
@@ -187,18 +187,18 @@ describe('LoginPage', () => {
       vi.restoreAllMocks()
     })
 
-    it('開いたら入口を描かずに prompt=none で IdP へ送り出す（行き先は保つ）', async () => {
+    it('on open, goes to the IdP with prompt=none without rendering (keeps target)', async () => {
       renderLogin('/login?redirect_to=%2Fadmin%2Flogs')
 
       await waitFor(() => {
         expect(startSsoLogin).toHaveBeenCalledExactlyOnceWith('/admin/logs', { silent: true })
       })
       expect(screen.queryByRole('button', { name: 'Sign in with Nolumia' })).not.toBeInTheDocument()
-      // 試す前にパスワード欄を描かない（一瞬見えてから IdP へ飛ばない）
+      // Do not render the password field before trying (no flash before going to the IdP)
       expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
     })
 
-    it('試して戻ってきたら、エラーを出さずにふつうの入口を出す', async () => {
+    it('after trying and returning, shows the normal entry without an error', async () => {
       renderLogin('/login?sso_silent=declined&redirect_to=%2Fadmin%2Flogs')
 
       expect(
@@ -208,7 +208,7 @@ describe('LoginPage', () => {
       expect(screen.queryByText('Single sign-on failed. Please try again.')).not.toBeInTheDocument()
     })
 
-    it('招待コードを持って来たときは試さない', async () => {
+    it('does not try when holding an invitation code', async () => {
       renderLogin('/login#code=CODE1234')
 
       expect(
@@ -217,7 +217,7 @@ describe('LoginPage', () => {
       expect(startSsoLogin).not.toHaveBeenCalled()
     })
 
-    it('試して戻った画面を再読み込みしたら、もう 1 回試す（ADR-0054）', async () => {
+    it('tries once more when the returned screen is reloaded (ADR-0054)', async () => {
       sessionStorage.setItem('ssoSilentTried', '1')
       vi.spyOn(window.performance, 'getEntriesByType').mockReturnValue([
         { type: 'reload' } as PerformanceNavigationTiming,
@@ -229,7 +229,7 @@ describe('LoginPage', () => {
       })
     })
 
-    it('再読み込みでも、サインアウトした後は試さない', async () => {
+    it('does not try on reload after signing out', async () => {
       localStorage.setItem('ssoSignedOut', '1')
       vi.spyOn(window.performance, 'getEntriesByType').mockReturnValue([
         { type: 'reload' } as PerformanceNavigationTiming,
@@ -242,7 +242,7 @@ describe('LoginPage', () => {
       expect(startSsoLogin).not.toHaveBeenCalled()
     })
 
-    it('再読み込みでも、エラーの知らせが付いていたら試さない', async () => {
+    it('does not try on reload when an error notice is attached', async () => {
       vi.spyOn(window.performance, 'getEntriesByType').mockReturnValue([
         { type: 'reload' } as PerformanceNavigationTiming,
       ])
@@ -254,7 +254,7 @@ describe('LoginPage', () => {
       expect(startSsoLogin).not.toHaveBeenCalled()
     })
 
-    it('再読み込みでも、招待コードを持って来たときは試さない', async () => {
+    it('does not try on reload when holding an invitation code', async () => {
       vi.spyOn(window.performance, 'getEntriesByType').mockReturnValue([
         { type: 'reload' } as PerformanceNavigationTiming,
       ])
@@ -266,7 +266,7 @@ describe('LoginPage', () => {
       expect(startSsoLogin).not.toHaveBeenCalled()
     })
 
-    it('このタブで一度試していたら試さない', async () => {
+    it('does not try if this tab already tried once', async () => {
       sessionStorage.setItem('ssoSilentTried', '1')
       renderLogin('/login')
 
@@ -276,7 +276,7 @@ describe('LoginPage', () => {
       expect(startSsoLogin).not.toHaveBeenCalled()
     })
 
-    it('サインアウトした後は試さない', async () => {
+    it('does not try after signing out', async () => {
       localStorage.setItem('ssoSignedOut', '1')
       renderLogin('/login')
 

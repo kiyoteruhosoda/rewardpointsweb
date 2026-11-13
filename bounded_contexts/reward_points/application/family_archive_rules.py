@@ -1,13 +1,14 @@
-"""控えを取り込む前に、書ける形かを確かめる（ADR-0026）。
+"""Before importing an archive, check that it can be written (ADR-0026).
 
-項目の有無・型・長さは Pydantic が先に見る。ここが見るのは **中身の辻褄** で、
-「この API を順に叩けば同じ家族が作れるか」を問う。作れない控えは 1 行も書かずに
-断る — 取り込みは 1 つのトランザクションなので、途中で気付いても巻き戻るだけだが、
-半端に書いた家族が残らないことを呼び出し側が読み取れる場所に置いておく。
+Presence, types and lengths of fields are checked first by Pydantic. This module checks
+**internal consistency**, asking "could the same family be built by calling this API in
+order?". An archive that could not be built is rejected without writing a single row —
+the import is one transaction, so noticing midway would only roll back, but this keeps the
+guarantee that no half-written family remains somewhere the caller can read.
 
-台帳の決まり（打ち消しは打ち消せない・同じ行は 1 度しか打ち消せない・訂正は
-打ち消しにはできない。ADR-0010 / ADR-0022）は、記録の入口と同じものをここでも
-守る。控えから来た行だけが例外、という抜け道を作らない。
+The ledger rules (a reversal cannot be reversed, a row can be reversed only once, a
+reversal cannot be corrected; ADR-0010 / ADR-0022) are enforced here exactly as at the
+recording entry points. No loophole where only rows from an archive are exempt.
 """
 
 from __future__ import annotations
@@ -30,12 +31,12 @@ from bounded_contexts.reward_points.domain.exceptions import (
 
 
 def require_importable(archive: FamilyArchiveDTO) -> None:
-    """取り込める控えでなければ例外を投げる。"""
+    """Raise unless the archive can be imported."""
     _require_readable_format(archive)
     _unique_refs(member.ref for member in archive.members)
     _require_single_owner(archive.members)
-    # 台帳へ書けるのは親だけ（``can_modify_ledger``）。記録した人の欄に子を置いた
-    # 控えは、この API を通しては作れない履歴になる
+    # Only parents can write to ledgers (``can_modify_ledger``). An archive with a child in the
+    # recorder field holds a history that could not be created through this API
     recorders = frozenset(member.ref for member in archive.members if member.role.is_guardian)
     for member in archive.members:
         _require_person(member)
@@ -47,9 +48,9 @@ def require_importable(archive: FamilyArchiveDTO) -> None:
 def _require_readable_format(archive: FamilyArchiveDTO) -> None:
     if archive.format != ARCHIVE_FORMAT:
         raise InvalidFamilyArchiveError
-    # 知らない版は読めるところだけ読む、ということをしない。落ちた項目に記録が
-    # 入っていた場合、取り込めたように見えて中身が減る。古い版を受け付けるのは
-    # 「無くても復元が成立する」項目しか増えていないと分かっている版だけ
+    # Do not read just the readable parts of an unknown version. If dropped fields held
+    # records, the import would look successful while content was lost. Older versions are
+    # accepted only when they are known to lack nothing but fields "the restore works without"
     if archive.version not in SUPPORTED_ARCHIVE_VERSIONS:
         raise UnsupportedArchiveVersionError
 
@@ -64,10 +65,10 @@ def _unique_refs(refs: Iterable[str]) -> frozenset[str]:
 
 
 def _require_single_owner(members: Sequence[ArchivedMemberDTO]) -> None:
-    """owner はちょうど 1 人。
+    """Exactly one owner.
 
-    取り込んだ人がその席に就く（``ImportFamilyUseCase``）。0 人なら誰も家族を
-    管理できず、2 人以上なら取り込んだ人がどちらの名前を継ぐか決められない。
+    The importer takes that seat (``ImportFamilyUseCase``). With zero, nobody could manage
+    the family; with two or more, it is undecidable whose name the importer inherits.
     """
     owners = [member for member in members if member.role.can_administer_family]
     if len(owners) != 1:
@@ -75,13 +76,13 @@ def _require_single_owner(members: Sequence[ArchivedMemberDTO]) -> None:
 
 
 def _require_person(member: ArchivedMemberDTO) -> None:
-    """控えに入るのは人だけ。表示端末は書き出さない（ADR-0047）ので、載っていれば書き換えられた控え。"""
+    """Only people go into an archive. Display devices are never exported (ADR-0047): one present means tampering."""
     if member.role.is_display:
         raise InvalidFamilyArchiveError
 
 
 def _require_ledger_matches_role(member: ArchivedMemberDTO) -> None:
-    """台帳を持つのは子だけ、そして子は必ず持つ（ADR-0009）。"""
+    """Only children have a ledger, and every child has one (ADR-0009)."""
     if (member.ledger is not None) != member.role.has_own_ledger:
         raise InvalidFamilyArchiveError
 
@@ -92,11 +93,12 @@ def _require_writable_ledger(ledger: ArchivedLedgerDTO, *, recorders: frozenset[
 
 
 def _require_consistent_bonus(bonus: ArchivedDailyBonusDTO | None) -> None:
-    """渡し終えた日が、最初に渡す日より前にならないこと（ADR-0024）。
+    """The last granted day must not precede the first day to grant (ADR-0024).
 
-    渡した日は必ず ``starts_on`` 以降なので、実際の控えでこれが崩れることはない。
-    書き換えられた控えが通ると、次の付与が ``granted_through`` の翌日から始まり、
-    **開始日より前の日付でボーナスが足される**（``DailyBonus.due_days``）。
+    Granted days are always on or after ``starts_on``, so a genuine archive never breaks this.
+    If a tampered archive got through, the next grant would start the day after
+    ``granted_through``, **adding bonuses dated before the start date**
+    (``DailyBonus.due_days``).
     """
     if bonus is None or bonus.granted_through is None:
         return
@@ -107,18 +109,18 @@ def _require_consistent_bonus(bonus: ArchivedDailyBonusDTO | None) -> None:
 def _require_writable_history(entries: Sequence[ArchivedTransactionDTO], *, recorders: frozenset[str]) -> None:
     history = _WrittenHistory()
     for entry in entries:
-        # 記録した人は、この家族で台帳へ書ける立場の参加者（親）
+        # The recorder must be a member of this family allowed to write ledgers (a parent)
         if entry.granted_by is not None and entry.granted_by not in recorders:
             raise InvalidFamilyArchiveError
         history.append(entry)
 
 
 class _WrittenHistory:
-    """並び順に沿って「ここまでに書いた行」を追う。
+    """Track "rows written so far" following the order.
 
-    控えは書いた順に並ぶので、打ち消し・訂正の相手は必ず**それより前**にある。
-    前にしか繋がらないことを確かめれば、輪になった参照も、まだ無い行を指す参照も
-    同じ 1 つの規則で落ちる。
+    An archive is in writing order, so the target of a reversal/correction is always
+    **earlier**. Checking that links only point backwards rejects both cyclic references
+    and references to rows not yet present with one single rule.
     """
 
     def __init__(self) -> None:
@@ -140,12 +142,12 @@ class _WrittenHistory:
         target = entry.reverses
         if target is None:
             return
-        # 打ち消しは打ち消せず（ADR-0010）、同じ行を 2 度は打ち消せない
-        # （``UNIQUE (reversal_of_id)``）
+        # A reversal cannot be reversed (ADR-0010), and a row cannot be reversed twice
+        # (``UNIQUE (reversal_of_id)``)
         if target in self._reversals or target in self._reversed:
             raise InvalidFamilyArchiveError
-        # 打ち消しは逆符号（``PointTransaction.plan_reversal``）。ここが崩れた控えは、
-        # この API を通しては作れない残高を持つ
+        # A reversal has the opposite sign (``PointTransaction.plan_reversal``). An archive
+        # breaking this holds a balance that could not be produced through this API
         if entry.amount != -self._amount_of(target):
             raise InvalidFamilyArchiveError
         self._reversed.add(target)
@@ -154,20 +156,20 @@ class _WrittenHistory:
         target = entry.corrects
         if target is None:
             return
-        # 打ち消しの行は訂正できず（ADR-0022）、同じ行の言い直しは 1 度だけ
-        # （``UNIQUE (corrects_id)``）
+        # A reversal row cannot be corrected (ADR-0022), and a row can be restated only once
+        # (``UNIQUE (corrects_id)``)
         if target in self._reversals or target in self._corrected:
             raise InvalidFamilyArchiveError
         self._amount_of(target)
-        # 訂正は「打ち消して書き直す」1 つの操作で、打ち消しの行を必ず伴う
-        # （``CorrectPointTransactionUseCase``）。打ち消しの無い言い直しを通すと、
-        # 効いたままの元の行と訂正後の行が二重に足された残高になる
+        # A correction is a single "reverse and rewrite" operation and always comes with a
+        # reversal row (``CorrectPointTransactionUseCase``). Letting a restatement through
+        # without a reversal would double-count the still-effective original and the corrected row
         if target not in self._reversed:
             raise InvalidFamilyArchiveError
         self._corrected.add(target)
 
     def _amount_of(self, ref: str) -> int:
-        """まだ書いていない行は指せない。"""
+        """A row not yet written cannot be referenced."""
         amount = self._amounts.get(ref)
         if amount is None:
             raise InvalidFamilyArchiveError

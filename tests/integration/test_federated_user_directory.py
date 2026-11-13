@@ -1,7 +1,7 @@
-"""初めての相手の口座を作る口（ADR-0041）の、DB に触れる部分。
+"""The DB-touching part of the endpoint that creates an account for a first-time user (ADR-0041).
 
-⚠ **確かめてから作るまでのあいだに追い越される**場合を、一意制約の側で受け止める。
-ユースケースの単体試験では名簿を差し替えているので、ここでしか確かめられない。
+⚠ The case of **being overtaken between checking and creating** is handled by the unique constraint.
+The use case unit tests swap out the roster, so this is the only place it can be checked.
 """
 
 from __future__ import annotations
@@ -25,12 +25,12 @@ def test_the_new_account_is_a_parent_without_a_password(db_session: Session) -> 
     assert user is not None
     assert user.password_hash is None
     assert [role.name for role in user.roles] == ["member"]
-    # ⚠ 長い名乗りは桁数で切る（MySQL の厳格モードは溢れた値を通さない）
+    # ⚠ Long names are truncated to the column length (MySQL strict mode rejects overflowing values)
     assert len(user.display_name) == 100
 
 
 def test_a_value_taken_in_the_meantime_returns_none_and_keeps_the_session_usable(db_session: Session) -> None:
-    """⚠ 巻き戻すのは作りかけの 1 行だけ。外側の変更（往復の控えの消費など）は残る。"""
+    """⚠ Only the half-created row is rolled back. Outer changes (consuming the round-trip record etc.) remain."""
     db_session.add(User(username="taken", email=None, display_name="先客", password_hash=None))
     db_session.flush()
     directory = SqlFederatedUserDirectory(db_session)

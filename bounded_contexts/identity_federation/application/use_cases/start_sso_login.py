@@ -59,7 +59,10 @@ class StartSsoLogin:
         return self._start(redirect_to=RedirectTarget.parse(redirect_to).path, silent=silent, renewal=False)
 
     def renew(self) -> SsoAuthorizationDto:
-        """A round trip that continues an expired login without showing a screen (inside a hidden frame. ADR-0058). Always ``prompt=none``."""
+        """A round trip that continues an expired login without showing a screen.
+
+        Runs inside a hidden frame (ADR-0058). Always ``prompt=none``.
+        """
         return self._start(redirect_to="/", silent=True, renewal=True)
 
     def _start(self, *, redirect_to: str, silent: bool, renewal: bool) -> SsoAuthorizationDto:

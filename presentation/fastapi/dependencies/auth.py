@@ -1,7 +1,7 @@
-"""FastAPI JWT 認証依存コンポーネント。
+"""FastAPI JWT authentication dependencies.
 
-``Depends()`` ベースで JWT を検証し、検証済みの ``AuthenticatedPrincipal`` を
-ルーターへ渡す。認可は :func:`require_permission`（scope ベース）で宣言する。
+Verifies JWTs via ``Depends()`` and passes the verified ``AuthenticatedPrincipal`` to
+routers. Authorization is declared with :func:`require_permission` (scope based).
 """
 
 from __future__ import annotations
@@ -20,15 +20,15 @@ from shared.kernel.settings.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# アクセストークンを格納する Cookie 名（ログイン時に auth ルーターが設定する）
+# Name of the cookie holding the access token (set by the auth router at login)
 ACCESS_TOKEN_COOKIE = "access_token"
 
 
 def set_access_token_cookie(response: Response, token: str) -> None:
-    """アクセストークンを Cookie へ載せる。
+    """Put the access token into the cookie.
 
-    トークンを発行する経路（パスワード・リフレッシュ・パスキー）が複数あるため、
-    属性の付け方をここ 1 か所に集約する。
+    There are several paths that issue tokens (password, refresh, passkey), so the cookie
+    attributes are set in this one place.
     """
     response.set_cookie(
         ACCESS_TOKEN_COOKIE,
@@ -44,7 +44,7 @@ def clear_access_token_cookie(response: Response) -> None:
     response.delete_cookie(ACCESS_TOKEN_COOKIE)
 
 
-# Authorization ヘッダー優先、無ければ Cookie フォールバック
+# Prefer the Authorization header; fall back to the cookie
 _bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -61,7 +61,7 @@ async def get_current_principal(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     access_token_cookie: str | None = Cookie(default=None, alias=ACCESS_TOKEN_COOKIE),
 ) -> AuthenticatedPrincipal:
-    """JWT を検証して ``AuthenticatedPrincipal`` を返す。失敗時は 401。"""
+    """Verify the JWT and return ``AuthenticatedPrincipal``. 401 on failure."""
     from presentation.fastapi.services.token_service import TokenService
 
     token = _extract_token(credentials, access_token_cookie)
@@ -74,14 +74,14 @@ async def get_current_principal(
 
     principal, reason = TokenService.verify_access_token_with_reason(token)
     if not principal:
-        logger.debug("JWT 認証失敗: %s", reason)
+        logger.debug("JWT authentication failed: %s", reason)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "invalid_token", "reason": reason},
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 以降のログへ user.id_hash を伝播する（PII は残さない）
+    # Propagate user.id_hash to subsequent logs (no PII)
     user_id_hash_var.set(principal.id_hash)
     return principal
 
@@ -89,13 +89,13 @@ async def get_current_principal(
 async def get_active_principal(
     principal: AuthenticatedPrincipal = Depends(get_current_principal),
 ) -> AuthenticatedPrincipal:
-    """一時パスワードでのログイン中は通さない（ADR-0011）。
+    """Refuse while logged in with a temporary password (ADR-0011).
 
-    **認証が要る経路は原則ここを通す。** :func:`get_current_principal` を直接
-    使ってよいのは、パスワードを変える経路（``POST /api/auth/change-password``）
-    と、自分が誰かを知る経路（``GET /api/auth/me`` / ``POST /api/auth/logout``）
-    の 3 つだけ。二要素・パスキーの登録や解除まで開けてしまうと、一時パスワード
-    を握った人が本人より先に第二の要素を差し替えられる。
+    **Paths that need authentication go through here as a rule.** Only three may use
+    :func:`get_current_principal` directly: the password change path
+    (``POST /api/auth/change-password``) and the who-am-I paths
+    (``GET /api/auth/me`` / ``POST /api/auth/logout``). If 2FA / passkey registration and removal
+    were open too, whoever holds the temporary password could swap the second factor before the owner.
     """
     if principal.must_change_password:
         raise HTTPException(
@@ -108,12 +108,12 @@ async def get_active_principal(
 async def get_current_principal_or_none(
     access_token_cookie: str | None = Cookie(default=None, alias=ACCESS_TOKEN_COOKIE),
 ) -> AuthenticatedPrincipal | None:
-    """入っていれば主体を、入っていなければ ``None`` を返す（401 にしない）。
+    """Return the principal if signed in, ``None`` otherwise (no 401).
 
-    ⚠ **これを認可に使わない。** 用があるのは**ブラウザの画面遷移**で戻ってくる
-    経路だけである（ADR-0036 の連携の戻り）。そこで 401 を返すと、利用者には
-    JSON の生文字列が見えるだけで、やり直す導線も出せない。認可が要る口は
-    :func:`get_active_principal` を使う。
+    ⚠ **Do not use this for authorization.** It is only for paths reached by a **browser
+    navigation** (the return from linking in ADR-0036). Returning 401 there would show the user
+    nothing but raw JSON, with no way to retry. Endpoints that need authorization use
+    :func:`get_active_principal`.
     """
     from presentation.fastapi.services.token_service import TokenService
 
@@ -126,11 +126,12 @@ async def get_current_principal_or_none(
 async def get_person_principal(
     principal: AuthenticatedPrincipal = Depends(get_active_principal),
 ) -> AuthenticatedPrincipal:
-    """**人のセッション**だけを通す。表示端末（ADR-0047）は断る。
+    """Allow **person sessions** only. Display devices (ADR-0047) are refused.
 
-    表示端末は資格情報（二要素・パスキー・SSO の結び付け）もプロフィールも持たない。
-    ⚠ 持たせると、端末の前に立った人が**外された後も入れる口**を作れる（メールアドレスを
-    足してリセットでパスワードを生やす、など）。資格情報やプロフィールを変える経路はここを通す。
+    Display devices have neither credentials (2FA, passkeys, SSO links) nor a profile.
+    ⚠ If they did, someone standing at the device could create **a way in that survives being
+    removed** (e.g. add an email address and grow a password via reset). Credential- and
+    profile-changing paths go through here.
     """
     if principal.via_display_device:
         raise HTTPException(
@@ -144,15 +145,15 @@ def get_settled_principal(
     principal: AuthenticatedPrincipal = Depends(get_person_principal),
     db: Session = Depends(get_db),
 ) -> AuthenticatedPrincipal:
-    """**資格情報を変える経路**のための関門（ADR-0037）。
+    """Gate for **credential-changing paths** (ADR-0037).
 
-    ⚠ **ここだけは行を読み直す。** アクセストークンの検証が DB を引かなくなったので
-    （ADR-0037）、一時パスワードの印はトークンに焼かれた値になる。親が一時パスワードを
-    立てた直後に、子が手元のトークンで**二要素やパスキーを差し替えられては、立てた
-    意味が無い**（ADR-0011）。
+    ⚠ **Only here is the row re-read.** Access token verification no longer hits the DB
+    (ADR-0037), so the temporary-password flag is the value baked into the token. If, right after
+    a parent sets a temporary password, a child could **swap 2FA or passkeys with the token they
+    hold, setting it would be pointless** (ADR-0011).
 
-    ⚠ **止められた利用者もここで弾く。** 新しい資格情報を作らせないためである。
-    表示端末も（:func:`get_person_principal` で）弾く。
+    ⚠ **Disabled users are also rejected here**, so they cannot create new credentials.
+    Display devices are rejected too (via :func:`get_person_principal`).
     """
     from presentation.fastapi.services.token_service import TokenService
 
@@ -171,9 +172,9 @@ def get_settled_principal(
 
 
 def require_permission(*codes: str) -> Callable[..., Awaitable[AuthenticatedPrincipal]]:
-    """指定された権限を全て保持している場合のみアクセスを許可する依存関数ファクトリ。
+    """Dependency factory that allows access only when all the given permissions are held.
 
-    使用例::
+    Example::
 
         @router.get("/api/admin/users")
         def list_users(

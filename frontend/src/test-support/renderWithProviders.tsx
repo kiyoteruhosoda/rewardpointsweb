@@ -1,10 +1,10 @@
 /**
- * 画面テスト用の描画補助。
+ * Render helper for screen tests.
  *
- * 画面は i18n・テーマ・トースト・ルーター・認証（scope）・所属する家族の上でしか
- * 動かない。毎回同じ入れ子を書かずに済むよう、ここでまとめて用意する。scope と
- * 家族は引数で差し替えられるので、「権限があるとき／ないとき」「家族があるとき／
- * ないとき」の描き分けをそのまま検証できる。
+ * Screens only work on top of i18n, theme, toasts, router, auth (scopes) and the user's
+ * family. Prepare them here so the same nesting need not be written each time. Scopes and
+ * family can be replaced via arguments, so "with/without permission" and "with/without
+ * a family" rendering can be verified directly.
  */
 import { render, type RenderResult } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
@@ -36,25 +36,25 @@ const USER: Me = {
 }
 
 interface Options {
-  /** ログイン中ユーザーが持つ scope。 */
+  /** Scopes held by the signed-in user. */
   scopes?: string[]
-  /** 表示する URL（`useParams` を使う画面で必要）。 */
+  /** URL to display (needed for screens using `useParams`). */
   route?: string
-  /** ルート定義のパス。既定は何にでも一致する。 */
+  /** Path of the route definition. Matches anything by default. */
   path?: string
-  /** ログアウトの観測（再ログイン誘導を検証する画面で使う）。 */
+  /** Observes logout (used by screens that verify the re-login prompt). */
   logout?: () => void
-  /** SSO の引き換え（IdP からの戻りを受ける画面で差し替える）。 */
+  /** SSO exchange (replaced for screens that receive the return from the IdP). */
   loginWithSsoTicket?: (ticket: string) => Promise<string>
-  /** 所属する家族。既定はどこにも所属していない状態。 */
+  /** The user's family. Defaults to not belonging to any family. */
   family?: FamilyDetail | null
-  /** 家族を読み込めなかった状態（所属の有無は分からない）。 */
+  /** State where the family failed to load (membership unknown). */
   familyFailed?: boolean
-  /** 家族の読み直しの観測（変更の後に読み直すかを検証する画面で使う）。 */
+  /** Observes family reloads (used by screens that verify reloading after changes). */
   reloadFamily?: () => Promise<void>
   /**
-   * 追加の `<Route>`。画面が別の URL へ送るところまで検証したいときに、
-   * 行き先の目印として置く（`path` を絞ったうえで使う）。
+   * Extra `<Route>`s. Placed as destination markers when verifying that a screen
+   * navigates to another URL (use with a narrowed `path`).
    */
   extraRoutes?: ReactNode
 }
@@ -97,7 +97,7 @@ export function renderWithProviders(ui: ReactElement, options: Options = {}): Re
     reloadFamily = () => Promise.resolve(),
     extraRoutes = null,
   } = options
-  // 言語は en に固定する。利用者の選択（localStorage）が残っていると期待文言が変わる。
+  // Fix the language to en. A leftover user choice (localStorage) would change expected text.
   localStorage.setItem('locale', 'en')
 
   return render(

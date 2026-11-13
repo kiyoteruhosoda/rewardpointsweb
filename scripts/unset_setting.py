@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""画面で保存した設定を 1 つ消す（＝環境変数か既定値へ戻す）。
+"""Delete one setting saved from the UI (= fall back to the environment variable or default).
 
     python scripts/unset_setting.py LOCAL_LOGIN_ENABLED
     python scripts/unset_setting.py --list
 
-⚠ **締め出しからの戻り道である。** 解決の順序は **DB > 環境変数 > 既定値** なので、
-画面で保存した値は環境変数では上書きできない（ADR-0031）。`LOCAL_LOGIN_ENABLED`
-を偽にしたまま IdP が落ちる、のような**画面に入れない状態**からは、保存を消して
-環境変数・既定値へ戻す。
+⚠ **This is the way back from a lockout.** Resolution order is **DB > environment > default**, so
+a value saved from the UI cannot be overridden by an environment variable (ADR-0031). From a
+**state where you cannot get into the UI**, such as the IdP going down while `LOCAL_LOGIN_ENABLED`
+is false, delete the saved value to fall back to the environment variable / default.
 
-⚠ **消すのは 1 鍵だけ。** 行ごと削ると、他の設定まで既定へ戻る。
+⚠ **Delete only one key.** Deleting the whole row resets the other settings to defaults too.
 
-⚠ **値は出さない。** 秘密が入っている鍵もあるので、出すのは鍵の名前だけである。
+⚠ **Never print values.** Some keys hold secrets, so only key names are printed.
 """
 
 from __future__ import annotations
@@ -48,8 +48,8 @@ def main(argv: list[str]) -> int:
         return 1
 
     del stored[key]
-    # ⚠ **新しい dict を代入する。** 中身を書き換えるだけでは JSON 列の変更を
-    #   SQLAlchemy が拾わないことがある。
+    # ⚠ **Assign a new dict.** If only the contents are mutated, SQLAlchemy may not
+    #   pick up the change to the JSON column.
     row.setting_json = stored
     session.commit()
     print(f"{key} の保存を消した。次に読むときは環境変数か既定値へ戻る。")

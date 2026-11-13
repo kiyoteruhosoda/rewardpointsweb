@@ -21,7 +21,8 @@ class PairingStartResponse(BaseModel):
     expires_in: int
     #: Interval for polling the claim endpoint (seconds)
     interval: int
-    #: QR code pointing to the approval screen (with the confirmation code), as an SVG data URI. ``None`` if ``origin`` was not sent
+    #: QR code pointing to the approval screen (with the confirmation code), as an SVG data URI.
+    #: ``None`` if ``origin`` was not sent
     qr_code: str | None = None
 
 

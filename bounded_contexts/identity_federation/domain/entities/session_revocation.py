@@ -58,13 +58,15 @@ class SessionRevocation:
         now: datetime,
         keep_for_seconds: int,
     ) -> SessionRevocation:
-        """Stop **all** SSO sessions of a person whom assay said "can no longer use" in periodic reconciliation (ADR-0040).
+        """Stop **all** SSO sessions of a person whom assay said "can no longer use" in periodic reconciliation
+        (ADR-0040).
 
         ⚠ **Derive ``jti`` from ``(issuer, sub, time of the last SSO sign-in)``.**
 
         - For the same login, even running hourly once per worker, **one row** is enough
           (the second is rejected by :meth:`SessionRevocationRepository.record` as a duplicate ``jti``)
-        - When the user comes back in assay, signs in again and is stopped again, the time changes, so it is **a new row**.
+        - When the user comes back in assay, signs in again and is stopped again, the time changes, so it is
+          **a new row**.
           ⚠ If ``jti`` stayed the same, the old row would remain, the new one would not be written, and the
           re-signed-in session would be missed (a record only applies to "what started before that time")
 
@@ -83,11 +85,11 @@ class SessionRevocation:
         )
 
     def covers(self, login: FederatedLogin) -> bool:
-        """このログインを、この記録が無効にするか。
+        """Whether this record invalidates the given login.
 
-        ``session_id`` が ``None`` の記録は**その利用者のすべてのセッション**に効く。
-        比べるのは**セッションが始まった時刻**で、止めたあとに入り直した利用者は
-        巻き添えにしない。
+        A record whose ``session_id`` is ``None`` applies to **all sessions of that user**.
+        What is compared is **the time the session started**, so a user who signed in again after
+        the stop is not caught up in it.
         """
         target = login.session
         if (self.session.issuer, self.session.subject) != (target.issuer, target.subject):

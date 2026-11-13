@@ -1,4 +1,4 @@
-"""家族の中での立場による認可（ADR-0009 の認可表）。"""
+"""Authorization by position within the family (ADR-0009 authorization table)."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def test_child_sees_only_its_own_ledger() -> None:
     child = _membership(id=2, role=FamilyRole.CHILD)
 
     assert family_access_policy.can_view_ledger(child, _ledger(id=10, membership_id=2))
-    # 兄弟の台帳は見えない
+    # A sibling's ledger is not visible
     assert not family_access_policy.can_view_ledger(child, _ledger(id=11, membership_id=3))
 
 
@@ -74,21 +74,21 @@ def test_both_guardians_create_children() -> None:
 
 
 def test_only_the_owner_invites_another_parent() -> None:
-    """新しい大人を入れるのは「家族の構成を変える」操作。除名と同じく owner のみ。"""
+    """Bringing in a new adult "changes the family's makeup". Owner only, like removal."""
     assert family_access_policy.can_invite(_membership(id=1, role=FamilyRole.OWNER), FamilyRole.PARENT)
     assert not family_access_policy.can_invite(_membership(id=2, role=FamilyRole.PARENT), FamilyRole.PARENT)
     assert not family_access_policy.can_invite(_membership(id=3, role=FamilyRole.CHILD), FamilyRole.PARENT)
 
 
 def test_both_guardians_hand_a_child_its_code() -> None:
-    """子ども宛の招待は顔ぶれを変えない（ADR-0020）。追加した親が渡せる。"""
+    """A child invitation does not change who is in the family (ADR-0020). The parent who added them can give it."""
     for role in (FamilyRole.OWNER, FamilyRole.PARENT):
         assert family_access_policy.can_invite(_membership(id=1, role=role), FamilyRole.CHILD)
     assert not family_access_policy.can_invite(_membership(id=3, role=FamilyRole.CHILD), FamilyRole.CHILD)
 
 
 def test_password_reset_targets_children_only() -> None:
-    """親から親へのリセットは許可しない（ADR-0011）。"""
+    """Parent-to-parent resets are not allowed (ADR-0011)."""
     parent = _membership(id=1, role=FamilyRole.PARENT)
     child = _membership(id=2, role=FamilyRole.CHILD)
     other_parent = _membership(id=3, role=FamilyRole.OWNER)
@@ -97,12 +97,12 @@ def test_password_reset_targets_children_only() -> None:
     assert family_access_policy.can_reset_password_of(parent, child)
     assert not family_access_policy.can_reset_password_of(parent, other_parent)
     assert not family_access_policy.can_reset_password_of(parent, outsider)
-    # 子は誰のパスワードも発行できない
+    # A child cannot issue anyone's password
     assert not family_access_policy.can_reset_password_of(child, child)
 
 
 def test_temporary_password_needs_an_account() -> None:
-    """立場が揃っていても、本人のアカウントが無ければ発行しようがない。"""
+    """Even with the right position, there is nothing to issue to if the person has no account."""
     parent = _membership(id=1, role=FamilyRole.PARENT)
     unlinked = _membership(id=2, role=FamilyRole.CHILD, linked=False)
 
@@ -111,7 +111,7 @@ def test_temporary_password_needs_an_account() -> None:
 
 
 def test_independence_targets_children_with_an_account() -> None:
-    """独立は本人の承認で成立する。ログインできない子は対象外（ADR-0014）。"""
+    """Independence takes effect with the person's own approval. Children who cannot sign in are excluded (ADR-0014)."""
     parent = _membership(id=1, role=FamilyRole.PARENT)
     child = _membership(id=2, role=FamilyRole.CHILD)
     unlinked = _membership(id=3, role=FamilyRole.CHILD, linked=False)
@@ -124,7 +124,7 @@ def test_independence_targets_children_with_an_account() -> None:
 
 
 def test_removal_needs_the_owner_and_an_empty_ledger() -> None:
-    """記録の残る参加者は外せない（ADR-0010）。自分自身も外せない。"""
+    """Participants with remaining records cannot be removed (ADR-0010). Nor can you remove yourself."""
     owner = _membership(id=1, role=FamilyRole.OWNER)
     parent = _membership(id=2, role=FamilyRole.PARENT)
     child = _membership(id=3, role=FamilyRole.CHILD)
@@ -136,7 +136,7 @@ def test_removal_needs_the_owner_and_an_empty_ledger() -> None:
 
 
 def test_both_guardians_reorder_members() -> None:
-    """並び順は見え方だけの話なので、親なら変えられる。"""
+    """Ordering is only about how things look, so any parent can change it."""
     for role in (FamilyRole.OWNER, FamilyRole.PARENT):
         assert family_access_policy.can_reorder_members(_membership(id=1, role=role))
     assert not family_access_policy.can_reorder_members(_membership(id=3, role=FamilyRole.CHILD))

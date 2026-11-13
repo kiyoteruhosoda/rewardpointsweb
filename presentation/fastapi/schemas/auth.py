@@ -47,7 +47,8 @@ class MeResponse(BaseModel):
     # offer password change**: otherwise a user who cannot enter a "current password"
     # would be shown a form that can never succeed.
     has_password: bool = True
-    # Whether this is a display device (signage) session (ADR-0047). If true, the UI shows only the display screen (/display)
+    # Whether this is a display device (signage) session (ADR-0047).
+    # If true, the UI shows only the display screen (/display)
     display_device: bool = False
 
 

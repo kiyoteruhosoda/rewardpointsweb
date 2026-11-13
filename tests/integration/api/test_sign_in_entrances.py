@@ -1,7 +1,7 @@
-"""「この利用者が入れる手段」の棚卸し（ADR-0035）。
+"""An inventory of "the ways this user can get in" (ADR-0035).
 
-認証系が 2 つある以上、開いている口の数は**並べて見ないと分からない**。
-材料はそれぞれのコンテキストが答える（パスワード / TOTP・パスキー / IdP との結び付き）。
+With two authentication systems, the number of open entrances **cannot be seen without listing them side by side**.
+Each context answers for its own part (password / TOTP and passkeys / link to the IdP).
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def test_a_password_only_user_shows_one_entrance(client: TestClient, admin_heade
 
 
 def test_every_entrance_is_listed(client: TestClient, db_session: Session, admin_headers: dict[str, str]) -> None:
-    """⚠ IdP 側の多要素はここに出ない。出せるのはこのアプリが知っている口だけ。"""
+    """⚠ IdP-side multi-factor does not show up here. Only entrances this app knows about can be listed."""
     admin = _admin(db_session)
     db_session.add(TotpSecretRecord(user_id=admin.id, secret="s", confirmed_at=utcnow()))
     db_session.add(
@@ -76,7 +76,7 @@ def test_every_entrance_is_listed(client: TestClient, db_session: Session, admin
 def test_an_enrolment_in_progress_is_not_an_entrance(
     client: TestClient, db_session: Session, admin_headers: dict[str, str]
 ) -> None:
-    """登録手続きの途中（``confirmed_at`` が NULL）は、まだ入り口ではない。"""
+    """A registration still in progress (``confirmed_at`` is NULL) is not yet an entrance."""
     db_session.add(TotpSecretRecord(user_id=_admin(db_session).id, secret="s", confirmed_at=None))
     db_session.commit()
 
@@ -86,7 +86,7 @@ def test_an_enrolment_in_progress_is_not_an_entrance(
 def test_a_user_without_a_password_shows_only_what_is_left(
     client: TestClient, db_session: Session, admin_headers: dict[str, str]
 ) -> None:
-    """⚠ パスワードを取り上げても、結び付きが残っていれば SSO では入れる。"""
+    """⚠ Even with the password taken away, SSO still works while the link remains."""
     admin = _admin(db_session)
     db_session.add(FederatedIdentityRecord(issuer=_ISSUER, subject="sub", user_id=admin.id))
     admin.password_hash = None

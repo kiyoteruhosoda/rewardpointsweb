@@ -1,32 +1,32 @@
 /**
- * パスワード入力欄。伏せ字の中身を一時的に見せる切り替えを備える。
+ * Password input. Has a toggle to temporarily reveal the masked content.
  *
- * 打ち間違えても気付けないのが伏せ字の欠点なので、入力欄の右端に目のボタンを置き、
- * 押しているあいだではなく「押すたびに」表示・非表示を入れ替える（片手で持つ端末でも
- * 押しっぱなしにしなくて済む）。表示状態はこの部品の中だけに持ち、画面を移ると必ず
- * 伏せ字へ戻る。
+ * The downside of masking is that typos go unnoticed, so an eye button sits at the right edge of the
+ * input and toggles show/hide "on each press" rather than while held (no need to keep holding on a
+ * one-handed device). The visible state lives only inside this component and always returns to
+ * masked when leaving the screen.
  *
- * 見出しは `label`（縦積みのフォーム）か `placeholder`（横並びのフォーム）のどちらかで
- * 渡す。ボタンは `<label>` の外に置く。中に入れると押した先で入力欄が反応してしまう。
+ * The caption is passed either as `label` (stacked forms) or `placeholder` (inline forms).
+ * The button sits outside the `<label>`; inside it, pressing would make the input react.
  */
 import { useId, useState } from 'react'
 
 import { useI18n } from '../i18n'
 
 interface Props {
-  /** 入力欄の上に出す見出し。横並びのフォームでは `placeholder` を使う。 */
+  /** Caption shown above the input. Inline forms use `placeholder` instead. */
   label?: string
-  /** 見出しを置けないときの代わりの文言。 */
+  /** Alternative text when no caption can be placed. */
   placeholder?: string
   value: string
   onChange: (value: string) => void
-  /** ブラウザ・パスワード管理ソフトへの用途の伝達（`current-password` 等）。 */
+  /** Tells the browser / password managers the purpose (`current-password` etc.). */
   autoComplete?: string
   minLength?: number
   required?: boolean
 }
 
-/** 目のかたち。伏せているあいだは斜線を重ねる。 */
+/** The eye shape. A slash is overlaid while masked. */
 function EyeIcon({ crossed }: { crossed: boolean }) {
   return (
     <svg
@@ -61,10 +61,10 @@ export function PasswordField({
   const [previous, setPrevious] = useState(value)
   const id = useId()
 
-  // 送信に成功した画面は入力欄を空へ戻す（部品は置かれたまま）。表示にしたままだと
-  // 次に打つパスワードが最初から見えてしまうので、値が空へ変わった時点で伏せ字へ戻す。
-  // 「空になった瞬間」だけを見る。空かどうかで判定すると、何も打っていない欄で先に
-  // 表示を押せなくなる。
+  // A screen that submitted successfully clears the input (the component stays mounted). If left
+  // visible, the next password typed would be visible from the start, so re-mask once the value becomes empty.
+  // Look only at "the moment it became empty". Checking whether it is empty would make it impossible
+  // to switch to visible first on an untouched input.
   if (previous !== value) {
     setPrevious(value)
     if (value === '') setVisible(false)
@@ -89,7 +89,7 @@ export function PasswordField({
         <button
           type="button"
           className="password-field-toggle"
-          /* 押した結果ではなく、押すと何が起きるかを読み上げる。 */
+          /* Announce what pressing will do, not the result of pressing. */
           aria-label={visible ? t('common.hidePassword') : t('common.showPassword')}
           aria-controls={id}
           onClick={() => {

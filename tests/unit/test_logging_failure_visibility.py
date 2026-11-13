@@ -1,8 +1,8 @@
-"""ログ基盤そのものが失敗したときに、それが見えること。
+"""When the logging infrastructure itself fails, that is visible.
 
-ログを書く側が例外を握り潰すと、症状は「管理画面にログが出ない」「保存した設定
-が効かない」だけになり、原因（DB 未接続・マイグレーション前・列の不一致）が
-どこにも残らない。**処理は止めない／黙りもしない**の両立をここで確かめる。
+If the log writer swallows exceptions, the symptoms are only "no logs in the admin screen" and "saved settings
+have no effect", and the cause (DB not connected, before migration, column mismatch) is
+left nowhere. This checks that we **neither stop processing nor stay silent**.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ def _record() -> logging.LogRecord:
 
 
 def test_write_failure_does_not_propagate(monkeypatch: pytest.MonkeyPatch) -> None:
-    """本処理はログのために落とさない。"""
+    """The main work is not brought down for logging's sake."""
     handler = DbLogHandler()
     monkeypatch.setattr(handler, "handleError", _ignore)
     monkeypatch.setattr(
@@ -28,11 +28,11 @@ def test_write_failure_does_not_propagate(monkeypatch: pytest.MonkeyPatch) -> No
         _raise,
     )
 
-    handler.emit(_record())  # 例外が漏れない
+    handler.emit(_record())  # no exception leaks
 
 
 def test_write_failure_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
-    """失敗は ``handleError``（stderr）で知らせる。黙って捨てない。"""
+    """Failures are reported via ``handleError`` (stderr). Not silently dropped."""
     handler = DbLogHandler()
     reported: list[logging.LogRecord] = []
     monkeypatch.setattr(handler, "handleError", reported.append)
@@ -52,15 +52,15 @@ def _raise(rows: object) -> None:
 
 
 def _ignore(record: logging.LogRecord) -> None:
-    """``handleError`` の差し替え（テスト中に stderr を汚さない）。"""
+    """Replacement for ``handleError`` (keeps stderr clean during tests)."""
 
 
 def test_unreadable_system_settings_are_reported_once(caplog: pytest.LogCaptureFixture) -> None:
-    """DB から設定を読めない状態は 1 度だけ警告する（TTL ごとに出すと溢れる）。"""
+    """Warn only once when settings cannot be read from the DB (warning every TTL would flood)."""
     settings = ApplicationSettings(env={})
 
     with caplog.at_level(logging.DEBUG, logger="shared.kernel.settings.settings"):
-        # エンジン未設定 = 読めない。TTL を潰して 2 回読ませる
+        # No engine configured = unreadable. Collapse the TTL and read twice
         assert settings.log_level == "INFO"
         settings.reload_db_overrides()
         assert settings.log_level == "INFO"

@@ -1,12 +1,12 @@
 /**
- * ユーザー管理（要 `user:manage`）。
+ * User management (requires `user:manage`).
  *
- * ログイン識別子は `username`、画面に出す名前は `display_name` と別に持つ。
- * メールアドレスは任意項目で、空のまま作れる（ADR-0011）。
+ * The login identifier is `username`, kept separate from the on-screen name `display_name`.
+ * Email is optional; users can be created without it (ADR-0011).
  *
- * 権限はロール経由でのみ付く。そのため一覧では **ロールを付け外し** し、その結果
- * 実際に効く scope（ロールの和集合）はサーバーが返した値をそのまま読み取り専用で
- * 並べる。scope を直に付け替える口は用意しない（CLAUDE.md「権限管理」）。
+ * Permissions are granted only via roles. So the list **assigns and removes roles**, and the
+ * resulting effective scopes (union of roles) are shown read-only, exactly as the server
+ * returns them. There is no way to change scopes directly (CLAUDE.md 「権限管理」, permissions).
  */
 import { useEffect, useState, type SubmitEvent } from 'react'
 
@@ -20,21 +20,21 @@ import { useI18n } from '../i18n'
 import { api, errorMessageKey } from '../services/api'
 import { roleLabel } from '../services/roles'
 
-/** この利用者が**このアプリへ入れる手段**（ADR-0035）。 */
+/** The **ways this user can get into this app** (ADR-0035). */
 interface SignInEntrances {
   password: boolean
   totp: boolean
   passkeys: number
   identity_providers: string[]
-  /** ペアリングした表示端末として入れるか（ADR-0047）。 */
+  /** Whether they can get in as a paired display device (ADR-0047). */
   display_device: boolean
 }
 
 /**
- * 入れる手段を短い並びにする（ADR-0035）。
+ * Turns the ways in into a short list (ADR-0035).
  *
- * ⚠ **IdP 側の多要素はここに出ない。** 出せるのはこのアプリが知っている口だけで、
- * それがまさに「認証系が 2 つある」ということである。
+ * ⚠ **IdP-side multi-factor does not show here.** Only the ways this app knows about can be shown,
+ * which is precisely what "two authentication systems" means.
  */
 function entranceLabels(entrances: SignInEntrances, t: (key: string) => string): string[] {
   const labels: string[] = []
@@ -53,9 +53,9 @@ interface User {
   display_name: string
   is_active: boolean
   roles: string[]
-  /** 所属ロールの権限の和集合（サーバーが計算する。ここでは変更できない）。 */
+  /** Union of the permissions of assigned roles (computed by the server; not editable here). */
   permissions: string[]
-  /** 入れる手段の棚卸し（ADR-0035）。表示だけで、ここからは取り上げられない。 */
+  /** Inventory of ways in (ADR-0035). Display only; they cannot be revoked from here. */
   entrances: SignInEntrances
 }
 
@@ -64,7 +64,7 @@ interface Role {
   name: string
 }
 
-/** 行の中で実行しうる操作（実行中の目印をどこに出すかが変わる）。 */
+/** Actions that can run within a row (affects where the in-progress marker appears). */
 type RowAction = 'update' | 'removal'
 
 interface RoleCheckboxesProps {
@@ -75,10 +75,10 @@ interface RoleCheckboxesProps {
 }
 
 /**
- * 1 人分のロールの付け外し。
+ * Assigning and removing roles for one user.
  *
- * ロール一覧の取得には `role:manage` が要る（`/api/admin/roles`）。持っていない
- * 管理者には選択肢を出しようがないので、その場合は今のロール名だけを示す。
+ * Listing roles requires `role:manage` (`/api/admin/roles`). Admins without it cannot be
+ * offered choices, so in that case only the current role names are shown.
  */
 function RoleCheckboxes({ user, roles, disabled, onToggle }: RoleCheckboxesProps) {
   const { t } = useI18n()
@@ -109,7 +109,7 @@ export function UsersPage() {
   const { notify } = useToast()
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<Role[]>([])
-  // 書きかけはログインの往復をまたいで残す（ADR-0058）。パスワードだけは残さない
+  // Keep unfinished input across the login round trip (ADR-0058). Passwords are never kept
   const [email, setEmail] = useSessionValue('users.email', '')
   const [username, setUsername] = useSessionValue('users.username', '')
   const [displayName, setDisplayName] = useSessionValue('users.displayName', '')
@@ -150,7 +150,7 @@ export function UsersPage() {
     }
   })
 
-  /** 1 行分の更新。終わるまでその行の次の操作を受け付けない。 */
+  /** Update for one row. No further action on that row is accepted until it finishes. */
   const runExclusively = (user: User, action: RowAction, request: () => Promise<unknown>) =>
     runForRow(user.id, action, async () => {
       try {
@@ -166,7 +166,7 @@ export function UsersPage() {
       api.put(`/api/admin/users/${user.id}`, { is_active: !user.is_active }),
     )
 
-  /** ロールの付け外し。差分ではなく変更後の全体を送る（API がそう受け取る）。 */
+  /** Assign/remove roles. Sends the whole resulting set, not a diff (as the API expects). */
   const toggleRole = (user: User, roleName: string) => {
     const next = user.roles.includes(roleName)
       ? user.roles.filter((name) => name !== roleName)
@@ -297,8 +297,8 @@ export function UsersPage() {
                     />
                   </td>
                   <td>
-                    {/* 入れる手段は変えられない（ここは棚卸しのための表示）。
-                        取り上げ方はそれぞれの口の側にある。 */}
+                    {/* The ways in cannot be changed (this is an inventory display).
+                        Each is revoked on its own side. */}
                     {entranceLabels(user.entrances, t).length === 0 ? (
                       t('users.entrance.none')
                     ) : (
@@ -320,7 +320,7 @@ export function UsersPage() {
                     >
                       {t('common.delete')}
                     </ActionButton>
-                    {/* チェックの付け外しは押しても表示が変わらないので、行に目印を出す。 */}
+                    {/* Toggling a checkbox does not change the display, so mark the row. */}
                     {rowAction === 'update' && (
                       <span className="spinner" role="status" aria-label={t('common.processing')} />
                     )}

@@ -1,12 +1,12 @@
-"""アプリケーション設定の一元アクセス。
+"""Single point of access to application settings.
 
-設定値は必ずこのモジュールの :data:`settings`（:class:`ApplicationSettings`）の
-``@property`` 経由で取得する。``os.getenv`` や DB への直接アクセスは禁止
-（CLAUDE.md「設定管理」参照）。
+Always read setting values through the ``@property`` accessors of this module's :data:`settings`
+(:class:`ApplicationSettings`). Direct ``os.getenv`` or DB access is forbidden
+(see the settings section of CLAUDE.md).
 
-優先順位: **環境変数 > DB（system_settings テーブル）> デフォルト値**。
+Priority: **environment variable > DB (system_settings table) > default value**.
 
-テストでは ``ApplicationSettings(env=...)`` を個別に生成して検証できる。
+Tests can create their own ``ApplicationSettings(env=...)`` to verify behaviour.
 """
 
 from __future__ import annotations
@@ -23,24 +23,24 @@ from shared.kernel.settings.system_settings_defaults import DEFAULT_APPLICATION_
 
 _logger = logging.getLogger(__name__)
 
-# IdP へ渡すリダイレクト URI の経路（``OIDC_REDIRECT_URI`` 未設定時に組み立てる）。
-# ルーター側の定義と対で合わせる（``bounded_contexts/identity_federation``）。
+# Path of the redirect URI passed to the IdP (built when ``OIDC_REDIRECT_URI`` is unset).
+# Keep in step with the router's definition (``bounded_contexts/identity_federation``).
 OIDC_CALLBACK_PATH = "/api/auth/sso/callback"
 
 
 class _DatabaseOverrides:
-    """優先順位「環境変数 > DB > デフォルト値」の DB 層。
+    """The DB layer of the "environment > DB > default" priority order.
 
-    管理画面から保存される ``system_settings`` テーブルの ``app.config``
-    レコードを供給する。
+    Supplies the ``app.config`` record of the ``system_settings`` table, which is saved from
+    the admin UI.
 
-    - DB 未接続・テーブル未作成（マイグレーション前）の場面では値なしを返し、
-      環境変数とデフォルト値のみで動作を続ける。読めない状態に入った／戻った
-      ときだけログへ 1 行残す。
-    - リクエスト毎の DB アクセスを避けるため TTL キャッシュを持つ。管理画面の
-      保存時は ``SystemSettingService`` が ``invalidate()`` を呼び即時反映する。
-    - 読み取りは専用の短命コネクションで行う（共有セッションの
-      トランザクション状態を汚さない）。
+    - When the DB is not connected or the table does not exist yet (before migrations), returns
+      no values and keeps running on environment variables and defaults only. Logs one line
+      only when entering / leaving the unreadable state.
+    - Keeps a TTL cache to avoid DB access on every request. On save in the admin UI,
+      ``SystemSettingService`` calls ``invalidate()`` so the change applies immediately.
+    - Reads use a dedicated short-lived connection (so they do not disturb the
+      transaction state of the shared session).
     """
 
     _SETTING_KEY = "app.config"
@@ -59,8 +59,8 @@ class _DatabaseOverrides:
 
     def get(self, key: str) -> Any:
         if key not in DEFAULT_APPLICATION_SETTINGS:
-            # DB 上書き対象は管理画面で編集可能なキーのみ。DATABASE_URI 等の
-            # ブートストラップ用キーをここで解決すると再帰する。
+            # Only keys editable in the admin UI can be overridden from the DB. Resolving
+            # bootstrap keys such as DATABASE_URI here would recurse.
             return None
         if getattr(self._loading, "active", False):
             return None
@@ -78,18 +78,18 @@ class _DatabaseOverrides:
                 self._payload = payload
             self._note_readable()
         except Exception:
-            # 直近の正常値を保持したまま、次の TTL まで再試行しない
+            # Keep the last good values and do not retry until the next TTL
             self._note_unreadable()
         finally:
             self._loading.active = False
             self._expires_at = time.monotonic() + self._TTL_SECONDS
 
     def _note_unreadable(self) -> None:
-        """DB から設定を読めなくなったことを知らせる。
+        """Report that settings can no longer be read from the DB.
 
-        黙って握り潰すと「管理画面で保存した値が効かない」という症状だけが残り、
-        原因（DB 未接続・マイグレーション前）がどこにも出ない。ただし TTL ごとに
-        出すとログが溢れるので、**状態が変わったときだけ** 1 行出す。
+        Swallowing it silently leaves only the symptom "values saved in the admin UI have no
+        effect", with the cause (DB not connected, before migrations) shown nowhere. Logging on
+        every TTL would flood the log, though, so log one line **only when the state changes**.
         """
         if self._unreadable:
             return
@@ -114,28 +114,29 @@ class _DatabaseOverrides:
 
 
 class ApplicationSettings:
-    """DB・環境変数・デフォルト値を統合して設定値を返す（この順に強い）。"""
+    """Returns setting values combining the DB, environment variables and defaults (in that order of precedence)."""
 
     def __init__(self, env: Mapping[str, str] | None = None) -> None:
         self._env: Mapping[str, str] = os.environ if env is None else env
         self._db = _DatabaseOverrides()
 
     # ------------------------------------------------------------------
-    # 解決ロジック
+    # Resolution logic
     # ------------------------------------------------------------------
 
     def _get(self, key: str, default: Any = None) -> Any:
-        """⚠ **DB（管理画面）が環境変数より強い。**
+        """⚠ **The DB (admin UI) wins over environment variables.**
 
-        環境変数は「配るときの初期値」であって、**運用中に決め直す場所は画面**
-        である ——逆にすると、compose に 1 行書いた時点でその鍵は画面から
-        触れなくなり、**画面に出ているのに変えられない**状態になる。
+        Environment variables are "initial values at deploy time"; **the place to change them
+        during operation is the UI** — the other way round, once a single line is written in
+        compose that key can no longer be touched from the UI, leaving it **shown on screen but
+        impossible to change**.
 
-        ⚠ **ブートストラップの鍵はこの順序の外**（`DATABASE_URI` など）。
-        解決に DB 接続が要る鍵を DB から読むと再帰するので、下の節では
-        `self._env` を直接読んでいる。
+        ⚠ **Bootstrap keys are outside this order** (e.g. `DATABASE_URI`).
+        Reading from the DB a key that resolving the DB connection needs would recurse, so the
+        section below reads `self._env` directly.
         """
-        # ⚠ 通信先と鍵の場所は順序の外（ADR-0056）。DB に値が残っていても読まない。
+        # ⚠ Endpoints and key locations are outside this order (ADR-0056). Ignore DB values for them.
         if key not in ENV_ONLY_SETTINGS:
             db_value = self._db.get(key)
             if db_value is not None:
@@ -146,9 +147,9 @@ class ApplicationSettings:
         return DEFAULT_APPLICATION_SETTINGS.get(key, default)
 
     def resolve(self, key: str, default: Any = None) -> Any:
-        """キーを優先順位どおりに解決する（管理画面の現在値表示用）。
+        """Resolve a key in priority order (for showing current values in the admin UI).
 
-        通常のコードは型付きの ``@property`` を使うこと。
+        Regular code must use the typed ``@property`` accessors.
         """
         return self._get(key, default)
 
@@ -177,11 +178,11 @@ class ApplicationSettings:
         return list(value) if isinstance(value, (list, tuple)) else []
 
     def reload_db_overrides(self) -> None:
-        """DB 上書きキャッシュを破棄する（設定保存直後・テスト後始末用）。"""
+        """Discard the DB override cache (right after saving settings, and for test cleanup)."""
         self._db.invalidate()
 
     # ------------------------------------------------------------------
-    # ブートストラップ（環境変数のみ。DB 上書き対象外）
+    # Bootstrap (environment variables only; not overridable from the DB)
     # ------------------------------------------------------------------
 
     @property
@@ -197,7 +198,7 @@ class ApplicationSettings:
         return self._env.get("ADMIN_INITIAL_PASSWORD") or None
 
     # ------------------------------------------------------------------
-    # 認証
+    # Authentication
     # ------------------------------------------------------------------
 
     @property
@@ -234,7 +235,7 @@ class ApplicationSettings:
 
     @property
     def login_max_failures(self) -> int:
-        """窓の中で何回まで失敗を許すか。``0`` で数えない（本番で 0 にしない。ADR-0055）。"""
+        """How many failures to allow within the window. ``0`` disables counting (never 0 in prod; ADR-0055)."""
         return max(self.get_int("LOGIN_MAX_FAILURES", 5), 0)
 
     @property
@@ -247,30 +248,30 @@ class ApplicationSettings:
 
     @property
     def temporary_password_ttl_seconds(self) -> int:
-        """親が発行した一時パスワードの有効期限（ADR-0011）。"""
+        """Lifetime of a temporary password issued by a parent (ADR-0011)."""
         return self.get_int("TEMPORARY_PASSWORD_TTL_SECONDS", 24 * 3600)
 
     @property
     def family_invitation_ttl_seconds(self) -> int:
-        """招待コードの有効期限（ADR-0009）。"""
+        """Lifetime of an invitation code (ADR-0009)."""
         return self.get_int("FAMILY_INVITATION_TTL_SECONDS", 7 * 24 * 3600)
 
     # ------------------------------------------------------------------
-    # 毎日のボーナス（ADR-0024）
+    # Daily bonus (ADR-0024)
     # ------------------------------------------------------------------
 
     @property
     def daily_bonus_time_zone(self) -> str:
-        """1 日の区切りに使う地域（IANA 名）。"""
+        """Time zone (IANA name) used to delimit a day."""
         return str(self._get("DAILY_BONUS_TIME_ZONE"))
 
     @property
     def daily_bonus_max_catch_up_days(self) -> int:
-        """止まっていたあいだの何日分まで遡って渡すか。"""
+        """How many days of downtime to go back and grant retroactively."""
         return self.get_int("DAILY_BONUS_MAX_CATCH_UP_DAYS", 31)
 
     # ------------------------------------------------------------------
-    # 二要素認証（TOTP）
+    # Two-factor authentication (TOTP)
     # ------------------------------------------------------------------
 
     @property
@@ -282,7 +283,7 @@ class ApplicationSettings:
         return self.get_int("TOTP_VALID_WINDOW", 1)
 
     # ------------------------------------------------------------------
-    # パスキー（WebAuthn）
+    # Passkeys (WebAuthn)
     # ------------------------------------------------------------------
 
     @property
@@ -302,7 +303,7 @@ class ApplicationSettings:
         return self.get_int("WEBAUTHN_CHALLENGE_TTL_SECONDS", 300)
 
     # ------------------------------------------------------------------
-    # 一般
+    # General
     # ------------------------------------------------------------------
 
     @property
@@ -326,7 +327,7 @@ class ApplicationSettings:
         return self.get_list("CORS_ALLOWED_ORIGINS")
 
     # ------------------------------------------------------------------
-    # メール
+    # Mail
     # ------------------------------------------------------------------
 
     @property
@@ -362,20 +363,20 @@ class ApplicationSettings:
         return str(self._get("MAIL_DEFAULT_SENDER") or "")
 
     # ------------------------------------------------------------------
-    # 外部 IdP（OIDC / SSO）連携。ADR-0029
+    # External IdP (OIDC / SSO) integration. ADR-0029
     # ------------------------------------------------------------------
 
     @property
     def oidc_enabled(self) -> bool:
-        """SSO を使うか。**設定が揃っているかまでは見ない**（:attr:`oidc_configured`）。"""
+        """Whether SSO is used. **Does not check that the settings are complete** (:attr:`oidc_configured`)."""
         return self.get_bool("OIDC_ENABLED", False)
 
     @property
     def oidc_configured(self) -> bool:
-        """SSO を実際に始められるか（有効かつ接続先が埋まっている）。
+        """Whether SSO can actually start (enabled and the endpoint is filled in).
 
-        資格情報が揃っているかは方式ごとに違うので ``ClientCredential`` が判断する。
-        ここは接続先だけを見る。
+        Whether credentials are complete differs per method, so ``ClientCredential`` decides that.
+        This looks only at the endpoint.
         """
         return self.oidc_enabled and bool(self.oidc_issuer and self.oidc_client_id)
 
@@ -397,40 +398,40 @@ class ApplicationSettings:
 
     @property
     def oidc_client_auth_method(self) -> str:
-        """トークンエンドポイントへの client 認証方式。
+        """Client authentication method for the token endpoint.
 
-        ``private_key_jwt`` にすると ``OIDC_CLIENT_SECRET`` を使わず、ホスト上の
-        秘密鍵で署名したアサーションを提示する。**秘密がデプロイの変数にも DB にも
-        載らない**のが利点。受け付ける値は ``ClientCredential`` 側の
-        ``CLIENT_AUTH_METHODS``。
+        With ``private_key_jwt``, ``OIDC_CLIENT_SECRET`` is not used; instead an assertion signed
+        with a private key on the host is presented. The benefit is that **the secret is in
+        neither the deploy variables nor the DB**. Accepted values are ``CLIENT_AUTH_METHODS``
+        in ``ClientCredential``.
         """
         return str(self._get("OIDC_CLIENT_AUTH_METHOD") or "").strip()
 
     @property
     def oidc_private_key_file(self) -> str:
-        """``private_key_jwt`` で使う秘密鍵（PEM）のパス。
+        """Path of the private key (PEM) used for ``private_key_jwt``.
 
-        nolumialab では ``/srv/secrets/oidc/client.key`` を read-only で渡している。
-        **ファイルの group をコンテナの実行 gid に合わせること**（0400 root だと
-        アプリが読めない）。ディレクトリ自身にも通り抜けの権限が要る。
+        On nolumialab ``/srv/secrets/oidc/client.key`` is passed in read-only.
+        **Set the file's group to the container's runtime gid** (with 0400 root the app
+        cannot read it). The directory itself also needs traverse permission.
         """
         return str(self._get("OIDC_PRIVATE_KEY_FILE") or "")
 
     @property
     def oidc_private_key_kid(self) -> str:
-        """アサーションのヘッダに入れる ``kid``。
+        """The ``kid`` put in the assertion header.
 
-        IdP に鍵が複数登録されているとき、これが無いとどの鍵で検証するか決められない。
+        When several keys are registered at the IdP, it cannot pick the key to verify with without it.
         """
         return str(self._get("OIDC_PRIVATE_KEY_KID") or "")
 
     @property
     def machine_client_id(self) -> str:
-        """このアプリが**機械として**名乗る ``client_id``（ADR-0040）。
+        """The ``client_id`` this app uses to identify itself **as a machine** (ADR-0040).
 
-        ⚠ 利用者のログイン用（``OIDC_CLIENT_ID``）とは**別の登録**。鍵だけを共有する。
-        ⚠ **用途の名前を付けない**（``RECONCILE_…`` にしない）。どのアプリのものかは
-        assay が決めることで、こちらが用途ごとに名乗りを使い分けて申告するものではない。
+        ⚠ **A separate registration** from the one for user login (``OIDC_CLIENT_ID``). Only the key is shared.
+        ⚠ **Do not name it after a purpose** (not ``RECONCILE_…``). Which app it belongs to is for
+        assay to decide; this side does not declare a different identity per purpose.
         """
         return str(self._get("MACHINE_CLIENT_ID") or "")
 
@@ -440,7 +441,7 @@ class ApplicationSettings:
 
     @property
     def oidc_redirect_uri(self) -> str:
-        """IdP へ渡すリダイレクト URI。未設定なら :attr:`app_base_url` から組み立てる。"""
+        """Redirect URI passed to the IdP. Built from :attr:`app_base_url` when unset."""
         configured = str(self._get("OIDC_REDIRECT_URI") or "")
         if configured:
             return configured
@@ -449,7 +450,7 @@ class ApplicationSettings:
 
     @property
     def oidc_acr_values(self) -> Sequence[str]:
-        """要求する認証の強度。空 = 要求しない（ADR-0039）。"""
+        """Required authentication strength. Empty = none required (ADR-0039)."""
         return self.get_list("OIDC_ACR_VALUES")
 
     @property
@@ -462,13 +463,13 @@ class ApplicationSettings:
 
     @property
     def oidc_link_by_email(self) -> bool:
-        """初回ログインで、同じメールアドレスの既存の利用者へ寄せるか（ADR-0033）。
+        """Whether a first login is merged into an existing user with the same email (ADR-0033).
 
-        ⚠ **既定は寄せない。** 条件の ``email_verified`` の意味が IdP 側と食い違って
-        いると、相手のアドレスを名乗るだけで他人のアカウントへ入れる経路になる。
+        ⚠ **Not merged by default.** If the IdP's meaning of the ``email_verified`` condition
+        differs from ours, claiming someone's address alone becomes a way into their account.
 
-        ⚠ 偽のあいだ、**同じメールアドレスの口座を持つ人は、初回の SSO で断られる**
-        （口座を 2 つ作らない。ADR-0041）。その口座へ入って設定画面から結び付ける。
+        ⚠ While false, **a person who has an account with the same email is refused at first SSO**
+        (no second account is created; ADR-0041). They sign into that account and link it from settings.
         """
         return self.get_bool("OIDC_LINK_BY_EMAIL", False)
 
@@ -485,7 +486,7 @@ class ApplicationSettings:
         return self.get_int("OIDC_LOGIN_TICKET_TTL_SECONDS", 60)
 
     # ------------------------------------------------------------------
-    # ログ
+    # Logging
     # ------------------------------------------------------------------
 
     @property

@@ -1,7 +1,8 @@
 """A family's lifecycle -- rename, leave, dissolve (ADR-0013).
 
 - Only the owner can change the family name.
-- A parent can leave if another parent remains, and afterwards is back to the initial state (can create a new family or accept an invitation again).
+- A parent can leave if another parent remains, and afterwards is back to the initial state
+  (can create a new family or accept an invitation again).
 - When the owner leaves, the oldest parent takes over as owner.
 - A child (guest) cannot leave on their own.
 - Only the owner can dissolve, and only when there are no other members.

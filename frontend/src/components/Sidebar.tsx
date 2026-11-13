@@ -1,18 +1,18 @@
 /**
- * ナビゲーション。表示はロール名ではなく scope で制御する。
+ * Navigation. Visibility is controlled by scope, not role name.
  *
- * 上段は家族が日常で使う画面。ダッシュボードのすぐ下に、台帳を持つ子を家族の
- * 決めた順（家族設定で変えられる）で並べる — 日々開くのはこの入口なので、
- * 家族の詳細を経由させない。システム管理（ユーザー・ロール・権限・システム設定・
- * ログ）は独立した節として下段に出し、scope を持つ人（admin）にだけ見せる。
+ * The upper part holds screens the family uses daily. Right under the dashboard, children with a ledger
+ * are listed in the family's chosen order (changeable in family settings) — this is the entry opened
+ * every day, so it does not go through family details. System administration (users, roles, permissions,
+ * system settings, logs) appears as a separate lower section, shown only to people with the scope (admin).
  *
- * 広い画面では本文の左に置いたままにし、狭い画面では画面外から滑り出す引き出しに
- * なる（切り替えは index.css のメディアクエリ。DOM は 1 つで、開いているかどうかだけを
- * `open` で受け取る）。閉じ方は「項目を選ぶ」「背景に触れる」「Escape」の 3 つ。
+ * On wide screens it stays to the left of the content; on narrow screens it becomes a drawer sliding in
+ * from off-screen (switched by a media query in index.css; there is one DOM, and only whether it is open
+ * is received as `open`). It closes in three ways: "choose an item", "touch the backdrop", "Escape".
  *
- * 開いているあいだはキーボードの焦点を引き出しの中に閉じ込める。引き出しは背景を
- * 覆って本文を操作できなくするので、Tab で背後の（見えない）操作子へ入れてしまうと
- * キーボードや支援技術の利用者だけが迷子になる。
+ * While open, keyboard focus is trapped inside the drawer. The drawer covers the backdrop and blocks
+ * the content, so letting Tab go into the (invisible) controls behind it would leave only keyboard and
+ * assistive-technology users lost.
  */
 import { Fragment, useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
@@ -33,24 +33,24 @@ const ITEMS: Item[] = [
   { to: '/profile', labelKey: 'nav.profile', scopes: [] },
 ]
 
-/** 子の入口を差し込む位置。ダッシュボードの直後（この項目の後ろ）。 */
+/** Where child entries are inserted. Right after the dashboard (after this item). */
 const CHILDREN_AFTER = '/'
 
-/** システム管理の入口。scope を持つ人にだけ独立した節として出す。 */
+/** System administration entries. Shown as a separate section only to people with the scope. */
 const ADMIN_ITEMS: Item[] = [
   { to: '/admin/users', labelKey: 'nav.users', scopes: ['user:manage'] },
   { to: '/admin/roles', labelKey: 'nav.roles', scopes: ['role:manage'] },
   { to: '/admin/permissions', labelKey: 'nav.permissions', scopes: ['permission:manage'] },
   { to: '/admin/config', labelKey: 'nav.config', scopes: ['admin:system-settings'] },
   { to: '/admin/logs', labelKey: 'nav.logs', scopes: ['log:view'] },
-  // 表示端末の承認・一覧は運用管理者だけ（admin には出ない。ADR-0047）
+  // Display-device approval/list is for operators only (not shown to admin; ADR-0047)
   { to: '/admin/displays', labelKey: 'nav.displays', scopes: ['display:approve'] },
 ]
 
-/** 引き出しの id。ヘッダーの開閉ボタンが `aria-controls` で指す。 */
+/** The drawer's id. The header toggle button points to it with `aria-controls`. */
 export const NAV_ID = 'primary-nav'
 
-/** index.css のメディアクエリと同じ境目。ここを跨いだら引き出しではなくなる。 */
+/** Same breakpoint as the index.css media query. Crossing it means it is no longer a drawer. */
 const NARROW = '(max-width: 48rem)'
 
 interface Props {
@@ -59,11 +59,11 @@ interface Props {
 }
 
 /**
- * 引き出しを開けているあいだ、焦点を巡回させる要素。
+ * Elements focus cycles through while the drawer is open.
  *
- * 順は「項目 → 背景の『閉じる』ボタン」。背景は DOM 上は項目より前にあるが、
- * 開いた直後の焦点が「閉じる」になるのは行き先を探している人には遠回りなので、
- * 巡回の最後に置く。
+ * Order is "items -> the backdrop's 'close' button". The backdrop comes before the items in the DOM,
+ * but having focus land on "close" right after opening is a detour for people looking for a
+ * destination, so it goes last in the cycle.
  */
 function focusables(nav: HTMLElement | null): HTMLElement[] {
   if (!nav) return []
@@ -78,12 +78,12 @@ export function Sidebar({ open, onClose }: Props) {
   const { family } = useFamily()
   const navRef = useRef<HTMLElement>(null)
   const adminItems = ADMIN_ITEMS.filter((item) => hasScope(...item.scopes))
-  // 台帳を持つ参加者＝子。見えない兄弟の台帳は ledger_id が来ないので、
-  // ここに並ぶのは「自分が開ける入口」だけになる（ADR-0009）。
+  // Participants with a ledger = children. Hidden siblings' ledgers come without ledger_id,
+  // so only "entries I can open" are listed here (ADR-0009).
   const children = family?.memberships.filter((member) => member.ledger_id !== null) ?? []
 
-  // Escape で閉じ、Tab は引き出しの中で巡回させる。開いたときは先頭へ焦点を移し、
-  // 閉じたら開いた操作子（ヘッダーの ☰）へ戻す。
+  // Close with Escape, and cycle Tab within the drawer. Move focus to the first item when opened,
+  // and back to the control that opened it (the header ☰) when closed.
   useEffect(() => {
     if (!open) return
     const opener = document.activeElement
@@ -114,7 +114,7 @@ export function Sidebar({ open, onClose }: Props) {
     }
   }, [open, onClose])
 
-  // 画面が広くなったら引き出しではなくなる。開いたままだと閉じ込めだけが残るので閉じる。
+  // When the screen becomes wide it is no longer a drawer. If left open only the trap would remain, so close it.
   useEffect(() => {
     if (!open) return
     const query = window.matchMedia(NARROW)

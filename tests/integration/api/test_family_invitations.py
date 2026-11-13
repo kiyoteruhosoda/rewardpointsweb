@@ -335,7 +335,8 @@ def test_parent_cannot_reset_another_parent(client: TestClient, admin_headers: d
 
 
 def test_temporary_password_blocks_profile_and_security_changes(client: TestClient, parent: Account) -> None:
-    """Keep the second factor and contact details from being replaced before the person themselves does it (ADR-0011)."""
+    """Keep the second factor and contact details from being replaced before the person themselves
+    does it (ADR-0011)."""
     family_id, membership_id = _linked_child(client, parent)
     issued = client.post(
         f"/api/families/{family_id}/memberships/{membership_id}/password-reset",
@@ -393,7 +394,8 @@ def test_with_an_idp_a_parent_invitation_cannot_create_an_account(
     """⚠ When an IdP exists, an adult has only the one account created when signing in through the IdP (ADR-0048).
 
     Creating one here would make a separate account without an email address, so the same person would end up
-    with two accounts on the first SSO sign-in. Even when refused, the code stays usable and can be accepted after signing in.
+    with two accounts on the first SSO sign-in. Even when refused, the code stays usable and can be
+    accepted after signing in.
     """
     monkeypatch.setenv("OIDC_ENABLED", "true")
     family_id = create_family(client, parent.headers)

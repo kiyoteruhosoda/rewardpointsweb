@@ -1,4 +1,4 @@
-"""テスト共通フィクスチャ（SQLite in-memory + マスタデータ投入済み）。"""
+"""Shared test fixtures (SQLite in-memory with master data seeded)."""
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ import bounded_contexts.account_security.infrastructure.account_security_models
 import bounded_contexts.display_devices.infrastructure.display_devices_models
 import bounded_contexts.example.infrastructure.item_model
 import bounded_contexts.identity_federation.infrastructure.identity_federation_models
-import bounded_contexts.reward_points.infrastructure.reward_points_models  # noqa: F401 — メタデータ登録
-import shared.infrastructure.models  # noqa: F401 — メタデータ登録
+import bounded_contexts.reward_points.infrastructure.reward_points_models  # noqa: F401 — registers metadata
+import shared.infrastructure.models  # noqa: F401 — registers metadata
 from bounded_contexts.email_sender.domain.email_message import EmailMessage
 from bounded_contexts.email_sender.infrastructure.smtp_email_sender import SmtpEmailSender
 from shared.domain.auth import master_data
@@ -40,8 +40,8 @@ def engine() -> Iterator[sa.Engine]:
         poolclass=StaticPool,
     )
 
-    # SQLite は既定で外部キーを検査しない。本番（MariaDB / InnoDB）は検査するため、
-    # 有効にしないと「参照が残っているのに親を消せてしまう」欠陥がテストを通過する。
+    # SQLite does not check foreign keys by default. Production (MariaDB / InnoDB) does, so
+    # without enabling it a defect like "the parent can be deleted while still referenced" passes the tests.
     @sa.event.listens_for(engine, "connect")
     def _enforce_foreign_keys(connection: DBAPIConnection, _record: ConnectionPoolEntry) -> None:
         cursor = connection.cursor()
@@ -82,11 +82,11 @@ def client(app: FastAPI) -> Iterator[TestClient]:
 
 @pytest.fixture
 def mail_outbox(monkeypatch: pytest.MonkeyPatch) -> list[EmailMessage]:
-    """メールを送れる状態にし、送られた本文を受け取る。
+    """Enable mail sending and capture the messages that were sent.
 
-    既定の ``MAIL_ENABLED`` は無効なので、これを使わないテストは「送信できない
-    運用」を検証していることになる。送ったつもりの経路を確かめたいときは、必ず
-    このフィクスチャを取ること。
+    ``MAIL_ENABLED`` is off by default, so a test that does not use this is verifying the
+    "cannot send" setup. Whenever you want to check a path that is meant to send mail,
+    always take this fixture.
     """
     sent: list[EmailMessage] = []
     monkeypatch.setenv("MAIL_ENABLED", "true")

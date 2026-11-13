@@ -1,17 +1,19 @@
-"""家族まるごとの控え（アーカイブ）— バックアップと復元の受け渡し形（ADR-0026）。
+"""A whole-family archive — the exchange shape for backup and restore (ADR-0026).
 
-家族・参加者・台帳・記録・毎日のボーナスを 1 つの入れ子で持つ。**アカウントは
-入らない** — ログイン ID もパスワードも招待コードもここには現れない。復元した
-家族に本人が入り直す道は招待コードで、控えの中身とは別に用意されている。
+Holds the family, members, ledgers, records and daily bonuses in one nested structure.
+**Accounts are not included** — no login IDs, passwords or invitation codes appear here.
+People re-join a restored family via invitation codes, provided separately from the
+archive contents.
 
-行どうしの繋がり（誰が記録したか、どの記録の打ち消し・訂正か）は、DB の ID では
-なくファイルの中だけで通じる **ref**（``"m1"`` / ``"t1"``）で表す。復元先では ID が
-すべて変わるため、書き出した ID をそのまま書けば必ず食い違う。ref なら別の
-インスタンスへ持ち込んでも繋がりが保たれる。
+Links between rows (who recorded it, which record a reversal/correction targets) are
+expressed as **refs** (``"m1"`` / ``"t1"``) that are meaningful only inside the file, not
+as DB IDs. All IDs change at the restore destination, so writing exported IDs as-is would
+always mismatch. With refs the links survive being carried to another instance.
 
-``version`` は形が変わったときに上げる。読めない版は
+Bump ``version`` when the shape changes. Unreadable versions are rejected with
 :class:`~bounded_contexts.reward_points.domain.exceptions.UnsupportedArchiveVersionError`
-で断る — 知らない項目を黙って捨てると、復元したつもりの家族から記録が消える。
+— silently dropping unknown fields would make records vanish from a supposedly restored
+family.
 """
 
 from __future__ import annotations
@@ -21,45 +23,47 @@ from datetime import date, datetime
 
 from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
 
-#: ファイルの種類。別のアプリの JSON を取り違えて渡されたときに気付くための印
+#: File kind. A marker to notice when another app's JSON is passed by mistake
 ARCHIVE_FORMAT = "rewardpointsweb.family"
 
-#: 書き出す形の版。形を変えたら上げる
+#: Version of the exported shape. Bump it when the shape changes
 ARCHIVE_VERSION = 2
 
-#: 取り込める版。
+#: Versions that can be imported.
 #:
-#: 版 1 との違いは家族のルール（``family_rules``）が載るかどうかだけで、無くても
-#: 家族は元どおりに作り直せる（ADR-0027）。**すでに手元にある控えを読めなくしない**
-#: ため、増えた項目が「無くても復元が成立する」ものである限り、古い版も受け付ける。
-#: 記録に関わる形が変わったときは、この集合から外して断る。
+#: The only difference from version 1 is whether the family rules (``family_rules``) are
+#: included; without them the family can still be rebuilt as before (ADR-0027). **To keep
+#: archives people already hold readable**, older versions are accepted as long as the added
+#: fields are ones "the restore still works without". When the shape of records changes,
+#: remove the old version from this set and reject it.
 SUPPORTED_ARCHIVE_VERSIONS = frozenset({1, ARCHIVE_VERSION})
 
 
 @dataclass(frozen=True, kw_only=True)
 class ArchivedTransactionDTO:
-    """台帳の 1 行。"""
+    """One ledger row."""
 
-    #: このファイルの中でこの行を指す名前（台帳の中で一意）
+    #: Name referring to this row within the file (unique within the ledger)
     ref: str
     amount: int
     reason: str
     occurred_at: datetime
-    #: 記録した参加者の ref。毎日のボーナス（ADR-0024）と、家族を離れた人の行では None
+    #: Ref of the recording member. None for daily bonuses (ADR-0024) and rows by people who
+    #: left the family
     granted_by: str | None
-    #: 打ち消しの行なら、打ち消した相手の ref（ADR-0010）
+    #: For a reversal row, the ref of the row it reverses (ADR-0010)
     reverses: str | None
-    #: 訂正後の行なら、言い直した相手の ref（ADR-0022）
+    #: For a corrected row, the ref of the row it restates (ADR-0022)
     corrects: str | None
 
 
 @dataclass(frozen=True, kw_only=True)
 class ArchivedDailyBonusDTO:
-    """毎日のボーナスの約束（ADR-0024）。
+    """A daily bonus arrangement (ADR-0024).
 
-    ``granted_through`` も控える。落とすと、復元した直後に「まだ渡していない日」
-    が開始日まで遡って復活し、すでに控えに入っている行と同じ日のボーナスが
-    もう一度足される。
+    ``granted_through`` is archived too. Dropping it would, right after a restore, revive
+    the "days not yet granted" back to the start date, adding the bonus again for days
+    whose rows are already in the archive.
     """
 
     amount: int
@@ -70,19 +74,19 @@ class ArchivedDailyBonusDTO:
 
 @dataclass(frozen=True, kw_only=True)
 class ArchivedLedgerDTO:
-    #: 書いた順（古い行が先）。打ち消し・訂正は必ず相手より後に並ぶ
+    #: In writing order (oldest first). Reversals/corrections always come after their target
     transactions: tuple[ArchivedTransactionDTO, ...]
     daily_bonus: ArchivedDailyBonusDTO | None
 
 
 @dataclass(frozen=True, kw_only=True)
 class ArchivedMemberDTO:
-    """家族への参加。誰のアカウントだったかは持たない。"""
+    """Membership in the family. Does not record whose account it was."""
 
     ref: str
     display_name: str
     role: FamilyRole
-    #: 台帳を持つのは ``role = child`` だけ（ADR-0009）
+    #: Only ``role = child`` has a ledger (ADR-0009)
     ledger: ArchivedLedgerDTO | None
 
 
@@ -92,15 +96,15 @@ class FamilyArchiveDTO:
     version: int
     exported_at: datetime
     family_name: str
-    #: 家族で決めた約束ごと（ADR-0027）。書いていなければ None。版 1 の控えには無い
+    #: Rules agreed in the family (ADR-0027). None if unwritten. Absent in version 1 archives
     family_rules: str | None
-    #: 画面に並ぶ順（owner が先、次に親、最後に家族が決めた順の子）
+    #: On-screen order (owner first, then parents, finally children in the family's chosen order)
     members: tuple[ArchivedMemberDTO, ...]
 
 
 @dataclass(frozen=True, kw_only=True)
 class ImportedFamilyDTO:
-    """取り込みの結果。数を返すのは、復元できた量を人が確かめられるようにするため。"""
+    """Import result. Counts are returned so a person can check how much was restored."""
 
     family_id: int
     name: str

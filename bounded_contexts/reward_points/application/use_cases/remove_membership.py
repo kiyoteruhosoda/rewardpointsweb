@@ -54,7 +54,8 @@ class RemoveMembershipUseCase:
         actor = self._access.membership_in(family_id=family_id, account_id=account_id)
         target = self._memberships.find_by_id(membership_id)
         if target is None or target.family_id != family_id:
-            # Return 403 to those not allowed to remove before revealing whether the target exists (same order as require_owner)
+            # Return 403 to those not allowed to remove before revealing whether the target exists
+            # (same order as require_owner)
             if not family_access_policy.can_administer_family(actor):
                 raise FamilyAccessDeniedError
             raise MembershipNotFoundError

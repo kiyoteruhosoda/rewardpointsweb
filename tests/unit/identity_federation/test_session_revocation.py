@@ -1,4 +1,4 @@
-"""停止の記録が、どのトークンを無効にするか（ADR-0032 / ADR-0040）。"""
+"""Which tokens a suspension record invalidates (ADR-0032 / ADR-0040)."""
 
 from __future__ import annotations
 
@@ -49,15 +49,15 @@ def test_sessions_started_before_the_stop_are_dead() -> None:
 
 
 def test_sessions_started_after_the_stop_survive() -> None:
-    """⚠ 止めたあとにログインし直した利用者を巻き添えにしない。
+    """⚠ Do not take down users who signed in again after being stopped.
 
-    比べるのは**マイクロ秒まで持つ開始時刻**で、トークンの ``iat``（秒まで）ではない。
+    What is compared is **the start time held to the microsecond**, not the token's ``iat`` (seconds).
     """
     assert not _revocation("session-1").covers(_login(started_at=_NOW + timedelta(microseconds=1)))
 
 
 def test_another_session_of_the_same_user_survives() -> None:
-    """``sid`` まで分かっているなら、その端末だけを落とす。"""
+    """If the ``sid`` is known, knock out only that device."""
     assert not _revocation("session-1").covers(_login("session-2"))
 
 
@@ -70,11 +70,11 @@ def test_another_user_is_never_touched() -> None:
 
 
 def test_the_record_is_kept_only_as_long_as_a_token_can_live() -> None:
-    """リフレッシュトークンの寿命を過ぎれば、記録より前のトークンは自力で切れる。"""
+    """Once the refresh token lifetime has passed, tokens older than the record expire on their own."""
     assert _revocation(None).expires_at == _NOW + timedelta(seconds=3600)
 
 
-# --- 定期照合が書く失効（ADR-0040） ---------------------------------------------------------
+# --- Revocations written by periodic reconciliation (ADR-0040) ----------------------------------------------------
 
 
 def _reconciled(last_login_at: datetime | None, *, subject: str = "idp-subject") -> SessionRevocation:
@@ -91,14 +91,14 @@ def test_reconciliation_ends_every_session_that_started_before_it() -> None:
 
 
 def test_reconciliation_writes_the_same_jti_for_the_same_login() -> None:
-    """⚠ 毎時・ワーカーの数だけ走っても、行は 1 本で済む。"""
+    """⚠ Even running hourly once per worker, it stays a single row."""
     logged_in = _NOW - timedelta(days=1)
 
     assert _reconciled(logged_in).jti == _reconciled(logged_in).jti
 
 
 def test_reconciliation_writes_a_new_jti_after_a_new_login() -> None:
-    """⚠ 同じ ``jti`` のままだと、戻って入り直した後の停止を取りこぼす。"""
+    """⚠ Keeping the same ``jti`` would miss a suspension after the person came back and signed in again."""
     assert _reconciled(_NOW - timedelta(days=1)).jti != _reconciled(_NOW - timedelta(hours=1)).jti
 
 

@@ -1,4 +1,4 @@
-"""ログイン後の戻り先（外部の URL へ出さない）。"""
+"""Where to return after sign-in (never to an external URL)."""
 
 from __future__ import annotations
 
@@ -22,9 +22,9 @@ def test_keeps_paths_inside_the_application(value: str) -> None:
         "",
         "   ",
         "https://phishing.example",
-        # スキーム相対。ブラウザは外部サイトとして開く
+        # Scheme-relative. The browser opens it as an external site
         "//phishing.example",
-        # 一部のブラウザが / として扱う
+        # Some browsers treat it as /
         "/\\phishing.example",
         "javascript:alert(1)",
     ],

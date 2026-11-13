@@ -1,4 +1,4 @@
-/** 認証状態（ログイン中ユーザーと scope）。認可判定は hasScope で行う。 */
+/** Authentication state (signed-in user and scopes). Authorization is checked with hasScope. */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
 import { clearSessionDrafts } from '../hooks/useSessionDraft'
@@ -17,25 +17,25 @@ import { assertPasskey, type PasskeyChallenge } from '../services/webauthn'
 
 export interface Me {
   user_id: number
-  /** ログイン識別子。メールアドレスは任意項目（ADR-0011）。 */
+  /** Login identifier. Email is optional (ADR-0011). */
   username: string
   display_name: string
   email: string | null
   scopes: string[]
-  /** 一時パスワードでのログイン中。変更を終えるまで他の操作は通らない。 */
+  /** Signed in with a temporary password. No other action passes until it is changed. */
   must_change_password: boolean
   /**
-   * パスワードという入り口を持っているか（ADR-0034）。
-   * 偽 = SSO でしか入れない利用者。画面はパスワード変更の導線を出さない。
+   * Whether the user has a password as a way in (ADR-0034).
+   * false = a user who can only enter via SSO. The screen offers no password change.
    */
   has_password: boolean
-  /** 表示端末（サイネージ）のセッションか（ADR-0047）。真なら表示の画面だけを出す。 */
+  /** Whether this is a display device (signage) session (ADR-0047). If true, only the display. */
   display_device: boolean
 }
 
 interface TokenPair {
   access_token: string
-  /** SSO で入ったログインには出ない（ADR-0058）。 */
+  /** Not present for logins via SSO (ADR-0058). */
   refresh_token: string | null
 }
 
@@ -43,26 +43,27 @@ export interface AuthValue {
   user: Me | null
   loading: boolean
   /**
-   * サーバーに届かない（5xx・通信の失敗）。新しい版を配っている最中など。
-   * ⚠ **このとき user を null にせず、トークン（とオフライン閲覧のキャッシュ）も消さない**——ログアウトしたのではないので、ログイン画面へ
-   * 送ると、戻ってきたあとも IdP の入口の無い画面に取り残される。つながるまで自動で聞き直す。
+   * The server is unreachable (5xx, network failure), e.g. while a new version is rolling out.
+   * ⚠ **Do not set user to null here, and do not clear tokens (or the offline view cache)** —
+   * this is not a logout, and sending them to the login screen would strand them on a screen
+   * without the IdP entry once the server is back. Retry automatically until connected.
    */
   unreachable: boolean
-  /** 二要素認証が有効なアカウントでは totpCode が必要（未指定なら totp_required）。 */
+  /** totpCode is required for accounts with two-factor auth (totp_required if omitted). */
   login: (username: string, password: string, totpCode?: string) => Promise<void>
   loginWithPasskey: () => Promise<void>
-  /** IdP からの戻りに付く引き換え券でログインする。返すのは戻り先の経路。 */
+  /** Sign in with the exchange ticket attached on return from the IdP. Returns the return path. */
   loginWithSsoTicket: (ticket: string) => Promise<string>
   logout: () => void
   refreshMe: () => Promise<void>
   hasScope: (...codes: string[]) => boolean
 }
 
-/** テストが scope を差し替えて描画できるよう公開する（本番の生成は AuthProvider）。 */
+/** Exported so tests can render with replaced scopes (production builds it in AuthProvider). */
 export const AuthContext = createContext<AuthValue | null>(null)
 
 const SERVER_ERROR = 500
-/** サーバーに届かないとき、聞き直す間隔 */
+/** Retry interval while the server is unreachable */
 export const RECONNECT_INTERVAL_MS = 5000
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -79,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(await api.get<Me>('/api/auth/me'))
       setUnreachable(false)
     } catch (e) {
-      // 4xx（401 など）はサーバーが「ログインしていない」と答えたもの。それ以外は届いていない
+      // 4xx (401 etc.) means the server answered "not signed in". Anything else did not get through
       if (e instanceof ApiError && e.status < SERVER_ERROR) {
         clearTokens()
         setUser(null)
@@ -90,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // ログインを続けられなかった（ADR-0058）。画面はログイン画面へ移る（行き先と書きかけは残る）
+  // Could not continue the session (ADR-0058). Moves to login (destination and drafts are kept)
   useEffect(
     () =>
       subscribeSessionEnded(() => {
@@ -121,8 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       totp_code: totpCode || null,
     })
-    // ログアウトを経ずに別のアカウントで入り直しても、前のユーザーの
-    // オフライン閲覧キャッシュを持ち越さない（ADR-0015）
+    // Even when re-entering with another account without logging out, do not carry over the
+    // previous user's offline view cache (ADR-0015)
     await clearOfflineViewCache()
     setTokens(pair.access_token, pair.refresh_token)
     clearSilentSsoMarks()
@@ -136,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       challenge_id: challenge.challenge_id,
       credential,
     })
-    // login と同じく、別アカウントでの入り直しに備えて消す（ADR-0015）
+    // As with login, clear it in case of re-entry with another account (ADR-0015)
     await clearOfflineViewCache()
     setTokens(pair.access_token, pair.refresh_token)
     clearSilentSsoMarks()
@@ -145,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithSsoTicket = async (ticket: string) => {
     const session = await exchangeSsoTicket(ticket)
-    // login と同じく、別アカウントでの入り直しに備えて消す（ADR-0015）
+    // As with login, clear it in case of re-entry with another account (ADR-0015)
     await clearOfflineViewCache()
     setTokens(session.access_token, session.refresh_token)
     clearSilentSsoMarks()
@@ -157,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void api.post('/api/auth/logout').catch(() => undefined)
     clearTokens()
     setUser(null)
-    // IdP の SSO は既定で残るので、ログイン画面を開いてもボタンを押さずに入り直さない（ADR-0052）
+    // The IdP SSO session persists, so opening login must not re-enter without a tap (ADR-0052)
     markSignedOut()
     clearSessionDrafts()
   }

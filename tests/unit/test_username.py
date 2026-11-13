@@ -1,4 +1,4 @@
-"""ログイン識別子の正規化と検証（ADR-0011）。"""
+"""Normalizing and validating sign-in identifiers (ADR-0011)."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ from shared.domain.auth.username import MAX_LENGTH, Username, normalize_username
 
 
 def test_case_is_not_significant() -> None:
-    """``Taro`` と ``taro`` が別アカウントとして並ばないようにする。"""
+    """Keep ``Taro`` and ``taro`` from existing side by side as separate accounts."""
     assert Username("Taro").value == "taro"
     assert normalize_username("  ADMIN@Example.COM ") == "admin@example.com"
 
 
 def test_existing_email_values_are_valid_identifiers() -> None:
-    """移行で ``username`` にメールアドレスが入る（ADR-0011）。"""
+    """The migration puts email addresses into ``username`` (ADR-0011)."""
     assert Username("admin@example.com").value == "admin@example.com"
 
 

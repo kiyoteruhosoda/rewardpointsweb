@@ -14,7 +14,7 @@ def test_get_config_returns_definitions(client: TestClient, admin_headers: dict[
     items = {item["key"]: item for item in response.json()}
     assert "MAIL_SERVER" in items
     assert items["MAIL_SERVER"]["env_fallback"] is False
-    # secret 項目は値をそのまま返さない
+    # Secret items do not return their value as is
     assert items["MAIL_PASSWORD"]["value"] in (None, "", "********")
 
 
@@ -26,14 +26,14 @@ def test_save_config_overrides_default(client: TestClient, admin_headers: dict[s
     )
     assert response.status_code == 200
 
-    # settings オブジェクト経由で即時反映される（環境変数 > DB > デフォルト）
+    # Takes effect immediately through the settings object (env var > DB > default)
     assert settings.mail_server == "smtp.custom.example"
 
     items = {i["key"]: i for i in client.get("/api/admin/config", headers=admin_headers).json()}
     assert items["MAIL_SERVER"]["value"] == "smtp.custom.example"
     assert items["MAIL_SERVER"]["stored"] is True
 
-    # null で DB 上書きを削除しデフォルトへ戻す
+    # null removes the DB override and falls back to the default
     client.put("/api/admin/config", headers=admin_headers, json={"values": {"MAIL_SERVER": None}})
     assert settings.mail_server == "smtp.example.com"
 
@@ -50,10 +50,10 @@ def test_unknown_key_is_ignored(client: TestClient, admin_headers: dict[str, str
 
 
 def test_rejects_relying_party_id_that_does_not_match_origin(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """RP ID とオリジンが噛み合わない組み合わせは保存させない。
+    """A combination where the RP ID and origin do not match cannot be saved.
 
-    保存できてしまうと、失敗するのは設定画面ではなくパスキーを登録しようと
-    した利用者の画面（ブラウザが ``SecurityError`` で拒む）になる。
+    If it could be saved, the failure would show up not on the settings screen but on the
+    screen of the user trying to register a passkey (the browser rejects it with ``SecurityError``).
     """
     response = client.put(
         "/api/admin/config",
@@ -68,7 +68,7 @@ def test_rejects_relying_party_id_that_does_not_match_origin(client: TestClient,
     assert response.status_code == 400
     assert response.json()["detail"]["error"] == "invalid_webauthn_rp_id"
 
-    # 拒んだ保存は DB に残さない（既定のままであること）
+    # A rejected save leaves nothing in the DB (stays at the default)
     items = {i["key"]: i for i in client.get("/api/admin/config", headers=admin_headers).json()}
     assert items["WEBAUTHN_RP_ID"]["stored"] is False
     assert settings.webauthn_rp_id == "localhost"

@@ -1,4 +1,4 @@
-"""結び付きの棚卸しのインターフェース（実装は Infrastructure 層。ADR-0035）。"""
+"""Interface for the link inventory (implemented in the Infrastructure layer; ADR-0035)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ from typing import Protocol
 
 class FederatedIssuerDirectory(Protocol):
     def issuers_by_user(self) -> dict[int, tuple[str, ...]]:
-        """利用者 ID → 結び付いている issuer の並び。無い利用者は載らない。
+        """User ID → list of linked issuers. Users with none are omitted.
 
-        ⚠ **全員分をまとめて返す。** 1 人ずつ引く形にすると、画面が利用者の数だけ
-        問い合わせることになる。
+        ⚠ **Returns everyone at once.** A one-user-at-a-time lookup would make the screen
+        issue as many queries as there are users.
         """
 
 

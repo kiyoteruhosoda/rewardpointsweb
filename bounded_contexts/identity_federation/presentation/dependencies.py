@@ -1,11 +1,11 @@
-"""ユースケースの組み立て（``Depends()`` 用のファクトリ）。
+"""Assembly of use cases (factories for ``Depends()``).
 
-設定（``settings`` の ``OIDC_*``）から値オブジェクトを起こすのはここだけ。
-ユースケースは組み立て済みの :class:`IdentityProvider` などを受け取る。
+Only this module builds value objects from settings (``OIDC_*`` in ``settings``).
+Use cases receive already-built :class:`IdentityProvider` and the like.
 
-IdP のメタデータ（discovery・JWKS）はプロセス内でキャッシュするため、ゲートウェイは
-**1 つを使い回す**。テストは ``app.dependency_overrides[dependencies.oidc_gateway]``
-で差し替える。
+IdP metadata (discovery, JWKS) is cached in-process, so the gateway is
+**a single reused instance**. Tests substitute it with
+``app.dependency_overrides[dependencies.oidc_gateway]``.
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ GatewayDep = Annotated[OidcProviderGateway, Depends(oidc_gateway)]
 
 
 def client_credential() -> ClientCredential:
-    """トークンエンドポイントへ名乗る手段を設定から起こす。"""
+    """Build the means of identifying to the token endpoint from settings."""
     return ClientCredential(
         method=settings.oidc_client_auth_method,
         secret=settings.oidc_client_secret,
@@ -110,7 +110,7 @@ def client_credential() -> ClientCredential:
 
 
 def identity_provider() -> IdentityProvider | None:
-    """設定から連携先を起こす。無効なら ``None``。"""
+    """Build the federation target from settings. ``None`` if disabled."""
     if not settings.oidc_enabled:
         return None
     return IdentityProvider(
@@ -131,7 +131,7 @@ def claims_mapping() -> ClaimsMapping:
 
 
 def requested_authentication_context() -> RequestedAuthenticationContext:
-    """要求した認証の強度の突き合わせ（ADR-0039）。空 = 要求しない。"""
+    """Matching of the requested authentication strength (ADR-0039). Empty = not requested."""
     return RequestedAuthenticationContext(values=tuple(settings.oidc_acr_values))
 
 
@@ -157,7 +157,7 @@ def start_sso_login(db: DbDep, gateway: GatewayDep) -> StartSsoLogin:
 
 
 def start_sso_link(db: DbDep, gateway: GatewayDep) -> StartSsoLink:
-    """連携の往復の開始（ADR-0036）。控えの寿命はログインと同じ。"""
+    """Start of a linking round trip (ADR-0036). The record lifetime is the same as for login."""
     return StartSsoLink(
         provider=identity_provider(),
         gateway=gateway,
@@ -219,11 +219,11 @@ def exchange_sso_ticket(db: DbDep) -> ExchangeSsoTicket:
 
 
 def receive_backchannel_logout(db: DbDep, gateway: GatewayDep) -> ReceiveBackchannelLogout:
-    """停止の伝播の受け口（ADR-0032）。
+    """Receiver for revocation propagation (ADR-0032).
 
-    記録を残す期間は**リフレッシュトークンの寿命**に合わせる。これを過ぎれば
-    停止より前に発行されたトークンは自力で期限切れになる。
-    SSO で入ったログインは更新の札を持たないので（ADR-0058）、**アクセストークンの寿命**より短くはしない。
+    Records are kept for **the refresh token lifetime**. Past that, tokens issued before the
+    stop expire on their own.
+    Logins via SSO hold no refresh credential (ADR-0058), so it is never shorter than **the access token lifetime**.
     """
     return ReceiveBackchannelLogout(
         provider=identity_provider(),

@@ -1,10 +1,10 @@
-"""入力検証の失敗（422）が、画面の読める形で返ることの検証。
+"""Input validation failures (422) are returned in a form the screen can read.
 
-FastAPI 既定の ``{"detail": [...]}`` は配列で、SPA の ``extractErrorCode``
-（``frontend/src/services/api.ts``）が当てはめられない。どの項目が悪くても
-``unknown_error`` の文言にしかならず、利用者は直しようがない。加えて既定の
-本文には ``input`` として送った値がそのまま乗る（打ち込んだパスワードを
-含む）。ここでは形とコード、そして**値が出ないこと**を固定する。
+FastAPI's default ``{"detail": [...]}`` is an array, which the SPA's ``extractErrorCode``
+(``frontend/src/services/api.ts``) cannot match. Whatever field is wrong, it only becomes
+the ``unknown_error`` message and the user has no way to fix it. On top of that, the default
+body carries the submitted value as ``input`` as is (including a typed
+password). This pins the shape, the code and **that values do not appear**.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from presentation.fastapi.error_handling import VALIDATION_ERROR_CODE
 
-# 8 文字未満で弾かれる。既定の応答ならこの値が ``input`` に乗って返る。
+# Rejected for being under 8 characters. With the default response this value would come back in ``input``.
 _PASSWORD = "secret"
 
 
@@ -31,7 +31,7 @@ def test_validation_failure_uses_the_same_error_shape_as_other_failures(
 
 
 def test_the_response_never_echoes_what_was_sent(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """項目名だけを返す。``input`` が乗るとパスワードとメールアドレスが外へ出る。"""
+    """Return only the field names. If ``input`` were included, passwords and email addresses would leak."""
     response = client.post(
         "/api/admin/users",
         headers=admin_headers,
@@ -46,7 +46,7 @@ def test_the_response_never_echoes_what_was_sent(client: TestClient, admin_heade
 
 
 def test_missing_body_is_reported_without_a_field_name(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """本文そのものが無い場合も同じ形で返す（項目名は ``body``）。"""
+    """Return the same shape when there is no body at all (the field name is ``body``)."""
     response = client.post("/api/admin/users", headers=admin_headers)
 
     assert response.status_code == 422
@@ -54,7 +54,7 @@ def test_missing_body_is_reported_without_a_field_name(client: TestClient, admin
 
 
 def test_account_signup_reports_the_field_that_failed(client: TestClient) -> None:
-    """招待コードでのアカウント作成（未認証）も同じ形で返る。"""
+    """Account creation with an invitation code (unauthenticated) returns the same shape."""
     response = client.post(
         "/api/families/invitations/redeem",
         json={"code": "ABCDE12345", "username": "kid", "password": "short"},

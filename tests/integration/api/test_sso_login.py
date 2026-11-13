@@ -170,9 +170,12 @@ def test_the_second_sign_in_goes_through_the_stored_link(
 
 
 def test_a_first_visit_creates_the_account(sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine) -> None:
-    """Whoever comes back from assay is someone assigned to the app. On a first visit, create an account to welcome them (ADR-0041).
+    """Whoever comes back from assay is someone assigned to the app.
 
-    ⚠ The created account matches the admin console default: **a parent (``member``) with no family**, and **no password**.
+    On a first visit, create an account to welcome them (ADR-0041).
+
+    ⚠ The created account matches the admin console default: **a parent (``member``) with no family**,
+    and **no password**.
     """
     before = _user_count(engine)
     gateway.claims = {
@@ -219,7 +222,10 @@ def test_the_created_account_is_found_by_its_link_next_time(
 def test_a_taken_username_is_refused_instead_of_renamed(
     sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine
 ) -> None:
-    """⚠ **On a collision, refuse instead of creating** (ADR-0041). Silently appending a number would give an identifier the person does not know."""
+    """⚠ **On a collision, refuse instead of creating** (ADR-0041).
+
+    Silently appending a number would give an identifier the person does not know.
+    """
     _other_user(engine, username="newcomer", email="someone-else@example.com")
     before = _user_count(engine)
     gateway.claims = {"email": "new@example.com", "email_verified": True, "preferred_username": "NewComer"}
@@ -282,9 +288,12 @@ def test_an_address_an_invited_account_holds_as_its_username_is_refused(
     gateway: FakeGateway,
     engine: sa.Engine,
 ) -> None:
-    """⚠ Accounts created by invitation have no ``email`` (ADR-0011). If the identifier is that address, it is the same person.
+    """⚠ Accounts created by invitation have no ``email`` (ADR-0011).
 
-    Missing this creates a second account and drops the person out of their family (happened in production on 2026-10-05).
+    If the identifier is that address, it is the same person.
+
+    Missing this creates a second account and drops the person out of their family
+    (happened in production on 2026-10-05).
     """
     monkeypatch.setenv("OIDC_LINK_BY_EMAIL", "false")
     session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
@@ -319,7 +328,8 @@ def test_an_unverified_address_is_refused(
 
 
 def test_a_callback_from_another_browser_is_refused(sso_client: TestClient, parent: int) -> None:
-    """Even if tricked into following an authorization request the attacker started, the victim does not sign in as the attacker."""
+    """Even if tricked into following an authorization request the attacker started, the victim does
+    not sign in as the attacker."""
     state = _start(sso_client)
     sso_client.cookies.delete(SSO_BINDING_COOKIE)
 
@@ -464,7 +474,10 @@ def test_a_linked_user_signs_in_without_an_email_claim(
 def test_a_first_visit_without_an_email_claim_still_creates_the_account(
     sso_client: TestClient, gateway: FakeGateway, engine: sa.Engine
 ) -> None:
-    """The email address is not the key (ADR-0038). An account can be created without one -- what is needed is ``username``."""
+    """The email address is not the key (ADR-0038).
+
+    An account can be created without one -- what is needed is ``username``.
+    """
     gateway.claims = {"name": "親", "preferred_username": "no-mail"}
 
     body = sso_client.post("/api/auth/sso/token", json={"ticket": _callback(sso_client, _start(sso_client))}).json()

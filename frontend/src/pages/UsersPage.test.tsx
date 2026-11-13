@@ -1,4 +1,4 @@
-/** ユーザー管理: 作成時に送る中身が API のスキーマと一致していること。 */
+/** User management: the payload sent on creation matches the API schema. */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -24,7 +24,7 @@ const ROLES = [
   { id: 3, name: 'member' },
 ]
 
-/** ロールを 1 つだけ持つアカウント 1 件を返す一覧。 */
+/** A list with one account that has exactly one role. */
 function respondWith(user: { roles: string[]; permissions: string[] }) {
   get.mockImplementation((path: string) =>
     Promise.resolve(
@@ -66,7 +66,7 @@ describe('UsersPage', () => {
     put.mockResolvedValue({})
   })
 
-  it('ログイン ID と表示名を別々に送る（display_name 欠落は 422 になる）', async () => {
+  it('sends login ID and display name separately (missing display_name is a 422)', async () => {
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
     await screen.findByRole('option', { name: 'Parent (member)' })
 
@@ -84,7 +84,7 @@ describe('UsersPage', () => {
     })
   })
 
-  it('メールアドレスは任意で、空なら null を送る（ADR-0011）', async () => {
+  it('email is optional and sends null when empty (ADR-0011)', async () => {
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
     await screen.findByRole('option', { name: 'Parent (member)' })
 
@@ -96,7 +96,7 @@ describe('UsersPage', () => {
     })
   })
 
-  it('メールアドレスを持たないアカウントも一覧に出せる', async () => {
+  it('can list accounts without an email', async () => {
     respondWith({ roles: ['member'], permissions: ['item:view'] })
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
 
@@ -104,7 +104,7 @@ describe('UsersPage', () => {
     expect(screen.getByText('—')).toBeInTheDocument()
   })
 
-  it('ロールを付けると、変更後の全体を送る', async () => {
+  it('adding a role sends the whole resulting set', async () => {
     respondWith({ roles: ['member'], permissions: ['item:view'] })
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
 
@@ -115,7 +115,7 @@ describe('UsersPage', () => {
     })
   })
 
-  it('ロールを外すと、そのロールだけを除いた全体を送る', async () => {
+  it('removing a role sends the whole set without that role', async () => {
     respondWith({ roles: ['admin', 'member'], permissions: ['user:manage'] })
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
 
@@ -126,7 +126,7 @@ describe('UsersPage', () => {
     })
   })
 
-  it('実際に効く権限はサーバーの計算結果を出すだけで、変更させない', async () => {
+  it('shows effective permissions as computed by the server, read-only', async () => {
     respondWith({ roles: ['member'], permissions: ['item:view', 'point:manage'] })
     renderWithProviders(<UsersPage />, { scopes: ['user:manage'] })
 
@@ -134,7 +134,7 @@ describe('UsersPage', () => {
     expect(screen.queryByLabelText('kid: point:manage')).not.toBeInTheDocument()
   })
 
-  it('ロール一覧を取れないときは、今のロールを文字で示す', async () => {
+  it('shows current roles as text when the role list is unavailable', async () => {
     get.mockImplementation((path: string) =>
       path === '/api/admin/roles'
         ? Promise.reject(new Error('forbidden'))
@@ -157,9 +157,9 @@ describe('UsersPage', () => {
     expect(screen.queryByLabelText('kid: member')).not.toBeInTheDocument()
   })
 
-  it('入れる手段を並べて出す（認証系が 2 つあることを読み取れるようにする）', async () => {
-    // ⚠ IdP 側の多要素はここに出ない。出せるのはこのアプリが知っている口だけで、
-    //   それがまさに「認証系が 2 つある」ということ（ADR-0035）。
+  it('lists the ways in (so it is readable that there are two auth systems)', async () => {
+    // ⚠ IdP-side multi-factor does not show here. Only the ways this app knows about can be shown,
+    //   which is precisely what "two authentication systems" means (ADR-0035).
     get.mockImplementation((path: string) =>
       Promise.resolve(
         path === '/api/admin/roles'
@@ -189,7 +189,7 @@ describe('UsersPage', () => {
     expect(screen.getByText('SSO')).toBeInTheDocument()
   })
 
-  it('決まったロールは呼び名に名前を添え、管理画面で作ったロールは名前のまま出す', async () => {
+  it('shows built-in roles as label plus name, and admin-created roles by name', async () => {
     get.mockImplementation((path: string) =>
       Promise.resolve(
         path === '/api/admin/roles'

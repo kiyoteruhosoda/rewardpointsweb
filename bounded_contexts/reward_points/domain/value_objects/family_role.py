@@ -1,19 +1,20 @@
-"""家族の中での立場。
+"""Role within a family.
 
-認可の判断はこの列挙が持つ性質だけで行い、呼び出し側に ``role == "owner"`` の
-ような比較を書かない（ADR-0009 の認可表がここに 1 か所だけ現れる）。
+Authorization decisions use only the properties of this enum; callers never write
+comparisons like ``role == "owner"`` (the ADR-0009 authorization table appears only here).
 
-============ ============ ======== ============ ====== ======
-role         家族の管理   子の作成 加算・消費   訂正   閲覧
-============ ============ ======== ============ ====== ======
-owner        ○            ○        全ての子     ○      全ての子
-parent       ×            ○        全ての子     ○      全ての子
-child        ×            ×        ×            ×      自分の台帳のみ
-display      ×            ×        ×            ×      全ての子
-============ ============ ======== ============ ====== ======
+============ ============ ============ ============ ======= ==============
+role         administer   create child add / spend  correct view
+============ ============ ============ ============ ======= ==============
+owner        yes          yes          all children yes     all children
+parent       no           yes          all children yes     all children
+child        no           no           no           no      own ledger only
+display      no           no           no           no      all children
+============ ============ ============ ============ ======= ==============
 
-``display`` は人ではなく表示端末（サイネージ。ADR-0047）。承認で生まれ、家族の
-全部の子の台帳を見るだけ。台帳を持たず、招待でも配れない。
+``display`` is not a person but a display device (signage; ADR-0047). Created by approval,
+it only views the ledgers of all the family's children. It has no ledger and cannot be
+handed out by invitation.
 """
 
 from __future__ import annotations
@@ -29,38 +30,38 @@ class FamilyRole(Enum):
 
     @property
     def is_guardian(self) -> bool:
-        """親の立場か（owner または parent）。子の台帳を扱えるのはこの 2 つ。"""
+        """Whether this is a parent role (owner or parent). Only these two can handle children's ledgers."""
         return self in (FamilyRole.OWNER, FamilyRole.PARENT)
 
     @property
     def can_administer_family(self) -> bool:
-        """家族そのもの（名前・参加者の除名）を管理できるか。owner だけ。"""
+        """Whether it can administer the family itself (name, removing members). Owner only."""
         return self is FamilyRole.OWNER
 
     @property
     def sees_every_ledger(self) -> bool:
-        """家族の全ての子の台帳を見られるか。親と表示端末（ADR-0047）。"""
+        """Whether it can see every child's ledger in the family. Parents and display devices (ADR-0047)."""
         return self.is_guardian or self is FamilyRole.DISPLAY
 
     @property
     def is_display(self) -> bool:
-        """人ではなく表示端末か（ADR-0047）。家族の顔ぶれに数えない。"""
+        """Whether this is a display device rather than a person (ADR-0047). Not counted as a family member."""
         return self is FamilyRole.DISPLAY
 
     @property
     def has_own_ledger(self) -> bool:
-        """ポイント台帳を 1 対 1 で持つ立場か。"""
+        """Whether this role holds a point ledger one-to-one."""
         return self is FamilyRole.CHILD
 
     @property
     def is_invitable(self) -> bool:
-        """招待コードで配ってよい立場か。
+        """Whether this role may be handed out with an invitation code.
 
-        owner は配れない。配れると、受け取った人が元の owner を除名して家族を
-        乗っ取れてしまう（招待の受諾は未認証の経路からも来る）。owner を移す
-        必要が生じたら、専用の引き継ぎ操作として設計する。
+        Owner cannot. Otherwise the recipient could remove the original owner and take over
+        the family (invitation acceptance also comes from unauthenticated paths). If the owner
+        ever needs to be transferred, design a dedicated hand-over operation.
 
-        表示端末も配れない。端末は運用管理者の承認でだけ生まれる（ADR-0047）。
+        Display devices cannot either. Devices are created only by operator approval (ADR-0047).
         """
         return self in (FamilyRole.PARENT, FamilyRole.CHILD)
 

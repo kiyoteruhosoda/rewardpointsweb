@@ -1,8 +1,8 @@
-"""DB を使う口と依存関数をイベントループの上で動かさない（雛形の ADR-0100・task #807）。
+"""Do not run endpoints and dependencies that use the DB on the event loop (template ADR-0100, task #807).
 
-``async def`` の中で同期の DB を呼ぶと、後の要求が行のロックを待つあいだ、イベントループごと止まる。先の要求の
-確定（``get_db`` の後始末）の順番が回ってこないので、ロック待ちの上限か gunicorn の ``--timeout`` まで固まる
-（MariaDB でだけ起きる。SQLite の試験では出ない）。
+Calling the synchronous DB inside ``async def`` stalls the whole event loop while a later request waits on a
+row lock. The earlier request never gets its turn to commit (the ``get_db`` cleanup), so it hangs until the lock
+wait limit or gunicorn's ``--timeout`` (happens only on MariaDB; the SQLite tests do not show it).
 """
 
 from __future__ import annotations
@@ -20,19 +20,19 @@ from shared.kernel.database.session import get_db
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
-#: ``async def`` のままにする関数と理由。DB は ``run_in_threadpool`` の中でだけ触る
+#: Functions that stay ``async def`` and why. They touch the DB only inside ``run_in_threadpool``
 _STAYS_ASYNC: dict[str, str] = {
-    "receive_backchannel_logout": "本文を await で読む（大きすぎる本文を読まずに断る）。検証はスレッドへ逃がす",
+    "receive_backchannel_logout": "Reads the body with await (refuses oversized bodies unread). Verifies in a thread",
 }
 
-#: 同期の関数で ``ContextVar`` を置いてよいファイルと理由
+#: Files where a synchronous function may set a ``ContextVar``, and why
 _CONTEXT_SETTERS: dict[str, str] = {
-    "bounded_contexts/audit/presentation/pending_events.py": "ミドルウェア（イベントループの上）からだけ呼ばれる",
+    "bounded_contexts/audit/presentation/pending_events.py": "Only called from middleware (on the event loop)",
 }
 
 
 def _own_session(call: Callable[..., object]) -> bool:
-    """``get_db`` を通らず、自分でセッションを開く依存関数（失敗の記録を別に確定するものなど）。"""
+    """Dependencies that bypass ``get_db`` and open their own session (e.g. committing failure records separately)."""
     return inspect.isfunction(call) and "get_session_factory" in inspect.getsource(call)
 
 
@@ -44,7 +44,7 @@ def _reaches_db(dependant: Dependant) -> bool:
 
 def _coroutines_on_the_way_to_db(dependant: Dependant) -> Iterator[str]:
     call = dependant.call
-    # ``yield`` の依存関数は ``iscoroutinefunction`` が偽になる
+    # ``iscoroutinefunction`` is false for ``yield`` dependencies
     if (inspect.iscoroutinefunction(call) or inspect.isasyncgenfunction(call)) and _reaches_db(dependant):
         yield call.__name__
     for child in dependant.dependencies:
@@ -52,9 +52,9 @@ def _coroutines_on_the_way_to_db(dependant: Dependant) -> Iterator[str]:
 
 
 def _blocking(app: FastAPI) -> set[str]:
-    """DB を使うのに ``async def`` の関数の名前。
+    """Names of ``async def`` functions that use the DB.
 
-    ⚠ **``app.routes`` を直に回さない。** ``include_router`` した口はそこに並ばない。
+    ⚠ **Do not iterate ``app.routes`` directly.** Endpoints added via ``include_router`` do not appear there.
     """
     return {
         name
@@ -80,7 +80,7 @@ async def free_dependency() -> None: ...
 
 
 def _an_app_that_blocks() -> FastAPI:
-    """規則を破った口を、``include_router`` の奥に置いたアプリ（判定の空振りを見つけるため）。"""
+    """An app with a rule-breaking endpoint deep inside ``include_router`` (to catch a check that silently misses)."""
     inner = APIRouter()
 
     @inner.get("/direct")
@@ -118,18 +118,18 @@ def test_the_check_catches_a_route_that_breaks_the_rule() -> None:
 
 
 def test_the_real_routes_are_being_looked_at(app: FastAPI) -> None:
-    """列挙が空だと、下の試験は素通りする。例外の表の口は必ず見つかるはず。"""
+    """If the enumeration is empty, the tests below pass vacuously. Endpoints in the exception table must be found."""
     assert set(_STAYS_ASYNC) <= _blocking(app)
     assert any(isinstance(context.original_route, APIRoute) for context in iter_route_contexts(app.routes))
 
 
 def test_routes_that_use_the_database_do_not_run_on_the_event_loop(app: FastAPI) -> None:
     found = _blocking(app) - set(_STAYS_ASYNC)
-    assert not found, f"DB を使うなら def にしてください。await が要るなら DB をスレッドへ逃がして表へ: {found}"
+    assert not found, f"Use def for DB access. If await is needed, move the DB to a thread and list it: {found}"
 
 
 def _context_sets_in_sync_functions(tree: ast.AST) -> list[str]:
-    """``def`` の中の ``なんとか_var.set(...)``。``def`` はスレッドで動くので、置いた値は呼び出し元へ戻らない。"""
+    """``something_var.set(...)`` inside a ``def``. A ``def`` runs in a thread, so the caller never sees it."""
     return [
         function.name
         for function in ast.walk(tree)
@@ -149,11 +149,11 @@ def test_the_context_check_catches_a_sync_function() -> None:
 
 
 def test_presentation_does_not_set_context_in_sync_functions() -> None:
-    """依存関数を ``def`` にすると、ログと監査の「誰が」が黙って消える（試験では気付きにくい）。"""
+    """Making a dependency a ``def`` silently drops the "who" in logs and audit (hard to notice in tests)."""
     found = []
     for root in ("bounded_contexts", "presentation"):
         for file in sorted((_PROJECT_ROOT / root).rglob("*.py")):
             path = file.relative_to(_PROJECT_ROOT).as_posix()
             if "presentation/" in path and path not in _CONTEXT_SETTERS:
                 found += [f"{path}: {name}" for name in _context_sets_in_sync_functions(ast.parse(file.read_text()))]
-    assert not found, f"ContextVar は async def の依存関数かミドルウェアで置いてください: {found}"
+    assert not found, f"Set ContextVar in an async def dependency or in middleware: {found}"

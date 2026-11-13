@@ -1,45 +1,45 @@
 /**
- * 家族・台帳 API のクライアント。
+ * Client for the family and ledger APIs.
  *
- * 画面が組み立てるのは表示だけで、パスとレスポンスの形はここに集める。
- * 「変更 UI を出すか」はサーバーが返す `can_modify` で決める（立場の名前では
- * 判断しない）。
+ * Screens only build the presentation; paths and response shapes are collected here.
+ * "Whether to show modification UI" is decided by the server-returned `can_modify` (not by
+ * role names).
  */
 import { api, type Fetched } from './api'
 
-/** `display` は人ではなく表示端末（サイネージ。ADR-0047）。 */
+/** `display` is not a person but a display device (signage, ADR-0047). */
 export type FamilyRole = 'owner' | 'parent' | 'child' | 'display'
 
 export interface Membership {
   id: number
   display_name: string
   role: FamilyRole
-  /** アカウントと結び付いているか。偽なら本人はまだログインできない。 */
+  /** Whether linked to an account. If false, the person cannot sign in yet. */
   is_linked: boolean
   is_me: boolean
   username: string | null
-  /** 台帳を持つのは role = child だけ。見えない相手のものは null。 */
+  /** Only role = child has a ledger. null for people the viewer cannot see. */
   ledger_id: number | null
   balance: number | null
   /**
-   * 毎日のボーナスの設定（ADR-0024）。決めていなければ null。
+   * Daily bonus setting (ADR-0024). null if not set.
    *
-   * 決めるのは家族設定の画面（ADR-0027）。量は子ども一人ひとりで違うので、
-   * 家族ではなく参加者ごとに載る。
+   * It is set on the family settings screen (ADR-0027). The amount differs per child, so
+   * it is carried per participant rather than per family.
    */
   daily_bonus: DailyBonus | null
-  /** 親から独立の指示が出ているか（ADR-0014）。子本人の承認で成立する。 */
+  /** Whether a parent has requested independence (ADR-0014). Done once the child approves. */
   independence_proposed: boolean
   /**
-   * 見ている人がこの参加者に対して行える操作。
+   * Actions the viewer can perform on this participant.
    *
-   * 立場から画面が組み立て直すと、サーバーが断る操作まで出てしまう（記録の
-   * 残る子の「削除」など）。出し分けはこの 3 つだけを見て決める。
+   * If the screen rebuilt these from roles, it would show actions the server refuses (e.g.
+   * "delete" for a child with records). Gating is decided by these 3 alone.
    */
   can_reset_password: boolean
-  /** 独立の指示 — アカウントのある子だけ。ADR-0014 */
+  /** Independence request — only children with an account. ADR-0014 */
   can_propose_independence: boolean
-  /** 削除 — owner だけ、自分以外、台帳に記録が無いとき */
+  /** Delete — owner only, not self, and only when the ledger has no records */
   can_remove: boolean
 }
 
@@ -54,7 +54,7 @@ export interface FamilySummary {
 export interface FamilyDetail {
   id: number
   name: string
-  /** 家族で決めた約束ごと（ADR-0027）。まだ書いていなければ null。 */
+  /** The family's agreed rules (ADR-0027). null if not written yet. */
   rules: string | null
   my_membership_id: number
   my_role: FamilyRole
@@ -67,7 +67,7 @@ export interface Invitation {
   target_membership_id: number | null
   target_display_name: string | null
   expires_at: string
-  /** 平文のコードは発行の応答でだけ返る。一覧では常に null。 */
+  /** The plaintext code is returned only in the issue response. Always null in listings. */
   code: string | null
 }
 
@@ -88,40 +88,40 @@ export interface TemporaryPassword {
 
 export interface Transaction {
   id: number
-  /** 符号付き。加算は正、消費は負。 */
+  /** Signed. Additions are positive, spending negative. */
   amount: number
   reason: string
   occurred_at: string
   created_at: string
-  /** 打ち消しレコードなら、打ち消した相手の ID。 */
+  /** For a reversal record, the ID of the record it reverses. */
   reversal_of_id: number | null
-  /** 訂正後のレコードなら、言い直した相手の ID（ADR-0022）。 */
+  /** For a corrected record, the ID of the record it restates (ADR-0022). */
   corrects_id: number | null
-  /** このレコードが打ち消されているか。 */
+  /** Whether this record has been reversed. */
   is_reversed: boolean
   granted_by: string | null
 }
 
-/** 1 回の訂正で台帳に足された 2 行。元のレコードは履歴に残る（ADR-0022）。 */
+/** The 2 rows added to the ledger by one correction. The original stays in history (ADR-0022). */
 export interface Correction {
   reversal: Transaction
   correction: Transaction
 }
 
 /**
- * 毎日のボーナスの設定（ADR-0024）。
+ * Daily bonus setting (ADR-0024).
  *
- * 決めておくと、日付が変わるたびにこの量が台帳へ 1 行足される。足すのはサーバー
- * 側の定期実行で、画面は決めるだけ。
+ * Once set, this amount is added to the ledger as one row each time the date changes. The
+ * server's scheduled job adds it; the screen only sets it.
  */
 export interface DailyBonus {
   ledger_id: number
-  /** 毎日足す量（正の数のみ）。 */
+  /** Amount added each day (positive only). */
   amount: number
   reason: string
-  /** 最初に渡す日（決めた日の翌日）。これより前へは遡らない。 */
+  /** First day to grant (the day after it was set). Never goes back before it. */
   starts_on: string
-  /** 渡し終えた最後の日。まだ 1 日も渡していなければ null。 */
+  /** Last day granted. null if none granted yet. */
   granted_through: string | null
 }
 
@@ -133,28 +133,28 @@ export interface Ledger {
   balance: number
   can_modify: boolean
   transactions: Transaction[]
-  /** 決めていなければ null。 */
+  /** null if not set. */
   daily_bonus: DailyBonus | null
 }
 
 /**
- * 家族まるごとの控え（バックアップ。ADR-0026）。
+ * Backup of the whole family (ADR-0026).
  *
- * 書き出しの応答であり、取り込みの本文でもある。同じ形を両方向で使うので、
- * 保存した JSON をそのまま送り返せば元に戻る。
+ * Both the export response and the import body. The same shape is used both ways, so
+ * sending the saved JSON back as is restores it.
  *
- * 行どうしの繋がり（誰が記録したか・どの記録の打ち消しか）は、DB の ID ではなく
- * ファイルの中だけで通じる `ref` で表す。復元先では ID が全部変わるため。
+ * Links between rows (who recorded, which record a reversal targets) use `ref`, valid only
+ * inside the file rather than DB IDs, because all IDs change at the restore target.
  *
- * **アカウントは入らない。** ログイン ID もパスワードも招待コードも載らないので、
- * 控えを持ち出しても誰かのアカウントには届かない。
+ * **Accounts are not included.** No login IDs, passwords or invitation codes are included, so
+ * taking the backup elsewhere does not reach anyone's account.
  */
 export interface ArchivedTransaction {
   ref: string
   amount: number
   reason: string
   occurred_at: string
-  /** 記録した参加者の ref。毎日のボーナスと、家族を離れた人の行では null。 */
+  /** ref of the participant who recorded. null for daily bonus rows and people who left. */
   granted_by: string | null
   reverses: string | null
   corrects: string | null
@@ -168,7 +168,7 @@ export interface ArchivedDailyBonus {
 }
 
 export interface ArchivedLedger {
-  /** 書いた順（古い行が先）。 */
+  /** Written order (oldest first). */
   transactions: ArchivedTransaction[]
   daily_bonus: ArchivedDailyBonus | null
 }
@@ -177,7 +177,7 @@ export interface ArchivedMember {
   ref: string
   display_name: string
   role: FamilyRole
-  /** 台帳を持つのは role = child だけ。 */
+  /** Only role = child has a ledger. */
   ledger: ArchivedLedger | null
 }
 
@@ -186,12 +186,12 @@ export interface FamilyArchive {
   version: number
   exported_at: string
   family_name: string
-  /** 家族で決めた約束ごと（ADR-0027）。版 1 の控えには入っていない。 */
+  /** The family's agreed rules (ADR-0027). Not present in version 1 backups. */
   family_rules?: string | null
   members: ArchivedMember[]
 }
 
-/** 取り込みの結果。戻った量を人が確かめられるように数が返る。 */
+/** Import result. Counts are returned so a person can check how much was restored. */
 export interface ImportedFamily {
   family_id: number
   name: string
@@ -200,9 +200,9 @@ export interface ImportedFamily {
 }
 
 /**
- * サーバーの時刻は UTC だが、タイムゾーンの接尾辞は付かない
- * （`2026-07-30T08:54:13`）。JavaScript はそれを **ローカル時刻** として解釈する
- * ため、そのまま `new Date()` に渡すと時差の分だけずれて表示される。
+ * Server times are UTC but carry no time zone suffix
+ * (`2026-07-30T08:54:13`). JavaScript parses that as **local time**,
+ * so passing it to `new Date()` as is shows it shifted by the offset.
  */
 export function parseUtc(value: string): Date {
   const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
@@ -210,8 +210,8 @@ export function parseUtc(value: string): Date {
 }
 
 /**
- * 冪等キー。送信ボタンを二度押ししても台帳に 2 行入らないよう、1 回の記録に
- * 1 つ発行して同じ値で再送する（ADR-0010）。
+ * Idempotency key. Issue one per record and resend with the same value, so a double tap
+ * on submit does not add 2 rows to the ledger (ADR-0010).
  */
 export function newIdempotencyKey(): string {
   return crypto.randomUUID()
@@ -237,34 +237,34 @@ export const families = {
     api.patch<FamilyDetail>(`/api/families/${familyId}`, { name }),
 
   /**
-   * 家族で決めた約束ごとを書き換える（親メンバー。ADR-0027）。
+   * Rewrite the family's agreed rules (parent members, ADR-0027).
    *
-   * 空文字を送ると消える（サーバーが null へ寄せる）。
+   * Sending an empty string clears them (the server turns it into null).
    */
   setRules: (familyId: number, rules: string) =>
     api.put<FamilyDetail>(`/api/families/${familyId}/rules`, { rules }),
 
   /**
-   * 家族まるごとを控えとして受け取る（親のみ。ADR-0026）。
+   * Receive the whole family as a backup (parents only, ADR-0026).
    *
-   * 子どもの台帳と履歴が全部入る。保存の仕方は `familyArchiveFile.ts`。
+   * Contains all children's ledgers and history. Saving is handled by `familyArchiveFile.ts`.
    */
   exportArchive: (familyId: number) => api.get<FamilyArchive>(`/api/families/${familyId}/export`),
 
   /**
-   * 控えから家族を作り直す（復元）。作られるのは **新しい家族** で、呼んだ人が
-   * owner になる。どこかに所属したままでは呼べない（ADR-0013）。
+   * Recreate a family from a backup (restore). It creates a **new family**, and the caller
+   * becomes owner. Cannot be called while belonging to a family (ADR-0013).
    */
   importArchive: (archive: FamilyArchive) =>
     api.post<ImportedFamily>('/api/families/import', archive),
 
-  /** 家族から抜ける（親のみ。他にアカウントの結び付いた親が残る場合に限る）。 */
+  /** Leave the family (parents only; only if another parent linked to an account remains). */
   leave: (familyId: number) => api.post<undefined>(`/api/families/${familyId}/leave`),
 
-  /** 家族を解散する（owner のみ。自分以外の参加者がいないこと）。 */
+  /** Dissolve the family (owner only; no participants other than self). */
   dissolve: (familyId: number) => api.delete<undefined>(`/api/families/${familyId}`),
 
-  /** 子の独立を指示する（親メンバー）。子本人の承認までは取り下げられる（ADR-0014）。 */
+  /** Request a child's independence (parent members). Withdrawable until the child approves (ADR-0014). */
   proposeIndependence: (familyId: number, membershipId: number) =>
     api.post<Membership>(
       `/api/families/${familyId}/memberships/${membershipId}/independence-proposal`,
@@ -275,11 +275,11 @@ export const families = {
       `/api/families/${familyId}/memberships/${membershipId}/independence-proposal`,
     ),
 
-  /** 独立を承認する（指示を受けた子本人）。成立すると台帳ごと家族から消える。 */
+  /** Approve independence (the requested child). Once done, they leave with their ledger. */
   approveIndependence: (familyId: number) =>
     api.post<undefined>(`/api/families/${familyId}/independence`),
 
-  /** 子を並べる順を決める（親メンバー）。並びは家族に 1 つで、誰が見ても同じ。 */
+  /** Set the order of children (parent members). One order per family, the same for everyone. */
   reorderMembers: (familyId: number, membershipIds: number[]) =>
     api.put<FamilyDetail>(`/api/families/${familyId}/member-order`, {
       membership_ids: membershipIds,
@@ -314,7 +314,7 @@ export const families = {
       display_name: displayName,
     }),
 
-  /** 未認証で呼ぶ。招待コードと引き換えにアカウントを作る（ADR-0011）。 */
+  /** Called unauthenticated. Creates an account in exchange for an invitation code (ADR-0011). */
   redeemInvitation: (code: string, username: string, password: string, displayName: string) =>
     api.post<RedeemedInvitation>('/api/families/invitations/redeem', {
       code,
@@ -323,11 +323,11 @@ export const families = {
       display_name: displayName,
     }),
 
-  /** その家族でよく使われている理由（入力候補）。頻度の高い順。 */
+  /** Reasons often used in the family (input suggestions), most frequent first. */
   reasonSuggestions: (familyId: number) =>
     api.get<string[]>(`/api/families/${familyId}/reason-suggestions`),
 
-  /** 取得時刻付き。オフラインではキャッシュが返り、時刻がその古さを示す（ADR-0015）。 */
+  /** With fetch time. Offline returns the cache, and the time shows how old it is (ADR-0015). */
   viewLedger: (familyId: number, ledgerId: number): Promise<Fetched<Ledger>> =>
     api.getFetched<Ledger>(ledgerPath(familyId, ledgerId)),
 
@@ -345,8 +345,8 @@ export const families = {
     ),
 
   /**
-   * 入力の間違いを直す。元のレコードは書き換わらず、打ち消しと正しい内容の
-   * 2 行が足される（ADR-0022）。発生日時は元のレコードから引き継ぐ。
+   * Fix an input mistake. The original record is not rewritten; a reversal and the correct
+   * content are added as 2 rows (ADR-0022). The occurred-at time is taken from the original.
    */
   correct: (
     familyId: number,
@@ -364,14 +364,14 @@ export const families = {
     ),
 
   /**
-   * 毎日のボーナスを決める（すでに決まっていれば書き換える。ADR-0024）。
+   * Set the daily bonus (rewrites it if already set, ADR-0024).
    *
-   * 決めた時点では台帳は動かない。最初の 1 行が入るのは次に日付が変わったとき。
+   * Setting it does not touch the ledger. The first row comes the next time the date changes.
    */
   setDailyBonus: (familyId: number, ledgerId: number, amount: number, reason: string) =>
     api.put<DailyBonus>(`${ledgerPath(familyId, ledgerId)}/daily-bonus`, { amount, reason }),
 
-  /** やめる。すでに渡したポイントはそのまま残る。 */
+  /** Stop it. Points already granted stay as is. */
   stopDailyBonus: (familyId: number, ledgerId: number) =>
     api.delete<undefined>(`${ledgerPath(familyId, ledgerId)}/daily-bonus`),
 }

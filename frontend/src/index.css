@@ -1,11 +1,11 @@
-/* 配色は CSS 変数で持ち、`<html data-theme>`（ThemeProvider が書き込む）で
- * 切り替える。色を直に書かないことで、テーマの追加は :root[data-theme=...] を
- * 1 ブロック足すだけで済む。
+/* Colours are held in CSS variables and switched by `<html data-theme>` (written by
+ * ThemeProvider). Since colours are never written directly, adding a theme only takes one more
+ * :root[data-theme=...] block.
  *
- * 面は 3 段で使い分ける:
- *   --surface        … ページの背景（わずかに色を持たせ、カードを浮かせる）
- *   --surface-raised … カード・ヘッダー・引き出しなど、手前にある面
- *   --surface-inset  … カードの中の差し込み（フォームの枠・共有パネル等）
+ * Surfaces are used at three levels:
+ *   --surface        … page background (slightly tinted so cards stand out)
+ *   --surface-raised … surfaces in front: cards, header, drawer, etc.
+ *   --surface-inset  … insets inside cards (form frames, shared panels, etc.)
  */
 :root,
 :root[data-theme='light'] {
@@ -23,7 +23,7 @@
   --success: #2e7d32;
   --shadow-card: 0 1px 2px rgb(23 26 48 / 5%), 0 4px 16px rgb(23 26 48 / 6%);
   --shadow-card-hover: 0 2px 4px rgb(23 26 48 / 7%), 0 8px 24px rgb(23 26 48 / 10%);
-  /* イベント（ADR-0042）: ごほうびの札・マスの点線・達成の判子 */
+  /* Events (ADR-0042): reward badge, dotted cells, completion stamp */
   --reward-soft: #fff0c7;
   --reward-ink: #7a4f00;
   --slot-line: #c3c8d8;
@@ -64,13 +64,13 @@
     'Segoe UI',
     sans-serif;
   line-height: 1.5;
-  /* 丸みのある見出し（イベントのカード）。入っていない端末では本文と同じ字になる */
+  /* Rounded heading font (event cards). Devices without it use the body font */
   --font-round:
     'Hiragino Maru Gothic ProN', 'Zen Maru Gothic', 'BIZ UDPGothic', system-ui, sans-serif;
 
-  /* 端末のセーフエリア（ノッチ・ホームインジケータ）。index.html の
-   * viewport-fit=cover で画面いっぱいに描く代わりに、避けたい余白をここで持つ。
-   * env() に対応しないブラウザでは第 2 引数の 0px になる。 */
+  /* Device safe areas (notch, home indicator). index.html draws full-screen with
+   * viewport-fit=cover; instead, the margins to avoid are held here.
+   * Browsers without env() support fall back to the second argument, 0px. */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -82,7 +82,7 @@
 }
 
 html {
-  /* 横向きにしたときに iOS が本文を勝手に拡大するのを止める */
+  /* Stop iOS from enlarging body text on its own in landscape */
   -webkit-text-size-adjust: 100%;
 }
 
@@ -90,7 +90,7 @@ body {
   margin: 0;
   background: var(--surface);
   color: var(--text);
-  /* 引き出しの出入りで横スクロールバーが出ないようにする */
+  /* Keep the drawer sliding in/out from showing a horizontal scrollbar */
   overflow-x: hidden;
 }
 
@@ -100,7 +100,7 @@ a {
 
 button {
   cursor: pointer;
-  /* 実行中のスピナー（.spinner）をラベルの前に並べるため。 */
+  /* To place the running spinner (.spinner) before the label. */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -125,8 +125,8 @@ button:disabled {
   opacity: 0.5;
 }
 
-/* 送信＝その画面の主操作。塗りのボタンにして目立たせる（削除等の type=button は
- * 枠だけの控えめなままにする）。 */
+/* Submit = the screen's primary action. Make it a filled button so it stands out (type=button ones
+ * such as delete stay as modest outlined buttons). */
 button[type='submit'] {
   background: var(--accent);
   border-color: var(--accent);
@@ -139,16 +139,16 @@ button[type='submit']:hover:not(:disabled) {
   border-color: var(--accent-strong);
 }
 
-/* 実行中の目印（ActionButton）。大きさは em 指定にしてラベルの字面に合わせる。 */
+/* Running marker (ActionButton). Sized in em to match the label's text. */
 .spinner {
-  /* ボタンの外（表のセル等）にも単独で置くので、行の中に収まる指定にしておく。 */
+  /* Also placed on its own outside buttons (table cells etc.), so it is set to fit within a line. */
   display: inline-block;
   vertical-align: -0.1em;
   flex: none;
   width: 0.9em;
   height: 0.9em;
   border: 2px solid currentColor;
-  /* 一周のうち一箇所を抜いて、回っていることを見せる。 */
+  /* Leave one segment of the circle out to show that it is spinning. */
   border-top-color: transparent;
   border-radius: 50%;
   animation: spinner-rotate 0.7s linear infinite;
@@ -160,20 +160,20 @@ button[type='submit']:hover:not(:disabled) {
   }
 }
 
-/* 表のセルでボタンと並べるときの間隔。 */
+/* Spacing when placed next to buttons in a table cell. */
 td > .spinner {
   margin-left: 0.4rem;
 }
 
-/* 表のボタンは文字の途中で折り返さない。列が細くなると（ユーザー管理は権限の
- * 一覧で横に詰まる）「削除」が 1 文字ずつ 2 行に割れていた。 */
+/* Table buttons do not wrap mid-word. When a column narrowed (user management gets squeezed by
+ * the permission list), "削除" split into two lines one character each. */
 td > button {
   white-space: nowrap;
 }
 
-/* 実行中でもボタンの幅を変えない。スピナーを差し込むとその分だけ横に伸び、隣の
- * ボタンが動いて押し間違いの元になる。ラベルは場所を占めたまま隠し、スピナーを
- * その上に重ねる。 */
+/* Keep the button width while running. Inserting a spinner would widen it by that much, shifting
+ * the neighbouring button and causing mis-taps. The label is hidden while keeping its space, and
+ * the spinner is overlaid on top. */
 .action-button {
   position: relative;
 }
@@ -186,11 +186,11 @@ td > button {
   position: absolute;
   top: 50%;
   left: 50%;
-  /* 自分の半分だけ戻して中央に置く（大きさは .spinner の 0.9em）。 */
+  /* Pull back by half its own size to centre it (size is .spinner's 0.9em). */
   margin: -0.45em 0 0 -0.45em;
 }
 
-/* 画面には出さず読み上げにだけ残す文言。 */
+/* Text not shown on screen, kept only for screen readers. */
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -211,8 +211,8 @@ textarea {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
-  /* 16px 未満だと iOS が入力欄へのフォーカスで画面を拡大する。狭い画面でも
-   * 縮めないこと。 */
+  /* Below 16px, iOS zooms the screen when an input gets focus. Do not shrink it
+   * even on narrow screens. */
   font-size: 1rem;
 }
 
@@ -224,8 +224,8 @@ textarea:focus-visible {
 }
 
 .layout {
-  /* dvh: モバイルブラウザのアドレスバーの出入りで高さが飛ばないようにする
-   * （対応していないブラウザは直前の 100vh を使う）。 */
+  /* dvh: keep the height from jumping as the mobile browser's address bar shows/hides
+   * (browsers without support use the preceding 100vh). */
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
@@ -242,9 +242,9 @@ textarea:focus-visible {
   padding-right: calc(1rem + var(--safe-right));
   padding-left: calc(1rem + var(--safe-left));
   border-bottom: 1px solid var(--border);
-  /* スクロールしてもメニューの開閉ボタンへ手が届くようにする */
+  /* Keep the menu toggle button within reach while scrolling */
   position: sticky;
-  /* 新しい版の知らせ（`.update-bar`）が出ている間は、その真下に貼り付く（ADR-0059）。 */
+  /* While the new-version notice (`.update-bar`) is shown, stick right below it (ADR-0059). */
   top: var(--update-bar-height, 0px);
   z-index: 30;
   background: var(--surface-raised);
@@ -256,7 +256,7 @@ textarea:focus-visible {
   letter-spacing: 0.01em;
   text-decoration: none;
   color: var(--accent);
-  /* 幅の足りない端末ではタイトルから先に詰める（右側の操作は残す） */
+  /* On devices without enough width, squeeze the title first (keep the actions on the right) */
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -280,7 +280,7 @@ textarea:focus-visible {
   color: var(--accent);
 }
 
-/* アカウントへの入口。広い画面では利用者名、狭い画面では頭文字の丸だけを出す。 */
+/* Account entry. On wide screens the user name; on narrow screens only the initial circle. */
 .header-account {
   display: inline-flex;
   align-items: center;
@@ -294,17 +294,17 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-/* 頭文字の丸は狭い画面でだけ出す（広い画面では名前がそのまま読める）。 */
+/* The initial circle is shown only on narrow screens (on wide screens the name is readable as is). */
 .header-account-initial {
   display: none;
 }
 
-/* 引き出しの開閉ボタン。広い画面ではナビゲーションが出たままなので出さない。 */
+/* Drawer toggle button. Not shown on wide screens, where the navigation stays visible. */
 .nav-toggle {
   display: none;
 }
 
-/* 引き出しの背景。開いているあいだだけ DOM に現れ、広い画面では出さない。 */
+/* Drawer backdrop. Appears in the DOM only while open; not shown on wide screens. */
 .nav-backdrop {
   display: none;
 }
@@ -312,7 +312,7 @@ textarea:focus-visible {
 .layout-body {
   display: flex;
   flex: 1;
-  /* 子の table が overflow-x で縮めるようにする（既定の min-width:auto を外す） */
+  /* Let a child table shrink via overflow-x (removes the default min-width:auto) */
   min-width: 0;
 }
 
@@ -322,8 +322,8 @@ textarea:focus-visible {
   gap: 0.25rem;
   min-width: 13rem;
   padding: 1rem 0.7rem;
-  /* セーフエリアは幅に関わらず避ける。viewport-fit=cover は全幅で効くため、
-   * 横向きのノッチ付き端末（CSS 幅が 48rem を超える）でも切り欠きは左右に来る。 */
+  /* Avoid safe areas regardless of width. viewport-fit=cover applies at all widths, so
+   * on notched devices in landscape (CSS width over 48rem) the cutout is at left/right. */
   padding-left: calc(0.7rem + var(--safe-left));
   border-right: 1px solid var(--border);
   background: var(--surface-raised);
@@ -337,14 +337,14 @@ textarea:focus-visible {
   font-weight: 500;
 }
 
-/* ダッシュボードの下に並ぶ子の入口（Sidebar.tsx）。画面の切り替えではなく
- * 「誰を見るか」の選択なので、一段下げて主要な項目と区別する。 */
+/* Child entries listed under the dashboard (Sidebar.tsx). They choose "whom to look at" rather
+ * than switching screens, so they are indented one level to set them apart from main items. */
 .sidebar a.sidebar-child {
   padding-left: 1.8rem;
   font-size: 0.9rem;
 }
 
-/* システム管理の節見出し（Sidebar.tsx）。項目との違いが分かる控えめな表示にする */
+/* System administration section heading (Sidebar.tsx). Modest so it is distinguishable from items */
 .sidebar-heading {
   margin: 0.8rem 0 0;
   padding: 0 0.8rem;
@@ -366,8 +366,8 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
-/* 引き出しを開くと先頭の項目へ焦点が移る（Sidebar.tsx）。どこに居るのかが
- * 分かるよう、選択中の背景とは別に枠を出す。 */
+/* Opening the drawer moves focus to the first item (Sidebar.tsx). Show an outline separate from
+ * the selected background so it is clear where you are. */
 .sidebar a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
@@ -377,8 +377,8 @@ textarea:focus-visible {
   flex: 1;
   min-width: 0;
   padding: 1.4rem;
-  /* 本文はナビゲーションの右にあるので、避けるのは右側の切り欠き。
-   * 引き出しになる狭い画面では左右とも本文が端まで来るため、下で左も足す。 */
+  /* Content is to the right of the navigation, so only the right-hand cutout is avoided.
+   * On narrow screens where it becomes a drawer, content reaches both edges, so the left is added below. */
   padding-right: calc(1.4rem + var(--safe-right));
 }
 
@@ -392,7 +392,7 @@ textarea:focus-visible {
   border-top: 1px solid var(--border);
 }
 
-/* 見出しと本文（複数カード）を縦に積むページの器。 */
+/* Page container that stacks a heading and content (multiple cards) vertically. */
 .page {
   display: flex;
   flex-direction: column;
@@ -411,7 +411,7 @@ textarea:focus-visible {
   color: var(--text-muted);
 }
 
-/* 入力欄に添える補足。直前の欄に属して見えるよう、余白を詰めて弱く出す。 */
+/* Note attached to an input. Tight spacing and muted so it reads as belonging to the field above. */
 .field-hint {
   margin: -0.5rem 0 0;
   font-size: 0.85rem;
@@ -453,8 +453,8 @@ textarea:focus-visible {
   border-radius: 0.7rem;
 }
 
-/* ダッシュボード: メンバーごとの残高カード。押せる面なのでカード全体をリンクにし、
- * hover でわずかに浮かせる。 */
+/* Dashboard: balance card per member. It is a pressable surface, so the whole card is a link,
+ * lifted slightly on hover. */
 .member-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
@@ -500,10 +500,10 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-/* 家族の詳細: 参加者を行のカードで積む（MemberList.tsx）。
+/* Family details: participants stacked as row cards (MemberList.tsx).
  *
- * 表にすると、狭い画面では操作が右へ流れて画面外に隠れる。名前・立場・残高・操作を
- * 1 行にまとめ、幅が足りなくなったら操作だけを次の行へ折り返す。 */
+ * As a table, on narrow screens the actions flow right and hide off-screen. Name, role, balance and
+ * actions sit on one line, and only the actions wrap to the next line when space runs out. */
 .member-list {
   display: flex;
   flex-direction: column;
@@ -523,7 +523,7 @@ textarea:focus-visible {
   border-radius: 0.7rem;
 }
 
-/* 名前と立場。残高と操作を押し出せるよう、余った幅はここが受け持つ。 */
+/* Name and role. This takes the leftover width so it can push balance and actions aside. */
 .member-row-identity {
   flex: 1 1 8rem;
   min-width: 0;
@@ -553,7 +553,7 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-/* 操作は行の中で 1 かたまり。折り返すときも操作どうしが離れないようにする。 */
+/* Actions form one block in the row. They stay together when wrapping. */
 .member-row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -561,7 +561,7 @@ textarea:focus-visible {
   gap: 0.4rem;
 }
 
-/* 立場に添える短い目印（自分・ログイン未設定・独立の指示あり）。 */
+/* Short markers next to the role (me, login not set up, independence instructed). */
 .tag {
   padding: 0.1rem 0.45rem;
   border: 1px solid var(--border);
@@ -569,14 +569,14 @@ textarea:focus-visible {
   font-size: 0.75rem;
 }
 
-/* 進行中の手続きを示す目印。ただの属性より一段強く見せる。 */
+/* Marker for an in-progress procedure. Stronger than a plain attribute. */
 .tag-notice {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
 }
 
-/* 取り消せない操作（削除・解散）。押す前に色で気付けるようにする。 */
+/* Irreversible actions (delete, disband). Coloured so they are noticed before pressing. */
 button.danger {
   color: var(--danger);
   border-color: var(--danger);
@@ -588,7 +588,7 @@ button.danger:hover:not(:disabled) {
   color: #fff;
 }
 
-/* 家族設定: 子の並び順（FamilySettingsPanel.tsx）。 */
+/* Family settings: child order (FamilySettingsPanel.tsx). */
 .order-editor {
   align-self: stretch;
 }
@@ -621,7 +621,7 @@ button.danger:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-/* 名前の頭文字を丸に入れた印。写真は持たない方針なので、これで人を見分ける。 */
+/* A mark with the name's initial in a circle. Photos are not kept by policy, so this tells people apart. */
 .avatar {
   display: inline-flex;
   align-items: center;
@@ -636,7 +636,7 @@ button.danger:hover:not(:disabled) {
   font-size: 1.1rem;
 }
 
-/* プロフィール設定: アカウントの段。 */
+/* Profile settings: the account section. */
 .account-row {
   display: flex;
   align-items: center;
@@ -656,7 +656,7 @@ button.danger:hover:not(:disabled) {
   font-size: 0.9rem;
 }
 
-/* プロフィール設定: 画面への入口を行として積む。行全体を押せるようにする。 */
+/* Profile settings: entries to screens stacked as rows. The whole row is pressable. */
 .link-list {
   display: flex;
   flex-direction: column;
@@ -701,7 +701,7 @@ button.danger:hover:not(:disabled) {
   align-items: flex-end;
 }
 
-/* 訂正のときの「加算・消費」の選択。入力欄の列の頭に 1 行で置く */
+/* "Add / spend" choice when correcting. Placed on one line at the top of the input column */
 .entry-kind {
   display: flex;
   flex-basis: 100%;
@@ -727,8 +727,8 @@ button.danger:hover:not(:disabled) {
   min-height: 2.25rem;
 }
 
-/* パスワード入力欄（PasswordField.tsx）。見出しの有無で高さが変わるだけで、
- * 縦積み（.card label）でも横並び（.inline-form）でも同じ形で置ける。 */
+/* Password input (PasswordField.tsx). Only the height changes depending on the caption, and it
+ * fits the same way both stacked (.card label) and inline (.inline-form). */
 .password-field {
   display: flex;
   flex-direction: column;
@@ -743,11 +743,11 @@ button.danger:hover:not(:disabled) {
 .password-field-control input {
   flex: 1;
   min-width: 0;
-  /* 伏せ字の末尾が目のボタンの下に隠れないよう、ボタンの幅だけ空ける */
+  /* Leave room for the button's width so the end of the masked text isn't hidden under the eye button */
   padding-right: 2.4rem;
 }
 
-/* 入力欄の枠の中に載せる。枠を二重に描かないよう背景・境界は持たない。 */
+/* Sits inside the input's frame. No background/border so the frame isn't drawn twice. */
 .password-field-toggle {
   position: absolute;
   top: 0;
@@ -795,14 +795,14 @@ button.danger:hover:not(:disabled) {
 .qr-code {
   width: 12rem;
   height: 12rem;
-  /* QR は黒い線の SVG。ダークテーマでも読み取れるよう常に白地に載せる。 */
+  /* The QR is an SVG of black lines. Always place it on white so it is readable in dark theme too. */
   background: #ffffff;
   padding: 0.5rem;
   border-radius: 0.4rem;
 }
 
-/* 表は列を落とさず、入りきらなければ横に送る。表だけをスクロールさせ、
- * ページ全体が横に動かないようにするためのラッパー。 */
+/* Tables don't drop columns; if they don't fit they scroll horizontally. A wrapper that scrolls
+ * only the table so the whole page doesn't move sideways. */
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -826,8 +826,8 @@ th {
   font-weight: 600;
 }
 
-/* 表の 1 セルに収めるチェックボックスの並び（ユーザー管理のロール）。項目が
-   増えても行が縦に伸びすぎないよう折り返す。`.card label` の縦積みを打ち消す。 */
+/* A row of checkboxes that fits in one table cell (user management roles). Wraps so the row
+   doesn't grow too tall as items increase. Overrides the stacked `.card label` layout. */
 .checkbox-list {
   display: flex;
   flex-wrap: wrap;
@@ -841,8 +841,8 @@ th {
   white-space: nowrap;
 }
 
-/* 入れる手段（ユーザー管理）。1 つずつ行を分け、語の途中で折り返さない
-   （列が細くなると「パスワード」が 1 文字ずつ縦に積まれていた）。 */
+/* Sign-in methods (user management). One per line, no wrapping mid-word
+   (when the column narrowed, "パスワード" was stacked vertically one character at a time). */
 .entrance-heading,
 .entrance-list {
   white-space: nowrap;
@@ -854,8 +854,8 @@ th {
   list-style: none;
 }
 
-/* 実際に効いている scope。ロールの和集合で読み取り専用なので、操作できる
-   ロールと見分けが付くよう控えめに出す。 */
+/* Effective scopes. A read-only union of the roles, shown modestly so they are distinguishable from
+   the editable roles. */
 .scope-list {
   display: flex;
   flex-wrap: wrap;
@@ -875,10 +875,10 @@ th {
   font-variant-numeric: tabular-nums;
 }
 
-/* 家族のルール（ADR-0027）。家族設定では書き、子どもの台帳では読むだけ。
- * 改行のとおりに読ませたいので、入力した折り返しをそのまま出す。 */
+/* Family rules (ADR-0027). Written in family settings, read-only on children's ledgers.
+ * They should read with the line breaks as entered, so the typed wrapping is kept. */
 .family-rules-form textarea {
-  /* 縦だけ伸ばせる。横へ広げると、隣の欄と桁がずれて読みにくくなる */
+  /* Only vertical resizing. Widening it would misalign columns with the neighbouring field and hurt readability */
   resize: vertical;
   width: 100%;
   font-family: inherit;
@@ -900,14 +900,14 @@ th {
   overflow-wrap: anywhere;
 }
 
-/* 毎日のボーナス（ADR-0024）は子ごとに 1 枠並ぶ。誰の欄かを見出しで示す。 */
+/* The daily bonus (ADR-0024) shows one box per child. The heading shows whose box it is. */
 .daily-bonus-child {
   margin: 0;
   font-weight: 600;
 }
 
-/* 発行した招待の URL。狭い画面でも枠から出さない。途中で切れると写せないので、
- * 区切りの無い文字列でも折り返す。 */
+/* URL of an issued invitation. Stays inside its box on narrow screens. Cut off it couldn't be copied,
+ * so it wraps even strings with no break points. */
 .invitation-link {
   margin: 0;
   max-width: 100%;
@@ -916,16 +916,16 @@ th {
   overflow-wrap: anywhere;
 }
 
-/* 残高をいつ取得したか。オフラインでは古いキャッシュが出得るため常に示す
-   （ADR-0015）。 */
+/* When the balance was fetched. Offline, an old cache may be shown, so it is always displayed
+   (ADR-0015). */
 .fetched-at {
   margin: 0.15rem 0 0;
   font-size: 0.8rem;
   color: var(--text-muted);
 }
 
-/* 打ち消された記録。台帳は追記専用で行が消えないため、取り消された事実を
-   見た目でも示す（ADR-0010）。 */
+/* Reversed records. The ledger is append-only and rows never disappear, so the fact that it was
+   reversed is also shown visually (ADR-0010). */
 tr.reversed {
   color: var(--text-muted);
   text-decoration: line-through;
@@ -945,7 +945,7 @@ tr.reversed {
   position: fixed;
   right: calc(1rem + var(--safe-right));
   bottom: calc(1rem + var(--safe-bottom));
-  /* 狭い画面でも画面外へはみ出さない（文言が長いと右端が切れるため） */
+  /* Don't overflow off-screen on narrow screens (long text gets cut at the right edge) */
   max-width: calc(100vw - 2rem - var(--safe-left) - var(--safe-right));
   align-items: flex-end;
   display: flex;
@@ -969,9 +969,9 @@ tr.reversed {
   background: var(--danger);
 }
 
-/* ポイントの推移（BalanceTrend.tsx）。線は 1 本なので凡例は持たず、見出しが名前を
- * 兼ねる。目盛りと補助線は控えめにし、0 の線だけ少し濃くする（マイナスの残高が
- * あるときに境目が読めるように）。 */
+/* Point trend (BalanceTrend.tsx). There is a single line, so there is no legend; the heading doubles
+ * as its name. Ticks and gridlines are muted, with only the zero line a bit darker (so the boundary
+ * is readable when the balance is negative). */
 .trend-heading {
   display: flex;
   justify-content: space-between;
@@ -1021,7 +1021,7 @@ tr.reversed {
 
 .trend-frame svg {
   display: block;
-  /* 横になぞって記録を選ぶあいだも、縦のスクロールは止めない */
+  /* Don't block vertical scrolling while swiping horizontally to pick a record */
   touch-action: pan-y;
 }
 
@@ -1094,8 +1094,8 @@ tr.reversed {
   margin: 0;
 }
 
-/* これからの予測（ADR-0053）。見積もりなので実線と描き分け、点線で伸ばす。
- * 「今日」の縦線で、ここまでが記録・ここからが見込みと分ける。 */
+/* The forecast ahead (ADR-0053). It is an estimate, so it is drawn as a dotted line unlike the solid one.
+ * The vertical "today" line separates records so far from the forecast beyond. */
 .trend-forecast-mark line {
   stroke: var(--border);
 }
@@ -1148,7 +1148,7 @@ tr.reversed {
   font-size: 0.8rem;
 }
 
-/* 見出しの横に添える入口（台帳 ⇄ イベント）。 */
+/* Entry placed beside the heading (ledger ⇄ events). */
 .page-heading-row {
   display: flex;
   align-items: center;
@@ -1171,7 +1171,7 @@ tr.reversed {
   outline-offset: 2px;
 }
 
-/* イベントの一覧は 1 画面で見渡したいので、ほかのページより横に広げる。 */
+/* The event list should be viewable on one screen, so it is wider than other pages. */
 .page-wide {
   max-width: 90rem;
 }
@@ -1180,7 +1180,7 @@ tr.reversed {
   max-width: none;
 }
 
-/* --- イベント（がんばりカード。ADR-0042） ---------------------------------- */
+/* --- Events (effort cards; ADR-0042) ---------------------------------------- */
 
 .event-create summary {
   cursor: pointer;
@@ -1216,7 +1216,7 @@ tr.reversed {
   color: var(--text-muted);
 }
 
-/* カードは指 1 本で押せる大きさを保ったまま、画面の幅いっぱいに詰める。 */
+/* Cards fill the screen width while staying large enough to press with one finger. */
 .event-board {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
@@ -1270,7 +1270,7 @@ tr.reversed {
   font-variant-numeric: tabular-nums;
 }
 
-/* ごほうびと期限の札を 1 行に並べる（狭いカードでは折り返す）。 */
+/* Put the reward and deadline badges on one line (wraps on narrow cards). */
 .event-card-tags {
   display: flex;
   flex-wrap: wrap;
@@ -1288,7 +1288,7 @@ tr.reversed {
   font-variant-numeric: tabular-nums;
 }
 
-/* 期限が近い。急かしすぎない程度に、ごほうびの札と同じ暖色の系統で知らせる */
+/* Deadline approaching. Signalled in the same warm colours as the reward badge, without being too pushy */
 .event-deadline-soon {
   background: var(--deadline-soon-soft);
   color: var(--deadline-soon-ink);
@@ -1314,14 +1314,14 @@ tr.reversed {
   gap: 0.4rem;
 }
 
-/* 期限切れのカードはシールを沈め、続けられないことを形で見せる */
+/* Expired cards dim their stickers, showing visually that they can't be continued */
 .event-card-expired .sticker-sheet {
   opacity: 0.45;
   filter: grayscale(0.8);
 }
 
-/* シール帳。マスは点線の丸で、番号を薄く刷っておく。貼ったシールはマスより
- * 少し大きく、1 枚ずつ傾けて「手で貼った」ように見せる。 */
+/* Sticker book. Cells are dotted circles with faintly printed numbers. Stuck stickers are a bit
+ * larger than the cells and each one tilted to look "stuck by hand". */
 .sticker-sheet-frame {
   position: relative;
   padding: 0.75rem;
@@ -1331,7 +1331,7 @@ tr.reversed {
 
 .sticker-sheet {
   display: grid;
-  /* マスは大きくしすぎない（回数の多いカードが縦に伸びて、一覧が 1 画面に収まらない） */
+  /* Don't make cells too large (cards with many counts would grow tall and the list wouldn't fit one screen) */
   grid-template-columns: repeat(var(--sheet-columns), minmax(0, 3.2rem));
   justify-content: center;
   gap: 0.45rem;
@@ -1395,7 +1395,7 @@ tr.reversed {
   }
 }
 
-/* 達成の判子。シールの上から押す（下のシールが透けて見えるよう、乗算で重ねる）。 */
+/* Completion stamp. Pressed over the stickers (multiplied so the stickers below show through). */
 .hanko-mark {
   position: absolute;
   inset: 0;
@@ -1404,14 +1404,14 @@ tr.reversed {
   pointer-events: none;
 }
 
-/* 判子が読めるよう、達成したカードのシールは一段沈める */
+/* Stickers on completed cards are dimmed one level so the stamp is readable */
 .event-card-completed .sticker-sheet {
   opacity: 0.55;
 }
 
 .hanko {
   width: min(72%, 10rem);
-  /* 1 行だけのカードでは枠からはみ出して見出しや日付に掛からないよう、高さでも抑える */
+  /* Also limit by height so on one-row cards it doesn't spill out of the frame over the heading or date */
   max-height: calc(100% + 1rem);
   color: var(--hanko);
   opacity: 0.9;
@@ -1498,10 +1498,10 @@ tr.reversed {
   outline-offset: 2px;
 }
 
-/* 新しい版の知らせ（AppUpdatePrompt.tsx。ADR-0059）。どの画面でもいちばん上に帯で出し、
- * 押されるまで消さない。下へ送っても上に残し、サインイン後の画面ではヘッダー（z-index: 30）が
- * その真下に付く（`.header` の `top`）。狭い画面の引き出し（50）と幕（40）は帯の上に重ねる
- * ——開いている間は引き出しだけを操作させるため。 */
+/* New-version notice (AppUpdatePrompt.tsx; ADR-0059). Shown as a bar at the very top of every screen
+ * and not removed until pressed. It stays at the top when scrolling, and on signed-in screens the header
+ * (z-index: 30) sits right below it (`.header`'s `top`). The narrow-screen drawer (50) and scrim (40)
+ * are layered above the bar -- so that only the drawer can be operated while it is open. */
 .update-bar {
   position: sticky;
   top: 0;
@@ -1521,7 +1521,7 @@ tr.reversed {
   text-align: center;
 }
 
-/* 帯と同じ色のボタンだと沈むので、色を反転させて押せる所だと分かるようにする。 */
+/* A button in the same colour as the bar would sink, so invert its colours to show it is pressable. */
 .update-bar .update-bar-button {
   background: var(--on-accent);
   border-color: var(--on-accent);
@@ -1536,7 +1536,7 @@ tr.reversed {
   color: var(--accent);
 }
 
-/* 長い一覧のページ送り（Pager.tsx）。表の下の中央に置く。 */
+/* Paging for long lists (Pager.tsx). Centred below the table. */
 .pager {
   display: flex;
   align-items: center;
@@ -1549,11 +1549,11 @@ tr.reversed {
   font-variant-numeric: tabular-nums;
 }
 
-/* ここから狭い画面（スマートフォン）向け。
+/* From here on: narrow screens (smartphones).
  *
- * 48rem を境に、左に固定していたナビゲーションを画面外から滑り出す引き出しへ
- * 変える。DOM は変わらず、開いているかどうかだけを Sidebar が `sidebar-open` で
- * 伝える（App.tsx の状態）。 */
+ * At 48rem, the navigation fixed on the left becomes a drawer that slides in from off-screen.
+ * The DOM does not change; Sidebar only signals whether it is open with `sidebar-open`
+ * (state in App.tsx). */
 @media (max-width: 48rem) {
   .nav-toggle {
     display: inline-flex;
@@ -1579,13 +1579,13 @@ tr.reversed {
     overflow-y: auto;
     background: var(--surface-raised);
     border-right: 1px solid var(--border);
-    /* visibility も切り替える。transform で画面外へ出しただけだと、閉じている
-     * あいだも Tab キーでリンクへ入れてしまう。
+    /* Also toggle visibility. Merely moving it off-screen with transform would still let Tab
+     * reach the links while closed.
      *
-     * visibility は途中の値を持たない（滑らかには変わらない）ので、切り替わる時点を
-     * 遅延で指定する。閉じるときは滑り終わってから hidden にし、開くときは即座に
-     * visible にする。開くのを遅らせると、滑っているあいだ項目に焦点を当てられず、
-     * Sidebar.tsx が引き出しの先頭へ焦点を移せない。 */
+     * visibility has no intermediate values (it doesn't change smoothly), so the switch point is
+     * set with a delay. When closing it becomes hidden after the slide ends; when opening it becomes
+     * visible immediately. Delaying the open would prevent focusing items while sliding, and
+     * Sidebar.tsx couldn't move focus to the top of the drawer. */
     visibility: hidden;
     transform: translateX(-100%);
     transition:
@@ -1614,7 +1614,7 @@ tr.reversed {
     border-radius: 0;
   }
 
-  /* 指で押す的は 44px 四方を下回らないようにする */
+  /* Tap targets should not be smaller than 44px square */
   button,
   input,
   select {
@@ -1634,15 +1634,15 @@ tr.reversed {
     gap: 0.5rem;
   }
 
-  /* 利用者名は長さがまちまちで、長いほどタイトルを押し出す。丸に頭文字だけを
-   * 出し、名前は読み上げ用に `aria-label` へ残す（Header.tsx）。
-   * `.header-actions a` の丸い枠（余白・背景）を上書きするため、同じ高さの
-   * 詳しさで書く（クラス 1 つでは弱く、余白が残る）。 */
+  /* User names vary in length, and longer ones push the title out. Show only the initial in a
+   * circle and keep the name in `aria-label` for screen readers (Header.tsx).
+   * Written with the same specificity to override the round frame (padding, background) of
+   * `.header-actions a` (a single class is too weak and the padding remains). */
   .header-actions .header-account {
     gap: 0;
     padding: 0;
     background: none;
-    /* 指で押す的は 44px 四方を下回らないようにする（丸は 40px なので枠で足す） */
+    /* Tap targets should not be smaller than 44px square (the circle is 40px, so the frame makes up the rest) */
     min-height: 2.75rem;
     min-width: 2.75rem;
     justify-content: center;
@@ -1661,7 +1661,7 @@ tr.reversed {
     background: var(--accent-soft);
     color: var(--accent);
     font-weight: 700;
-    /* 頭文字が縦棒の多い文字でも丸の中で揺れないようにする */
+    /* Keep the initial from wobbling inside the circle even for characters with many vertical strokes */
     line-height: 1;
   }
 
@@ -1675,7 +1675,7 @@ tr.reversed {
     padding: 0.9rem;
   }
 
-  /* 横並びの入力は縦に積む。狭い画面では 1 行に 2 つ入れても読めない。 */
+  /* Stack inline inputs vertically. On narrow screens two on one line are unreadable. */
   .inline-form {
     flex-direction: column;
     align-items: stretch;
@@ -1687,15 +1687,15 @@ tr.reversed {
     gap: 0.4rem;
   }
 
-  /* 差し込みの枠（共有パネル等）の中でも入力を横いっぱいに伸ばす。
-   * 広い画面では内容の幅で収まるが、狭い画面では読み書きしづらくなる。 */
+  /* Stretch inputs to full width even inside inset frames (shared panels etc.).
+   * On wide screens they fit their content, but on narrow screens they become hard to use. */
   .card-inset {
     align-items: stretch;
   }
 
   th,
   td {
-    /* 折り返して 1 文字幅の列にならないようにする（入りきらない分は横送り） */
+    /* Don't wrap into one-character-wide columns (what doesn't fit scrolls horizontally) */
     white-space: nowrap;
   }
 
@@ -1708,7 +1708,7 @@ tr.reversed {
     grid-template-columns: 1fr;
   }
 
-  /* 期間の切り替えは 3 つが 1 本の枠に並ぶので、枠の高さで押す的を確保する */
+  /* The period switch has three in one frame, so the frame height secures the tap target */
   .segmented button {
     min-height: 2.25rem;
   }
@@ -1720,21 +1720,21 @@ tr.reversed {
     transition: none;
   }
 
-  /* シールと判子は「現れた」ことが伝われば足りる。動きは付けない */
+  /* For stickers and stamps it is enough to convey that they "appeared". No animation */
   .sticker-fresh,
   .hanko-fresh .hanko {
     animation: none;
   }
 
-  /* スピナーは装飾ではなく「実行中」を伝える唯一の目印なので、止めずに遅くする。 */
+  /* The spinner is not decoration but the only marker of "running", so slow it down rather than stop it. */
   .spinner {
     animation-duration: 1.6s;
   }
 }
 
-/* --- 表示端末（ADR-0047） ------------------------------------------------- */
+/* --- Display devices (ADR-0047) ------------------------------------------- */
 
-/* ボタンの見た目のリンク（画面を移るだけの主操作）。 */
+/* A link that looks like a button (a primary action that just moves to another screen). */
 .link-button {
   display: inline-flex;
   align-items: center;
@@ -1751,7 +1751,7 @@ tr.reversed {
   gap: 0.6rem;
 }
 
-/* 表示の画面は操作の無い全画面。離れた所からも読めるよう、字を大きく取る。 */
+/* The display screen is a full screen without controls. Large text so it is readable from afar. */
 .display-screen {
   min-height: 100dvh;
   box-sizing: border-box;
@@ -1765,7 +1765,7 @@ tr.reversed {
   font-size: 1rem;
 }
 
-/* 動いている版（task #498）。読む物ではないので隅に小さく。 */
+/* The running version (task #498). Not meant to be read, so small in the corner. */
 .display-version {
   position: fixed;
   right: calc(0.75rem + env(safe-area-inset-right));

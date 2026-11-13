@@ -1,6 +1,6 @@
-"""設定解決の優先順位（環境変数 > デフォルト値）の検証。
+"""Validation of the settings resolution priority (env var > default value).
 
-DB 層（system_settings 上書き）は integration 側で検証する。
+The DB layer (system_settings overrides) is verified on the integration side.
 """
 
 from shared.kernel.settings.settings import ApplicationSettings

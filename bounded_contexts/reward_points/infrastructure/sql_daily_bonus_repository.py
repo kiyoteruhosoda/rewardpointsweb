@@ -1,10 +1,10 @@
-"""``IDailyBonusRepository`` の SQLAlchemy 実装（ADR-0024）。
+"""SQLAlchemy implementation of ``IDailyBonusRepository`` (ADR-0024).
 
-台帳につき 1 件（``UNIQUE (ledger_id)``）なので、保存は「引いて、あれば書き換え、
-無ければ足す」で足りる。ただし「引いた時点では無かった」が最後まで正しいとは
-限らない — 2 人の親が同時に最初の設定を送ると、どちらの側からも行が見えないまま
-両方が足しに行く。負けた側は一意制約に当たるので、そこで勝った行を読み直して
-書き換える（``PUT`` は置き換えなので、どちらが勝っても結果は同じで良い）。
+One per ledger (``UNIQUE (ledger_id)``), so saving is just "look it up, rewrite if present,
+add if not". But "it was absent when looked up" may not stay true — if two parents send
+the first setting simultaneously, both go to add without seeing the other's row. The loser
+hits the unique constraint, so it re-reads the winning row and rewrites it (``PUT`` is a
+replacement, so the result may be the same whichever wins).
 """
 
 from __future__ import annotations
@@ -43,13 +43,13 @@ class SqlDailyBonusRepository(IDailyBonusRepository):
         return [_to_bonus(row) for row in rows]
 
     def save(self, draft: DailyBonusDraft) -> DailyBonus:
-        # 値オブジェクトを先に通す。列の CHECK と同じ不変条件をドメイン側でも守る
+        # Pass through value objects first. The domain enforces the same invariants as the column CHECKs
         amount = PointAmount(draft.amount)
         reason = TransactionReason(draft.reason)
         row = self._find_row(draft.ledger_id) or self._add_row(draft, amount=amount, reason=reason)
-        # 量と理由はどちらの経路でも最後に書く（同時に作られた行を掴んだ場合も、
-        # この呼び出しの内容で置き換わる）。starts_on / granted_through は動かさない
-        # — 量を直しただけで、渡し終えた日まで無かったことにはしない
+        # Amount and reason are written last on either path (even when grabbing a row created
+        # concurrently, it is replaced with this call's content). starts_on / granted_through
+        # are left alone — merely fixing the amount must not erase the days already granted
         row.amount = amount.value
         row.reason = reason.value
         self._session.flush()
@@ -63,7 +63,7 @@ class SqlDailyBonusRepository(IDailyBonusRepository):
             select(DailyBonusModel)
             .where(
                 or_(
-                    # まだ 1 日も渡していない（開始日が来ていれば渡す）
+                    # Not a single day granted yet (granted once the start date arrives)
                     and_(
                         DailyBonusModel.granted_through.is_(None),
                         DailyBonusModel.starts_on <= today,
@@ -83,10 +83,10 @@ class SqlDailyBonusRepository(IDailyBonusRepository):
         self._session.flush()
 
     def _add_row(self, draft: DailyBonusDraft, *, amount: PointAmount, reason: TransactionReason) -> DailyBonusModel:
-        """行を足す。同時に足されていたら、その行を返す。
+        """Add a row. If one was added concurrently, return that row.
 
-        ``UNIQUE (ledger_id)`` に当たった側が 500 で終わらないようにするための
-        分岐で、台帳への追記（``SqlPointTransactionRepository.append``）と同じ形。
+        This branch keeps the side hitting ``UNIQUE (ledger_id)`` from ending in a 500, the
+        same shape as appending to the ledger (``SqlPointTransactionRepository.append``).
         """
         row = DailyBonusModel(
             ledger_id=draft.ledger_id,
@@ -96,8 +96,8 @@ class SqlDailyBonusRepository(IDailyBonusRepository):
             granted_through=None,
         )
         try:
-            # SAVEPOINT の中で書く。衝突しても巻き戻るのはこの 1 行だけで、
-            # 同じリクエストの他の書き込みは失われない
+            # Write inside a SAVEPOINT. On conflict only this row is rolled back, and other
+            # writes in the same request are not lost
             with self._session.begin_nested():
                 self._session.add(row)
         except IntegrityError:

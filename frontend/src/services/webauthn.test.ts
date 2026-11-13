@@ -1,4 +1,4 @@
-/** ブラウザ由来のパスキー失敗を、原因の分かる翻訳キーへ変換できること。 */
+/** Browser-originated passkey failures map to translation keys that explain the cause. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import en from '../i18n/en.json'
@@ -13,8 +13,8 @@ import {
   passkeyErrorKey,
 } from './webauthn'
 
-describe('パスキーを作る・使う前の噛み合わせ', () => {
-  // jsdom が開いている URL は localhost。RP ID がそれと合わない設定を渡す。
+describe('checks before creating or using a passkey', () => {
+  // jsdom opens localhost. Pass a config whose RP ID does not match it.
   const credentials = { create: vi.fn(), get: vi.fn() }
 
   afterEach(() => {
@@ -27,7 +27,7 @@ describe('パスキーを作る・使う前の噛み合わせ', () => {
     vi.stubGlobal('navigator', { credentials })
   }
 
-  it('使えない RP ID なら、認証器を呼ばずに原因の分かる失敗にする', async () => {
+  it('fails with a clear cause, without calling the authenticator, for an unusable RP ID', async () => {
     stubCredentials()
     await expect(createPasskey({ rp: { id: 'example.com' } })).rejects.toBeInstanceOf(
       PasskeyRelyingPartyMismatchError,
@@ -35,7 +35,7 @@ describe('パスキーを作る・使う前の噛み合わせ', () => {
     expect(credentials.create).not.toHaveBeenCalled()
   })
 
-  it('ログイン（認証）の側でも同じように見る', async () => {
+  it('checks the same on the login (authentication) side', async () => {
     stubCredentials()
     await expect(assertPasskey({ rpId: 'example.com' })).rejects.toBeInstanceOf(
       PasskeyRelyingPartyMismatchError,
@@ -43,7 +43,7 @@ describe('パスキーを作る・使う前の噛み合わせ', () => {
     expect(credentials.get).not.toHaveBeenCalled()
   })
 
-  it('食い違いは設定の誤りとして訳される（取り消しにはしない）', () => {
+  it('translates a mismatch as a misconfiguration (not a cancellation)', () => {
     const error = new PasskeyRelyingPartyMismatchError('example.com', 'localhost')
     expect(passkeyErrorKey(error)).toBe('error.passkey_domain_mismatch')
     expect(isPasskeyCancellation(error)).toBe(false)
@@ -51,39 +51,39 @@ describe('パスキーを作る・使う前の噛み合わせ', () => {
 })
 
 describe('passkeyErrorKey', () => {
-  it('RP ID がドメインと合わない場合（SecurityError）を見分ける', () => {
-    // 設定の誤りを利用者の画面で「エラーが発生しました」にしない
+  it('recognises an RP ID not matching the domain (SecurityError)', () => {
+    // Do not turn a misconfiguration into "an error occurred" on the user's screen
     expect(passkeyErrorKey(new DOMException('bad rp id', 'SecurityError'))).toBe(
       'error.passkey_domain_mismatch',
     )
   })
 
-  it('同じ端末に登録済みの場合（InvalidStateError）を見分ける', () => {
+  it('recognises an already registered device (InvalidStateError)', () => {
     expect(passkeyErrorKey(new DOMException('exists', 'InvalidStateError'))).toBe(
       'error.passkey_already_on_device',
     )
   })
 
-  it('認証器が対応していない場合（NotSupportedError）を見分ける', () => {
+  it('recognises an unsupported authenticator (NotSupportedError)', () => {
     expect(passkeyErrorKey(new DOMException('nope', 'NotSupportedError'))).toBe(
       'error.passkey_unsupported_authenticator',
     )
   })
 
-  it('取り消しは取り消しとして返す', () => {
+  it('returns a cancellation as a cancellation', () => {
     expect(passkeyErrorKey(new DOMException('cancel', 'NotAllowedError'))).toBe(
       'error.passkey_cancelled',
     )
     expect(passkeyErrorKey(new Error(PASSKEY_CANCELLED))).toBe('error.passkey_cancelled')
   })
 
-  it('サーバー由来の失敗は null を返し、呼び出し側の変換に委ねる', () => {
+  it('returns null for server-originated failures, leaving conversion to the caller', () => {
     expect(passkeyErrorKey(new ApiError(500, 'passkey_misconfigured'))).toBeNull()
     expect(passkeyErrorKey(new DOMException('other', 'AbortError'))).toBeNull()
     expect(passkeyErrorKey(undefined)).toBeNull()
   })
 
-  it('返すキーは両言語に訳がある', () => {
+  it('every returned key has translations in both languages', () => {
     const errors = [
       new DOMException('bad rp id', 'SecurityError'),
       new DOMException('exists', 'InvalidStateError'),
@@ -104,7 +104,7 @@ describe('passkeyErrorKey', () => {
 })
 
 describe('isPasskeyCancellation', () => {
-  it('取り消し以外の DOMException は取り消しではない', () => {
+  it('a DOMException other than cancellation is not a cancellation', () => {
     expect(isPasskeyCancellation(new DOMException('bad rp id', 'SecurityError'))).toBe(false)
   })
 })

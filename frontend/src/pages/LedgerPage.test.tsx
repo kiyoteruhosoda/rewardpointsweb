@@ -1,6 +1,6 @@
 /**
- * 台帳: 追記型の見え方（打ち消しの対表示）と、変更 UI の出し分け。
- * 残高を出す画面は他にもあるので、記録の後に家族まで読み直すかも見る（ADR-0021）。
+ * Ledger: append-only presentation (reversals shown as pairs) and gating of modification UI.
+ * Other screens show balances too, so also check the family is reloaded after recording (ADR-0021).
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { Link } from 'react-router-dom'
@@ -25,7 +25,7 @@ const reverse = vi.fn<() => Promise<Transaction>>()
 const correct = vi.fn<(transactionId: number, entry: NewTransaction) => Promise<Correction>>()
 
 vi.mock('../services/families', () => ({
-  // 本物と同じ判定にする。サーバは Z 付きで返すので、無条件に足すと `...ZZ` になる
+  // Same check as the real one. The server returns a trailing Z, so appending blindly gives `...ZZ`
   parseUtc: (value: string) =>
     new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`),
   newIdempotencyKey: () => 'test-key',
@@ -71,7 +71,7 @@ function ledger(overrides: Partial<Ledger> = {}): Fetched<Ledger> {
   }
 }
 
-/** 別の子へ移るところまで見たいので、同じ経路に一致する行き先を添えて描く。 */
+/** Renders with a destination matching the same route, to cover moving to another child. */
 function renderPage(reloadFamily = () => Promise.resolve(), family: FamilyDetail | null = null) {
   return renderWithProviders(
     <>
@@ -88,17 +88,17 @@ function renderPage(reloadFamily = () => Promise.resolve(), family: FamilyDetail
   )
 }
 
-/** ルールを書いてある家族（この画面での出所は家族の応答）。 */
+/** A family with rules written (on this screen they come from the family response). */
 function familyWithRules(): FamilyDetail {
   return { ...familyOf('owner', [member()]), rules: 'おかたづけ 10 pt' }
 }
 
-/** 訂正の入力を開く（対象は最初の「訂正する」を出している行）。 */
+/** Opens the correction input (target is the first row showing "Correct"). */
 function startCorrection(): void {
   fireEvent.click(screen.getAllByRole('button', { name: 'Correct' })[0] as HTMLElement)
 }
 
-/** 加算を 1 件記録する（フォームは加算・消費を符号で分ける）。 */
+/** Records one addition (the form separates addition and spending by sign). */
 function addPoints(): void {
   fireEvent.change(screen.getByLabelText('Points'), { target: { value: '50' } })
   fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'おてつだい' } })
@@ -116,24 +116,24 @@ describe('LedgerPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
-  describe('家族のルール（ADR-0027）', () => {
-    it('書いてあれば、記録の入力欄の下に出す（書き換えはここではできない）', async () => {
+  describe('family rules (ADR-0027)', () => {
+    it('shows them below the record input when written (cannot be edited here)', async () => {
       viewLedger.mockResolvedValue(ledger())
       renderPage(() => Promise.resolve(), familyWithRules())
 
       expect(await screen.findByText('おかたづけ 10 pt')).toBeInTheDocument()
-      // 書き換えるのは家族設定。この画面には入力欄を出さない
+      // They are edited in family settings. No input on this screen
       expect(screen.queryByRole('textbox', { name: 'Family rules' })).not.toBeInTheDocument()
     })
 
-    it('変更できない相手（子ども本人）にも同じ文面を出す', async () => {
+    it('shows the same text to someone who cannot modify (the child)', async () => {
       viewLedger.mockResolvedValue(ledger({ can_modify: false }))
       renderPage(() => Promise.resolve(), familyWithRules())
 
       expect(await screen.findByText('おかたづけ 10 pt')).toBeInTheDocument()
     })
 
-    it('書いていなければ何も出さない', async () => {
+    it('shows nothing when none are written', async () => {
       viewLedger.mockResolvedValue(ledger())
       renderPage(() => Promise.resolve(), familyOf('owner', [member()]))
 
@@ -142,7 +142,7 @@ describe('LedgerPage', () => {
     })
   })
 
-  it('残高と履歴、記録した人を出す', async () => {
+  it('shows balance, history and who recorded', async () => {
     viewLedger.mockResolvedValue(ledger())
     renderPage()
 
@@ -151,7 +151,7 @@ describe('LedgerPage', () => {
     expect(screen.getByText('おとうさん')).toBeInTheDocument()
   })
 
-  it('can_modify が偽なら変更 UI を出さない', async () => {
+  it('hides modification UI when can_modify is false', async () => {
     viewLedger.mockResolvedValue(ledger({ can_modify: false }))
     renderPage()
 
@@ -163,7 +163,7 @@ describe('LedgerPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('打ち消し済みと打ち消しの行を対で見せ、どちらも取り消せない', async () => {
+  it('shows reversed and reversal rows as a pair, neither reversible', async () => {
     viewLedger.mockResolvedValue(
       ledger({
         balance: 0,
@@ -176,20 +176,20 @@ describe('LedgerPage', () => {
     renderPage()
 
     await screen.findByText('0 pt')
-    // 元の行は消えず、両方が並ぶ
+    // The original row stays, and both are listed
     expect(screen.getByText(/\(undone\)/)).toBeInTheDocument()
     expect(screen.getByText(/\(undo\)/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
   })
 
-  it('まだ取り消されていない行にだけ取り消しを出す', async () => {
+  it('shows reverse only on rows not yet reversed', async () => {
     viewLedger.mockResolvedValue(ledger())
     renderPage()
 
     expect(await screen.findByRole('button', { name: 'Undo' })).toBeInTheDocument()
   })
 
-  it('マイナス残高では 0 までの必要ポイントを添える', async () => {
+  it('shows points needed to reach 0 on a negative balance', async () => {
     viewLedger.mockResolvedValue(ledger({ balance: -30 }))
     renderPage()
 
@@ -197,7 +197,7 @@ describe('LedgerPage', () => {
     expect(screen.getByText('30 pt short of zero.')).toBeInTheDocument()
   })
 
-  it('よく使う理由を入力候補として出す', async () => {
+  it('offers frequently used reasons as input suggestions', async () => {
     viewLedger.mockResolvedValue(ledger())
     reasonSuggestions.mockResolvedValue(['おてつだい', 'そうじ'])
     renderPage()
@@ -210,7 +210,7 @@ describe('LedgerPage', () => {
     ])
   })
 
-  it('候補が取れなくても記録はできる（自由入力なので）', async () => {
+  it('can record without suggestions (free input)', async () => {
     viewLedger.mockResolvedValue(ledger())
     reasonSuggestions.mockRejectedValue(new Error('offline'))
     renderPage()
@@ -219,14 +219,14 @@ describe('LedgerPage', () => {
     expect(document.querySelectorAll('datalist option')).toHaveLength(0)
   })
 
-  it('履歴が無ければその旨を出す', async () => {
+  it('says so when there is no history', async () => {
     viewLedger.mockResolvedValue(ledger({ balance: 0, transactions: [] }))
     renderPage()
 
     expect(await screen.findByText('Nothing recorded yet.')).toBeInTheDocument()
   })
 
-  it('最後に取得した時刻を出す（オフラインでは古いキャッシュが出得るため）', async () => {
+  it('shows the last fetch time (offline may show stale cache)', async () => {
     viewLedger.mockResolvedValue({
       ...ledger(),
       fetchedAt: new Date('2026-08-01T10:00:00Z'),
@@ -237,7 +237,7 @@ describe('LedgerPage', () => {
     expect(screen.getByText(/As of /)).toBeInTheDocument()
   })
 
-  it('取得時刻が読めない応答では時刻の行を出さない', async () => {
+  it('hides the time row when the response time is unreadable', async () => {
     viewLedger.mockResolvedValue(ledger())
     renderPage()
 
@@ -245,7 +245,7 @@ describe('LedgerPage', () => {
     expect(screen.queryByText(/As of /)).not.toBeInTheDocument()
   })
 
-  it('記録したら台帳と家族の両方を読み直す（他の画面の残高が古いまま残らない）', async () => {
+  it('reloads both ledger and family after recording (no stale balances elsewhere)', async () => {
     viewLedger.mockResolvedValueOnce(ledger()).mockResolvedValue(ledger({ balance: 150 }))
     record.mockResolvedValue(transaction({ id: 2, amount: 50 }))
     const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()
@@ -258,7 +258,7 @@ describe('LedgerPage', () => {
     expect(reloadFamily).toHaveBeenCalled()
   })
 
-  it('取り消しでも家族を読み直す（残高が減るのはどの画面でも同じ）', async () => {
+  it('reloads the family after a reversal too (balances drop on every screen)', async () => {
     viewLedger.mockResolvedValueOnce(ledger()).mockResolvedValue(ledger({ balance: 0 }))
     reverse.mockResolvedValue(transaction({ id: 2, amount: -100, reversal_of_id: 1 }))
     const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()
@@ -271,7 +271,7 @@ describe('LedgerPage', () => {
     expect(reloadFamily).toHaveBeenCalled()
   })
 
-  it('記録に失敗したら読み直さない（無かった記録を映さない）', async () => {
+  it('does not reload when recording fails (no phantom record)', async () => {
     viewLedger.mockResolvedValue(ledger())
     record.mockRejectedValue(new Error('offline'))
     const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()
@@ -287,7 +287,7 @@ describe('LedgerPage', () => {
     expect(viewLedger).toHaveBeenCalledTimes(1)
   })
 
-  it('手元に戻ってきたら読み直す（別の端末で足された分を映す）', async () => {
+  it('reloads on return (shows points added on another device)', async () => {
     viewLedger.mockResolvedValueOnce(ledger()).mockResolvedValue(ledger({ balance: 150 }))
     renderPage()
 
@@ -297,7 +297,7 @@ describe('LedgerPage', () => {
     expect(await screen.findByText('150 pt')).toBeInTheDocument()
   })
 
-  it('読み直しに失敗しても、出している残高は消さない', async () => {
+  it('keeps the shown balance when reloading fails', async () => {
     viewLedger.mockResolvedValueOnce(ledger()).mockRejectedValue(new Error('offline'))
     renderPage()
 
@@ -311,7 +311,7 @@ describe('LedgerPage', () => {
     expect(screen.queryByText('These points could not be loaded.')).not.toBeInTheDocument()
   })
 
-  it('訂正の後は入力候補も取り直す（直した書き間違いを選び直させない）', async () => {
+  it('refetches suggestions after a correction (no picking the fixed typo again)', async () => {
     viewLedger.mockResolvedValue(ledger())
     reasonSuggestions.mockResolvedValueOnce(['おてつだいい']).mockResolvedValue(['おてつだい'])
     correct.mockResolvedValue({
@@ -331,7 +331,7 @@ describe('LedgerPage', () => {
     expect([...options].map((option) => option.getAttribute('value'))).toEqual(['おてつだい'])
   })
 
-  it('訂正を選ぶと、元の内容が入った入力欄に替わる', async () => {
+  it('choosing correct swaps in an input prefilled with the original', async () => {
     viewLedger.mockResolvedValue(
       ledger({ transactions: [transaction({ amount: -60, reason: 'おかし' })] }),
     )
@@ -340,16 +340,16 @@ describe('LedgerPage', () => {
     await screen.findByText('-60 pt')
     startCorrection()
 
-    // 符号はラジオで決めるので、入力欄には絶対値が入る。種類は元の記録の側を選んでおく
+    // The sign is a radio, so the input holds the absolute value; the kind follows the original
     expect(await screen.findByLabelText('Points')).toHaveValue(60)
     expect(screen.getByRole('radio', { name: 'Used points' })).toBeChecked()
     expect(screen.getByRole('radio', { name: 'Added points' })).not.toBeChecked()
     expect(screen.getByLabelText('Reason')).toHaveValue('おかし')
-    // 記録の入力欄とは入れ替わる（どちらへ打っているのか分からなくならない）
+    // It replaces the record input (no confusion about which one you are typing into)
     expect(screen.queryByRole('button', { name: 'Add points' })).not.toBeInTheDocument()
   })
 
-  it('訂正を送ると、直した内容と符号でその記録を指して送る', async () => {
+  it('sends the correction targeting that record with the fixed content and sign', async () => {
     viewLedger.mockResolvedValueOnce(ledger()).mockResolvedValue(ledger({ balance: 50 }))
     correct.mockResolvedValue({
       reversal: transaction({ id: 2, amount: -100, reversal_of_id: 1 }),
@@ -369,13 +369,13 @@ describe('LedgerPage', () => {
       reason: 'おてつだい',
       idempotencyKey: 'test-key',
     })
-    // 残高はどの画面でも同じなので、家族も読み直す（ADR-0021）
+    // Balances are the same on every screen, so the family is reloaded too (ADR-0021)
     expect(reloadFamily).toHaveBeenCalled()
-    // 通ったら入力欄は記録用に戻る
+    // Once it succeeds, the input returns to recording
     expect(await screen.findByRole('button', { name: 'Add points' })).toBeInTheDocument()
   })
 
-  it('消費の記録を直すと、そのまま消費として送る', async () => {
+  it('fixing a spending record sends it as spending', async () => {
     viewLedger.mockResolvedValue(ledger({ transactions: [transaction({ amount: -60 })] }))
     correct.mockResolvedValue({
       reversal: transaction({ id: 2, amount: 60, reversal_of_id: 1 }),
@@ -393,7 +393,7 @@ describe('LedgerPage', () => {
     })
   })
 
-  it('符号の付け間違いは消費として保存し直せる', async () => {
+  it('a wrong sign can be re-saved as spending', async () => {
     viewLedger.mockResolvedValue(ledger())
     correct.mockResolvedValue({
       reversal: transaction({ id: 2, amount: -100, reversal_of_id: 1 }),
@@ -411,7 +411,7 @@ describe('LedgerPage', () => {
     })
   })
 
-  it('訂正に失敗したら入力欄を閉じない（直した内容を打ち直させない）', async () => {
+  it('keeps the input open when a correction fails (no retyping the fix)', async () => {
     viewLedger.mockResolvedValue(ledger())
     correct.mockRejectedValue(new Error('offline'))
     renderPage()
@@ -428,7 +428,7 @@ describe('LedgerPage', () => {
     expect(viewLedger).toHaveBeenCalledTimes(1)
   })
 
-  it('やめれば記録の入力欄へ戻る', async () => {
+  it('cancel returns to the record input', async () => {
     viewLedger.mockResolvedValue(ledger())
     renderPage()
 
@@ -440,7 +440,7 @@ describe('LedgerPage', () => {
     expect(correct).not.toHaveBeenCalled()
   })
 
-  it('打ち消しと訂正の行には、それと分かる印を付ける', async () => {
+  it('marks reversal and correction rows recognisably', async () => {
     viewLedger.mockResolvedValue(
       ledger({
         balance: 50,
@@ -456,11 +456,11 @@ describe('LedgerPage', () => {
     await screen.findByText('50 pt')
     expect(screen.getByText(/\(correction\)/)).toBeInTheDocument()
     expect(screen.getByText(/\(undo\)/)).toBeInTheDocument()
-    // 直せるのは打ち消しでも打ち消し済みでもない行だけ（ここでは訂正後の 1 行）
+    // Only rows that are neither reversals nor reversed can be fixed (here the one corrected row)
     expect(screen.getAllByRole('button', { name: 'Correct' })).toHaveLength(1)
   })
 
-  it('記録に失敗したら入力を残す（同じ鍵で送り直せる）', async () => {
+  it('keeps the input when recording fails (can resend with the same key)', async () => {
     viewLedger.mockResolvedValue(ledger())
     record.mockRejectedValue(new Error('offline'))
     renderPage()
@@ -475,7 +475,7 @@ describe('LedgerPage', () => {
     expect(screen.getByLabelText('Reason')).toHaveValue('おてつだい')
   })
 
-  it('別の子へ移ったら、前の子の残高を出したまま待たない', async () => {
+  it('does not keep showing the previous balance while moving to another child', async () => {
     viewLedger
       .mockResolvedValueOnce(ledger())
       .mockReturnValue(new Promise<Fetched<Ledger>>(() => undefined))

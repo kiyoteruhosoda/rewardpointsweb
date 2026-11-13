@@ -11,7 +11,8 @@ to use this app**. People without an assignment are stopped on assay's screen an
 this far (idp ADR-0054). A record is left in ``federated_identities`` when linked, so
 from the second time on it is decided by step 1.
 
-⚠ **Refuse when it cannot be created.** An account with the same email address already exists (``sso_account_not_linked``;
+⚠ **Refuse when it cannot be created.** An account with the same email address already exists
+(``sso_account_not_linked``;
 this includes accounts whose identifier (``username``) is that address),
 or the ``username`` cannot be decided (``sso_username_unavailable``). Silently creating it with another value
 in either case would give the same person two accounts, or an identifier the person does not know.

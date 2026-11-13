@@ -1,12 +1,12 @@
 /**
- * 家族まるごとの控えを書き出す（バックアップ。ADR-0026）。
+ * Exports a copy of the whole family (backup; ADR-0026).
  *
- * 出るのは親（owner / parent）の画面だけ。控えには家族全員の台帳が載るので、
- * 自分の台帳しか見られない子には渡さない（サーバーも同じ条件で断る）。
+ * Shown only on parents' (owner / parent) screens. The copy contains every family member's ledger,
+ * so it is not given to children who can only see their own (the server refuses on the same condition).
  *
- * 押すと 1 つの JSON ファイルが落ちてくる。戻すのは家族に所属していない状態から
- * （`FamilyImportPanel`）なので、この画面には取り込みを置かない — 今の家族へ
- * 上書きできると誤解させないため。
+ * Pressing downloads a single JSON file. Restoring is done from a state with no family
+ * (`FamilyImportPanel`), so import is not placed on this screen — to avoid suggesting it could
+ * overwrite the current family.
  */
 import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'

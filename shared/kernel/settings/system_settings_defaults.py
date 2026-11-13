@@ -1,14 +1,14 @@
-"""システム設定のデフォルト値（優先順位: 環境変数 > DB > ここ）。
+"""Default values of system settings (priority: environment variable > DB > here).
 
-キーを追加したら ``settings.py`` の ``@property`` と
-``presentation/fastapi/admin/system_settings_definitions.py`` も更新する
-（CLAUDE.md「設定管理」参照）。
+When adding a key, also update the ``@property`` in ``settings.py`` and
+``presentation/fastapi/admin/system_settings_definitions.py``
+(see the settings section of CLAUDE.md).
 """
 
 from __future__ import annotations
 
 DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
-    # --- 認証 ---
+    # --- Authentication ---
     "SECRET_KEY": "default-secret-key",
     "JWT_SECRET_KEY": "default-jwt-secret-change-me-in-production",
     "ACCESS_TOKEN_ISSUER": "rewardpointsweb",
@@ -17,88 +17,89 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     "REFRESH_TOKEN_EXPIRES_SECONDS": 14 * 24 * 3600,
     "SESSION_COOKIE_SECURE": False,
     "PASSWORD_RESET_TOKEN_TTL_SECONDS": 3600,
-    # 宛名ごとの失敗の上限（ADR-0055）。窓の中で上限まで失敗したら、しばらく断る
+    # Failure limit per login identifier (ADR-0055). Reaching it within the window refuses for a while
     "LOGIN_MAX_FAILURES": 5,
     "LOGIN_FAILURE_WINDOW_SECONDS": 900,
     "LOGIN_LOCK_SECONDS": 900,
-    # 親が発行した一時パスワードの有効期限（ADR-0011）
+    # Lifetime of a temporary password issued by a parent (ADR-0011)
     "TEMPORARY_PASSWORD_TTL_SECONDS": 24 * 3600,
-    # --- 家族（reward_points コンテキスト） ---
+    # --- Family (reward_points context) ---
     "FAMILY_INVITATION_TTL_SECONDS": 7 * 24 * 3600,
-    # 毎日のボーナス（ADR-0024）の 1 日の区切り。保存する時刻は常に UTC だが、
-    # 「毎日」を UTC の 0 時で切ると日本では毎朝 9 時が日付の変わり目になる。
-    # 暮らしの側の 1 日に合わせたい家族は Asia/Tokyo 等へ変える（IANA 名）
+    # Day boundary for the daily bonus (ADR-0024). Stored times are always UTC, but cutting
+    # "every day" at 00:00 UTC makes the date change at 9:00 every morning in Japan.
+    # Families who want it to follow their everyday day change it to e.g. Asia/Tokyo (IANA name)
     "DAILY_BONUS_TIME_ZONE": "UTC",
-    # 止まっていたあいだの何日分まで遡って渡すか。超えた分は渡さない
-    # （久しぶりに開いた台帳が何百行ものボーナスで埋まらないようにする）
+    # How many days of downtime to go back and grant. Anything beyond is not granted
+    # (so a ledger opened after a long time is not filled with hundreds of bonus rows)
     "DAILY_BONUS_MAX_CATCH_UP_DAYS": 31,
-    # --- 二要素認証（TOTP） ---
-    "TOTP_ISSUER": "rewardpointsweb",  # 認証アプリに表示される発行者名
-    "TOTP_VALID_WINDOW": 1,  # 前後いくつの時間枠を許容するか（時刻ずれ吸収）
-    # --- パスキー（WebAuthn） ---
-    # RP ID は登録済みパスキーの結び付け先。変更すると既存のパスキーが無効になる。
-    # 指定できるのは**ドメイン名のみ**（IP アドレス不可）。そのため開発時は
-    # 127.0.0.1 ではなく localhost で開く（docs/OPERATIONS.md に対応表）。
+    # --- Two-factor authentication (TOTP) ---
+    "TOTP_ISSUER": "rewardpointsweb",  # Issuer name shown in authenticator apps
+    "TOTP_VALID_WINDOW": 1,  # How many time steps either side to accept (absorbs clock drift)
+    # --- Passkeys (WebAuthn) ---
+    # The RP ID is what registered passkeys are bound to. Changing it invalidates existing passkeys.
+    # It can only be **a domain name** (no IP addresses), so during development open
+    # localhost rather than 127.0.0.1 (mapping table in docs/OPERATIONS.md).
     "WEBAUTHN_RP_ID": "localhost",
     "WEBAUTHN_RP_NAME": "rewardpointsweb",
     "WEBAUTHN_ORIGIN": "http://localhost:5173",
     "WEBAUTHN_CHALLENGE_TTL_SECONDS": 300,
-    # --- 外部 IdP（OIDC / SSO）連携。ADR-0029 ---
-    # 既定は無効。有効にするには ISSUER / CLIENT_ID と、方式に応じた資格情報
-    # （CLIENT_SECRET か PRIVATE_KEY_FILE）が揃っている必要がある（どれか欠けた
-    # ままでは「無効」として扱う）。
+    # --- External IdP (OIDC / SSO) integration. ADR-0029 ---
+    # Disabled by default. Enabling it requires ISSUER / CLIENT_ID and the credential for the
+    # chosen method (CLIENT_SECRET or PRIVATE_KEY_FILE) (if any is missing, it is treated
+    # as "disabled").
     "OIDC_ENABLED": False,
-    "OIDC_DISPLAY_NAME": "SSO",  # ログイン画面のボタンに出る名前
-    # OpenID Provider の発行者 URL。末尾に /.well-known/openid-configuration を
-    # 付けた先が読める必要がある（discovery で各エンドポイントを引く）。
+    "OIDC_DISPLAY_NAME": "SSO",  # Name shown on the login screen button
+    # Issuer URL of the OpenID Provider. It must be readable with /.well-known/openid-configuration
+    # appended (each endpoint is looked up via discovery).
     "OIDC_ISSUER": "",
     "OIDC_CLIENT_ID": "",
     "OIDC_CLIENT_SECRET": "",
-    # トークンエンドポイントへの client 認証方式。
-    # client_secret_basic = 上の CLIENT_SECRET を使う。
-    # private_key_jwt     = 下の PRIVATE_KEY_FILE の秘密鍵で署名する（秘密を
-    #                       デプロイの変数にも DB にも置かずに済む）。
+    # Client authentication method for the token endpoint.
+    # client_secret_basic = use CLIENT_SECRET above.
+    # private_key_jwt     = sign with the private key in PRIVATE_KEY_FILE below (keeps the
+    #                       secret out of both the deploy variables and the DB).
     "OIDC_CLIENT_AUTH_METHOD": "client_secret_basic",
-    # private_key_jwt のときだけ使う。ホスト上の PEM を read-only で渡す。
+    # Used only with private_key_jwt. Pass the PEM on the host in read-only.
     "OIDC_PRIVATE_KEY_FILE": "",
-    # IdP に鍵が複数登録されているときに、どれで検証するかを示す（RFC 7638 の
-    # サムプリント）。1 つしか無ければ空でよい。
+    # When several keys are registered at the IdP, tells it which one to verify with (RFC 7638
+    # thumbprint). May be empty if there is only one.
     "OIDC_PRIVATE_KEY_KID": "",
-    # このアプリが**機械として** IdP を呼ぶときの client_id（ADR-0040）。assay で
-    # サービスアカウントとして登録したもので、ログイン用の OIDC_CLIENT_ID とは別の登録。
-    # 鍵は上の OIDC_PRIVATE_KEY_FILE / KID を共有し、方式は常に private_key_jwt。
-    # 空なら定期照合は走らない。⚠ assay でアプリの「名乗り」に結び付けるまでは 403 で見送る。
+    # client_id this app uses when calling the IdP **as a machine** (ADR-0040). Registered in assay
+    # as a service account; a separate registration from OIDC_CLIENT_ID used for login.
+    # Shares the key from OIDC_PRIVATE_KEY_FILE / KID above; the method is always private_key_jwt.
+    # Empty means periodic reconciliation does not run. ⚠ Skipped with 403 until it is bound to
+    # the app's identity in assay.
     "MACHINE_CLIENT_ID": "",
     "OIDC_SCOPES": ["openid", "profile", "email"],
-    # IdP に登録するリダイレクト URI。空なら APP_BASE_URL + /api/auth/sso/callback。
+    # Redirect URI registered at the IdP. Empty means APP_BASE_URL + /api/auth/sso/callback.
     "OIDC_REDIRECT_URI": "",
-    # 要求する認証の強度（``acr_values``）。空 = 要求しない（ADR-0039）。
-    # ⚠ **入れたら fail closed になる。** 返ってきた acr が要求と一致しなければ
-    #   （返ってこない場合も）ログインを断る。予約語を持たない IdP へつなぐときは
-    #   空のままにする。自前 idp（assay）なら urn:assay:ac:mfa が使える。
+    # Required authentication strength (``acr_values``). Empty = none required (ADR-0039).
+    # ⚠ **Setting it makes login fail closed.** If the returned acr does not match the request
+    #   (or none is returned) the login is refused. Leave it empty when connecting to an IdP
+    #   without such reserved values. With our own idp (assay), urn:assay:ac:mfa is available.
     "OIDC_ACR_VALUES": [],
-    # クレーム名の対応付け（IdP ごとに異なる）
+    # Claim name mapping (differs per IdP)
     "OIDC_EMAIL_CLAIM": "email",
     "OIDC_DISPLAY_NAME_CLAIM": "name",
-    # 受け入れるメールアドレスのドメイン（空 = 制限しない）
-    # ⚠ **初回ログインで既存の利用者へ寄せるか。既定は false**（ADR-0033）。
-    #   条件の email_verified は、自前 idp (assay) では「テナント管理者がそう主張して
-    #   いる」であって本人の証明ではない。
-    #   ⚠ 偽のあいだ、同じメールアドレスの口座を持つ人は初回の SSO で断られる
-    #   （口座を 2 つ作らない。ADR-0041）。その口座へ入って設定画面から結び付ける。
+    # Accepted email domains (empty = no restriction)
+    # ⚠ **Whether a first login is merged into an existing user. Default is false** (ADR-0033).
+    #   With our own idp (assay), the email_verified condition means "the tenant admin claims
+    #   so", not proof from the person themselves.
+    #   ⚠ While false, a person who has an account with the same email is refused at first SSO
+    #   (no second account is created; ADR-0041). They sign into that account and link it from settings.
     "OIDC_LINK_BY_EMAIL": False,
     "OIDC_ALLOWED_EMAIL_DOMAINS": [],
-    # 認可要求 -> コールバックの往復に許す時間
+    # Time allowed for the authorization request -> callback round trip
     "OIDC_LOGIN_SESSION_TTL_SECONDS": 600,
-    # コールバックが発行する引き換え券（SPA がトークンへ交換する）の寿命
+    # Lifetime of the ticket issued by the callback (which the SPA exchanges for tokens)
     "OIDC_LOGIN_TICKET_TTL_SECONDS": 60,
-    # --- 一般 ---
-    "APP_BASE_URL": "",  # パスワードリセットリンク等の生成元（例: https://app.example.com）
+    # --- General ---
+    "APP_BASE_URL": "",  # Base for password reset links etc. (e.g. https://app.example.com)
     "LANGUAGES": ["en", "ja"],
     "DEFAULT_LOCALE": "en",
     "DEFAULT_THEME": "light",  # system / light / dark
     "CORS_ALLOWED_ORIGINS": [],
-    # --- メール ---
+    # --- Mail ---
     "MAIL_ENABLED": False,
     "MAIL_SERVER": "smtp.example.com",
     "MAIL_PORT": 587,
@@ -107,13 +108,13 @@ DEFAULT_APPLICATION_SETTINGS: dict[str, object] = {
     "MAIL_USERNAME": "",
     "MAIL_PASSWORD": "",
     "MAIL_DEFAULT_SENDER": "",
-    # --- ログ ---
+    # --- Logging ---
     "LOG_LEVEL": "INFO",
     "LOG_TO_DATABASE": True,
 }
 
-#: 環境変数だけで決める設定（ADR-0056）。サーバーがつなぎに行く先と、鍵のファイルの場所。
-#: 管理画面には見るだけで出し、保存は断る。DB に古い値が残っていても読まない。
+#: Settings decided by environment variables only (ADR-0056): where the server connects to, and
+#: where the key file is. Shown read-only in the admin UI; saving is refused. Stale DB values are ignored.
 ENV_ONLY_SETTINGS: frozenset[str] = frozenset(
     {
         "OIDC_ISSUER",

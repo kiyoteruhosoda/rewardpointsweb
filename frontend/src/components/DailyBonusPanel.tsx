@@ -1,15 +1,15 @@
 /**
- * 毎日のボーナス（ADR-0024）を家族設定に並べる（ADR-0027）。
+ * Lists the daily bonus (ADR-0024) in family settings (ADR-0027).
  *
- * 家族の決めごとは家族設定に集める。子ども一人ひとりの台帳を開いて回らなくても、
- * 誰にいくつ渡しているかがこの 1 枚で見比べられる。
+ * Family-wide rules are gathered in family settings. Without opening each child's ledger in turn,
+ * this one card lets you compare how much each child is given.
  *
- * **量は子ごとに違ってよい。** 家族に 1 つの設定にはせず、子の数だけ入力欄を出す
- * （年齢でお小遣いが違うのが普通なので、揃える方が例外）。
+ * **The amount may differ per child.** Rather than one setting per family, show one input per child
+ * (allowance usually varies by age, so equal amounts are the exception).
  *
- * 出るのは家族設定を開ける親だけ。台帳を変更できる相手（`point:manage`）でなければ
- * サーバーが断るので、押してから断られる操作にならないよう、呼び出し側が親のときだけ
- * 描く。
+ * Only parents who can open family settings see it. The server refuses anyone who cannot change the ledger
+ * (`point:manage`), so to avoid an action that is refused after pressing, the caller renders it only
+ * for parents.
  */
 import { useI18n } from '../i18n'
 import { type FamilyDetail } from '../services/families'
@@ -17,13 +17,13 @@ import { DailyBonusForm } from './DailyBonusForm'
 
 interface Props {
   family: FamilyDetail
-  /** 保存・停止のあと、家族を読み直す。 */
+  /** Reloads the family after save/stop. */
   onChanged: () => Promise<unknown>
 }
 
 export function DailyBonusPanel({ family, onChanged }: Props) {
   const { t } = useI18n()
-  // 台帳の見えない子は設定も返らない（ADR-0009）。親には全員ぶんが載る
+  // Children whose ledger is not visible return no setting either (ADR-0009). Parents get everyone
   const children = family.memberships.flatMap((member) =>
     member.role === 'child' && member.ledger_id !== null
       ? [
@@ -46,8 +46,8 @@ export function DailyBonusPanel({ family, onChanged }: Props) {
       ) : (
         children.map((child) => (
           <DailyBonusForm
-            // 読み直すと設定が変わり得るので、入力欄はその都度作り直す
-            // （保存した値を出したまま古い入力が残らないように）
+            // Reloading may change the setting, so the input is rebuilt each time
+            // (so stale input does not remain while the saved value is shown)
             key={`${child.id}:${child.bonus?.amount ?? 'none'}:${child.bonus?.reason ?? ''}`}
             familyId={family.id}
             ledgerId={child.ledgerId}

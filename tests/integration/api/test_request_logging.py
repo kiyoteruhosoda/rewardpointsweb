@@ -1,11 +1,11 @@
-"""アクセスログ（``app.request``）に何を残し、何を残さないか。
+"""What the access log (``app.request``) records and what it does not.
 
-見たいのは 2 つ。
+Two things to check.
 
-- **死活監視のパスは残さない。** Docker の healthcheck は数十秒おきに叩くため、
-  成功した分まで残すとアプリログがこれで埋まる。
-- **失敗はレベルで拾える。** 4xx は WARNING、5xx は ERROR。成功と同じ INFO で
-  並べると、ログを絞り込んでも異常が浮かび上がらない。
+- **Health-check paths are not recorded.** Docker's healthcheck hits them every few tens of seconds,
+  so recording the successful ones too would fill the app log with them.
+- **Failures can be picked up by level.** 4xx is WARNING, 5xx is ERROR. Listed at the same INFO as
+  successes, anomalies would not stand out even when filtering the log.
 """
 
 from __future__ import annotations
@@ -31,9 +31,9 @@ def test_successful_probes_are_not_logged(client: TestClient, caplog: pytest.Log
 
 
 def test_a_failing_probe_is_logged(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
-    """プローブが落ちていること自体は知りたい情報なので、失敗は残す。"""
+    """We do want to know that a probe is failing, so failures are recorded."""
     with caplog.at_level(logging.DEBUG, logger=_ACCESS_LOGGER):
-        # HEAD は定義していない = 405。プローブのパスでも失敗なら記録される
+        # HEAD is not defined = 405. A failure is recorded even on a probe path
         assert client.head("/healthz").status_code == 405
 
     assert [record.levelno for record in _access_records(caplog)] == [logging.WARNING]
@@ -54,7 +54,7 @@ def test_client_errors_are_logged_as_warnings(client: TestClient, caplog: pytest
         assert client.get("/api/nonexistent").status_code == 404
 
     assert [record.levelno for record in _access_records(caplog)] == [
-        # 401 は運用上ふつうに起きる（期限切れ・未ログイン）ので INFO のまま
+        # 401 happens routinely in operation (expired, not signed in), so it stays INFO
         logging.INFO,
         logging.WARNING,
     ]

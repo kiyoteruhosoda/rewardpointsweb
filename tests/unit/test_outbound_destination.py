@@ -1,4 +1,4 @@
-"""利用者が渡した宛先の確かめ（ADR-0083）。名前の引きは差し替える（外へは引きに行かない）。"""
+"""Checking destinations given by users (ADR-0083). Name resolution is swapped out (never resolved externally)."""
 
 from __future__ import annotations
 

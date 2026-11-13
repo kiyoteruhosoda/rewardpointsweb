@@ -1,4 +1,4 @@
-"""既存の利用者へ寄せてよいかの判断。"""
+"""Deciding whether it is OK to merge into an existing user."""
 
 from __future__ import annotations
 
@@ -36,22 +36,22 @@ def test_rejects_a_domain_that_is_not_listed() -> None:
 
 
 def test_by_default_nothing_is_linked() -> None:
-    """⚠ 既定は寄せない（ADR-0033）。
+    """⚠ Not merged by default (ADR-0033).
 
-    条件の ``email_verified`` は、自前 idp (assay) では「テナント管理者がそう
-    主張している」であって本人の証明ではない。既定で開けておくと、意味の食い違いが
-    そのまま乗っ取りの経路になる。
+    The ``email_verified`` condition, with our own idp (assay), means "the tenant admin
+    claims so", not proof from the person. Leaving it open by default turns the mismatch in meaning
+    straight into a takeover path.
 
-    ⚠ **このアプリは SSO で利用者を作らない**ので、倒すと「まだ結び付いていない人は
-    SSO で入れない」になる（パスワードでは入れる）。開けるかは運用で決める。
+    ⚠ **This app does not create users via SSO**, so turning it off means "people not yet linked
+    cannot sign in via SSO" (they can with a password). Whether to open it is an operational decision.
     """
     assert AccountLinkingPolicy().may_link(_user("a@example.com")) is False
 
 
 def test_links_only_on_a_verified_address() -> None:
-    """開けていても、未検証のアドレスでは寄せない。
+    """Even when open, unverified addresses are not merged.
 
-    名乗るだけで他人のアカウントへ入れてしまうため。
+    Otherwise just claiming an address would let you into someone else's account.
     """
     policy = AccountLinkingPolicy(link_by_email=True)
 

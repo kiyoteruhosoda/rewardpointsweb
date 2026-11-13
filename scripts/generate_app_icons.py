@@ -1,15 +1,15 @@
-"""アプリアイコン（favicon / PWA / iOS）を `frontend/public/` へ書き出す。
+"""Write the app icons (favicon / PWA / iOS) to `frontend/public/`.
 
-図柄は「親子（大人 2 人と子ども 2 人）と、貯まったごほうびの星」。SVG も PNG も
-このスクリプトが同じ座標から作るので、両者の形は必ず一致する。
+The motif is "a family (2 adults and 2 children) and the reward star they have earned". This
+script builds both the SVG and the PNGs from the same coordinates, so their shapes always match.
 
     uv run python scripts/generate_app_icons.py
 
-図形の位置は「アイコンの一辺を 1 とした比率」で持つ（`UNIT` 系の定数）。大きさを
-変えても比率は変わらないため、192 / 512 / 180 のどれでも同じ絵になる。
+Shape positions are kept as "ratios of the icon's side length, taken as 1" (the `UNIT` constants).
+The ratios do not change with size, so 192 / 512 / 180 all produce the same picture.
 
-色や配置を変えたいときはここの定数を直して実行し、書き出した 5 ファイルをコミット
-する（`favicon.svg` を手で編集しても PNG は追随しない）。
+To change colours or layout, edit the constants here, run it, and commit the 5 files it writes
+(editing `favicon.svg` by hand does not carry over to the PNGs).
 """
 
 from __future__ import annotations
@@ -22,42 +22,42 @@ from PIL import Image, ImageDraw
 
 OUT = Path(__file__).resolve().parent.parent / "frontend" / "public"
 
-BLUE = "#1c80fa"  # 背景。index.html の theme-color / manifest の theme_color と揃える
+BLUE = "#1c80fa"  # Background. Keep in sync with theme-color in index.html / theme_color in the manifest
 WHITE = "#ffffff"
 STAR = "#fecf42"
 
-CORNER = 0.20  # 角丸の半径（一辺に対する比率）
-GAP = 0.013  # 重なった人物を切り分ける背景色の隙間
-BELOW = 1.08  # 体は下端より先まで描いて角丸で切る（足元を作らない）
+CORNER = 0.20  # Corner radius (ratio of the side length)
+GAP = 0.013  # Background-coloured gap separating overlapping figures
+BELOW = 1.08  # Bodies extend past the bottom edge and are clipped by the rounded corners (no feet)
 
-SUPERSAMPLE = 4  # 大きく描いてから縮める（PIL の polygon はアンチエイリアスしない）
-ARC_STEPS = 64  # 円弧を何本の線分で近似するか（SVG は円弧コマンドを使うので PNG 用）
-VIEW_BOX = 512  # SVG の座標系（比率にこの値を掛けて書き出す）
+SUPERSAMPLE = 4  # Draw large, then downscale (PIL's polygon does not anti-alias)
+ARC_STEPS = 64  # Number of segments approximating an arc (PNG only; the SVG uses arc commands)
+VIEW_BOX = 512  # SVG coordinate system (ratios are multiplied by this when written)
 
 
 @dataclass(frozen=True)
 class Person:
-    """頭（円）と体（上が半円の柱）でできた人。数値はすべて一辺に対する比率。"""
+    """A person made of a head (circle) and body (pillar with a semicircular top). All values are ratios of the side."""
 
     head_x: float
     head_y: float
     head_r: float
     body_x: float
-    body_hw: float  # 体の半分の幅（＝肩の円弧の半径）
-    body_arc_y: float  # 肩の円弧の中心。頂点はここから body_hw だけ上
+    body_hw: float  # Half the body width (= radius of the shoulder arc)
+    body_arc_y: float  # Centre of the shoulder arc. The top is body_hw above this
 
 
-# 奥から手前の順。手前の人ほど後に描き、背景色の隙間で切り分ける。
+# Ordered back to front. People in front are drawn later and separated by a background-coloured gap.
 FAMILY = (
-    Person(0.645, 0.470, 0.107, 0.645, 0.192, 0.747),  # 大人（右・奥）
-    Person(0.340, 0.429, 0.115, 0.340, 0.207, 0.733),  # 大人（左）
-    Person(0.590, 0.748, 0.063, 0.605, 0.078, 0.892),  # 子ども（右）
-    Person(0.396, 0.679, 0.078, 0.395, 0.123, 0.879),  # 子ども（左・手前）
+    Person(0.645, 0.470, 0.107, 0.645, 0.192, 0.747),  # Adult (right, back)
+    Person(0.340, 0.429, 0.115, 0.340, 0.207, 0.733),  # Adult (left)
+    Person(0.590, 0.748, 0.063, 0.605, 0.078, 0.892),  # Child (right)
+    Person(0.396, 0.679, 0.078, 0.395, 0.123, 0.879),  # Child (left, front)
 )
 
 STAR_X, STAR_Y, STAR_R = 0.781, 0.207, 0.130
-STAR_INNER = 0.50  # 内側の半径の比。小さくすると鋭く、大きくすると太る
-# きらめき。星の右上に 2 本、丸い端の線で入れる。
+STAR_INNER = 0.50  # Inner radius ratio. Smaller is sharper, larger is fatter
+# Sparkle. Two round-capped lines at the upper right of the star.
 SPARKS = (((0.886, 0.050), (0.856, 0.100)), ((0.947, 0.100), (0.887, 0.137)))
 SPARK_WIDTH = 0.017
 
@@ -72,7 +72,7 @@ def star_points(cx: float, cy: float, radius: float) -> list[tuple[float, float]
 
 
 def dome_points(x: float, half_width: float, arc_y: float, *, bottom: float) -> list[tuple[float, float]]:
-    """体の輪郭（上半分が半円、下は下端の先まで伸びる柱）。"""
+    """Body outline (semicircular top half; below, a pillar extending past the bottom edge)."""
     points = [(x - half_width, bottom)]
     for i in range(ARC_STEPS + 1):
         angle = math.pi + math.pi * i / ARC_STEPS
@@ -82,18 +82,18 @@ def dome_points(x: float, half_width: float, arc_y: float, *, bottom: float) -> 
 
 
 class Canvas:
-    """比率（0〜1）で受け取り、実寸の PNG へ描く。"""
+    """Takes ratios (0-1) and draws onto a full-size PNG."""
 
     def __init__(self, size: int, scale: float) -> None:
         self._px = size * SUPERSAMPLE
         self._scale = scale
         self._image = Image.new("RGBA", (self._px, self._px), (0, 0, 0, 0))
         self._draw = ImageDraw.Draw(self._image)
-        # 縮小しても体が下端に届くよう、縮小の分だけ長く伸ばす（足元を作らない）
+        # Extend by the shrink amount so bodies still reach the bottom edge when shrunk (no feet)
         self.bottom = 0.5 + (BELOW - 0.5) / scale
 
     def _at(self, x: float, y: float) -> tuple[float, float]:
-        """図柄全体を中心から ``scale`` 倍に縮める（maskable の安全域に収めるため）。"""
+        """Shrink the whole motif by ``scale`` around the centre (to fit the maskable safe zone)."""
         return (
             (0.5 + (x - 0.5) * self._scale) * self._px,
             (0.5 + (y - 0.5) * self._scale) * self._px,
@@ -117,11 +117,11 @@ class Canvas:
     def stroke(self, start: tuple[float, float], end: tuple[float, float], width: float) -> None:
         px_width = width * self._scale * self._px
         self._draw.line((self._at(*start), self._at(*end)), fill=STAR, width=round(px_width))
-        for point in (start, end):  # 丸い端
+        for point in (start, end):  # Round caps
             self.circle(point[0], point[1], width / 2, color=STAR)
 
     def finish(self, size: int, corner: float) -> Image.Image:
-        """角丸の外へはみ出した体を切り落としてから縮小する。"""
+        """Clip bodies sticking out past the rounded corners, then downscale."""
         if corner > 0:
             mask = Image.new("L", (self._px, self._px), 0)
             ImageDraw.Draw(mask).rounded_rectangle(
@@ -132,10 +132,10 @@ class Canvas:
 
 
 def paint(canvas: Canvas, corner: float) -> None:
-    """背景 → 家族（奥から手前）→ 星、の順で 1 枚ぶん描く。"""
+    """Draw one image: background -> family (back to front) -> star."""
     canvas.background(corner)
     for index, person in enumerate(FAMILY):
-        if index > 0:  # 奥の人と重なるところに背景色の隙間を作る
+        if index > 0:  # Cut a background-coloured gap where this overlaps the person behind
             canvas.circle(person.head_x, person.head_y, person.head_r + GAP, color=BLUE)
             gap_body = dome_points(person.body_x, person.body_hw + GAP, person.body_arc_y, bottom=canvas.bottom)
             canvas.polygon(gap_body, BLUE)
@@ -167,7 +167,7 @@ def _svg_dome(person: Person, grow: float) -> str:
 def _svg_person(person: Person, gap: float, *, first: bool) -> list[str]:
     head = f'<circle cx="{person.head_x:.1f}" cy="{person.head_y:.1f}"'
     lines: list[str] = []
-    if not first:  # 奥の人と重なるところに背景色の隙間を作る
+    if not first:  # Cut a background-coloured gap where this overlaps the person behind
         lines.append(f'{head} r="{person.head_r + gap:.1f}" fill="{BLUE}"/>')
         lines.append(f'<path d="{_svg_dome(person, gap)}" fill="{BLUE}"/>')
     lines.append(f'<path d="{_svg_dome(person, 0.0)}" fill="{WHITE}"/>')
@@ -177,7 +177,7 @@ def _svg_person(person: Person, gap: float, *, first: bool) -> list[str]:
 
 
 def svg() -> str:
-    """PNG と同じ図形の SVG（favicon 用。タブでは拡大縮小されるためベクターで持つ）。"""
+    """An SVG of the same shapes as the PNGs (for the favicon; kept as vector since tabs scale it)."""
     view = float(VIEW_BOX)
     scaled = [
         Person(
@@ -217,13 +217,13 @@ def svg() -> str:
 
 
 def main() -> None:
-    # 通常のアイコン。ランチャーはこれをそのまま出すので角を丸めておく。
+    # Regular icons. Launchers show them as is, so round the corners.
     render(192, corner=CORNER).save(OUT / "pwa-192x192.png")
     render(512, corner=CORNER).save(OUT / "pwa-512x512.png")
-    # maskable。ランチャーが好きな形に切り抜くので端まで塗り、頭と星がセーフゾーン
-    # （内側 80%）に収まるよう図柄を縮める。体は今までどおり下端まで伸ばす。
+    # maskable. Launchers crop it to any shape, so fill to the edges and shrink the motif so the
+    # heads and star fit the safe zone (inner 80%). Bodies still extend to the bottom edge.
     render(512, corner=0.0, scale=0.85).save(OUT / "pwa-maskable-512x512.png")
-    # iOS は自前で角を丸め、透過を黒く塗る。角丸なし・透過なしで渡す。
+    # iOS rounds the corners itself and paints transparency black. Hand it no rounding, no alpha.
     render(180, corner=0.0, scale=0.94).save(OUT / "apple-touch-icon.png")
     (OUT / "favicon.svg").write_text(svg())
     print(f"wrote icons into {OUT}")

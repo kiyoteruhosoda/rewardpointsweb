@@ -1,19 +1,19 @@
 /**
- * ポイントの加算・消費の入力フォーム。記録の訂正にも同じ形を使う（ADR-0022）。
+ * Input form for adding/spending points. The same form is used to correct a record (ADR-0022).
  *
- * 台帳は符号で加算と消費を区別する（ADR-0010）。画面では「加算」「消費」の
- * 2 つのボタンに分け、送るときに符号を付ける。入力欄で負の数を打たせない。
- * 訂正のときは、加算と消費の入れ替えはまれなので、元の記録の種類を選んだ
- * ラジオを出して「保存」1 つで送る。どちらを直しているかが見え、あえて
- * 入れ替えるときだけラジオを切り替える（ADR-0049）。
+ * The ledger distinguishes adding and spending by sign (ADR-0010). On screen these are split into two
+ * buttons, "add" and "spend", and the sign is applied when sending. Negative numbers are not typed in.
+ * When correcting, swapping add and spend is rare, so radio buttons preselected with the original
+ * record's kind are shown and a single "save" sends it. You can see which side is being fixed, and
+ * switch the radio only when deliberately swapping (ADR-0049).
  *
- * 冪等キーは 1 回の記録につき 1 つ発行し、**成功するまで持ち越す**。通信が
- * 途中で切れたときに利用者がもう一度押しても、サーバー側で同じ 1 行として
- * 扱われる（キーを毎回作り直すと、その再送が二重登録になる）。失敗したときは
- * 入力もそのまま残す（打ち直させない）。
+ * One idempotency key is issued per record and **carried over until it succeeds**. If the connection
+ * drops midway and the user presses again, the server treats it as the same single row
+ * (recreating the key every time would turn that resend into a duplicate). On failure the
+ * input is also kept as is (no retyping).
  *
- * 未入力の検査はブラウザに任せる（`required` と `useRequiredText`）。JavaScript
- * 側で黙って捨てると、押しても何も起きない画面になる。
+ * Empty-field checks are left to the browser (`required` and `useRequiredText`). Silently dropping in
+ * JavaScript makes a screen where pressing does nothing.
  */
 import { useRef, useState } from 'react'
 
@@ -22,9 +22,9 @@ import { useRequiredText } from '../hooks/useRequiredText'
 import { newIdempotencyKey } from '../services/families'
 import { ActionButton } from './ActionButton'
 
-/** 訂正のときだけ渡す。元の記録の内容と、やめるときの戻り先。 */
+/** Passed only when correcting. The original record's content and where to return on cancel. */
 interface CorrectionTarget {
-  /** 元の符号付きの量。入力欄には絶対値を入れる（符号はラジオが決める）。 */
+  /** Original signed amount. The input holds the absolute value (the radio decides the sign). */
   amount: number
   reason: string
   onCancel: () => void
@@ -32,20 +32,20 @@ interface CorrectionTarget {
 
 interface Props {
   onSubmit: (amount: number, reason: string, idempotencyKey: string) => Promise<void>
-  /** その家族でよく使われている理由。同じ言い回しを打ち直さずに済ませる。 */
+  /** Reasons commonly used in this family. Saves retyping the same wording. */
   reasonSuggestions: string[]
-  /** 渡すと訂正の入力になる（元の内容が入り、ボタンが「保存」になる）。 */
+  /** When passed, this becomes a correction form (original content filled in, button becomes "save"). */
   editing?: CorrectionTarget
 }
 
 const REASON_LIST_ID = 'point-entry-reasons'
 
-// 押されたボタンで符号を決める。両方 submit にしておかないと、消費の側だけ
-// ブラウザの必須チェックを通らずに送られる（`submit()` の中で黙って捨てられ、
-// 未入力のまま押しても何も起きない画面になる）。
+// The pressed button decides the sign. Unless both are submit buttons, only the spend side
+// would be sent without the browser's required check (silently dropped inside `submit()`,
+// making a screen where pressing with empty fields does nothing).
 const CONSUME = 'consume'
 
-/** 送信したのがどちらのボタンか。Enter キーでの送信は既定のボタン（加算）になる。 */
+/** Which button submitted. Submitting with the Enter key uses the default button (add). */
 function signOf(event: SubmitEvent): 1 | -1 {
   return event.submitter?.getAttribute('value') === CONSUME ? -1 : 1
 }
@@ -53,10 +53,10 @@ function signOf(event: SubmitEvent): 1 | -1 {
 export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) {
   const { t } = useI18n()
   const [points, setPoints] = useState(editing ? String(Math.abs(editing.amount)) : '')
-  // 訂正のときの種類。元の記録と同じ側を選んでおく
+  // Kind when correcting. Preselect the same side as the original record
   const [editingSign, setEditingSign] = useState<1 | -1>(editing && editing.amount < 0 ? -1 : 1)
   const [reason, setReason] = useState(editing?.reason ?? '')
-  // 送信中の符号（押したボタンにだけスピナーを出す）。null なら送信していない。
+  // Sign being sent (spinner only on the pressed button). null means not sending.
   const [submittingSign, setSubmittingSign] = useState<1 | -1 | null>(null)
   const busy = submittingSign !== null
   const pendingKey = useRef<string | null>(null)
@@ -73,8 +73,8 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
       setPoints('')
       setReason('')
     } catch {
-      // 失敗は呼び出し元がトーストで伝える。ここでは入力と鍵を残し、
-      // 同じ内容・同じ鍵でもう一度押せる状態にしておく
+      // The caller reports failures with a toast. Keep the input and key here
+      // so it can be pressed again with the same content and the same key
     } finally {
       setSubmittingSign(null)
     }
@@ -130,7 +130,7 @@ export function PointEntryForm({ onSubmit, reasonSuggestions, editing }: Props) 
           required
         />
       </label>
-      {/* 候補は datalist で出す。自由入力のままにしておきたいので select にしない */}
+      {/* Suggestions come from a datalist. We want to keep free input, so no select */}
       <datalist id={REASON_LIST_ID}>
         {reasonSuggestions.map((suggestion) => (
           <option key={suggestion} value={suggestion} />

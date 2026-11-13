@@ -1,17 +1,17 @@
 /**
- * 家族の設定（ルール・並び順・改名・脱退・解散）。
+ * Family settings (rules, order, rename, leave, disband).
  *
- * 出し分けは立場で決める: 改名と解散は owner、ルール・脱退・並べ替えは親
- * （owner / parent）。
- * 「他に親が残っているか」「自分以外の参加者がいないか」といった成立条件は
- * サーバーが検証するので（ADR-0013）、ここではエラーコードの文言を出すだけ。
+ * What is shown depends on role: rename and disband for owner; rules, leave and reordering for parents
+ * (owner / parent).
+ * Preconditions such as "is another parent left" or "are there no participants besides me" are
+ * validated by the server (ADR-0013), so here we only show the text for the error code.
  *
- * 並び順は家族に 1 つで、左のナビゲーションとダッシュボードの両方に効く。
- * 上下に 1 つずつ動かす形にしているのは、指でも掴める操作にするため
- * （ドラッグはキーボードと支援技術から扱いにくい）。
+ * There is one order per family, and it applies to both the left navigation and the dashboard.
+ * Moving one step up/down at a time is chosen so it can be done with a finger too
+ * (dragging is hard to use from the keyboard and assistive technology).
  *
- * ルール（家族で決めた約束ごと。ADR-0027）も家族に 1 つ。ここが唯一の書く場所で、
- * 子どもの台帳には同じ文面が読むだけの形で出る。
+ * Rules (family agreements; ADR-0027) are also one per family. This is the only place to write them;
+ * the same text appears read-only on the children's ledgers.
  */
 import { useState, type SubmitEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -36,8 +36,8 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
   const navigate = useNavigate()
   const [name, setName] = useState(family.name)
   const [rules, setRules] = useState(family.rules ?? '')
-  // 並べ替え中の子と向き。上下の矢印は同じ子を指すので、押した方だけに目印を出すには
-  // 「どちらへ動かしているか」まで持つ必要がある。
+  // Child and direction being reordered. Up/down arrows point at the same child, so to mark only the
+  // pressed one we also need to keep "which way it is moving".
   const [moving, setMoving] = useState<{ childId: number; delta: number } | null>(null)
 
   const isOwner = family.my_role === 'owner'
@@ -69,7 +69,7 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
     }
   })
 
-  /** *index* の子を 1 つ上（-1）／下（+1）へ動かす。 */
+  /** Moves the child at *index* one step up (-1) / down (+1). */
   const move = async (index: number, delta: number) => {
     const ids = children.map((child) => child.id)
     const here = ids[index]
@@ -89,11 +89,11 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
     }
   }
 
-  /** 押された矢印（子 × 向き）が実行中か。 */
+  /** Whether the pressed arrow (child x direction) is running. */
   const isMoving = (childId: number, delta: number) =>
     moving !== null && moving.childId === childId && moving.delta === delta
 
-  /** 家族から離れる（脱退・解散）。読み直してから送らないと、消えた家族へ戻される。 */
+  /** Leaves the family (leave/disband). Without reloading before sending, you'd be sent back to a deleted family. */
   const depart = async (leaving: () => Promise<void>, message: string) => {
     try {
       await leaving()
@@ -137,10 +137,10 @@ export function FamilySettingsPanel({ family, onChanged }: Props) {
         </form>
       )}
 
-      {/* 家族で決めた約束ごと（ADR-0027）。親なら書ける（改名と違い owner 限定に
-          しない）。子どもの台帳にも同じ文面が出るので、ここが唯一の出所になる。
-          立場に加えて scope も見る — 運用者がロールの権限を編集した後に、押せば
-          必ず 403 になる入力欄を残さないため（ADR-0019 と同じ考え方） */}
+      {/* Family agreements (ADR-0027). Parents can write them (not limited to owner, unlike
+          rename). The same text appears on children's ledgers, so this is the single source.
+          Check scope in addition to role — so that after an operator edits a role's permissions, no
+          input remains that would always 403 when pressed (same idea as ADR-0019) */}
       {hasScope('family:manage') && (
         <form className="card-inset family-rules-form" onSubmit={saveRules}>
           <label>

@@ -1,14 +1,14 @@
-"""OpenID Provider のメタデータ（エンドポイントと署名鍵）の取得とキャッシュ。
+"""Fetching and caching OpenID Provider metadata (endpoints and signing keys).
 
-- **エンドポイントは discovery で引く**（``<issuer>/.well-known/openid-configuration``）。
-  URL を 1 つずつ設定させると IdP 側の変更に追随できず、設定項目も増える。
-- **署名鍵は JWKS から引く**。鍵は入れ替わるため、こちらも都度取りに行ける形で
-  持つ（``PyJWKClient`` が内部でキャッシュと再取得を行う）。
-- **外へ出る要求は名前を名乗る**（``USER_AGENT``）。既定のままだと IdP の前段に
-  落とされることがある（下記）。
+- **Endpoints are looked up via discovery** (``<issuer>/.well-known/openid-configuration``).
+  Configuring URLs one by one could not follow IdP-side changes and would add settings.
+- **Signing keys are fetched from JWKS**. Keys rotate, so they are also held in a form that can be
+  refetched (``PyJWKClient`` caches and refetches internally).
+- **Outgoing requests identify themselves** (``USER_AGENT``). With the default, the layer in front of the IdP
+  may drop them (see below).
 
-どちらもログインのたびに取りに行くと IdP への往復が 2 回増えるので、短い TTL の
-キャッシュを挟む。プロセスごとのキャッシュで、値が古くなっても TTL のあいだだけ。
+Fetching both on every login would add two round trips to the IdP, so a short-TTL cache sits
+in between. The cache is per process, so stale values last only for the TTL.
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from bounded_contexts.identity_federation.domain.exceptions import (
     IdentityProviderUnavailableError,
 )
 
-# 受け入れる ID トークンの署名アルゴリズム。**対称鍵（HS*）と ``none`` は入れない**
-# ——クライアントシークレットを鍵に使う HS* は IdP 以外も署名を作れてしまう。
+# Signature algorithms accepted for ID tokens. **Symmetric keys (HS*) and ``none`` are excluded**
+# -- HS* uses the client secret as the key, so parties other than the IdP could make signatures.
 ALLOWED_SIGNING_ALGORITHMS: tuple[str, ...] = (
     "RS256",
     "RS384",
@@ -42,10 +42,10 @@ ALLOWED_SIGNING_ALGORITHMS: tuple[str, ...] = (
 _DISCOVERY_PATH = "/.well-known/openid-configuration"
 _CACHE_TTL_SECONDS = 300.0
 
-# IdP へ出ていく要求が名乗る名前。**既定の UA に任せない。**
-# JWKS だけは PyJWT (``PyJWKClient``) が内部の urllib で取りに行くため、既定では
-# ``Python-urllib/3.x`` を名乗る。IdP の前段に居る CDN・WAF はこの UA を落とすことが
-# あり、discovery とトークン交換は通るのに ID トークンの検証だけが落ちる形になる。
+# The name outgoing requests to the IdP identify with. **Do not leave it to the default UA.**
+# Only JWKS is fetched by PyJWT (``PyJWKClient``) through its internal urllib, which by default
+# identifies as ``Python-urllib/3.x``. A CDN/WAF in front of the IdP may drop this UA,
+# so discovery and token exchange pass while only ID token verification fails.
 USER_AGENT = "rewardpointsweb"
 
 
@@ -61,10 +61,10 @@ class ProviderMetadata:
 
     @classmethod
     def of(cls, document: dict[str, Any]) -> ProviderMetadata:
-        """discovery 文書から必要な項目だけを取り出す。
+        """Extract only the needed items from the discovery document.
 
-        認可・トークン・JWKS のどれかが欠けている応答は OpenID Provider として
-        成立していない（IdP の URL の書き間違いで HTML が返る場合もここで落ちる）。
+        A response missing any of authorization, token or JWKS is not a valid OpenID Provider
+        (an HTML response caused by a mistyped IdP URL also fails here).
         """
         metadata = cls(
             issuer=_text(document.get("issuer")),
@@ -81,7 +81,7 @@ class ProviderMetadata:
 
 
 class OidcMetadataCache:
-    """discovery 文書と JWKS クライアントの TTL キャッシュ（プロセス内）。"""
+    """TTL cache of the discovery document and the JWKS client (in-process)."""
 
     def __init__(self, *, timeout_seconds: float = 10.0) -> None:
         self._timeout = timeout_seconds
@@ -101,7 +101,7 @@ class OidcMetadataCache:
         return metadata
 
     def signing_key(self, jwks_uri: str, id_token: str) -> Any:
-        """ID トークンの ``kid`` に対応する公開鍵を返す。"""
+        """Return the public key matching the ID token's ``kid``."""
         with self._lock:
             client = self._jwks.get(jwks_uri)
             if client is None:
@@ -123,7 +123,7 @@ class OidcMetadataCache:
                 url,
                 headers={"User-Agent": USER_AGENT},
                 timeout=self._timeout,
-                # ⚠ 転送を追わない（ADR-0056）。発行者の確かめは最初の URL にしか効かない。
+                # ⚠ Do not follow redirects (ADR-0056). The issuer check only applies to the first URL.
                 follow_redirects=False,
             )
             response.raise_for_status()
@@ -136,12 +136,12 @@ class OidcMetadataCache:
 
 
 def _require_same_issuer(metadata: ProviderMetadata, issuer: str) -> None:
-    """discovery 文書が名乗る ``issuer`` が、引きに行った先と同じことを確かめる。
+    """Check that the ``issuer`` claimed by the discovery document equals where it was fetched from.
 
-    OpenID Connect Discovery は両者の一致を要求している。取得は転送を追う
-    （``follow_redirects``）ため、確かめないと別の発行者の文書を掴まされたときに
-    その発行者が署名した ID トークンをそのまま受け入れてしまう。
-    末尾の ``/`` の有無だけは許す（設定側で落としているため）。
+    OpenID Connect Discovery requires them to match. Fetching follows redirects
+    (``follow_redirects``), so without the check, being handed another issuer's document would
+    make us accept ID tokens signed by that issuer as is.
+    Only a trailing ``/`` difference is allowed (the settings side strips it).
     """
     if metadata.issuer.rstrip("/") != issuer.rstrip("/"):
         raise IdentityProviderUnavailableError
@@ -158,9 +158,9 @@ def _texts(value: object) -> tuple[str, ...]:
 
 
 def _supported_algorithms(value: object) -> tuple[str, ...]:
-    """IdP が名乗ったアルゴリズムのうち、こちらが受け入れるものだけを残す。
+    """Of the algorithms the IdP advertises, keep only those we accept.
 
-    名乗りが無ければ OpenID Connect の必須である ``RS256`` を使う。
+    If none are advertised, use ``RS256``, which OpenID Connect requires.
     """
     advertised = _texts(value)
     allowed = tuple(algorithm for algorithm in advertised if algorithm in ALLOWED_SIGNING_ALGORITHMS)

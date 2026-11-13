@@ -1,4 +1,4 @@
-/** ダッシュボード: 家族の子どもたちの残高一覧。立場で見た目を変えない。 */
+/** Dashboard: balances of the family's children. Looks the same regardless of role. */
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
@@ -7,7 +7,7 @@ import { renderWithProviders } from '../test-support/renderWithProviders'
 import { DashboardPage } from './DashboardPage'
 
 describe('DashboardPage', () => {
-  it('挨拶と、子どもごとの残高カードを出す', () => {
+  it('shows a greeting and a balance card per child', () => {
     renderWithProviders(<DashboardPage />, {
       scopes: ['family:view'],
       family: familyOf('owner', [
@@ -25,7 +25,7 @@ describe('DashboardPage', () => {
     )
   })
 
-  it('サーバーが返した順にそのまま並べる（家族が決めた並び順）', () => {
+  it('keeps the order the server returned (the order the family chose)', () => {
     renderWithProviders(<DashboardPage />, {
       scopes: ['family:view'],
       family: familyOf('owner', [
@@ -34,14 +34,14 @@ describe('DashboardPage', () => {
       ]),
     })
 
-    // 頭文字の印を除いた見出しの並び（カードは 頭文字 + 名前 + 残高 でできている）
+    // Order of headings without the initial badge (a card is initial + name + balance)
     const names = screen
       .getAllByRole('link')
       .map((link) => link.querySelector('.member-card-name')?.textContent)
     expect(names).toEqual(['タロウ', 'ハナ'])
   })
 
-  it('owner でなくても同じダッシュボードを出す（招待で加わった親）', () => {
+  it('shows the same dashboard to non-owners (a parent who joined by invitation)', () => {
     renderWithProviders(<DashboardPage />, {
       scopes: ['family:view'],
       family: familyOf('parent', [
@@ -54,7 +54,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('30 pt')).toBeInTheDocument()
   })
 
-  it('台帳を持たない参加者（親）はカードに並べない', () => {
+  it('does not list participants without a ledger (parents) as cards', () => {
     renderWithProviders(<DashboardPage />, {
       scopes: ['family:view'],
       family: familyOf('owner', [
@@ -73,7 +73,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('おとうさん')).not.toBeInTheDocument()
   })
 
-  it('自分自身の台帳には目印を付ける', () => {
+  it('marks the ledger that belongs to the viewer', () => {
     renderWithProviders(<DashboardPage />, {
       scopes: ['family:view'],
       family: familyOf('child', [member({ is_me: true })]),
@@ -82,7 +82,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/\(you\)/)).toBeInTheDocument()
   })
 
-  it('システム運用の情報（API ドキュメント）は出さない', () => {
+  it('does not show system operations info (API docs)', () => {
     renderWithProviders(<DashboardPage />, {
       scopes: ['family:view'],
       family: familyOf('owner', [member()]),
@@ -92,7 +92,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByText(/openapi/i)).not.toBeInTheDocument()
   })
 
-  it('子どもがいなければ家族の画面への案内を出す', () => {
+  it('points to the family screen when there are no children', () => {
     renderWithProviders(<DashboardPage />, { scopes: ['family:view'] })
 
     expect(screen.getByRole('link', { name: 'Set up your family' })).toHaveAttribute(
@@ -101,7 +101,7 @@ describe('DashboardPage', () => {
     )
   })
 
-  it('読み込めなかったときは「子どもがいない」と案内しない', () => {
+  it('does not say "no children" when loading failed', () => {
     renderWithProviders(<DashboardPage />, { scopes: ['family:view'], familyFailed: true })
 
     expect(screen.getByText('This family could not be loaded.')).toBeInTheDocument()
@@ -110,7 +110,7 @@ describe('DashboardPage', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('family:view が無ければ空の案内も出さない（行き先が無い）', () => {
+  it('shows no empty-state hint without family:view (nowhere to go)', () => {
     renderWithProviders(<DashboardPage />, { scopes: ['dashboard:view'] })
 
     expect(screen.getByText('Hello, manager')).toBeInTheDocument()

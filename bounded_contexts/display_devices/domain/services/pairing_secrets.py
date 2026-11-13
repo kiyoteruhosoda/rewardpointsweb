@@ -25,7 +25,7 @@ def new_user_code() -> str:
 
 
 def format_user_code(code: str) -> str:
-    """``KQ7M3XPA`` → ``KQ7M-3XPA``。"""
+    """``KQ7M3XPA`` → ``KQ7M-3XPA``."""
     return f"{code[:_USER_CODE_GROUP]}-{code[_USER_CODE_GROUP:]}"
 
 

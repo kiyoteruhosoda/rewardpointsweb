@@ -1,22 +1,22 @@
 /**
- * 1 人の子の台帳（残高と履歴）。
+ * One child's ledger (balance and history).
  *
- * 台帳は追記専用で、訂正は打ち消しの行を足して表す（ADR-0010）。履歴からは
- * 何も消えないので、取り消されたレコードには印を付けて対で見せる。
+ * The ledger is append-only; corrections are expressed by adding a reversal row (ADR-0010).
+ * Nothing disappears from history, so reversed records are marked and shown as a pair.
  *
- * 入力の間違いは「訂正」で直す（ADR-0022）。打ち消して正しい内容を書き直す
- * 操作を 1 つにまとめたもので、履歴には打ち消しと訂正後の 2 行が足される。
+ * Input mistakes are fixed with "correct" (ADR-0022): one action that reverses and rewrites
+ * the right content, adding two rows to history (the reversal and the corrected record).
  *
- * 変更 UI を出すのはサーバーが `can_modify` を返したときだけ。子ども本人は同じ
- * 画面で残高と履歴を見るが、変更の入り口は現れない。
+ * Modification UI is shown only when the server returns `can_modify`. The child sees the
+ * balance and history on the same screen, but no entry to modify appears.
  *
- * 家族で決めた約束ごと（ADR-0027）は記録の入力欄の下に **読むだけ** で出す。
- * 書き換えるのは家族設定で、毎日のボーナスの設定（ADR-0024）も同じくそちらへ
- * 移した — 家族の決めごとは 1 か所に集める。
+ * The family's agreed rules (ADR-0027) are shown **read-only** below the record input.
+ * They are edited in family settings, and the daily bonus setting (ADR-0024) was moved
+ * there too — family rules are kept in one place.
  *
- * 残高を出すのはこの画面だけではない。ダッシュボード・ナビゲーション・家族設定は
- * 家族の応答（FamilyContext）に載る残高を見るので、記録したら**両方**読み直す
- * （ADR-0021）。片方だけだと、同じ残高が画面ごとに食い違う。
+ * This is not the only screen that shows balances. The dashboard, navigation and family settings
+ * read balances from the family response (FamilyContext), so after recording reload **both**
+ * (ADR-0021). Reloading only one makes the same balance disagree between screens.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -40,10 +40,10 @@ import {
 } from '../services/families'
 import { useFamily } from '../store/FamilyContext'
 
-/** 履歴の 1 ページの件数。スマートフォンでも 2〜3 回送れば 1 ページを読み切れる量。 */
+/** History page size. On a smartphone, 2–3 swipes read through one page. */
 const HISTORY_PAGE_SIZE = 20
 
-/** 増減が読み取れるよう、加算には符号を付ける（消費は元から `-`）。 */
+/** Prefix additions with a sign so the change is readable (spending already has `-`). */
 function withSign(amount: number): string {
   return amount > 0 ? `+${amount}` : String(amount)
 }
@@ -55,15 +55,15 @@ export function LedgerPage() {
   const { family: myFamily, reload: reloadFamily } = useFamily()
   const [ledger, setLedger] = useState<Ledger | null>(null)
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null)
-  // 推移の線を伸ばす先。応答に時刻が無いときは受け取った時刻で代える
+  // Where the trend line extends to. If the response has no time, use the time it was received
   const [asOf, setAsOf] = useState<Date>(() => new Date())
   const [reasons, setReasons] = useState<string[]>([])
   const [failed, setFailed] = useState(false)
-  // 訂正の対象。null なら入力欄はいつもの記録用
+  // Target of a correction. null means the input is for a normal record
   const [editing, setEditing] = useState<Transaction | null>(null)
-  // 取り消し中の記録（押した行のボタンにだけスピナーを出す）
+  // Record being reversed (show a spinner only on the tapped row's button)
   const { pendingActionOf, runForRow } = usePendingRows<'reversal'>()
-  // 履歴はページに分ける（新しい順なので、1 ページ目が最新）。推移のグラフは全件を使う
+  // History is paged (newest first, so page 1 is the latest). The trend chart uses all rows
   const history = usePaged(ledger?.transactions ?? [], HISTORY_PAGE_SIZE)
   const { setPage: setHistoryPage } = history
 
@@ -87,8 +87,8 @@ export function LedgerPage() {
     [family, id, notify, t],
   )
 
-  // 別の子の台帳へ移ったら、前の子の残高と履歴を消してから読む。残したまま読むと、
-  // 応答が届くまでのあいだ、開いた覚えのない子の数字がこの画面の見出しの下に出る。
+  // When moving to another child's ledger, clear the previous child's balance and history first.
+  // Otherwise, until the response arrives, numbers of a child never opened show under the heading.
   useEffect(() => {
     setLedger(null)
     setFetchedAt(null)
@@ -97,10 +97,10 @@ export function LedgerPage() {
     void reload()
   }, [reload, setHistoryPage])
 
-  // 手元に戻ってきたら読み直す（別の端末からの記録はこの画面には届かない）
+  // Reload when returning to the app (records from other devices do not reach this screen)
   useRefreshOnReturn(reload)
 
-  // 候補が取れなくても記録はできる（自由入力なので、無ければ何も出さないだけ）
+  // Recording works without suggestions (free input; nothing is shown if there are none)
   const loadReasons = useCallback(
     () =>
       families
@@ -117,13 +117,13 @@ export function LedgerPage() {
   }, [loadReasons])
 
   /**
-   * 記録の後は台帳と家族の両方を読み直す。残高の出所は 2 つあり
-   * （台帳の応答とこの家族の応答）、片方だけ読み直すと、この画面は増えたのに
-   * ダッシュボードとナビゲーションの子は古い数字のまま、という食い違いになる。
+   * After recording, reload both the ledger and the family. Balances come from two sources
+   * (the ledger response and this family response); reloading only one leaves this screen
+   * updated while the dashboard and navigation still show the old number for the child.
    *
-   * 書き込みの失敗はここで伝えたうえで**呼び出し元へ投げ直す**。打ち込んだ内容を
-   * 残すか、訂正の入力を開いたままにするかは、送った側にしか決められない。
-   * 読み直しの失敗は投げ直さない（書き込みそのものは通っている）。
+   * Write failures are reported here and then **rethrown to the caller**. Only the sender can
+   * decide whether to keep what was typed or keep the correction input open.
+   * Reload failures are not rethrown (the write itself succeeded).
    */
   const run = async (action: Promise<unknown>) => {
     try {
@@ -132,18 +132,18 @@ export function LedgerPage() {
       notify('error', t(errorMessageKey(error)))
       throw error
     }
-    // 入力候補も取り直す。書いた理由は候補に加わり、訂正で言い直した理由は
-    // 候補から外れる。取り直さないと、直したはずの書き間違いを選び直せてしまう
+    // Also refetch suggestions. Reasons just written join them, and reasons rephrased by a
+    // correction drop out. Without refetching, a fixed typo could be picked again
     await Promise.all([reload(), reloadFamily(), loadReasons()])
   }
 
-  // 書いた行は 1 ページ目の先頭に並ぶ。別のページを見ていたら戻す
+  // A written row goes to the top of page 1. Go back there if viewing another page
   const record = async (amount: number, reason: string, idempotencyKey: string) => {
     await run(families.record(family, id, { amount, reason, idempotencyKey }))
     setHistoryPage(1)
   }
 
-  /** 訂正が通ったときだけ入力欄を閉じる（失敗したら直した内容を残す）。 */
+  /** Close the input only when the correction succeeds (keep the edits on failure). */
   const correct = async (
     target: number,
     amount: number,
@@ -156,15 +156,15 @@ export function LedgerPage() {
 
   const reverse = (transactionId: number) => {
     if (!window.confirm(t('points.confirmReverse'))) return
-    // 取り消しは入力欄を持たないので、伝えるところまでで終わってよい
+    // A reversal has no input, so reporting the error is enough
     void runForRow(transactionId, 'reversal', () =>
       run(families.reverse(family, id, transactionId, newIdempotencyKey())).catch(() => undefined),
     )
   }
 
-  // 読み直しに失敗しても、いま出している残高は消さない（手元に戻った瞬間の
-  // 一時的な不通で、読めていた履歴まで消えると出所の分からない画面になる）。
-  // 失敗はトーストで伝わっており、時刻の行が古さを示す。
+  // Even if reloading fails, keep the balance shown (a brief outage just after returning
+  // should not wipe history already loaded, leaving a screen of unknown origin).
+  // The failure is reported by a toast, and the timestamp row shows how stale it is.
   if (ledger === null) {
     return failed ? (
       <p className="error">{t('points.unavailable')}</p>
@@ -173,12 +173,12 @@ export function LedgerPage() {
     )
   }
 
-  // 家族のルール（ADR-0027）。家族を読めていないときは何も出さない（この画面は
-  // 台帳を出せていれば用を成す。ルールが読めないことを断り書きにはしない）
+  // Family rules (ADR-0027). Show nothing when the family is not loaded (this screen is useful
+  // as long as the ledger shows; an unreadable rule is not worth a disclaimer)
   const familyRules = myFamily?.rules ?? null
 
-  // 訂正のあいだは記録の入力欄をその場で置き換える。同じ画面に「足す」と
-  // 「直す」の入力が並ぶと、どちらへ打ち込んでいるのか分からなくなる。
+  // While correcting, replace the record input in place. With "add" and "fix" inputs
+  // side by side on one screen, it is unclear which one you are typing into.
   const entryForm =
     editing === null ? (
       <PointEntryForm onSubmit={record} reasonSuggestions={reasons} />
@@ -187,7 +187,7 @@ export function LedgerPage() {
         <h2>{t('points.correctTitle')}</h2>
         <p>{t('points.correctNote')}</p>
         <PointEntryForm
-          // 別の記録の訂正へ移ったら、入力欄をその記録の内容で作り直す
+          // When switching to correct another record, rebuild the input from that record
           key={editing.id}
           onSubmit={(amount, reason, idempotencyKey) =>
             correct(editing.id, amount, reason, idempotencyKey)
@@ -208,7 +208,7 @@ export function LedgerPage() {
     <div className="page">
       <div className="page-heading page-heading-row">
         <h1>{t('points.title', { name: ledger.display_name })}</h1>
-        {/* イベント（がんばりカード。ADR-0042）は子ごとに持つので、台帳から入る */}
+        {/* Events (effort cards, ADR-0042) are per child, so they are entered from the ledger */}
         <Link className="page-heading-link" to={`/families/${family}/ledgers/${id}/events`}>
           {t('events.open')}
         </Link>
@@ -219,7 +219,7 @@ export function LedgerPage() {
           {t('points.balance')}: <strong>{t('points.value', { points: ledger.balance })}</strong>
         </p>
         {ledger.balance < 0 && <p>{t('points.negative', { points: -ledger.balance })}</p>}
-        {/* オフラインでは古いキャッシュが出得るので、いつの情報かを常に示す（ADR-0015） */}
+        {/* Offline may show stale cache, so always show how current the info is (ADR-0015) */}
         {fetchedAt !== null && (
           <p className="fetched-at">
             {t('points.fetchedAt', { time: fetchedAt.toLocaleString(locale) })}
@@ -230,10 +230,10 @@ export function LedgerPage() {
       <section className="card">
         {ledger.can_modify ? entryForm : <p>{t('points.readOnly')}</p>}
 
-        {/* 家族で決めた約束ごと（ADR-0027）。**読むだけ**で、書き換えるのは家族設定。
-            付ける・使うを決める手前でいつでも読めるよう、入力欄のすぐ下に置く。
-            出所は家族の応答（FamilyContext）— 台帳の応答には載せない（同じ文面を
-            2 か所から返すと、書き換えた直後に画面ごとで食い違う） */}
+        {/* The family's agreed rules (ADR-0027). **Read-only**; edited in family settings.
+            Placed right below the input so they can be read before deciding to add or spend.
+            Source is the family response (FamilyContext) — not in the ledger response (returning
+            the same text from 2 places makes screens disagree right after an edit) */}
         {familyRules !== null && (
           <div className="card-inset family-rules">
             <h2>{t('families.rules')}</h2>
@@ -274,7 +274,7 @@ export function LedgerPage() {
                     <td>{transaction.granted_by ?? '—'}</td>
                     {ledger.can_modify && (
                       <td>
-                        {/* 打ち消しの行と、すでに打ち消された行はどちらも直せない */}
+                        {/* Reversal rows and already-reversed rows cannot be corrected */}
                         {transaction.reversal_of_id === null && !transaction.is_reversed && (
                           <>
                             <button

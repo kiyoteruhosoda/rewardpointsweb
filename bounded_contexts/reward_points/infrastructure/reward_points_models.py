@@ -1,13 +1,13 @@
-"""reward_points コンテキストの SQLAlchemy モデル。
+"""SQLAlchemy models of the reward_points context.
 
-Alembic が認識できるよう ``migrations/env.py`` へ import を追加してある。
-立場（role）は DB ネイティブ ENUM を使わず ``native_enum=False``（CHECK 制約付き
-VARCHAR）で持つ（CLAUDE.md「DB モデリング」）。
+Imported from ``migrations/env.py`` so that Alembic can see them.
+Roles are stored without a DB-native ENUM, using ``native_enum=False`` (VARCHAR with a
+CHECK constraint) (see the DB modeling section of CLAUDE.md).
 
-``point_transactions`` は追記専用（ADR-0010）。``updated_at`` を持たないのは、
-更新される想定が無いことをスキーマ自身で示すため。入力の間違いは
-``reversal_of_id``（打ち消し）と ``corrects_id``（訂正後の言い直し）の 2 行で
-表す（ADR-0022）。
+``point_transactions`` is append-only (ADR-0010). It has no ``updated_at`` so the schema
+itself shows that updates are not expected. Input mistakes are expressed with two rows:
+``reversal_of_id`` (reversal) and ``corrects_id`` (the corrected restatement)
+(ADR-0022).
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ class FamilyModel(Base):
 
     id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
-    # 家族で決めた約束ごと（ADR-0027）。書いていなければ NULL（空文字は入れない）
+    # Rules agreed in the family (ADR-0027). NULL if unwritten (never an empty string)
     rules: Mapped[str | None] = mapped_column(sa.Text(), nullable=True)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
@@ -37,9 +37,9 @@ class FamilyModel(Base):
 class FamilyMembershipModel(Base):
     __tablename__ = "family_memberships"
     __table_args__ = (
-        # 同一 Family 内では 1 アカウント 1 membership（ADR-0009）。
-        # account_id は NULL を取りうる（親が作った直後の子はまだ未紐付け）。
-        # NULL 同士は衝突しないため、未紐付けの参加者は何人でも並べられる。
+        # One membership per account within a Family (ADR-0009).
+        # account_id may be NULL (a child just created by a parent is not linked yet).
+        # NULLs do not collide, so any number of unlinked members can coexist.
         sa.UniqueConstraint("family_id", "account_id", name="uq_family_memberships_family_account"),
     )
 
@@ -47,16 +47,16 @@ class FamilyMembershipModel(Base):
     family_id: Mapped[int] = mapped_column(
         BigIntPk, sa.ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # アカウントが消えても参加と台帳は残す（本人ログインの紐付けだけが外れる）
+    # Keep the membership and ledger even if the account is deleted (only the login link goes)
     account_id: Mapped[int | None] = mapped_column(
         BigIntPk, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     role: Mapped[str] = mapped_column(FAMILY_ROLE, nullable=False)
     display_name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
-    # 親メンバーが独立を指示した日時（ADR-0014）。子本人の承認で独立が成立する。
-    # role = child 以外では常に NULL。
+    # When a parent member requested independence (ADR-0014). Established on the child's approval.
+    # Always NULL unless role = child.
     independence_proposed_at = mapped_column(sa.DateTime(), nullable=True)
-    # 家族が決めた並び順（小さいほど先）。同じ立場の中でだけ効く
+    # Sort order chosen by the family (smaller first). Effective only within the same role
     display_order: Mapped[int] = mapped_column(sa.Integer(), nullable=False, default=0, server_default="0")
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
@@ -69,7 +69,7 @@ class PointLedgerModel(Base):
     family_id: Mapped[int] = mapped_column(
         BigIntPk, sa.ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # role = child の membership と 1 対 1（ADR-0009）
+    # One-to-one with a role = child membership (ADR-0009)
     membership_id: Mapped[int] = mapped_column(
         BigIntPk,
         sa.ForeignKey("family_memberships.id", ondelete="CASCADE"),
@@ -82,12 +82,12 @@ class PointLedgerModel(Base):
 class PointTransactionModel(Base):
     __tablename__ = "point_transactions"
     __table_args__ = (
-        # 送信ボタンの二重タップで二重登録しない（ADR-0010）
+        # A double tap on the submit button must not register twice (ADR-0010)
         sa.UniqueConstraint("ledger_id", "idempotency_key", name="uq_point_transactions_idempotency"),
-        # 同一レコードの二重取り消しを DB 制約で防ぐ
+        # Prevent reversing the same record twice with a DB constraint
         sa.UniqueConstraint("reversal_of_id", name="uq_point_transactions_reversal_of"),
-        # 同じ記録を 2 度言い直させない。訂正は必ず打ち消しを伴うので上の UNIQUE でも
-        # 止まるが、対応が 1 対 1 であることをこの表自身に持たせておく
+        # Do not let the same record be restated twice. A correction always comes with a
+        # reversal so the UNIQUE above already stops it, but the table itself keeps it 1:1
         sa.UniqueConstraint("corrects_id", name="uq_point_transactions_corrects"),
         sa.CheckConstraint("amount <> 0", name="ck_point_transactions_amount_nonzero"),
         sa.Index("ix_point_transactions_ledger_occurred", "ledger_id", "occurred_at", "id"),
@@ -97,19 +97,19 @@ class PointTransactionModel(Base):
     ledger_id: Mapped[int] = mapped_column(
         BigIntPk, sa.ForeignKey("point_ledgers.id", ondelete="CASCADE"), nullable=False
     )
-    # 符号付き。加算は正、消費は負
+    # Signed. Additions are positive, spending negative
     amount: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
     reason: Mapped[str] = mapped_column(sa.String(255), nullable=False)
-    # 操作した参加者が家族を離れても記録は残す（履歴は台帳のもの）
+    # Keep records even if the acting member leaves the family (history belongs to the ledger)
     granted_by_membership_id: Mapped[int | None] = mapped_column(
         BigIntPk, sa.ForeignKey("family_memberships.id", ondelete="SET NULL"), nullable=True
     )
-    # 出来事の発生日時（遡って入力できる）とレコード作成日時は別物
+    # The event time (can be entered retroactively) differs from the record creation time
     occurred_at = mapped_column(sa.DateTime(), nullable=False)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     reversal_of_id: Mapped[int | None] = mapped_column(BigIntPk, sa.ForeignKey("point_transactions.id"), nullable=True)
-    # 訂正後の行なら、言い直した相手の ID（ADR-0022）。台帳ごと消すとき
-    # （独立の成立。ADR-0014）に消す順で拒まれないよう ON DELETE SET NULL。
+    # For a corrected row, the ID of the row it restates (ADR-0022). ON DELETE SET NULL so
+    # deleting a whole ledger (independence; ADR-0014) is not refused due to deletion order.
     corrects_id: Mapped[int | None] = mapped_column(
         BigIntPk, sa.ForeignKey("point_transactions.id", ondelete="SET NULL"), nullable=True
     )
@@ -117,16 +117,16 @@ class PointTransactionModel(Base):
 
 
 class DailyBonusModel(Base):
-    """台帳へ毎日足す約束（ADR-0024）。
+    """An arrangement to add to a ledger daily (ADR-0024).
 
-    台帳につき 1 件。台帳が消えれば一緒に消える（家族の解散・参加者の削除・
-    独立の成立）。渡し終えた日を ``granted_through`` に持つので、アプリが
-    止まっていた日は次に動いたときにまとめて追いつける。
+    One per ledger. Deleted along with the ledger (family dissolution, member removal,
+    independence). The last granted day is kept in ``granted_through``, so days when the
+    app was down are caught up in bulk the next time it runs.
     """
 
     __tablename__ = "daily_bonuses"
     __table_args__ = (
-        # 毎日減っていく設定は「ボーナス」ではない（消費は手で記録する）
+        # A setting that decreases daily is not a "bonus" (spending is recorded by hand)
         sa.CheckConstraint("amount > 0", name="ck_daily_bonuses_amount_positive"),
     )
 
@@ -139,19 +139,20 @@ class DailyBonusModel(Base):
     )
     amount: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
     reason: Mapped[str] = mapped_column(sa.String(255), nullable=False)
-    # 最初に渡す日（設定した日の翌日）。これより前へは遡らない
+    # First day to grant (the day after it was set). Never goes back before this
     starts_on: Mapped[date] = mapped_column(sa.Date(), nullable=False)
-    # 渡し終えた最後の日。まだ 1 日も渡していなければ NULL
+    # Last day granted. NULL if not a single day has been granted yet
     granted_through: Mapped[date | None] = mapped_column(sa.Date(), nullable=True)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 
 
 class RewardEventModel(Base):
-    """がんばりカード（ADR-0042）。
+    """Effort card (ADR-0042).
 
-    台帳に何枚でも持てる。台帳が消えれば一緒に消える（家族の解散・参加者の削除・
-    独立の成立）。マスが埋まったら ``completed_at`` と、台帳へ足した行を持つ。
+    Any number per ledger. Deleted along with the ledger (family dissolution, member
+    removal, independence). Once the slots are filled it holds ``completed_at`` and the row
+    added to the ledger.
     """
 
     __tablename__ = "reward_events"
@@ -167,10 +168,10 @@ class RewardEventModel(Base):
     title: Mapped[str] = mapped_column(sa.String(100), nullable=False)
     reward_points: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
     goal_count: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
-    # この日のうちに埋めれば達成（家族の 1 日の区切りで数える）。無ければ NULL
+    # Completed if filled by the end of this day (counted by the family's day boundary). NULL if none
     deadline: Mapped[date | None] = mapped_column(sa.Date(), nullable=True)
     completed_at = mapped_column(sa.DateTime(), nullable=True)
-    # 達成で足した台帳の行。独立の成立では台帳の行が先に消えるので SET NULL
+    # Ledger row added on completion. SET NULL because independence deletes ledger rows first
     awarded_transaction_id: Mapped[int | None] = mapped_column(
         BigIntPk, sa.ForeignKey("point_transactions.id", ondelete="SET NULL"), nullable=True
     )
@@ -178,10 +179,10 @@ class RewardEventModel(Base):
 
 
 class RewardEventStickerModel(Base):
-    """イベントに貼られた 1 枚（ADR-0042）。
+    """One sticker stuck on an event (ADR-0042).
 
-    ``number`` は 1 から始まる通し番号。同じ番号は 2 枚貼れないので、同じ押下が
-    2 度届いても 1 枚にしかならない。
+    ``number`` is a sequence number starting at 1. The same number cannot be stuck twice,
+    so the same tap arriving twice results in only one sticker.
     """
 
     __tablename__ = "reward_event_stickers"
@@ -196,7 +197,7 @@ class RewardEventStickerModel(Base):
     )
     number: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
     stuck_at = mapped_column(sa.DateTime(), nullable=False)
-    # 貼った参加者が家族を離れてもシールは残す
+    # Keep the sticker even if the member who stuck it leaves the family
     stuck_by_membership_id: Mapped[int | None] = mapped_column(
         BigIntPk, sa.ForeignKey("family_memberships.id", ondelete="SET NULL"), nullable=True
     )
@@ -209,10 +210,10 @@ class FamilyInvitationModel(Base):
     family_id: Mapped[int] = mapped_column(
         BigIntPk, sa.ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # 平文は保存しない（発行時に 1 度だけ返す）
+    # Plaintext is not stored (returned only once at issuance)
     code_hash: Mapped[str] = mapped_column(sa.String(64), unique=True, nullable=False)
     role: Mapped[str] = mapped_column(FAMILY_ROLE, nullable=False)
-    # role = child の招待では、親が先に作った参加者を指す
+    # For role = child invitations, points at the member a parent created beforehand
     target_membership_id: Mapped[int | None] = mapped_column(
         BigIntPk, sa.ForeignKey("family_memberships.id", ondelete="CASCADE"), nullable=True
     )

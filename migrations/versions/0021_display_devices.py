@@ -6,7 +6,8 @@ Adds display devices (signage) through pairing (ADR-0047).
   ``family_invitations.role`` are ``native_enum=False`` VARCHARs whose length is set by
   the longest value (``parent``, 6 characters). ``display`` is 7 characters, so widen them
 - Adds tables for pairings (``display_pairings``) and device credentials (``display_credentials``)
-- Adds the scope ``display:approve`` and the roles ``operator`` (operations administrator) and ``display`` (display device).
+- Adds the scope ``display:approve`` and the roles ``operator`` (operations administrator) and
+  ``display`` (display device).
   ⚠ **admin does not get ``display:approve``** (admin does not look at household ledgers; ADR-0018)
 
 Grants use constants this file holds (same approach as 0005 and 0010; master_data, the source of truth, is

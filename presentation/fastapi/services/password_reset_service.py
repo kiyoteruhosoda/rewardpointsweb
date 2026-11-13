@@ -1,26 +1,26 @@
-"""パスワードリセット（トークン発行・メール送信・再設定）。
+"""Password reset (token issuance, sending mail, setting a new password).
 
-トークンは平文を保存せず SHA-256 ハッシュのみを保存する。
+Tokens are never stored in plain text; only their SHA-256 hash is stored.
 
-申し込みの識別子は **ユーザー名**。メールアドレスは任意項目になったので、
-「そのアドレスの持ち主」を起点にできない（ADR-0011）。応答は
-:class:`ResetOutcome` の 2 種類で、**実在するかどうかでは変えない**。
-メールアドレスを持たない子アカウントにも、存在しないユーザー名と同じ応答を返す
-（子どものユーザー名が実在するかを外から確かめさせない。task #733）。
-届かないメールを待たせないよう、画面は「メールアドレスの無いアカウントは
-親に一時パスワードを頼む」を常に添える。
+Requests are identified by **user name**. Email addresses became optional, so "the owner of that
+address" cannot be the starting point (ADR-0011). The response is one of the two
+:class:`ResetOutcome` values and **does not vary with whether the account exists**.
+Child accounts without an email address get the same response as a non-existent user name
+(so outsiders cannot check whether a child's user name exists; task #733).
+So nobody waits for mail that will never arrive, the UI always adds "accounts without an email
+address should ask a parent for a temporary password".
 
-``MAIL_UNAVAILABLE`` も持つ。``MAIL_ENABLED`` が無効な運用や SMTP が
-落ちている間に「送りました」と返すと、決して届かないメールを待たせることになり、
-ログイン不能からの回復手段が事実上失われる。送信可否は利用者に依らないので、
-実在しないユーザー名でも同じ応答になり、実在は漏れない。SMTP に届くかどうかは
-送ってみるまで分からないので、送る先の無い申し込み（不在・子ども・SSO だけの口座）
-でも SMTP に届くかを確かめてから応答を決める（task #768。以前は SMTP の障害中だけ、
-大人のユーザー名が実在するかを外から確かめられた）。
+There is also ``MAIL_UNAVAILABLE``. Replying "sent" while ``MAIL_ENABLED`` is disabled or SMTP
+is down would leave people waiting for mail that never arrives, effectively removing the way to
+recover from being unable to log in. Whether mail can be sent does not depend on the user, so a
+non-existent user name gets the same response and existence does not leak. Whether SMTP is
+reachable is unknown until sending is tried, so requests with nowhere to send (unknown, child,
+SSO-only accounts) also check SMTP reachability before deciding the response (task #768;
+previously, an adult user name's existence could be probed from outside only during SMTP outages).
 
-そして発行したリンクは **必ずログへ出す**。メールが届かない場面でも運用者が
-本人へ手渡せる経路を残すため。ログを読める人はそのリンクでアカウントを乗っ取れる
-ので、ログの取り扱いは管理者に限ること。
+And the issued link is **always written to the log**, to keep a path for the operator to hand it
+to the person even when mail does not arrive. Anyone who can read the log can take over the
+account with that link, so log access must be limited to administrators.
 """
 
 from __future__ import annotations
@@ -57,12 +57,12 @@ def _hash_token(token: str) -> str:
 
 
 class ResetOutcome(Enum):
-    """申し込みの結果。"""
+    """Outcome of a request."""
 
-    #: リセットリンクを送った（あるいは、そのユーザー名が存在しない・メールアドレスを持たない）
+    #: Sent the reset link (or the user name does not exist / has no email address)
     ACCEPTED = "accepted"
-    #: メールを送れない（``MAIL_ENABLED`` が無効、または SMTP に届かない）。
-    #: 待たせても届かないので、親からの一時パスワードへ誘導する
+    #: Mail cannot be sent (``MAIL_ENABLED`` is disabled, or SMTP is unreachable).
+    #: Waiting would not help, so direct the user to a temporary password from a parent
     MAIL_UNAVAILABLE = "mail_unavailable"
 
 
@@ -71,35 +71,35 @@ class PasswordResetService:
         self._sender = sender or SmtpEmailSender()
 
     def request_reset(self, session: Session, username: str) -> ResetOutcome:
-        """リセットトークンを発行し、ログへ出したうえでメールを送る。
+        """Issue a reset token, write it to the log, then send the mail.
 
-        ユーザー不在なら黙って「送信手段があれば ``ACCEPTED``」を返す（存在の
-        有無を漏らさない）。送信手段が無い運用・SMTP に届かない間は、実在・不在に
-        かかわらず ``MAIL_UNAVAILABLE`` を返すので、ここでも実在は漏れない。
+        If the user does not exist, silently return "``ACCEPTED`` if mail can be sent" (no leak
+        of existence). When there is no way to send or SMTP is unreachable, ``MAIL_UNAVAILABLE``
+        is returned regardless of existence, so existence does not leak here either.
         """
         user = self._find(session, username)
         if user is None or not user.is_active:
             logger.info("password_reset_requested_unknown_account")
-            # 応答は実在するアカウントと揃える（送信可否だけで決める）
+            # Match the response for existing accounts (decided only by whether mail can be sent)
             return self._outcome_without_sending()
         if not user.has_local_password:
-            # ⚠ **リセットでローカル認証を生やさない**（ADR-0034）。パスワードを
-            # 持たない利用者にここで新しい値を設定させると、「この利用者は SSO でしか
-            # 入れない」が黙って崩れる。持たせるなら管理者が明示的に設定する。
-            # 応答は不在のときと同じ（存在を漏らさない）。
+            # ⚠ **A reset must not create local authentication** (ADR-0034). Letting a user with no
+            # password set a new one here would silently break "this user can only sign in via
+            # SSO". If they should have one, an administrator sets it explicitly.
+            # The response is the same as for a non-existent user (no leak of existence).
             logger.info("password_reset_requested_without_local_password")
             return self._outcome_without_sending()
         if user.email is None:
-            # 送る先が無い（子ども。回復は親からの一時パスワード。ADR-0011）。
-            # 応答は不在のときと同じ ——違えると子どものユーザー名が実在するかを
-            # 外から確かめられる（task #733）。親への依頼は画面が常に案内する
+            # Nowhere to send (a child; recovery is a temporary password from a parent. ADR-0011).
+            # The response is the same as for a non-existent user — otherwise outsiders could check
+            # whether a child's user name exists (task #733). The UI always explains asking a parent
             logger.info("password_reset_requested_without_email")
             return self._outcome_without_sending()
 
         link = self._issue_link(session, user)
-        # メールが届かない場面（MAIL_ENABLED 無効・SMTP 障害）でも運用者が本人へ
-        # 手渡せるよう、リンクは必ずログへ出す。ログを読める人はこのリンクで
-        # アカウントを乗っ取れるため、ログの取り扱いは管理者に限ること。
+        # Always log the link so the operator can hand it to the person even when mail does not
+        # arrive (MAIL_ENABLED disabled, SMTP outage). Anyone who can read the log can take over
+        # the account with this link, so log access must be limited to administrators.
         logger.warning("password_reset_link_issued: %s", link)
 
         try:
@@ -115,22 +115,22 @@ class PasswordResetService:
                 )
             )
         except EmailSendingDisabledError:
-            # MAIL_ENABLED が無効。リンクはログに出してあるので運用者が手渡せる
+            # MAIL_ENABLED is disabled. The link is in the log, so the operator can hand it over
             logger.warning("password_reset_unavailable: mail_disabled")
             return ResetOutcome.MAIL_UNAVAILABLE
         except (OSError, smtplib.SMTPException):
-            # SMTP に届かない。以前はここが 500 になり、利用者には原因の分からない
-            # 失敗として出ていた。回復手段を案内できる形にする
+            # SMTP is unreachable. This used to be a 500, shown to the user as a failure with no
+            # clear cause. Return something that lets the UI point to a way to recover
             logger.exception("password_reset_unavailable: mail_send_failed")
             return ResetOutcome.MAIL_UNAVAILABLE
         return ResetOutcome.ACCEPTED
 
     def _outcome_without_sending(self) -> ResetOutcome:
-        """送る先の無い申し込みの応答。実在する大人に送ったときと同じ条件で決める。
+        """Response for a request with nowhere to send. Decided by the same conditions as sending to a real adult.
 
-        実在する大人の申し込みは SMTP に送ってみて、届かなければ ``MAIL_UNAVAILABLE``
-        になる。送る先が無いときも同じく SMTP に届くかを確かめないと、障害中だけ
-        応答が分かれて実在が漏れる（task #768）。
+        A request for a real adult tries SMTP and becomes ``MAIL_UNAVAILABLE`` if it fails.
+        Unless SMTP reachability is checked the same way when there is nowhere to send, the
+        responses would differ only during outages and leak existence (task #768).
         """
         if not settings.mail_enabled:
             return ResetOutcome.MAIL_UNAVAILABLE
@@ -143,7 +143,7 @@ class PasswordResetService:
 
     @staticmethod
     def _issue_link(session: Session, user: User) -> str:
-        """トークンを 1 つ発行し、再設定画面の URL を組み立てる。"""
+        """Issue one token and build the URL of the reset screen."""
         token = secrets.token_urlsafe(32)
         session.add(
             PasswordResetToken(
@@ -165,7 +165,7 @@ class PasswordResetService:
         return session.scalar(select(User).where(User.username == identifier))
 
     def reset(self, session: Session, token: str, new_password: str) -> bool:
-        """トークンを検証してパスワードを更新する。成功時 True。"""
+        """Verify the token and update the password. True on success."""
         from werkzeug.security import generate_password_hash
 
         row = session.scalar(select(PasswordResetToken).where(PasswordResetToken.token_hash == _hash_token(token)))
@@ -175,12 +175,12 @@ class PasswordResetService:
         if user is None or not user.is_active:
             return False
         if not user.has_local_password:
-            # 発行のあとでパスワードを取り上げられた場合（ADR-0034）。券が残っていても
-            # 通さない。
+            # The password was taken away after issuance (ADR-0034). Refuse even if the token
+            # is still valid.
             return False
         user.password_hash = generate_password_hash(new_password)
-        # 親が発行した一時パスワードの途中でも、本人がメールから再設定できる。
-        # 期限を残すと、そのまま新しいパスワードまで期限切れ扱いになってしまう。
+        # The person can reset via mail even while on a temporary password issued by a parent.
+        # Leaving the expiry would make the new password count as expired too.
         user.must_change_password = False
         user.temporary_password_expires_at = None
         row.used_at = utcnow()

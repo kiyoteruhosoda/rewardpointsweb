@@ -340,7 +340,10 @@ def test_removing_the_child_takes_the_cards_with_them(client: TestClient, home: 
 
 
 def test_independence_takes_completed_cards_with_the_ledger(client: TestClient, home: Home) -> None:
-    """On becoming independent the ledger lines are deleted first. A card pointing at a completion line does not block the deletion order."""
+    """On becoming independent the ledger lines are deleted first.
+
+    A card pointing at a completion line does not block the deletion order.
+    """
     event = _create(client, home, goal_count=1)
     _stick(client, home, event, number=1)
     child_headers = _child_headers(client, home)

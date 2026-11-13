@@ -1,5 +1,5 @@
 /**
- * 控え（バックアップ）のファイル入出力（ADR-0026）。
+ * File input/output for backups (ADR-0026).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -23,7 +23,7 @@ function fileOf(contents: string): File {
 }
 
 describe('archiveFileName', () => {
-  it('家族の名前と書き出した日を付ける（何度書き出しても上書きにならない）', () => {
+  it('names the file with the family name and export date (repeated exports do not overwrite)', () => {
     expect(archiveFileName(archive())).toBe('ほその家-2026-08-09.json')
   })
 })
@@ -33,7 +33,7 @@ describe('saveArchive', () => {
     vi.restoreAllMocks()
   })
 
-  it('控えをそのままファイルとして落とす', () => {
+  it('downloads the backup as a file as is', () => {
     const createObjectURL = vi.fn(() => 'blob:archive')
     const revokeObjectURL = vi.fn()
     vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
@@ -42,22 +42,22 @@ describe('saveArchive', () => {
     saveArchive(archive())
 
     expect(click).toHaveBeenCalledOnce()
-    // 開きっぱなしにすると、書き出すたびにメモリが積み上がる
+    // Leaving it open would pile up memory with every export
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:archive')
     vi.unstubAllGlobals()
   })
 })
 
 describe('readArchive', () => {
-  it('控えとして読める', async () => {
+  it('can be read as a backup', async () => {
     await expect(readArchive(fileOf(JSON.stringify(archive())))).resolves.toEqual(archive())
   })
 
-  it('JSON ですらないファイルは、送る前に断る', async () => {
+  it('refuses a file that is not even JSON before sending', async () => {
     await expect(readArchive(fileOf('これは写真です'))).rejects.toThrow(ApiError)
   })
 
-  it('別のアプリの JSON は、送る前に断る', async () => {
+  it('refuses JSON from another app before sending', async () => {
     const other = JSON.stringify({ format: 'something.else', members: [] })
 
     await expect(readArchive(fileOf(other))).rejects.toMatchObject({
@@ -65,7 +65,7 @@ describe('readArchive', () => {
     })
   })
 
-  it('参加者の並びが無いファイルは、送る前に断る', async () => {
+  it('refuses a file without the participant list before sending', async () => {
     const broken = JSON.stringify({ format: 'rewardpointsweb.family', version: 1 })
 
     await expect(readArchive(fileOf(broken))).rejects.toMatchObject({

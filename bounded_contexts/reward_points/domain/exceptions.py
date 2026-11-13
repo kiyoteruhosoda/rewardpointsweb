@@ -1,325 +1,333 @@
-"""reward_points コンテキストのドメイン例外。
+"""Domain exceptions of the reward_points context.
 
-Presentation 層が HTTP ステータス＋エラーコードへ変換する（表示文言への変換は
-フロントエンド。CLAUDE.md「国際化」参照）。
+The Presentation layer converts them to HTTP status + error code (conversion to display
+text happens in the frontend; see the i18n section of CLAUDE.md).
 """
 
 from __future__ import annotations
 
 
 class RewardPointsError(Exception):
-    """このコンテキストの基底例外。``code`` がそのまま API のエラーコードになる。"""
+    """Base exception of this context. ``code`` becomes the API error code as-is."""
 
     code = "reward_points_error"
 
 
 class FamilyNotFoundError(RewardPointsError):
-    """家族そのものが存在しない。
+    """The family itself does not exist.
 
-    「所属していない」はこれではなく :class:`FamilyAccessDeniedError`。参加が
-    引けない時点で止まるため、呼び出し元からは実在と未所属を区別できない。
-    こちらは、参加は引けたのに家族の行が無いという壊れた状態のときだけ出る。
+    "Not a member" is :class:`FamilyAccessDeniedError`, not this. Processing stops as soon as
+    the membership cannot be found, so callers cannot tell existence from non-membership.
+    This one is raised only in the broken state where the membership was found but the
+    family row is missing.
     """
 
     code = "family_not_found"
 
 
 class FamilyAccessDeniedError(RewardPointsError):
-    """家族には所属しているが、その操作を行える立場ではない。"""
+    """A member of the family, but not in a role allowed to perform the operation."""
 
     code = "family_access_denied"
 
 
 class MembershipNotFoundError(RewardPointsError):
-    """参加者が存在しない（他の家族の参加者を指した場合も含む）。"""
+    """The member does not exist (including when pointing at another family's member)."""
 
     code = "membership_not_found"
 
 
 class LedgerNotFoundError(RewardPointsError):
-    """台帳が存在しない、または閲覧できる立場ではない。"""
+    """The ledger does not exist, or the caller is not in a role allowed to view it."""
 
     code = "ledger_not_found"
 
 
 class TransactionNotFoundError(RewardPointsError):
-    """トランザクションが存在しない（他の台帳のものを指した場合も含む）。"""
+    """The transaction does not exist (including when pointing at another ledger's)."""
 
     code = "transaction_not_found"
 
 
 class TransactionAlreadyReversedError(RewardPointsError):
-    """すでに打ち消し済みのトランザクションを、もう一度打ち消そうとした。"""
+    """Attempted to reverse a transaction that is already reversed."""
 
     code = "transaction_already_reversed"
 
 
 class ReversalOfReversalError(RewardPointsError):
-    """打ち消しレコード自体を打ち消そうとした（ADR-0010 で禁じている）。"""
+    """Attempted to reverse a reversal record itself (forbidden by ADR-0010)."""
 
     code = "reversal_of_reversal_not_allowed"
 
 
 class CorrectionOfReversalError(RewardPointsError):
-    """打ち消しレコード自体を訂正しようとした（ADR-0022）。
+    """Attempted to correct a reversal record itself (ADR-0022).
 
-    訂正は「打ち消して書き直す」操作で、打ち消しの行にはどちらも行えない。
-    直したいのは打ち消された元の行の方であり、それはもう打ち消し済みなので、
-    正しい内容を新しい記録として足す。
+    A correction is a "reverse and rewrite" operation, and neither can be applied to a
+    reversal row. What one wants to fix is the reversed original row, which is already
+    reversed, so the correct content is added as a new record.
     """
 
     code = "correction_of_reversal_not_allowed"
 
 
 class IdempotencyKeyReusedError(RewardPointsError):
-    """1 つの冪等キーが、別の訂正にも使われた（ADR-0022）。
+    """One idempotency key was also used for a different correction (ADR-0022).
 
-    訂正は 1 回で 2 行書くため、鍵を段階ごとに分けて使う。同じ鍵で別の記録を
-    訂正しようとすると、分けた鍵が先の訂正のものと重なり、書いたつもりの行が
-    書けていない状態になる。黙って通さず、鍵を作り直してもらう。
+    A correction writes two rows at once, so the key is split per step. Correcting a
+    different record with the same key makes the split keys collide with the earlier
+    correction's, leaving rows that were meant to be written unwritten. Rather than let it
+    pass silently, the client is asked to generate a new key.
     """
 
     code = "idempotency_key_reused"
 
 
 class InvitationNotFoundError(RewardPointsError):
-    """招待コードが存在しない、期限切れ、または使用済み。
+    """The invitation code does not exist, has expired, or was already used.
 
-    3 つを区別しない。区別すると、有効なコードを総当たりで探す手がかりになる。
+    The three are not distinguished. Distinguishing them would give clues for brute-forcing
+    valid codes.
     """
 
     code = "invitation_not_found"
 
 
 class RoleNotInvitableError(RewardPointsError):
-    """招待では配れない立場（owner）を指定した。"""
+    """Specified a role that cannot be handed out by invitation (owner)."""
 
     code = "role_not_invitable"
 
 
 class InvitationTargetUnavailableError(RewardPointsError):
-    """招待が指す参加者に、すでに別のアカウントが結び付いている。"""
+    """The member the invitation points at is already linked to another account."""
 
     code = "invitation_target_unavailable"
 
 
 class AccountAlreadyInFamilyError(RewardPointsError):
-    """同一家族に、そのアカウントの参加者がすでに存在する。
+    """A member for that account already exists in the same family.
 
-    ``UNIQUE (family_id, account_id)``（ADR-0009）と同じ不変条件。
+    The same invariant as ``UNIQUE (family_id, account_id)`` (ADR-0009).
     """
 
     code = "account_already_in_family"
 
 
 class AlreadyBelongsToFamilyError(RewardPointsError):
-    """すでにどこかの家族に所属しているアカウントが、家族を作る・加わろうとした。
+    """An account already belonging to a family tried to create or join a family.
 
-    所属できる家族は 1 アカウント 1 つまで（ADR-0013）。抜けて初期状態に
-    戻ってから、作り直すか招待を受け直す。
+    An account can belong to at most one family (ADR-0013). Leave and return to the initial
+    state first, then create a new one or accept an invitation again.
     """
 
     code = "already_belongs_to_family"
 
 
 class ChildCannotLeaveFamilyError(RewardPointsError):
-    """``role = child``（ゲスト）が自分から家族を抜けようとした。
+    """A ``role = child`` (guest) tried to leave the family on their own.
 
-    子は自分では抜けられない（ADR-0013）。家族の構成を変えるのは owner の役目。
+    Children cannot leave by themselves (ADR-0013). Changing the family's composition is the
+    owner's job.
     """
 
     code = "child_cannot_leave_family"
 
 
 class LastGuardianCannotLeaveError(RewardPointsError):
-    """最後の親（owner / parent）が家族を抜けようとした。
+    """The last parent (owner / parent) tried to leave the family.
 
-    抜けられるのは他に親が残る場合だけ（ADR-0013）。親が誰もいなくなると、
-    残された子の台帳を扱える人がいなくなる。1 人だけなら脱退ではなく解散を使う。
+    Leaving is allowed only if another parent remains (ADR-0013). With no parents left,
+    nobody could handle the remaining children's ledgers. A sole parent dissolves the family
+    instead of leaving.
     """
 
     code = "last_guardian_cannot_leave"
 
 
 class FamilyNotEmptyError(RewardPointsError):
-    """自分以外の参加者が残っている家族を解散しようとした。
+    """Attempted to dissolve a family in which other members remain.
 
-    参加者（親も子も）がいるうちは解散できない（ADR-0013）。台帳ごと黙って
-    消える経路を作らない（ADR-0010）。
+    A family cannot be dissolved while members (parents or children) remain (ADR-0013). No
+    path may silently delete ledgers along with it (ADR-0010).
     """
 
     code = "family_not_empty"
 
 
 class IndependenceNotProposedError(RewardPointsError):
-    """独立の指示が無いのに、子が独立を承認しようとした。
+    """A child tried to approve independence without it having been requested.
 
-    独立は親メンバーの指示と子本人の承認の 2 段階で成立する（ADR-0014）。
+    Independence takes two steps: a request by a parent member and approval by the child
+    (ADR-0014).
     """
 
     code = "independence_not_proposed"
 
 
 class UsernameAlreadyTakenError(RewardPointsError):
-    """指定されたログイン ID はすでに使われている。"""
+    """The specified login ID is already in use."""
 
     code = "username_already_taken"
 
 
 class ChildAccountRequiredError(RewardPointsError):
-    """``role = child`` にしか行えない操作を、親に対して試みた。
+    """Attempted an operation only valid for ``role = child`` on a parent.
 
-    一時パスワードの発行（ADR-0011）と独立の指示（ADR-0014）は、子の参加者に
-    対してだけ許す。
+    Issuing temporary passwords (ADR-0011) and requesting independence (ADR-0014) are
+    allowed only for child members.
     """
 
     code = "child_account_required"
 
 
 class GuardianAccountRequiredError(RewardPointsError):
-    """親（parent）の招待を、保護者になれないアカウント（子）が使おうとした。
+    """An account that cannot be a guardian (a child) tried to use a parent invitation.
 
-    子（guest ロール）が親として加わると、家族の中では親なのに子の追加も
-    ポイントの記録もできない「名ばかりの保護者」になる。子の大人化は独立
-    （ADR-0014）か管理者のロール変更で行う（ADR-0018）。
+    A child (guest role) joining as a parent would become a "guardian in name only": a parent
+    in the family who can neither add children nor record points. A child becomes an adult
+    via independence (ADR-0014) or an administrator's role change (ADR-0018).
     """
 
     code = "guardian_account_required"
 
 
 class ChildInvitationRequiresSignupError(RewardPointsError):
-    """子の招待コードを、既存アカウントの受諾（accept）で使おうとした。
+    """Attempted to use a child invitation code via acceptance (accept) by an existing account.
 
-    子アカウントは招待の受諾で「新しく生まれる」もの（redeem — ADR-0011 /
-    ADR-0018）。既存のアカウントを子として結び付けると、除名時の後始末
-    （アカウント削除）が独立に存在するアカウントを巻き込んでしまう。
+    Child accounts are "newly born" when the invitation is redeemed (redeem — ADR-0011 /
+    ADR-0018). Linking an existing account as a child would make the cleanup on removal
+    (account deletion) take an independently existing account down with it.
     """
 
     code = "child_invitation_requires_signup"
 
 
 class GuardianInvitationRequiresSignInError(RewardPointsError):
-    """親の招待を、新しいアカウントの作成（redeem）で使おうとした（IdP があるとき）。
+    """Attempted to use a parent invitation by creating a new account (redeem) when an IdP exists.
 
-    IdP（SSO）があるなら、大人の口座は IdP で入ったときに作る 1 つだけにする
-    （ADR-0048）。ここで別に作ると、IdP の口座と結び付ける手掛かりが無く、
-    同じ人の口座が 2 つになる。親はログインしてから受諾（accept）で加わる。
+    With an IdP (SSO), an adult has only the one account created on IdP sign-in
+    (ADR-0048). Creating another here leaves no clue to link it with the IdP account, so the
+    same person would end up with two accounts. Parents sign in first and join via accept.
     """
 
     code = "guardian_invitation_requires_sign_in"
 
 
 class DisplayNameRequiredError(RewardPointsError):
-    """呼び名の要る招待（参加者を指していない招待）に、呼び名が渡されなかった。"""
+    """No display name was given for an invitation that needs one (not pointing at a member)."""
 
     code = "display_name_required"
 
 
 class MembershipNotLinkedError(RewardPointsError):
-    """アカウントがまだ結び付いていない参加者に、アカウント側の操作を求めた。"""
+    """An account-side operation was requested for a member not yet linked to an account."""
 
     code = "membership_not_linked"
 
 
 class LedgerNotEmptyError(RewardPointsError):
-    """記録の残っている台帳ごと参加者を削除しようとした。
+    """Attempted to delete a member together with a ledger that still has records.
 
-    台帳は追記専用で、消す手段を用意していない（ADR-0010）。参加者を外したい
-    場合も、記録が残っているうちは断る。
+    Ledgers are append-only with no means of deletion (ADR-0010). Removing a member is also
+    refused while records remain.
     """
 
     code = "ledger_not_empty"
 
 
 class InvalidMemberOrderError(RewardPointsError):
-    """並べ替えの指定が、その家族の並べられる参加者と一致しない。
+    """The reorder request does not match the family's sortable members.
 
-    並び替えは順番を入れ替えるだけの操作で、参加者を増やしも減らしもしない。
-    抜け・重複・他家族の参加者が混ざった指定は、画面が古い一覧を握っている
-    合図なので断る。
+    Reordering only swaps positions; it neither adds nor removes members. A request with
+    missing, duplicate or other-family members signals that the UI holds a stale list, so it
+    is refused.
     """
 
     code = "invalid_member_order"
 
 
 class InvalidFamilyArchiveError(RewardPointsError):
-    """書き出したファイルとして辻褄の合わない内容を取り込もうとした（ADR-0026）。
+    """Attempted to import content that is inconsistent as an exported file (ADR-0026).
 
-    形式そのもの（項目の有無・型・長さ）は Pydantic が先に弾く。ここで断るのは
-    **中身の辻褄** — owner が 1 人でないもの、台帳を持たない立場に台帳が付いて
-    いるもの、まだ書いていない記録を指す打ち消し・訂正など。取り込みは 1 つの
-    トランザクションで書くので、途中で気付くより先に断る。
+    The format itself (presence, types, lengths of fields) is rejected first by Pydantic.
+    What is refused here is **internal consistency** — not exactly one owner, a ledger
+    attached to a role without one, reversals/corrections pointing at records not yet
+    written, and so on. The import is written in one transaction, so it is refused up front
+    rather than noticed midway.
 
-    理由を細かく分けない。壊れたファイルを人が手で直すことは想定しておらず、
-    分けたところで打つ手は「書き出し直す」の 1 つしかない。
+    Reasons are not broken down. People are not expected to fix broken files by hand, and
+    even if split, the only remedy is "export again".
     """
 
     code = "invalid_family_archive"
 
 
 class UnsupportedArchiveVersionError(RewardPointsError):
-    """このアプリが読めない版のファイルを取り込もうとした（ADR-0026）。
+    """Attempted to import a file version this app cannot read (ADR-0026).
 
-    :class:`InvalidFamilyArchiveError` と分けるのは、打つ手が違うため。壊れて
-    いるのではなく、**新しいアプリで書き出したファイルを古いアプリへ持ち込んだ**
-    合図なので、直すのはファイルではなくアプリの方になる。
+    Separate from :class:`InvalidFamilyArchiveError` because the remedy differs. It is not
+    broken; it signals that **a file exported by a newer app was brought to an older app**,
+    so what needs fixing is the app, not the file.
     """
 
     code = "unsupported_archive_version"
 
 
 class UserStillOwnsFamiliesError(RewardPointsError):
-    """家族の owner として残っているアカウントは削除できない。
+    """An account still remaining as a family's owner cannot be deleted.
 
-    owner が消えるとその家族を管理できる人がいなくなる。黙って一緒に消すと
-    台帳まで失われるため、先に家族を片付けてもらう。
+    Without the owner nobody could manage that family. Silently deleting it along with the
+    account would lose the ledgers too, so the family must be dealt with first.
     """
 
     code = "user_still_owns_families"
 
 
 class RewardEventNotFoundError(RewardPointsError):
-    """イベントが存在しない（他の台帳のものを指した場合も含む。ADR-0042）。"""
+    """The event does not exist (including when pointing at another ledger's; ADR-0042)."""
 
     code = "reward_event_not_found"
 
 
 class RewardEventCompletedError(RewardPointsError):
-    """達成したイベントのシールを貼る・はがそうとした。
+    """Attempted to stick or peel a sticker on a completed event.
 
-    達成した時点でポイントは台帳に入っている。シールを動かしても台帳は戻らない
-    ので、カードは達成の姿のまま止める。ポイントを戻したいときは台帳の記録を
-    取り消す。
+    On completion the points are already in the ledger. Moving stickers would not revert the
+    ledger, so the card stays frozen as completed. To take points back, reverse the ledger
+    record.
     """
 
     code = "reward_event_already_completed"
 
 
 class RewardEventExpiredError(RewardPointsError):
-    """期限を過ぎたイベントにシールを貼ろうとした。
+    """Attempted to stick a sticker on an event past its deadline.
 
-    続けたいときは、親が期限を延ばす（延ばせば、また貼れる）。
+    To continue, a parent extends the deadline (once extended, stickers can be stuck again).
     """
 
     code = "reward_event_expired"
 
 
 class RewardEventDeadlinePassedError(RewardPointsError):
-    """期限に、もう過ぎた日を決めようとした（今日は期限にできる）。"""
+    """Attempted to set a deadline that has already passed (today is allowed)."""
 
     code = "reward_event_deadline_passed"
 
 
 class DisplayNotFoundError(RewardPointsError):
-    """表示端末が見つからない（外された・知らないアカウント。ADR-0047）。"""
+    """Display device not found (detached or unknown account; ADR-0047)."""
 
     code = "display_not_found"
 
 
 class StickerOutOfOrderError(RewardPointsError):
-    """次の番号ではないシールを貼る・最後の 1 枚ではないシールをはがそうとした。
+    """Attempted to stick a sticker that is not the next number, or peel one that is not the last.
 
-    画面が古い姿を見ている（別の端末で貼られた等）。読み直せば正しい番号が分かる。
+    The UI is looking at a stale state (e.g. stuck from another device). Reloading reveals the
+    correct number.
     """
 
     code = "sticker_out_of_order"

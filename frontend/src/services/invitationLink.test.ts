@@ -1,9 +1,9 @@
 /**
- * 招待 URL の組み立てと読み取り。
+ * Building and reading invitation URLs.
  *
- * 見るのは「参加の入口へ向くこと」「コードが URL として壊れないこと」、そして
- * **コードがクエリに出ないこと**（ADR-0025）。クエリへ戻ると、リバースプロキシの
- * アクセスログに平文のコードが残り、ログを読める人が誰でも家族へ入れてしまう。
+ * What is checked: "it points to the join entry", "the code does not break as a URL", and
+ * **the code never appears in the query** (ADR-0025). Back in the query, the reverse proxy's
+ * access log would keep the code in plain text, letting anyone who can read logs join the family.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -18,14 +18,14 @@ import {
 } from './invitationLink'
 
 describe('invitationLink', () => {
-  it('参加の入口へ、断片としてコードを載せる', () => {
+  it('puts the code as a fragment on the join entry', () => {
     expect(invitationJoinPath('ABC123')).toBe('/join#code=ABC123')
     expect(invitationUrl('ABC123', 'child', 'https://points.example.com')).toBe(
       'https://points.example.com/join#code=ABC123',
     )
   })
 
-  it('親の招待はログインの画面へ向ける（新しいアカウントを作らせない。ADR-0048）', () => {
+  it('points parent invitations to the login screen (no new account; ADR-0048)', () => {
     for (const role of ['parent', 'owner'] as const) {
       expect(invitationUrl('ABC123', role, 'https://points.example.com')).toBe(
         'https://points.example.com/login#code=ABC123',
@@ -33,8 +33,8 @@ describe('invitationLink', () => {
     }
   })
 
-  it('受け取り側の 3 画面がどれも断片で運ぶ', () => {
-    // どれか 1 つでも `?` に戻ると、そこから先は平文でログに載る。
+  it('all 3 receiving screens carry it in the fragment', () => {
+    // If any one goes back to `?`, everything from there lands in logs in plain text.
     for (const path of [
       invitationJoinPath('ABC123'),
       invitationSignInPath('ABC123'),
@@ -47,50 +47,50 @@ describe('invitationLink', () => {
     expect(invitationAcceptPath('ABC123')).toBe('/families#code=ABC123')
   })
 
-  it('URL で意味を持つ文字はエスケープする', () => {
-    // `+` や `&` をそのまま置くと、開いた先で別のコードとして読まれる。
+  it('escapes characters meaningful in URLs', () => {
+    // Leaving `+` or `&` as is makes the opened page read it as a different code.
     expect(invitationJoinPath('a+b&c=d')).toBe('/join#code=a%2Bb%26c%3Dd')
     expect(readInvitationCode(invitationJoinPath('a+b&c=d').slice('/join'.length))).toBe('a+b&c=d')
   })
 
-  it('コードが無ければ断片を付けない', () => {
+  it('adds no fragment without a code', () => {
     expect(invitationJoinPath('')).toBe('/join')
     expect(invitationSignInPath('   ')).toBe('/login')
   })
 
-  it('出所の末尾のスラッシュで `//join` にしない', () => {
+  it('does not produce `//join` from a trailing slash on the origin', () => {
     expect(invitationUrl('ABC123', 'child', 'https://points.example.com/')).toBe(
       'https://points.example.com/join#code=ABC123',
     )
   })
 
-  it('断片からコードを取り出す。無ければ空', () => {
+  it('extracts the code from the fragment, or empty if none', () => {
     expect(readInvitationCode('#code=ABC123')).toBe('ABC123')
     expect(readInvitationCode('#code=%20ABC123%20')).toBe('ABC123')
     expect(readInvitationCode('')).toBe('')
     expect(readInvitationCode('#other=1')).toBe('')
   })
 
-  describe('IdP への往復のあいだの預かり', () => {
+  describe('holding the code during the IdP round trip', () => {
     beforeEach(() => {
       sessionStorage.clear()
     })
 
-    it('預けたコードは 1 回だけ取り出せる', () => {
+    it('a held code can be taken out only once', () => {
       rememberInvitationCode(' ABC123 ')
 
       expect(takeRememberedInvitationCode()).toBe('ABC123')
       expect(takeRememberedInvitationCode()).toBe('')
     })
 
-    it('空を預けたら、前の預かりも消す', () => {
+    it('holding an empty value clears the previous one too', () => {
       rememberInvitationCode('ABC123')
       rememberInvitationCode('')
 
       expect(takeRememberedInvitationCode()).toBe('')
     })
 
-    it('預けていなければ空（コードを持たないログインを止めない）', () => {
+    it('is empty when nothing is held (does not block a login without a code)', () => {
       expect(takeRememberedInvitationCode()).toBe('')
     })
   })

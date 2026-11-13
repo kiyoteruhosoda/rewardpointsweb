@@ -68,7 +68,7 @@ class SsoSessionDto:
 
 @dataclass(frozen=True)
 class FederatedLinkDto:
-    """"My federation status" shown on the settings screen (ADR-0036).
+    """The "my federation status" shown on the settings screen (ADR-0036).
 
     If ``available`` is false, the screen does not show this section at all (SSO is disabled).
     """

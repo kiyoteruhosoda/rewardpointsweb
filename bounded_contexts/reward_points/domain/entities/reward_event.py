@@ -1,24 +1,25 @@
-"""イベント（ADR-0042）。
+"""Reward events (ADR-0042).
 
-子の台帳 1 つに、いくつでも持てる「がんばりカード」。目標（``title``）・達成で
-もらえるポイント（``reward``）・達成回数（``goal_count``）を決めておき、1 回達成
-するたびにシールを 1 枚貼る。マスが全部埋まったら目標達成で、そのとき台帳へ
-``reward`` を 1 行足す。
+"Effort cards", any number per child ledger. A goal (``title``), the points earned on
+completion (``reward``) and the number of times to achieve it (``goal_count``) are set in
+advance, and one sticker is stuck per achievement. When all slots are filled the goal is
+complete, and one ``reward`` row is appended to the ledger.
 
-シールは **番号つき** で貼る（1 枚目・2 枚目…）。番号は画面が「次に貼る番号」を
-送るので、同じ押下が 2 度届いても 2 枚にはならない（``UNIQUE (event_id, number)``）。
-はがせるのは最後の 1 枚だけ（押し間違いを戻すため）。達成した後は貼るのも
-はがすのもできない — ポイントはもう台帳に入っている。
+Stickers are stuck **with numbers** (1st, 2nd, ...). The UI sends "the next number to
+stick", so the same tap arriving twice never yields two stickers
+(``UNIQUE (event_id, number)``). Only the last sticker can be peeled (to undo a mis-tap).
+After completion nothing can be stuck or peeled — the points are already in the ledger.
 
-期限（``deadline``）は任意の日付。期限の日が終わるまでに埋まらなければ **期限切れ** で、
-それ以上は貼れない（ポイントも入らない）。日付の区切りは家族の暮らしの 1 日
-（:class:`~...day_boundary.DayBoundary`）で、判定に使う「今日」は呼び出し側が渡す。
-親が期限を延ばせば、また貼れるようになる。
+The deadline (``deadline``) is an optional date. If the slots are not filled by the end of
+that day the event is **expired** and no more stickers can be stuck (nor points earned).
+Days are split by the family's day of living (:class:`~...day_boundary.DayBoundary`), and
+the "today" used for the check is passed by the caller. If a parent extends the deadline,
+stickers can be stuck again.
 
-達成の 1 行は **イベントごとに 1 つ** の冪等キー（``reward-event#<id>``）で書く。
-2 人の親が同時に最後の 1 枚を貼っても、台帳には 1 行しか入らない。``#`` は
-利用者の送る鍵には現れない（:func:`~...idempotency_key.is_derived`）ので、
-手で書いた行とぶつかることも無い。
+The completion row is written with **one idempotency key per event**
+(``reward-event#<id>``). Even if two parents stick the last sticker at the same time, only
+one row enters the ledger. ``#`` never appears in user-sent keys
+(:func:`~...idempotency_key.is_derived`), so it cannot collide with hand-written rows.
 """
 
 from __future__ import annotations
@@ -35,19 +36,19 @@ from bounded_contexts.reward_points.domain.value_objects.idempotency_key import 
 from bounded_contexts.reward_points.domain.value_objects.point_amount import PointAmount
 from bounded_contexts.reward_points.domain.value_objects.transaction_reason import TransactionReason
 
-#: 目標の長さの上限。カードの見出しに収まる長さに留める（台帳の理由の上限より短い）
+#: Max goal length. Kept short enough to fit the card heading (shorter than the ledger reason limit)
 TITLE_MAX_LENGTH = 100
 
-#: 達成回数の上限。1 枚のカードにマスが並び切る数に留める（画面は 1 画面で見せる）
+#: Max goal count. Kept to what fits as slots on one card (the UI shows it on one screen)
 MAX_GOAL_COUNT = 50
 
-#: 達成の 1 行の冪等キーの土台。``reward-event#<id>`` の形で使う
+#: Base of the idempotency key for the completion row. Used as ``reward-event#<id>``
 IDEMPOTENCY_BASE = "reward-event"
 
 
 @dataclass(frozen=True, kw_only=True)
 class EventSticker:
-    """貼られた 1 枚。``number`` は 1 から始まる通し番号。"""
+    """One stuck sticker. ``number`` is a sequence number starting at 1."""
 
     number: int
     stuck_at: datetime
@@ -60,16 +61,16 @@ class RewardEvent:
     title: TransactionReason
     reward: PointAmount
     goal_count: int
-    #: 番号の小さい順
+    #: In ascending number order
     stickers: tuple[EventSticker, ...]
-    #: マスが埋まった日時。まだなら ``None``
+    #: When the slots were filled. ``None`` if not yet
     completed_at: datetime | None
     created_at: datetime
-    #: この日のうちに埋めれば達成。決めていなければ ``None``（いつまでも貼れる）
+    #: Completed if filled by the end of this day. ``None`` if unset (stickers can be stuck forever)
     deadline: date | None = None
 
     def __post_init__(self) -> None:
-        # 達成で減るイベントは無い（消費は手で記録する）
+        # No event subtracts points on completion (spending is recorded by hand)
         if self.reward.value <= 0:
             raise ValueError("Reward event must add points")
         if len(self.title.value) > TITLE_MAX_LENGTH:
@@ -86,19 +87,20 @@ class RewardEvent:
         return self.completed_at is not None
 
     def is_expired(self, today: date) -> bool:
-        """期限の日を過ぎても埋まっていないか。達成したカードは期限切れにならない。"""
+        """Whether the deadline day has passed without filling. A completed card never expires."""
         return not self.is_completed and self.deadline is not None and today > self.deadline
 
     @property
     def award_key(self) -> str:
-        """達成の 1 行の冪等キー。同じイベントからは必ず同じ値が出る。"""
+        """Idempotency key of the completion row. Always the same value for the same event."""
         return IdempotencyKey(f"{IDEMPOTENCY_BASE}{STEP_SEPARATOR}{self.id}").value
 
     def should_stick(self, number: int, *, today: date) -> bool:
-        """*number* 枚目を **いま貼るべきか**。
+        """Whether sticker *number* **should be stuck now**.
 
-        すでに貼ってある番号なら偽（同じ押下の再送。何もせずに今の姿を返す）。
-        飛ばした番号・マスの外・達成済み・期限切れは例外にする — 画面が古い姿を見ている。
+        False if that number is already stuck (a resend of the same tap; return the current
+        state without doing anything). A skipped number, out-of-range slot, completed or
+        expired event raises — the UI is looking at a stale state.
         """
         if number <= self.sticker_count:
             return False
@@ -111,14 +113,14 @@ class RewardEvent:
         return True
 
     def completes_with(self, number: int) -> bool:
-        """*number* 枚目でマスが埋まるか。"""
+        """Whether sticker *number* fills the slots."""
         return number == self.goal_count
 
     def should_peel(self, number: int) -> bool:
-        """*number* 枚目を **いまはがすべきか**。
+        """Whether sticker *number* **should be peeled now**.
 
-        もう無い番号なら偽（はがしたいという求めは満たされている）。はがせるのは
-        最後の 1 枚だけで、達成した後ははがせない。
+        False if that number is already gone (the request to peel is already satisfied).
+        Only the last sticker can be peeled, and none after completion.
         """
         if self.is_completed:
             raise RewardEventCompletedError

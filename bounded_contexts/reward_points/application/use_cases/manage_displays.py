@@ -1,13 +1,15 @@
-"""表示端末を家族へ付ける・外す・一覧する（運用管理者。ADR-0047）。
+"""Attach, detach and list display devices for families (operators; ADR-0047).
 
-ここに来る呼び出しは ``display:approve`` を持つ人（運用管理者）か、端末そのものの
-取り直し（``/api/display/session``）に限る。
+Calls reaching here are limited to people holding ``display:approve`` (operators) or the
+device itself re-fetching its session (``/api/display/session``).
 
-⚠ **付けられるのは、承認する人がその家族の owner / parent のときだけ**（task #758）。
-scope だけで通していたので、運用管理者はどの家族の台帳でも端末に映せ、admin も
-自分に operator を付ければ全家族の台帳に届いた。選べる家族も同じ条件で絞る。
+⚠ **A device can be attached only when the approver is an owner / parent of that family**
+(task #758). It used to pass on the scope alone, so operators could show any family's
+ledger on a device, and an admin could reach every family's ledger by granting themselves
+operator. The selectable families are narrowed by the same condition.
 
-家族の側から外す経路（親が家族の画面で外す）は :class:`RemoveMembershipUseCase` が持つ。
+The path for detaching from the family side (a parent removing it on the family screen)
+belongs to :class:`RemoveMembershipUseCase`.
 """
 
 from __future__ import annotations
@@ -34,14 +36,14 @@ from bounded_contexts.reward_points.domain.value_objects.family_role import Fami
 @dataclass(frozen=True, kw_only=True)
 class AttachDisplayCommand:
     family_id: int
-    #: 承認する人。映す家族の owner / parent でなければ断る
+    #: The approver. Rejected unless an owner / parent of the family to display
     approver_id: int
-    #: 端末の名前（例「リビング」）
+    #: Device name (e.g. "Living room")
     name: str
 
 
 class DisplayRoster:
-    """表示端末の名簿。付ける・外す・引く・並べるをまとめて持つ。"""
+    """Roster of display devices. Handles attach, detach, lookup and listing together."""
 
     def __init__(
         self,
@@ -55,10 +57,11 @@ class DisplayRoster:
         self._provisioning = provisioning
 
     def attach(self, command: AttachDisplayCommand) -> DisplayDTO:
-        """表示アカウントを作り、家族へ表示端末として加える。
+        """Create a display account and add it to the family as a display device.
 
-        承認する人が家族の親でなければ :class:`FamilyAccessDeniedError`。家族が実在するかは
-        その後で見る（参加していない家族の実在を確かめさせない）。
+        :class:`FamilyAccessDeniedError` unless the approver is a parent of the family. Whether
+        the family exists is checked afterwards (so nobody can probe the existence of
+        families they do not belong to).
         """
         approver = self._memberships.find_in_family(family_id=command.family_id, account_id=command.approver_id)
         if approver is None or not approver.role.is_guardian:
@@ -77,7 +80,7 @@ class DisplayRoster:
         return _to_dto(membership, family)
 
     def detach(self, account_id: int) -> DisplayDTO:
-        """表示端末を外す。参加とアカウントの両方を消す（1 端末 = 1 アカウント）。"""
+        """Detach a display device. Deletes both the membership and the account (1 device = 1 account)."""
         found = self.find(account_id)
         if found is None:
             raise DisplayNotFoundError
@@ -86,7 +89,7 @@ class DisplayRoster:
         return found
 
     def find(self, account_id: int) -> DisplayDTO | None:
-        """*account_id* が表示端末として家族に付いていれば、その端末。"""
+        """The device, if *account_id* is attached to a family as a display device."""
         membership = next((m for m in self._memberships.list_for_account(account_id) if m.role.is_display), None)
         if membership is None:
             return None
@@ -99,7 +102,7 @@ class DisplayRoster:
         return [_to_dto(display, families[display.family_id]) for display in displays if display.family_id in families]
 
     def families_to_display(self, approver_id: int) -> list[DisplayableFamilyDTO]:
-        """*approver_id* が owner / parent として入っている家族だけ（:meth:`attach` と同じ条件）。"""
+        """Only families *approver_id* belongs to as owner / parent (same condition as :meth:`attach`)."""
         family_ids = [m.family_id for m in self._memberships.list_for_account(approver_id) if m.role.is_guardian]
         return [
             DisplayableFamilyDTO(id=family.id, name=family.name_value)
@@ -108,7 +111,7 @@ class DisplayRoster:
 
 
 def _to_dto(membership: FamilyMembership, family: Family) -> DisplayDTO:
-    if membership.account_id is None:  # 表示端末は承認の時点でアカウントと結び付いている
+    if membership.account_id is None:  # A display device is linked to an account at approval time
         raise DisplayNotFoundError
     return DisplayDTO(
         account_id=membership.account_id,

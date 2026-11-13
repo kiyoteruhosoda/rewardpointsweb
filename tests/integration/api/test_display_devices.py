@@ -51,7 +51,8 @@ class PairedDisplay:
 
 @pytest.fixture
 def household(client: TestClient, admin_headers: dict[str, str]) -> Household:
-    # The family owner is also an operator. A device can only be attached to a family where they are a parent (task #758)
+    # The family owner is also an operator.
+    # A device can only be attached to a family where they are a parent (task #758)
     owner = create_account(
         client, admin_headers, username="dad", role=("member", "operator"), display_name="おとうさん"
     )
@@ -448,7 +449,8 @@ def test_a_parent_removes_a_display_from_the_family_page(
 def test_removing_a_display_is_logged_the_same_way_from_both_sides(
     *, client: TestClient, operator: Account, household: Household, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Whether from the operator list or from the family screen, who removed which device of which family is recorded."""
+    """Whether from the operator list or from the family screen, who removed which device of which
+    family is recorded."""
     by_operator = _pair(client, operator, household)
     with caplog.at_level(logging.INFO):
         client.delete(f"/api/display/devices/{by_operator.account_id}", headers=operator.headers)

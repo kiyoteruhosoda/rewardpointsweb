@@ -1,4 +1,4 @@
-"""要求した認証の強度の確かめ方（ADR-0039）。"""
+"""How the requested authentication strength is checked (ADR-0039)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from bounded_contexts.identity_federation.domain.value_objects.authentication_co
 
 
 def test_nothing_is_required_by_default() -> None:
-    """既定は要求しない。予約語を持たない IdP へつないでも従来どおり動く。"""
+    """Not requested by default. Works as before even when connected to an IdP without the reserved values."""
     context = RequestedAuthenticationContext()
 
     assert not context.is_requested
@@ -34,7 +34,7 @@ def test_a_weaker_acr_is_refused() -> None:
 
 
 def test_a_missing_acr_is_refused() -> None:
-    """⚠ ここが肝。返ってこないものを「満たした」と読むと、要求は送っただけになる。"""
+    """⚠ This is the crux. Reading what did not come back as "satisfied" would make the request merely sent."""
     context = RequestedAuthenticationContext(values=("urn:assay:ac:mfa",))
 
     with pytest.raises(SsoAcrNotSatisfiedError):

@@ -1,18 +1,18 @@
-"""``private_key_jwt`` のクライアント認証アサーション（RFC 7523 / OIDC Core 9）。
+"""Client authentication assertion for ``private_key_jwt`` (RFC 7523 / OIDC Core 9).
 
-秘密鍵はホスト上のファイルにあり、**署名のときだけ読む**。アプリの設定に載るのは
-在り処と ``kid`` だけで、鍵そのものはデプロイの変数にも DB にも現れない
-（ADR-0029）。
+The private key is in a file on the host and **is read only when signing**. App settings hold
+only its location and ``kid``; the key itself appears neither in deployment variables nor in the DB
+(ADR-0029).
 
-自前 idp 側の検証:
+Verification on our own idp side:
 
-- ``client_assertion_type`` は ``urn:ietf:params:oauth:client-assertion-type:jwt-bearer`` のみ
-- ``iss`` と ``sub`` はどちらも **client_id 自身**（RFC 7523 3 節）
-- ``aud`` は ``<issuer>/token`` か ``<issuer>`` のどちらか
-- **``jti`` 必須**。再生防止のため IdP 側が記録する
-- ``exp`` は **今から 5 分以内**。超えると ``assertion_lifetime_too_long``
-- 検証アルゴリズムは**登録済み鍵の種別**から決まる。ヘッダの ``alg`` は信用されない
-  （alg 混同攻撃を成立させないため）
+- ``client_assertion_type`` must be ``urn:ietf:params:oauth:client-assertion-type:jwt-bearer``
+- ``iss`` and ``sub`` are both **the client_id itself** (RFC 7523 section 3)
+- ``aud`` is either ``<issuer>/token`` or ``<issuer>``
+- **``jti`` is required**. The IdP records it to prevent replay
+- ``exp`` is **within 5 minutes from now**. Beyond that, ``assertion_lifetime_too_long``
+- The verification algorithm is determined by **the registered key's type**. The header ``alg`` is not trusted
+  (to prevent alg confusion attacks)
 """
 
 from __future__ import annotations
@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 
 ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 
-# idp の上限は 5 分。短くしておく理由は、長くしても得るものが無く、再生の窓と
-# IdP 側が jti を保持する期間を伸ばすだけだから。
+# idp's limit is 5 minutes. It is kept short because longer gains nothing and only widens the
+# replay window and how long the IdP has to keep the jti.
 _LIFETIME_SECONDS = 60
 
 _ALGORITHM = "RS256"
@@ -46,11 +46,11 @@ _ALGORITHM = "RS256"
 
 @dataclass(frozen=True)
 class ClientAssertionRequest:
-    """アサーションを 1 通作るための入力。
+    """Input for building one assertion.
 
-    ``client_id`` と ``audience`` はどちらも ``str`` で、位置引数で渡すと取り違えが
-    型検査を抜ける。取り違えれば IdP 側で ``invalid_client`` になるが、**どれで
-    落ちたかは返ってこない**ので、入口でまとめて運ぶ。
+    ``client_id`` and ``audience`` are both ``str``, so passing them positionally lets a mix-up
+    slip past type checking. A mix-up yields ``invalid_client`` at the IdP, but **which one
+    caused it is not reported**, so they are carried together from the entry point.
     """
 
     client_id: str
@@ -59,19 +59,19 @@ class ClientAssertionRequest:
 
 
 def build_client_assertion(request: ClientAssertionRequest) -> str:
-    """トークンエンドポイントへ提示する署名付きアサーションを組み立てる。"""
+    """Build the signed assertion presented to the token endpoint."""
     now = utcnow()
     headers = {"typ": "JWT"}
     kid = request.credential.private_key_kid
     if kid:
-        # 鍵が複数登録されていると、kid が無い限り IdP はどれで検証するか決められない。
+        # With multiple keys registered, the IdP cannot decide which to verify with unless kid is given.
         headers["kid"] = kid
     return jwt.encode(
         {
             "iss": request.client_id,
             "sub": request.client_id,
             "aud": request.audience,
-            # 毎回異なる値。IdP が記録して再生を防ぐ。
+            # A different value every time. The IdP records it to prevent replay.
             "jti": secrets.token_urlsafe(32),
             "iat": now,
             "exp": now + timedelta(seconds=_LIFETIME_SECONDS),
@@ -83,11 +83,11 @@ def build_client_assertion(request: ClientAssertionRequest) -> str:
 
 
 def read_private_key(credential: ClientCredential) -> str:
-    """署名鍵（PEM）を読む。読めなければ :class:`SsoNotConfiguredError`。
+    """Read the signing key (PEM). If unreadable, :class:`SsoNotConfiguredError`.
 
-    **読めるかどうかは使うときになって初めて分かる。** 権限が合っていなくても
-    起動も設定の確認も通り、利用者が IdP から戻ってきた瞬間だけ落ちる。
-    起動時にも一度確かめてログへ出す（``presentation/startup_check.py``）。
+    **Whether it is readable is only known when it is used.** Even with wrong permissions,
+    startup and configuration checks pass, and it fails only at the moment a user returns from the IdP.
+    So it is also checked once at startup and logged (``presentation/startup_check.py``).
     """
     path = credential.private_key_file
     if not path:
@@ -95,8 +95,8 @@ def read_private_key(credential: ClientCredential) -> str:
     try:
         return Path(path).read_text(encoding="utf-8")
     except OSError as error:
-        # 0400 root だとコンテナの実行ユーザーは読めない。ディレクトリ自身にも
-        # 通り抜けの権限が要る（``/srv/secrets/oidc`` は 0710）。
+        # With 0400 root the container's runtime user cannot read it. The directory itself
+        # also needs traverse permission (``/srv/secrets/oidc`` is 0710).
         logger.error("sso_private_key_unreadable", extra={"reason": type(error).__name__})
         raise SsoNotConfiguredError from error
 

@@ -1,5 +1,5 @@
 /**
- * バックアップからの復元（ADR-0026）。
+ * Restoring from a backup (ADR-0026).
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -35,7 +35,7 @@ describe('FamilyImportPanel', () => {
     vi.clearAllMocks()
   })
 
-  it('選んだファイルを送り、できた家族へ入る', async () => {
+  it('sends the chosen file and enters the created family', async () => {
     importArchive.mockResolvedValue({
       family_id: 7,
       name: 'ほその家',
@@ -54,7 +54,7 @@ describe('FamilyImportPanel', () => {
     expect(onImported).toHaveBeenCalledWith(7)
   })
 
-  it('戻った量を知らせる', async () => {
+  it('reports how much was restored', async () => {
     importArchive.mockResolvedValue({
       family_id: 7,
       name: 'ほその家',
@@ -69,7 +69,7 @@ describe('FamilyImportPanel', () => {
     expect(await screen.findByText('Restored 3 members and 12 point records.')).toBeInTheDocument()
   })
 
-  it('控えでないファイルは送らずに断る', async () => {
+  it('refuses a file that is not a backup without sending it', async () => {
     renderWithProviders(<FamilyImportPanel onImported={() => Promise.resolve()} />)
 
     choose('これは写真です')
@@ -83,7 +83,7 @@ describe('FamilyImportPanel', () => {
     expect(importArchive).not.toHaveBeenCalled()
   })
 
-  it('ファイルを選ぶまでは押せない', () => {
+  it('cannot be pressed until a file is chosen', () => {
     renderWithProviders(<FamilyImportPanel onImported={() => Promise.resolve()} />)
 
     expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled()

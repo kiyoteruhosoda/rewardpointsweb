@@ -1,4 +1,4 @@
-"""初期管理者のパスワードを、どこまで追随させ・どこから触らないかの検証。"""
+"""How far the initial admin password follows the defaults, and where it is left alone."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def _session(engine: sa.Engine) -> Session:
 
 
 def _hash_of(user: User) -> str:
-    """パスワードのハッシュ。**NULL は想定外**（ADR-0034）——据え付けは必ず設定する。"""
+    """The password hash. **NULL is unexpected** (ADR-0034); the installer always sets one."""
     assert user.password_hash is not None
     return user.password_hash
 
@@ -33,8 +33,8 @@ def test_seeded_admin_can_be_authenticated_with_the_documented_password(db_sessi
 
 
 def test_admin_left_on_a_superseded_default_follows_the_new_default(engine: sa.Engine) -> None:
-    """既定値のまま運用されている管理者は、既定値の変更に追随する。"""
-    assert master_data.SUPERSEDED_ADMIN_PASSWORD_HASHES, "旧既定値が無いとこの経路を検証できない"
+    """An admin still running on the default value follows changes to the default."""
+    assert master_data.SUPERSEDED_ADMIN_PASSWORD_HASHES, "this path cannot be verified without old defaults"
     session = _session(engine)
     _admin(session).password_hash = master_data.SUPERSEDED_ADMIN_PASSWORD_HASHES[-1]
     session.commit()
@@ -58,7 +58,7 @@ def test_password_chosen_by_the_operator_is_left_alone(engine: sa.Engine) -> Non
 
 
 def test_explicit_reset_restores_the_default_password(engine: sa.Engine) -> None:
-    """締め出されたときの復旧経路。明示したときだけ上書きする。"""
+    """The recovery path when locked out. Overwrites only when explicitly requested."""
     session = _session(engine)
     _admin(session).password_hash = generate_password_hash("forgotten")
     session.commit()
@@ -85,7 +85,7 @@ def test_seeding_twice_does_not_duplicate_roles_or_permissions(engine: sa.Engine
 
     admin = _admin(session)
     assert [role.name for role in admin.roles] == [master_data.DEFAULT_ADMIN_ROLE]
-    # admin は家族・ポイントに関与しない（ADR-0018）
+    # admin has nothing to do with families or points (ADR-0018)
     assert admin.permission_codes == frozenset(master_data.ROLE_PERMISSIONS["admin"])
     assert not admin.permission_codes & {"family:view", "family:manage", "point:view", "point:manage"}
     session.close()

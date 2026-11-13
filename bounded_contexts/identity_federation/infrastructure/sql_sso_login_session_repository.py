@@ -1,4 +1,4 @@
-"""認可要求の控えの SQLAlchemy 実装。"""
+"""SQLAlchemy implementation of authorization request records."""
 
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ class SqlSsoLoginSessionRepository:
     session: Session
 
     def issue(self, session: SsoLoginSession) -> SsoLoginSession:
-        # 戻ってこなかった控え（利用者が IdP の画面を閉じた等）は放っておくと
-        # 溜まり続ける。発行のたびに期限切れを掃除する。
+        # Records that never came back (the user closed the IdP screen, etc.) would keep
+        # piling up if left alone. Expired ones are cleaned up on every issue.
         self.session.execute(delete(SsoLoginSessionRecord).where(SsoLoginSessionRecord.expires_at < utcnow()))
         self.session.add(
             SsoLoginSessionRecord(
@@ -46,7 +46,7 @@ class SqlSsoLoginSessionRepository:
         return session
 
     def peek(self, state: str) -> SsoLoginSession | None:
-        """控えを**消さずに**読む（ADR-0036）。期限切れは無いものとして扱う。"""
+        """Read a record **without deleting it** (ADR-0036). Expired ones are treated as absent."""
         record = self.session.get(SsoLoginSessionRecord, state)
         if record is None:
             return None
@@ -60,9 +60,9 @@ class SqlSsoLoginSessionRepository:
 
         consumed = _to_session(record)
 
-        # 消費は**削除の成否**で決める（「読んでから消す」だと同じ ``state`` を
-        # 同時に 2 本送られたとき両方が読み終えてしまう）。DELETE は行ロックを
-        # 取るため、後続は先行のコミットを待ってから 0 行を返す。
+        # Consumption is decided by **whether the delete succeeded** ("read then delete" would let
+        # two concurrent requests with the same ``state`` both finish reading). DELETE takes a row
+        # lock, so the later one waits for the earlier commit and then returns 0 rows.
         result = cast(
             "CursorResult[Any]",
             self.session.execute(

@@ -1,16 +1,16 @@
 /**
- * シール 1 枚の絵と、達成の判子（ADR-0042）。
+ * Artwork for one sticker, and the completion stamp (ADR-0042).
  *
- * シールは「型抜きした紙」に見せる。同じ形を白で太く縁取ってから色を重ね、左上に
- * 光沢を 1 つ置く。縁取りがあるので、隣のシールや枠の線に重なっても形が読める。
+ * Stickers look like "die-cut paper": the same shape is outlined thickly in white, the colour layered on
+ * top, and one gloss placed top left. The outline keeps the shape readable over neighbours or frame lines.
  *
- * どちらも飾りなので読み上げない（枚数はカードの側が文字で伝える）。
+ * Both are decoration and are not read aloud (the card conveys the count in text).
  */
 import { useId, type ReactElement } from 'react'
 
 import type { StickerShape } from '../services/stickerSheet'
 
-/** 中心 (0,0)・半径 R の n 角星の頂点。 */
+/** Vertices of an n-pointed star centred at (0,0) with radius R. */
 function starPoints(spikes: number, outer: number, inner: number): string {
   const points: string[] = []
   for (let i = 0; i < spikes * 2; i++) {
@@ -26,7 +26,7 @@ const SPARKLE = starPoints(4, 44, 14)
 const HEART =
   'M0 38 C -6 32 -42 12 -42 -10 C -42 -28 -28 -38 -16 -38 C -6 -38 0 -30 0 -24 C 0 -30 6 -38 16 -38 C 28 -38 42 -28 42 -10 C 42 12 6 32 0 38 Z'
 
-/** 縁取りと塗りで同じ形を 2 度描くので、形だけを返す。 */
+/** The same shape is drawn twice (outline and fill), so only the shape is returned. */
 function silhouette(shape: StickerShape): ReactElement {
   switch (shape) {
     case 'star':
@@ -57,7 +57,7 @@ function silhouette(shape: StickerShape): ReactElement {
   }
 }
 
-/** 形ごとの中の模様（顔・花芯）。 */
+/** Inner pattern per shape (face, flower centre). */
 function detail(shape: StickerShape): ReactElement | null {
   if (shape === 'smile') {
     return (
@@ -81,13 +81,13 @@ export function Sticker({ shape, color }: StickerProps) {
   const form = silhouette(shape)
   return (
     <svg className="sticker-art" viewBox="-56 -56 112 112" aria-hidden="true" focusable="false">
-      {/* 型抜きの白い縁 */}
+      {/* White die-cut edge */}
       <g fill="#fff" stroke="#fff" strokeWidth="14" strokeLinejoin="round">
         {form}
       </g>
       <g fill={color}>{form}</g>
       {detail(shape)}
-      {/* 光沢 */}
+      {/* Gloss */}
       <ellipse
         cx="-14"
         cy="-20"
@@ -106,14 +106,14 @@ interface HankoProps {
 }
 
 /**
- * 達成の判子。朱肉のかすれを `feTurbulence` で付け、手で押した傾きにする。
+ * The completion stamp. Ink smudges are added with `feTurbulence`, tilted as if pressed by hand.
  *
- * 文字は 2 文字（「達成」）を想定した大きさ。訳語が長い言語では縮めて収める
- * （`textLength`）。
+ * Sized for two characters ("達成"). In languages with longer translations it is shrunk to fit
+ * (`textLength`).
  */
 export function Hanko({ label }: HankoProps) {
-  // 判子は 1 画面に何枚も並ぶので、フィルタの id を 1 枚ごとに分ける
-  // （useId の値は `:` を含み、url() の中で読み違えるブラウザがあるので外す）
+  // Stamps appear many at a time on a screen, so give each one its own filter id
+  // (useId values contain `:`, which some browsers misread inside url(), so strip them)
   const filterId = `hanko-ink-${useId().replace(/:/g, '')}`
   return (
     <svg className="hanko" viewBox="0 0 120 120" aria-hidden="true" focusable="false">

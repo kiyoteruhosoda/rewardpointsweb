@@ -1,4 +1,4 @@
-"""停止の記録の永続化インターフェース（実装は Infrastructure 層）。"""
+"""Persistence interface for revocation records (implemented in the Infrastructure layer)."""
 
 from __future__ import annotations
 
@@ -14,14 +14,14 @@ from bounded_contexts.identity_federation.domain.value_objects.federated_login i
 
 class SessionRevocationRepository(Protocol):
     def record(self, revocation: SessionRevocation) -> bool:
-        """記録を残す。**同じ ``jti`` が既にあれば何もせず ``False``**。
+        """Keep a record. **If the same ``jti`` already exists, do nothing and return ``False``**.
 
-        ADR-0024 の送り手は再送のたびに同じ ``jti`` を使うので、ここが重複配送の
-        受け止め口になる。期限切れの記録はこの機会に掃除する。
+        The ADR-0024 sender uses the same ``jti`` for every resend, so this is where duplicate
+        deliveries are absorbed. Expired records are cleaned up at this opportunity.
         """
 
     def is_revoked(self, login: FederatedLogin) -> bool:
-        """そのログインが、届いた停止のどれかに当たるかどうか。"""
+        """Whether the login matches any of the received revocations."""
 
 
 __all__ = ["SessionRevocationRepository"]

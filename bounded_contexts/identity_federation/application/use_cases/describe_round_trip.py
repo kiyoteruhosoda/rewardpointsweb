@@ -1,4 +1,5 @@
-"""Answer whether a returned round trip is a "login", a "link", or one tried without showing a screen (ADR-0036, ADR-0052).
+"""Answer whether a returned round trip is a "login", a "link", or one tried without showing a screen
+(ADR-0036, ADR-0052).
 
 ⚠ **This does not authenticate.** It only peeks at the saved request **without deleting it**, neither checking
 nor consuming the passphrase -- it is a query only for deciding which completion to call.

@@ -1,7 +1,7 @@
-"""家族まわりのテストで繰り返す手順（アカウント作成・ログイン・家族の用意）。
+"""Steps repeated in family-related tests (creating accounts, signing in, setting up a family).
 
-API だけを使って組み立てる。DB を直接触ると、実際の利用者が通れない状態でも
-テストが通ってしまう。
+Built using the API only. Touching the DB directly would let tests pass even in states
+that real users cannot reach.
 """
 
 from __future__ import annotations
@@ -91,7 +91,7 @@ def issue_invitation(
 
 @dataclass(frozen=True, kw_only=True)
 class Ledger:
-    """記録先（家族と台帳の組）と、そこへの追記。"""
+    """A recording target (a family and ledger pair) and appending to it."""
 
     family_id: int
     ledger_id: int

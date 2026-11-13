@@ -1,7 +1,8 @@
 """Starting a link -- begin an IdP round trip for **a user who is already logged in** (ADR-0036).
 
-The only difference from the login round trip is the content of the saved request; the authorization request sent to the IdP
-is the same (only one redirect URI is registered). The saved request holds **the user who started it** (``link_user_id``)
+The only difference from the login round trip is the content of the saved request; the authorization
+request sent to the IdP is the same (only one redirect URI is registered). The saved request holds
+**the user who started it** (``link_user_id``)
 .
 
 ⚠ **This is the crux of this round trip.** Without it, the return would be decided by looking at "who is signed in

@@ -1,12 +1,12 @@
 /**
- * 家族の参加者一覧。
+ * List of family participants.
  *
- * 表ではなく行のカードで組む。列を持つと、狭い画面では操作が右へ流れて画面外に
- * 隠れる（横送りの表に押し込むと、指で探し当てるまで気付けない）。名前・立場・
- * 残高・操作をひとかたまりにして、幅が足りなければ操作だけを次の行へ折り返す。
+ * Built as row cards rather than a table. With columns, on narrow screens the actions flow right and
+ * hide off-screen (squeezed into a horizontally scrolling table, you don't notice them until you find
+ * them by finger). Name, role, balance and actions form one block, and only the actions wrap to the next line when space runs out.
  *
- * 出す操作はサーバーが返す可否（`can_*`）だけで決める。立場から組み立て直すと、
- * 押した先で断られる操作（記録の残る子の削除など）まで出てしまう。
+ * Which actions are shown is decided solely by the server's flags (`can_*`). Rebuilding them from role
+ * would also show actions that are refused after pressing (e.g. deleting a child who still has records).
  */
 import { Link } from 'react-router-dom'
 
@@ -14,18 +14,18 @@ import { useI18n } from '../i18n'
 import type { FamilyDetail, Membership } from '../services/families'
 import { ActionButton } from './ActionButton'
 
-/** 参加者ごとに実行しうる操作。押したボタンにだけ実行中の目印を出すために使う。 */
+/** Actions that can run per participant. Used to show the running marker only on the pressed button. */
 export type MemberAction = 'independence' | 'removal' | 'passwordReset'
 
 export interface MemberActions {
-  /** 独立を指示する（ADR-0014）。子本人の承認で成立する。 */
+  /** Instructs independence (ADR-0014). Takes effect when the child approves. */
   onProposeIndependence: (member: Membership) => void
-  /** 独立の指示を取り下げる（承認前ならいつでも）。 */
+  /** Withdraws the independence instruction (any time before approval). */
   onWithdrawIndependence: (member: Membership) => void
-  /** 参加ごと削除する（台帳が空のときだけ出る）。 */
+  /** Deletes the participant entirely (shown only when the ledger is empty). */
   onRemove: (member: Membership) => void
   onResetPassword: (member: Membership) => void
-  /** その参加者で実行中の操作（実行していなければ `null`）。 */
+  /** The action running for that participant (`null` if none). */
   pendingActionOf: (member: Membership) => MemberAction | null
 }
 
@@ -76,7 +76,7 @@ interface ButtonProps extends MemberActions {
 function MemberActionButtons({ member, familyId, ...actions }: ButtonProps) {
   const { t } = useI18n()
   const pendingAction = actions.pendingActionOf(member)
-  // 1 人の参加者に対する操作は 1 つずつ（結果の取り違えを防ぐ）。
+  // One action at a time per participant (prevents mixing up results).
   const busy = pendingAction !== null
 
   return (

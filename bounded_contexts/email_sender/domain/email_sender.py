@@ -13,4 +13,7 @@ class IEmailSender(ABC):
 
     @abstractmethod
     def check_reachable(self) -> None:
-        """Check only that the destination server is reachable, without sending. Raises the same exception as send when it is not."""
+        """Check only that the destination server is reachable, without sending.
+
+        Raises the same exception as send when it is not.
+        """

@@ -32,7 +32,8 @@ PUSH_SERVICE_HOST_SUFFIXES = (
     "push.apple.com",
 )
 
-#: Suffixes of names that exist only internally. One-word names (``db``, ``app`` = Services in the same namespace) are rejected too.
+#: Suffixes of names that exist only internally.
+#: One-word names (``db``, ``app`` = Services in the same namespace) are rejected too.
 INTERNAL_NAME_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa", ".svc", ".cluster.local")
 
 _HOST_NAME = re.compile(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?")
@@ -43,8 +44,11 @@ Resolver = Callable[[str, int], Iterable[IpAddress]]
 
 
 class DestinationRefusedError(ValueError):
-    """The destination was rejected. ``reason`` is one of ``invalid_url`` / ``host_not_allowed`` / ``port_not_allowed`` /
-    ``blocked_address`` / ``unresolvable``."""
+    """The destination was rejected.
+
+    ``reason`` is one of ``invalid_url`` / ``host_not_allowed`` / ``port_not_allowed`` /
+    ``blocked_address`` / ``unresolvable``.
+    """
 
     def __init__(self, reason: str) -> None:
         super().__init__(reason)

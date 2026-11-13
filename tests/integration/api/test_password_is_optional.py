@@ -1,7 +1,7 @@
-"""「ローカル認証を持たない」をデータで表せているか（ADR-0034）。
+"""Whether "has no local authentication" is expressed in the data (ADR-0034).
 
-``users.password_hash`` が NULL の利用者は、パスワードで入れない・変更できない・
-**リセットでも生やせない**。持たせられるのは管理者が明示的に設定したときだけ。
+A user whose ``users.password_hash`` is NULL cannot sign in with a password, cannot change it,
+and **cannot grow one through a reset either**. Only an explicit setting by an admin gives them one.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ _SSO_ONLY = "ssoonly"
 
 @pytest.fixture
 def sso_only_user(engine: sa.Engine) -> int:
-    """SSO でしか入れない利用者（パスワードを持たない）。"""
+    """A user who can sign in only via SSO (has no password)."""
     session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
     user = User(
         username=_SSO_ONLY,
@@ -44,15 +44,15 @@ def test_a_user_without_a_password_cannot_sign_in_with_one(client: TestClient, s
 def test_a_reset_is_not_issued_for_a_user_without_a_password(
     client: TestClient, db_session: Session, sso_only_user: int
 ) -> None:
-    """⚠ ここが抜けると、リセット 1 回でローカル認証が生える。"""
+    """⚠ Without this, a single reset grows local authentication."""
     response = client.post("/api/auth/forgot-password", json={"username": _SSO_ONLY})
-    # 応答は宛先が無いときと同じ（存在を漏らさない）。
+    # The response is the same as when there is no recipient (does not leak existence).
     assert response.status_code == 200
     assert db_session.scalar(select(PasswordResetToken).where(PasswordResetToken.user_id == sso_only_user)) is None
 
 
 def _take_the_password_away(db_session: Session, username: str) -> None:
-    """入っている人のパスワードだけを取り上げる（トークンはそのまま）。"""
+    """Take away only the password of a signed-in user (the token stays as is)."""
     user = db_session.scalar(select(User).where(User.username == username))
     assert user is not None
     user.password_hash = None
@@ -62,7 +62,7 @@ def _take_the_password_away(db_session: Session, username: str) -> None:
 def test_the_screen_is_told_whether_there_is_a_password(
     client: TestClient, db_session: Session, admin_headers: dict[str, str]
 ) -> None:
-    """画面はこれを見て、パスワード変更の導線を出すかどうかを決める。"""
+    """The screen looks at this to decide whether to show the path to change the password."""
     assert client.get("/api/auth/me", headers=admin_headers).json()["has_password"] is True
 
     _take_the_password_away(db_session, master_data.DEFAULT_ADMIN_USERNAME)
@@ -72,9 +72,9 @@ def test_the_screen_is_told_whether_there_is_a_password(
 def test_a_user_without_a_password_cannot_change_one(
     client: TestClient, db_session: Session, admin_headers: dict[str, str]
 ) -> None:
-    """パスワードを持たない利用者に「今のパスワード」は入力できない。
+    """A user without a password cannot enter a "current password".
 
-    理由は分けずに揃える（入り口の有無を外から数えられないようにするため）。
+    The reason is not distinguished (so the presence of an entrance cannot be counted from outside).
     """
     _take_the_password_away(db_session, master_data.DEFAULT_ADMIN_USERNAME)
 
@@ -89,7 +89,7 @@ def test_a_user_without_a_password_cannot_change_one(
 def test_an_administrator_can_give_a_password_on_purpose(
     client: TestClient, sso_only_user: int, admin_headers: dict[str, str]
 ) -> None:
-    """ローカル口座を持たせるのは、明示的な操作だけ（ADR-0034）。"""
+    """Only an explicit operation gives someone a local account (ADR-0034)."""
     updated = client.put(
         f"/api/admin/users/{sso_only_user}",
         headers=admin_headers,

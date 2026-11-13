@@ -1,8 +1,8 @@
 /**
- * 毎日のボーナス（ADR-0024）を家族設定に並べる（ADR-0027）。
+ * Lists the daily bonus (ADR-0024) in family settings (ADR-0027).
  *
- * 見たいのは「子の数だけ欄が並ぶこと」と「決めた相手の台帳にだけ効くこと」。
- * 量は子ごとに違ってよいので、送り先の台帳を取り違えないことが要になる。
+ * What we want to see: "one input per child" and "it only affects the chosen child's ledger".
+ * The amount may differ per child, so not mixing up the target ledger is the key point.
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,7 +26,7 @@ vi.mock('../services/families', () => ({
   },
 }))
 
-/** 子 2 人（ハナ＝台帳 20・タロウ＝台帳 21）。ボーナスはハナにだけ決めてある。 */
+/** Two children (ハナ = ledger 20, タロウ = ledger 21). Only ハナ has a bonus set. */
 function twoChildren() {
   return familyOf('owner', [
     member({ daily_bonus: dailyBonus({ amount: 25 }) }),
@@ -50,18 +50,18 @@ describe('DailyBonusPanel', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
-  it('子の数だけ欄を並べ、決めてある子には今の量と「やめる」を出す', () => {
+  it('lists one input per child, and shows the current amount and "stop" for children with a bonus', () => {
     renderPanel()
 
     expect(screen.getByLabelText('Points per day for ハナ')).toHaveValue(25)
     expect(screen.getByText('25 pt are added every day.')).toBeInTheDocument()
-    // まだ決めていない子は空欄で、やめる先も無い
+    // A child without a bonus has an empty input and nothing to stop
     expect(screen.getByLabelText('Points per day for タロウ')).toHaveValue(null)
     expect(screen.getByText('Not set up yet.')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Stop' })).toHaveLength(1)
   })
 
-  it('決めた量はその子の台帳へ送り、家族を読み直す', async () => {
+  it("sends the amount to that child's ledger and reloads the family", async () => {
     setDailyBonus.mockResolvedValue(dailyBonus({ ledger_id: 21, amount: 30 }))
     const onChanged = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
     renderPanel(twoChildren(), onChanged)
@@ -77,7 +77,7 @@ describe('DailyBonusPanel', () => {
     expect(onChanged).toHaveBeenCalled()
   })
 
-  it('やめるのも台帳ごと（押した子の設定だけを消す）', async () => {
+  it("stopping is per ledger too (removes only the pressed child's setting)", async () => {
     stopDailyBonus.mockResolvedValue(undefined)
     renderPanel()
 
@@ -88,7 +88,7 @@ describe('DailyBonusPanel', () => {
     })
   })
 
-  it('台帳の見えない参加者（親・兄弟）には欄を出さない', () => {
+  it('shows no input for participants whose ledger is not visible (parents, siblings)', () => {
     renderPanel(
       familyOf('owner', [
         member({

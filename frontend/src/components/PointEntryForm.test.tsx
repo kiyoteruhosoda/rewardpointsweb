@@ -1,6 +1,6 @@
 /**
- * 記録の入力: 未入力のまま押したときに、押した側のボタンに関わらず理由の必須が出る。
- * 消費だけが素通りして「押しても何も起きない」状態に戻らないよう、両方から確かめる。
+ * Record input: when submitted empty, the reason-required message appears regardless of which button.
+ * Checked from both so that "spend" doesn't slip through back to a "nothing happens on press" state.
  */
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
@@ -31,7 +31,7 @@ function reasonField(): HTMLInputElement {
 }
 
 describe('PointEntryForm', () => {
-  it('理由が空なら加算では送らず、必須のメッセージを出す', () => {
+  it('does not send an add with an empty reason and shows the required message', () => {
     const { onSubmit } = setUp()
 
     typeInto('Points', '50')
@@ -41,7 +41,7 @@ describe('PointEntryForm', () => {
     expect(reasonField().validationMessage).toBe('Enter a reason.')
   })
 
-  it('理由が空なら消費でも送らない（黙って捨てない）', () => {
+  it('does not send a spend with an empty reason either (does not silently drop it)', () => {
     const { onSubmit } = setUp()
 
     typeInto('Points', '50')
@@ -51,7 +51,7 @@ describe('PointEntryForm', () => {
     expect(reasonField().validationMessage).toBe('Enter a reason.')
   })
 
-  it('空白だけの理由も未入力として扱う', () => {
+  it('treats a whitespace-only reason as empty', () => {
     const { onSubmit } = setUp()
 
     typeInto('Points', '50')
@@ -62,7 +62,7 @@ describe('PointEntryForm', () => {
     expect(reasonField().validationMessage).toBe('Enter a reason.')
   })
 
-  it('埋まっていれば送る。符号は押したボタンで決まる', () => {
+  it('sends when filled in; the sign is decided by the pressed button', () => {
     const { onSubmit } = setUp()
 
     typeInto('Points', '50')

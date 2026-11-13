@@ -18,25 +18,25 @@ import { fetchSsoProvider, startSsoLogin, type SsoProvider } from '../services/s
 import { isPasskeySupported, passkeyErrorKey } from '../services/webauthn'
 import { RECONNECT_INTERVAL_MS, useAuth } from '../store/AuthContext'
 
-/** 資格情報の入力 → （二要素認証が有効なら）ワンタイムコードの入力。 */
+/** Credentials input -> (if two-factor auth is enabled) one-time code input. */
 type Step = 'credentials' | 'totp'
 
 export function LoginPage() {
   const { t } = useI18n()
   const { login, loginWithPasskey } = useAuth()
   const navigate = useNavigate()
-  // 招待コードを持ったままここへ来ることがある（アカウント作成の画面から回された
-  // 場合、または招待リンクから直接）。コードは URL の断片で運ばれる（ADR-0025）。
-  // ログイン後は既定の行き先ではなく、そのコードで参加できる家族の画面へ送る。
-  // コードが無ければ、開こうとしていた画面（`?redirect_to=`。ADR-0051）へ戻す。
+  // People may arrive here holding an invitation code (sent from the account creation screen,
+  // or directly from an invitation link). The code travels in the URL fragment (ADR-0025).
+  // After login, go to the screen for joining the family with that code, not the default.
+  // Without a code, return to the screen they were trying to open (`?redirect_to=`, ADR-0051).
   const { hash } = useLocation()
   const [searchParams] = useSearchParams()
   const pendingCode = readInvitationCode(hash)
   const returnTo = sanitizeRedirectTo(searchParams.get(REDIRECT_TO_PARAM))
   const destination = pendingCode ? invitationAcceptPath(pendingCode) : returnTo
-  // SSO の戻り先はサーバーを経由するので、コードを含まない経路だけを渡す
+  // The SSO return path goes through the server, so pass only a path without the code
   const ssoDestination = pendingCode ? '/families' : returnTo
-  // 行き来してもコードを落とさない（ここで落とすと打ち直しになる）
+  // Do not drop the code when navigating back and forth (dropping it means retyping)
   const joinPath = invitationJoinPath(pendingCode)
   const [step, setStep] = useState<Step>('credentials')
   const [username, setUsername] = useState('')
@@ -45,16 +45,16 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [sso, setSso] = useState<SsoProvider | null>(null)
   const [ssoUnreachable, setSsoUnreachable] = useState(false)
-  // IdP で入っていればボタンを押さずに入れる（ADR-0052）。試してよいかは開いたときの URL で決める。
-  // 招待コードを持って来たときは試さない（入ったあとの行き先が参加の画面になるため、本人に選ばせる）。
-  // ⚠ **試すと決めたら入口を描かない。** 描いてから飛ぶと、一瞬だけログイン画面が見える。
+  // If signed in at the IdP, enter without a tap (ADR-0052). The opening URL decides whether to try
+  // Skip it when holding an invitation code (the destination is the join screen; let them choose).
+  // ⚠ **Once it decides to try, do not render the entry.** Rendering first flashes the login page.
   const [silentAllowed] = useState(() => !pendingCode && maySilentSso(searchParams))
-  // SSO の失敗は画面遷移で戻ってくるため、応答本文ではなく URL に載る
+  // SSO failures come back via navigation, so they are in the URL rather than a response body
   const ssoError = searchParams.get('sso_error')
 
-  // 問い合わせに失敗するのはサーバーに届かないとき（リリース中など）。⚠ **一度で諦めない**
-  // ——諦めると、サーバーが戻っても SSO のボタンの無い画面に取り残される。届かないことを
-  // 伝え、つながるまで聞き直す（ADR-0046）。パスワードの欄は主な入口なので出したままにする。
+  // The query fails when the server is unreachable (e.g. during a release). ⚠ **Do not give up
+  // after one try** — giving up strands the user without the SSO button after the server is back.
+  // Say it is unreachable and retry until connected (ADR-0046). Keep the password field (main entry)
   useEffect(() => {
     let timer: number | undefined
     let cancelled = false
@@ -91,7 +91,7 @@ export function LoginPage() {
     } catch (err) {
       const code = err instanceof ApiError ? err.code : 'unknown_error'
       if (code === 'totp_required') {
-        // コード要求はエラーではなく次の手順。案内としてコード入力へ進める。
+        // A code request is not an error but the next step. Move on to code input as guidance.
         setStep('totp')
         setTotpCode('')
         setError(null)
@@ -118,8 +118,8 @@ export function LoginPage() {
     setError(null)
   }
 
-  // 試すかどうかが決まるまでは入口を描かない（ADR-0052）。描いてから IdP へ飛ぶと、パスワード欄が
-  // 一瞬だけ見える。届かないと分かったら（ssoUnreachable）いつもの入口を出す。
+  // Do not render the entry until deciding whether to try (ADR-0052). Rendering, then going to the
+  // IdP flashes the password field. Once known unreachable (ssoUnreachable), show the usual entry.
   if (silentAllowed && sso === null && !ssoUnreachable) {
     return (
       <div className="auth-page">
@@ -133,14 +133,14 @@ export function LoginPage() {
       <form className="card" onSubmit={submit}>
         <h1>{step === 'totp' ? t('login.totpTitle') : t('login.title')}</h1>
         {pendingCode && <p className="notice">{t('login.invitationPending')}</p>}
-        {/* パスキーの設定違いは、いま開いているドメインを添えて出す（{domain}）。 */}
+        {/* A passkey misconfiguration is shown with the currently open domain ({domain}). */}
         {error && <p className="error">{t(error, { domain: window.location.hostname })}</p>}
         {ssoUnreachable && (
           <p className="notice">
             <span className="spinner" aria-hidden="true" /> {t('common.unreachable')}
           </p>
         )}
-        {/* IdP から戻された失敗。知らないコードは一般的な文言へ倒す */}
+        {/* A failure returned from the IdP. Unknown codes fall back to a generic message */}
         {!error && ssoError !== null && (
           <p className="error">{t(knownMessageKey(`error.${ssoError}`, 'error.sso_error'))}</p>
         )}
@@ -178,8 +178,8 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={() => {
-                  // 戻り先はサーバーに残る。招待コードは載せず、同じタブへ預ける
-                  // （断片はクエリへ移した時点でログに平文で残る。ADR-0025）
+                  // The return path stays on the server; the invitation code is kept in this tab
+                  // (once a fragment moves into the query it stays in logs in plain text. ADR-0025)
                   rememberInvitationCode(pendingCode)
                   startSsoLogin(ssoDestination)
                 }}
@@ -189,7 +189,7 @@ export function LoginPage() {
             )}
             <Link to="/forgot-password">{t('login.forgot')}</Link>
             <Link to={joinPath}>{t('login.withInvitation')}</Link>
-            {/* 表示端末（サイネージ）にする入口。ホーム画面に置いた Web アプリでは URL を打てない（ADR-0047） */}
+            {/* Entry for using this as a display (signage); home-screen web apps cannot type URLs (ADR-0047) */}
             <Link to="/display">{t('login.useAsDisplay')}</Link>
           </>
         ) : (

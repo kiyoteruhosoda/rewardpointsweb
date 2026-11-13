@@ -1,4 +1,4 @@
-"""IdP アカウントとの結び付きの SQLAlchemy 実装。"""
+"""SQLAlchemy implementation of links to IdP accounts."""
 
 from __future__ import annotations
 
@@ -25,10 +25,10 @@ class SqlFederatedIdentityRepository:
         return _as_identity(self.session.get(FederatedIdentityRecord, (issuer, subject)))
 
     def find_for_user(self, issuer: str, user_id: int) -> FederatedIdentity | None:
-        """⚠ **同じ IdP の結び付きは 1 人につき 1 本**という前提で最初の 1 件を返す。
+        """⚠ Returns the first row, assuming **at most one link per person for the same IdP**.
 
-        表には利用者側の一意制約が無い（1 人が複数の IdP を持てる形のため）ので、
-        同じ IdP で 2 本作らせないのは :class:`LinkFederatedIdentity` の仕事になる。
+        The table has no unique constraint on the user side (one person may have multiple IdPs), so
+        preventing two links to the same IdP is the job of :class:`LinkFederatedIdentity`.
         """
         record = self.session.scalars(
             select(FederatedIdentityRecord)
@@ -66,10 +66,10 @@ class SqlFederatedIdentityRepository:
         self.session.flush()
 
     def list_for_issuer(self, issuer: str) -> Sequence[FederatedIdentity]:
-        """その IdP と結び付いている利用者を全件（定期照合。ADR-0040）。
+        """All users linked to the IdP (periodic reconciliation; ADR-0040).
 
-        並びは ``subject`` の昇順に固定する。順番が実行計画しだいで変わると、
-        記録を突き合わせたときに毎回違って見える。
+        The order is fixed to ascending ``subject``. If the order varied with the execution plan,
+        comparing records would look different every time.
         """
         records = self.session.scalars(
             select(FederatedIdentityRecord)

@@ -1,8 +1,8 @@
 /**
- * 所属する家族の共有状態: 取得のきっかけと、失敗したときに何を残すか。
+ * Shared state of the user's family: what triggers fetching, and what to keep on failure.
  *
- * 画面の側は `FamilyContext` を差し替えて描けるので（`test-support`）、ここでは
- * 状態を作る `FamilyProvider` そのものを見る。
+ * Screens can render with a replaced `FamilyContext` (`test-support`), so this tests
+ * `FamilyProvider` itself, which builds the state.
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Link, MemoryRouter } from 'react-router-dom'
@@ -62,7 +62,7 @@ function authValueOf(scopes: string[]): AuthValue {
   }
 }
 
-/** 応答の届く順を組み立てるための、外から解決できる約束。 */
+/** A promise resolvable from outside, for arranging the order responses arrive in. */
 interface Deferred {
   promise: Promise<FamilyDetail>
   arrive: (family: FamilyDetail) => void
@@ -70,7 +70,7 @@ interface Deferred {
 
 function deferred(): Deferred {
   let resolve: (family: FamilyDetail) => void = () => {
-    throw new Error('Promise の実行子がまだ走っていない')
+    throw new Error('The Promise executor has not run yet')
   }
   const promise = new Promise<FamilyDetail>((settle) => {
     resolve = settle
@@ -83,7 +83,7 @@ function deferred(): Deferred {
   }
 }
 
-/** 届いた応答の反映まで含めて流し切る。 */
+/** Flush everything, including applying the arrived responses. */
 async function flush(arrival: () => void): Promise<void> {
   await act(() => {
     arrival()
@@ -91,14 +91,14 @@ async function flush(arrival: () => void): Promise<void> {
   })
 }
 
-/** 状態をそのまま文字にして出す（描き分けは各画面の責務なのでここでは見ない）。 */
+/** Print the state as text (how it is rendered is each screen's job, so not checked here). */
 function Probe() {
   const { family, failed, loading } = useFamily()
   if (loading) return <p>loading</p>
   return <p>{failed ? 'failed' : (family?.name ?? 'none')}</p>
 }
 
-/** 画面を移るところまで見たいので、行き先へのリンクを添えて描く。 */
+/** Renders with a link to a destination, to cover moving between screens. */
 function renderProvider(scopes = ['family:view']) {
   return render(
     <AuthContext.Provider value={authValueOf(scopes)}>
@@ -118,7 +118,7 @@ describe('FamilyProvider', () => {
     view.mockReset()
   })
 
-  it('所属する家族を読む', async () => {
+  it('loads the family the user belongs to', async () => {
     list.mockResolvedValue([SUMMARY])
     view.mockResolvedValue(DETAIL)
     renderProvider()
@@ -126,21 +126,21 @@ describe('FamilyProvider', () => {
     expect(await screen.findByText('ほその家')).toBeInTheDocument()
   })
 
-  it('family:view を持たない人には引きに行かない', async () => {
+  it('does not fetch for people without family:view', async () => {
     renderProvider([])
 
     expect(await screen.findByText('none')).toBeInTheDocument()
     expect(list).not.toHaveBeenCalled()
   })
 
-  it('最初の取得に失敗したら、読めなかったと伝える（「所属していない」ではない）', async () => {
+  it('reports a load failure when the first fetch fails (not "not a member")', async () => {
     list.mockRejectedValue(new Error('offline'))
     renderProvider()
 
     expect(await screen.findByText('failed')).toBeInTheDocument()
   })
 
-  it('手元に戻ってきたら読み直す', async () => {
+  it('reloads on return', async () => {
     list.mockResolvedValue([SUMMARY])
     view.mockResolvedValueOnce(DETAIL).mockResolvedValue({ ...DETAIL, name: 'ほその家（改名）' })
     renderProvider()
@@ -151,7 +151,7 @@ describe('FamilyProvider', () => {
     expect(await screen.findByText('ほその家（改名）')).toBeInTheDocument()
   })
 
-  it('画面を移るたびに読み直す（1 回きりだと別の端末で足された分が出てこない）', async () => {
+  it('reloads on every screen change (fetching once misses points added elsewhere)', async () => {
     list.mockResolvedValue([SUMMARY])
     view.mockResolvedValueOnce(DETAIL).mockResolvedValue({ ...DETAIL, name: 'ほその家（改名）' })
     renderProvider()
@@ -162,7 +162,7 @@ describe('FamilyProvider', () => {
     expect(await screen.findByText('ほその家（改名）')).toBeInTheDocument()
   })
 
-  it('追い越された応答で新しい内容を上書きしない', async () => {
+  it('does not overwrite newer content with an overtaken response', async () => {
     const late = deferred()
     list.mockResolvedValue([SUMMARY])
     view
@@ -170,7 +170,7 @@ describe('FamilyProvider', () => {
       .mockResolvedValue({ ...DETAIL, name: 'ほその家（改名）' })
     renderProvider()
 
-    // 最初の取得が届かないうちに 2 回目を始め、そちらが先に届く
+    // Start a second fetch before the first arrives, and the second arrives first
     fireEvent.click(screen.getByRole('link', { name: '家族設定へ' }))
     await screen.findByText('ほその家（改名）')
 
@@ -181,7 +181,7 @@ describe('FamilyProvider', () => {
     expect(screen.getByText('ほその家（改名）')).toBeInTheDocument()
   })
 
-  it('追い越された取得が先に終わっても、読み込み中を解かない', async () => {
+  it('does not end loading even if an overtaken fetch finishes first', async () => {
     const first = deferred()
     const second = deferred()
     list.mockResolvedValue([SUMMARY])
@@ -196,8 +196,8 @@ describe('FamilyProvider', () => {
       expect(view).toHaveBeenCalledTimes(2)
     })
 
-    // 捨てた結果で読み込み中を解くと、まだ何も入っていない状態が
-    // 「家族がない・子どもがいない」として画面に出てしまう
+    // Ending loading with a discarded result would show the still-empty state
+    // as "no family / no children" on screen
     await flush(() => {
       first.arrive(DETAIL)
     })
@@ -209,7 +209,7 @@ describe('FamilyProvider', () => {
     expect(screen.getByText('ほその家（改名）')).toBeInTheDocument()
   })
 
-  it('読み直しに失敗しても、読めている家族は捨てない', async () => {
+  it('keeps the loaded family even when a reload fails', async () => {
     list.mockResolvedValueOnce([SUMMARY]).mockRejectedValue(new Error('offline'))
     view.mockResolvedValue(DETAIL)
     renderProvider()
@@ -220,8 +220,8 @@ describe('FamilyProvider', () => {
     await waitFor(() => {
       expect(list).toHaveBeenCalledTimes(2)
     })
-    // 残高も子への入口も、この家族から組み立てられる。消すと家族から外された
-    // ようにしか見えない
+    // Balances and child entries are built from this family. Clearing it would look like
+    // being removed from the family
     expect(screen.getByText('ほその家')).toBeInTheDocument()
   })
 })

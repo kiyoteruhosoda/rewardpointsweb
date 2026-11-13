@@ -1,13 +1,13 @@
 /**
- * 画面上端の枠。アプリ名と、ログイン中のアカウントに関わる操作だけを置く。
+ * The frame at the top of the screen. Holds only the app name and actions for the signed-in account.
  *
- * 言語・テーマの切り替えはここではなくプロフィール設定（ProfilePage）に置いている。
- * 狭い画面ではこの行に収まらず、選択肢の文字数で幅が決まる `<select>` が 2 つ並ぶと
- * タイトルまで押し出されるため。
+ * Language/theme switching is in profile settings (ProfilePage), not here.
+ * On narrow screens it would not fit on this row; two `<select>`s whose width depends on option text
+ * would push even the title out.
  *
- * アカウントへの入口は、狭い画面では頭文字の丸だけにする（表示は index.css）。
- * 利用者名は長さがまちまちで、長い名前ほど右側を占めてタイトルを押し出すため。
- * 読み上げ・マウスカーソルには利用者名が残る（`aria-label` / `title`）。
+ * On narrow screens the account entry is just a circle with the initial (display in index.css).
+ * User names vary in length, and longer names take up the right side and push the title out.
+ * The user name remains for screen readers and the mouse cursor (`aria-label` / `title`).
  */
 import { Link } from 'react-router-dom'
 
@@ -21,10 +21,10 @@ interface Props {
 }
 
 /**
- * 丸に出す頭文字。
+ * Initial shown in the circle.
  *
- * 絵文字や結合文字で始まる名前を途中で切らないよう、コードポイントで取り出す
- * （`username[0]` は壊れた文字になりうる）。
+ * Taken by code point so names starting with emoji or combining characters are not cut midway
+ * (`username[0]` can yield a broken character).
  */
 function initialOf(name: string): string {
   const [first] = Array.from(name.trim())
@@ -37,7 +37,7 @@ export function Header({ navOpen, onToggleNav }: Props) {
 
   return (
     <header className="header">
-      {/* 引き出しの開閉。狭い画面でだけ出す（表示の判定は index.css）。 */}
+      {/* Drawer toggle. Shown only on narrow screens (visibility decided in index.css). */}
       <button
         type="button"
         className="nav-toggle"

@@ -60,10 +60,12 @@ PERMISSION_CODES: Sequence[str] = (
 #             families and points belong to the household parties (member / guest) and admin stays out
 #   member  = parent / adult (member). Creates a family, adds children and records points
 #   guest   = child (guest). Created only by accepting an invitation; only views their own family and ledger
-#   manager = log viewer (screen name; formerly "operator"). Unrelated to family features, never assigned in family flows
+#   manager = log viewer (screen name; formerly "operator"). Unrelated to family features,
+#             never assigned in family flows
 #   operator = display device approver (screen name; formerly "operations admin").
 #              Approves display devices and decides which family is shown on which device (ADR-0047)
-#   display  = display device (not a person). Created by approval; only views the ledgers of all children in the family (ADR-0047)
+#   display  = display device (not a person). Created by approval; only views the ledgers of all
+#              children in the family (ADR-0047)
 _FAMILY_POINT_SCOPES: frozenset[str] = frozenset({"family:view", "family:manage", "point:view", "point:manage"})
 # Scopes admin does not get. Besides families and points, also no approval to show a family on a device
 _OUTSIDE_ADMIN_SCOPES: frozenset[str] = _FAMILY_POINT_SCOPES | {"display:approve"}

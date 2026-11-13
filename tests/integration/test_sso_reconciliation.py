@@ -1,10 +1,10 @@
-"""定期照合（ADR-0040）を実際の SQL で見る。
+"""Look at the periodic reconciliation (ADR-0040) with real SQL.
 
-- 結び付きの列挙は発行者ごとで、並びが安定していること
-- 定期実行の入口が、サービスアカウントの `client_id` が無いときは assay に聞きに行かないこと
-- assay が未結び付け（403）・不調と答えたら、何も変えないこと
-- 通しで、止まった人の SSO のセッションが失効し、⚠ **利用者そのものは有効なまま**であること
-- 何度走らせても失効の行が増えないこと
+- Links are enumerated per issuer, in a stable order
+- The periodic entry point does not ask assay when the service account's `client_id` is missing
+- When assay answers not-bound (403) or is unhealthy, nothing is changed
+- End to end, a stopped person's SSO sessions are revoked and ⚠ **the user themselves stays active**
+- Running it any number of times does not add more revocation rows
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ def test_a_roster_we_could_not_read_changes_nothing(engine: sa.Engine, db_sessio
 def test_a_stopped_user_loses_sso_sessions_but_keeps_the_local_account(
     engine: sa.Engine, db_session: Session, configured: None
 ) -> None:
-    """⚠ この雛形はローカル口座を意図して持つ。IdP の停止でパスワードまで止めない。"""
+    """⚠ This template intentionally keeps local accounts. An IdP suspension does not stop passwords too."""
     dave = _user(db_session, "dave")
     erin = _user(db_session, "erin")
     _link(db_session, dave, "sub-dave")

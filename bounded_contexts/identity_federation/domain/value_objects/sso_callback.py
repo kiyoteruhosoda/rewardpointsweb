@@ -1,6 +1,6 @@
-"""IdP からの戻り（``code`` / ``state`` と、ブラウザが持っている合言葉）。
+"""The return from the IdP (``code`` / ``state`` and the passphrase the browser holds).
 
-ログインの完了と連携の完了（ADR-0036）で同じ 3 つを受け取るので、値としてまとめる。
+Completing a login and completing a link (ADR-0036) receive the same three, so they are grouped as a value.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 class SsoCallback:
     code: str
     state: str
-    #: 送り出したときに Cookie へ置いた合言葉。無ければ照合に落ちる。
+    #: The passphrase put into a cookie when sending the browser out. If absent, matching fails.
     browser_binding: str | None
 
 

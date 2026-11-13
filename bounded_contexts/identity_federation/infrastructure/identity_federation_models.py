@@ -1,7 +1,7 @@
-"""ID 連携コンテキストの SQLAlchemy モデル。
+"""SQLAlchemy models of the identity federation context.
 
-``migrations/env.py`` と ``tests/conftest.py`` がこのモジュールを import して
-メタデータへ登録する（コンテキスト固有モデルの扱い。CLAUDE.md「DDL 管理」）。
+``migrations/env.py`` and ``tests/conftest.py`` import this module to register it
+in the metadata (handling of context-specific models; CLAUDE.md "DDL management").
 """
 
 from __future__ import annotations
@@ -14,10 +14,10 @@ from shared.kernel.database.db import Base
 
 
 class FederatedIdentityRecord(Base):
-    """外部 IdP のアカウントと利用者の結び付き。
+    """Link between an external IdP account and a user.
 
-    鍵は ``(issuer, subject)``。利用者側には一意制約を置かない（1 人が複数の
-    IdP アカウントを持てる）。
+    The key is ``(issuer, subject)``. There is no unique constraint on the user side (one person can
+    have multiple IdP accounts).
     """
 
     __tablename__ = "federated_identities"
@@ -35,10 +35,10 @@ class FederatedIdentityRecord(Base):
 
 
 class SsoLoginSessionRecord(Base):
-    """認可要求の控え（送り出してから戻るまで）。
+    """Record of an authorization request (from sending out until return).
 
-    複数ワーカー構成では送り出したプロセスと戻り先のプロセスが一致しないため、
-    プロセスのメモリではなく DB に置く。
+    With multiple workers, the process that sent the browser out and the one it returns to differ, so
+    this is kept in the DB rather than process memory.
     """
 
     __tablename__ = "sso_login_sessions"
@@ -46,28 +46,28 @@ class SsoLoginSessionRecord(Base):
     state: Mapped[str] = mapped_column(sa.String(64), primary_key=True)
     nonce: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     code_verifier: Mapped[str] = mapped_column(sa.String(128), nullable=False)
-    # 送り出したブラウザの Cookie に置いた合言葉のハッシュ（生の値は保存しない）
+    # Hash of the passphrase put into the sending browser's cookie (the raw value is not stored)
     binding_hash: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     redirect_to: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     expires_at = mapped_column(sa.DateTime(), nullable=False, index=True)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
-    # 連携の往復（ADR-0036）を始めた利用者。ログインの往復では NULL。
+    # The user who started a linking round trip (ADR-0036). NULL for a login round trip.
     #
-    # ⚠ **外部キーを張らない。** この表は短命な控えで、利用者を消したときに
-    #   道連れにする対象ではない（消えた利用者の控えは期限で消える）。
+    # ⚠ **No foreign key.** This table holds short-lived records, not something to cascade
+    #   when a user is deleted (records of deleted users disappear on expiry).
     link_user_id: Mapped[int | None] = mapped_column(BigIntPk, nullable=True)
-    # 画面を出さずに試した往復（prompt=none。ADR-0052）
+    # A round trip tried without showing a screen (prompt=none; ADR-0052)
     silent: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False, default=False, server_default=sa.false())
-    # 切れたログインを続ける往復（見えない枠の中。ADR-0058）。戻りは結果の頁へ送る
+    # A round trip continuing an expired login (inside a hidden frame; ADR-0058). The return goes to the result page
     renewal: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False, default=False, server_default=sa.false())
 
 
 class SsoLoginTicketRecord(Base):
-    """コールバックが発行する 1 回限りの引き換え券（ハッシュのみ保存）。
+    """One-time exchange ticket issued by the callback (only the hash is stored).
 
-    IdP 側のセッション（``issuer`` / ``subject`` / ``session_id``）も一緒に運ぶ。
-    停止の伝播はこの 3 つ組を宛名にして届くので、**券を発行する時点で控えておかないと
-    後から結び付けられない**（ADR-0032）。
+    It also carries the IdP-side session (``issuer`` / ``subject`` / ``session_id``).
+    Revocation propagation arrives addressed by this triple, so **unless it is recorded when the ticket
+    is issued, it cannot be linked later** (ADR-0032).
     """
 
     __tablename__ = "sso_login_tickets"
@@ -82,20 +82,20 @@ class SsoLoginTicketRecord(Base):
     redirect_to: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     issuer: Mapped[str] = mapped_column(sa.String(255), nullable=False, default="")
     subject: Mapped[str] = mapped_column(sa.String(255), nullable=False, default="")
-    #: ID トークンの ``sid``。出さない IdP があるので NULL 可。
+    #: The ID token's ``sid``. Nullable, since some IdPs do not issue it.
     session_id: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
-    #: セッションが始まった時刻。停止の記録はこの時刻と突き合わせる（ADR-0032）。
+    #: The time the session started. Revocation records are matched against it (ADR-0032).
     session_started_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     expires_at = mapped_column(sa.DateTime(), nullable=False, index=True)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
 
 
 class FederatedSessionRevocationRecord(Base):
-    """IdP から届いた「このセッションを止めろ」の記録（ADR-0032）。
+    """Record of a "stop this session" received from the IdP (ADR-0032).
 
-    主キーが ``jti`` なのは、再送を**行の重複としてそのまま弾く**ため
-    （idp の ADR-0024 の送り手は再送でも同じ ``jti`` を使う）。
-    ``session_id`` が NULL の行は、その利用者のすべてのセッションに効く。
+    The primary key is ``jti`` so that resends are **rejected directly as duplicate rows**
+    (the sender of idp ADR-0024 uses the same ``jti`` on resend).
+    A row whose ``session_id`` is NULL applies to all sessions of that user.
     """
 
     __tablename__ = "federated_session_revocations"

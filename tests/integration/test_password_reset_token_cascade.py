@@ -1,9 +1,9 @@
-"""アカウント削除にパスワード再設定トークンが追随することの検証。
+"""Password reset tokens follow account deletion.
 
-``password_reset_tokens.user_id`` の外部キーに ``ON DELETE CASCADE`` が無いと、
-再設定を一度でも申請したアカウントの削除が本番（MariaDB）で外部キーに阻まれて
-失敗する。開発用 SQLite は既定で外部キーを検査しないため、ここでは PRAGMA を
-有効にしたうえでマイグレーション済みスキーマの挙動を確かめる。
+Without ``ON DELETE CASCADE`` on the ``password_reset_tokens.user_id`` foreign key, deleting an
+account that ever requested a reset fails in production (MariaDB), blocked by the foreign key.
+The development SQLite does not check foreign keys by default, so this enables the PRAGMA
+and checks the behaviour of the migrated schema.
 """
 
 from __future__ import annotations

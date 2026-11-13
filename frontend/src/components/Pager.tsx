@@ -1,8 +1,8 @@
 /**
- * 長い一覧をページに分けて送る（前へ・次へ）。
+ * Splits a long list into pages (previous / next).
  *
- * 1 ページしか無いときは何も出さない。ページの数え方（何件ずつか）は呼び出し側が
- * `usePaged` で決め、この部品は送るボタンと「いま何ページ目か」だけを受け持つ。
+ * Shows nothing when there is only one page. How pages are counted (how many items each) is decided
+ * by the caller via `usePaged`; this component only handles the buttons and "which page we are on".
  */
 import { useI18n } from '../i18n'
 

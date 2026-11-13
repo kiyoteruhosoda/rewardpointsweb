@@ -1,19 +1,19 @@
 /**
- * 招待コードでアカウントを作る画面（未認証で開く）。
+ * Screen for creating an account with an invitation code (opened unauthenticated).
  *
- * 子アカウントの入り口はここだけ。子ども自身では作れず、親が参加を用意して
- * 招待コードを渡した場合にのみ成立する（ADR-0011）。メールアドレスは尋ねない。
+ * This is the only entry for child accounts. Children cannot create one themselves; it works
+ * only when a parent has prepared a membership and handed over the code (ADR-0011). No email asked.
  *
- * 招待リンクから開かれると、コードは URL の断片（`#code=...`）に載っている
- * （ADR-0025）。入力欄の初期値にして、打ち込まずに始められるようにする。
+ * When opened from an invitation link, the code is in the URL fragment (`#code=...`)
+ * (ADR-0025). It becomes the input's initial value so they can start without typing it.
  *
- * ⚠ **SSO があるとき、親の招待はここで使えない**（ADR-0048）。大人のアカウントは
- * SSO で入ったときに作る 1 つだけにする。断られたら下の「ログインして参加する」へ進む。
+ * ⚠ **With SSO, parent invitations cannot be used here** (ADR-0048). An adult has only the one
+ * account created on SSO sign-in. If refused, proceed to "sign in and join" below.
  *
- * すでにアカウントを持つ人はここでは作れない（所属できる家族は 1 つまで —
- * ADR-0013）。その場合はログインしてから家族の画面で参加する経路になるため、
- * 入力済みの招待コードを持たせてログインへ送る。行き先で拾えないと
- * 「コードを持っているのに元の画面へ戻される」動線になる。
+ * People who already have an account cannot create one here (at most one family —
+ * ADR-0013). Their path is to sign in and join from the family screen, so they are sent
+ * to login carrying the entered invitation code. If the destination did not pick it up,
+ * they would be "sent back to the original screen despite holding a code".
  */
 import { useState, type SubmitEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -27,7 +27,7 @@ import { families } from '../services/families'
 import { invitationSignInPath, readInvitationCode } from '../services/invitationLink'
 import { useAuth } from '../store/AuthContext'
 
-/** 家族の中での呼び名の上限（DisplayName の MAX_LENGTH と同じ）。 */
+/** Maximum length of the in-family name (same as DisplayName MAX_LENGTH). */
 const DISPLAY_NAME_MAX_LENGTH = 100
 
 export function RedeemInvitationPage() {
@@ -41,7 +41,7 @@ export function RedeemInvitationPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  // 打ち込んだコードはログインの先まで運ぶ。空のまま送っても意味がないので付けない。
+  // Carry the typed code past login. Sending an empty one is pointless, so it is not attached.
   const signInPath = invitationSignInPath(code)
 
   const [submit, submitting] = usePendingAction(async (event: SubmitEvent) => {
@@ -49,7 +49,7 @@ export function RedeemInvitationPage() {
     setError(null)
     try {
       const joined = await families.redeemInvitation(code, username, password, displayName)
-      // 作った直後はまだログインしていない。設定したばかりの資格情報でそのまま入る
+      // Right after creation the user is not signed in yet. Sign in with the credentials just set
       await login(joined.username, password)
       void navigate('/')
     } catch (err) {
@@ -75,9 +75,9 @@ export function RedeemInvitationPage() {
             required
           />
         </label>
-        {/* ここで名乗る名前はアカウントの表示名（プロフィール）。家族の中での呼び名は
-            別に持つ（ADR-0010）ので、親が参加を用意していた場合は親が付けた呼び名の
-            ままになる。案内でも「家族に出る名前」とは言い切らない。 */}
+        {/* The name given here is the account's display name (profile). The in-family name is
+            held separately (ADR-0010), so if a parent prepared the membership it stays as the
+            name the parent gave. The hint does not claim it is "the name shown to the family". */}
         <label>
           {t('join.displayName')}
           <input
@@ -104,7 +104,7 @@ export function RedeemInvitationPage() {
             required
           />
         </label>
-        {/* 長さの下限はサーバーと同じ。欠けると打ち込んだ直後に 422 で跳ね返る。 */}
+        {/* Minimum length matches the server. Without it, input bounces with 422 right after. */}
         <PasswordField
           label={t('join.password')}
           autoComplete="new-password"

@@ -1,8 +1,8 @@
-"""reward_points コンテキストの Pydantic スキーマ。
+"""Pydantic schemas of the reward_points context.
 
-長さ・上限はドメインの値オブジェクトの定数を使う（同じ数字を書き写さない）。
-``role`` はドメインの列挙をそのまま使い、JSON へは値（``"owner"`` 等）が出る。
-OpenAPI にも列挙として現れる。
+Lengths and limits use the constants of the domain value objects (never copy the numbers).
+``role`` uses the domain enum as-is; its values (``"owner"`` etc.) appear in the JSON.
+It also appears as an enum in OpenAPI.
 """
 
 from __future__ import annotations
@@ -47,10 +47,10 @@ from shared.domain.auth.username import MAX_LENGTH as USERNAME_MAX_LENGTH
 
 
 def _non_blank(value: str) -> str:
-    """前後の空白を落とし、空白だけの入力を弾く。
+    """Strip surrounding whitespace and reject whitespace-only input.
 
-    ``min_length=1`` は空白 1 文字を通してしまうため、表示される値は落としてから
-    長さを見る。
+    ``min_length=1`` lets a single space through, so the length is checked after stripping
+    what would be displayed.
     """
     stripped = value.strip()
     if not stripped:
@@ -59,18 +59,19 @@ def _non_blank(value: str) -> str:
 
 
 def _non_zero(value: int) -> int:
-    """0 は台帳に意味を持たない（``CHECK (amount <> 0)``。ADR-0010）。"""
+    """0 is meaningless in a ledger (``CHECK (amount <> 0)``; ADR-0010)."""
     if value == 0:
         raise ValueError("must not be zero")
     return value
 
 
 def _not_a_step_key(value: str) -> str:
-    """段階ごとに分けた鍵の形（``<鍵>#reversal``）は受け取らない。
+    """Reject keys in the per-step split form (``<key>#reversal``).
 
-    台帳の鍵の空間は 1 つ（``UNIQUE (ledger_id, idempotency_key)``）しかない。
-    訂正が内部で作る鍵と同じ形を外から書けると、無関係な記録を「同じ操作の
-    再送」と取り違え、打ち消しを書いたつもりで書けていない状態になる。
+    A ledger has only one key space (``UNIQUE (ledger_id, idempotency_key)``). If clients
+    could send keys of the same form a correction builds internally, an unrelated record
+    could be mistaken for "a resend of the same operation", leaving a reversal that was
+    meant to be written unwritten.
     """
     if is_derived(value):
         raise ValueError(f"must not contain {STEP_SEPARATOR!r}")
@@ -81,7 +82,8 @@ NonBlankStr = Annotated[str, AfterValidator(_non_blank)]
 IdempotencyKeyStr = Annotated[
     NonBlankStr, AfterValidator(_not_a_step_key), Field(max_length=IDEMPOTENCY_KEY_MAX_LENGTH)
 ]
-# 訂正は 1 回で 2 行書き、鍵を段階ごとに分ける。分けた後も列に収まる長さまで
+# A correction writes two rows at once, splitting the key per step. Limit to a length that
+# still fits the column after splitting
 CorrectionKeyStr = Annotated[
     NonBlankStr, AfterValidator(_not_a_step_key), Field(max_length=IDEMPOTENCY_KEY_MAX_BASE_LENGTH)
 ]
@@ -89,13 +91,13 @@ DisplayNameStr = Annotated[NonBlankStr, Field(max_length=DISPLAY_NAME_MAX_LENGTH
 CodeStr = Annotated[NonBlankStr, Field(max_length=64)]
 
 
-# --- 毎日のボーナス（ADR-0024） ----------------------------------------------
+# --- Daily bonus (ADR-0024) --------------------------------------------------
 #
-# 家族の応答（参加者ごと）にも台帳の応答にも載るので、家族より先に置く。
+# Included in both family responses (per member) and ledger responses, so it comes before family.
 
 
 class DailyBonusRequest(BaseModel):
-    """毎日いくつ足すか。加算だけなので符号は持たない（正の数のみ）。"""
+    """How much to add each day. Additions only, so no sign (positive numbers only)."""
 
     amount: Annotated[int, Field(ge=1, le=AMOUNT_MAX)]
     reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
@@ -105,27 +107,27 @@ class DailyBonusResponse(BaseModel):
     ledger_id: int
     amount: int
     reason: str
-    # 最初に渡す日（決めた日の翌日）
+    # First day to grant (the day after it was set)
     starts_on: date
-    # 渡し終えた最後の日。まだ 1 日も渡していなければ null
+    # Last day granted. null if not a single day has been granted yet
     granted_through: date | None
 
 
-# --- イベント（ADR-0042） ----------------------------------------------------
+# --- Reward events (ADR-0042) ------------------------------------------------
 
 
 class RewardEventCreateRequest(BaseModel):
-    """目標・達成でもらえるポイント・達成回数（＝マスの数）。"""
+    """Goal, points earned on completion, and number of achievements (= number of slots)."""
 
     title: Annotated[NonBlankStr, Field(max_length=EVENT_TITLE_MAX_LENGTH)]
     reward_points: Annotated[int, Field(ge=1, le=AMOUNT_MAX)]
     goal_count: Annotated[int, Field(ge=1, le=EVENT_GOAL_COUNT_MAX)]
-    # この日のうちに埋めれば達成（家族の 1 日の区切り）。省略で期限なし
+    # Completed if filled by the end of this day (family's day boundary). Omit for no deadline
     deadline: date | None = None
 
 
 class RewardEventDeadlineRequest(BaseModel):
-    """期限を決め直す。null で期限なし。"""
+    """Reset the deadline. null for no deadline."""
 
     deadline: date | None
 
@@ -141,14 +143,14 @@ class RewardEventResponse(BaseModel):
     title: str
     reward_points: int
     goal_count: int
-    # 番号の小さい順
+    # In ascending number order
     stickers: list[StickerResponse]
-    # マスが埋まった日時。まだなら null
+    # When the slots were filled. null if not yet
     completed_at: UtcDatetime | None
     created_at: UtcDatetime
-    # この日のうちに埋めれば達成。決めていなければ null
+    # Completed if filled by the end of this day. null if unset
     deadline: date | None
-    # 期限を過ぎても埋まっていない（サーバーが家族の 1 日の区切りで判定する）
+    # Past the deadline without being filled (the server judges by the family's day boundary)
     is_expired: bool
 
 
@@ -159,12 +161,12 @@ class RewardEventBoardResponse(BaseModel):
     events: list[RewardEventResponse]
 
 
-# --- 家族 --------------------------------------------------------------------
+# --- Family ------------------------------------------------------------------
 
 
 class FamilyCreateRequest(BaseModel):
     name: Annotated[NonBlankStr, Field(max_length=FAMILY_NAME_MAX_LENGTH)]
-    # 家族の中での自分の呼び名。省略時はアカウントの表示名を使う
+    # The name you go by in the family. Defaults to the account's display name if omitted
     display_name: DisplayNameStr | None = None
 
 
@@ -177,12 +179,12 @@ class MembershipResponse(BaseModel):
     username: str | None
     ledger_id: int | None
     balance: int | None
-    # 毎日のボーナスの設定（ADR-0024）。決めていなければ null。設定を決めるのは
-    # 家族設定の画面なので、参加者ごとにここへ載せる（ADR-0027）
+    # Daily bonus settings (ADR-0024). null if unset. They are decided on the family settings
+    # screen, so they are included here per member (ADR-0027)
     daily_bonus: DailyBonusResponse | None = None
-    # 独立が指示され、子本人の承認待ちか（ADR-0014）
+    # Whether independence was requested and awaits the child's own approval (ADR-0014)
     independence_proposed: bool
-    # 見ている人がこの参加者に対して行える操作。画面はこれを見て操作を出す
+    # Operations the viewer may perform on this member. The UI shows operations based on these
     can_reset_password: bool
     can_propose_independence: bool
     can_remove: bool
@@ -199,7 +201,7 @@ class FamilySummaryResponse(BaseModel):
 class FamilyDetailResponse(BaseModel):
     id: int
     name: str
-    # 家族で決めた約束ごと（ADR-0027）。まだ書いていなければ null
+    # Rules agreed in the family (ADR-0027). null if not written yet
     rules: str | None
     my_membership_id: int
     my_role: FamilyRole
@@ -211,10 +213,10 @@ class FamilyRenameRequest(BaseModel):
 
 
 class FamilyRulesRequest(BaseModel):
-    """家族で決めた約束ごと（ADR-0027）。
+    """Rules agreed in the family (ADR-0027).
 
-    空文字・空白だけの入力は「消す」と同じに扱うので、``NonBlankStr`` は使わない
-    （書いたものを消す道を、別の入口にしない）。
+    Empty or whitespace-only input is treated as "clear", so ``NonBlankStr`` is not used
+    (clearing what was written does not get a separate entry point).
     """
 
     rules: Annotated[str, Field(max_length=FAMILY_RULES_MAX_LENGTH)] | None = None
@@ -225,17 +227,17 @@ class ChildCreateRequest(BaseModel):
 
 
 class MemberOrderRequest(BaseModel):
-    """並べたい順の参加者 ID。その家族の子をちょうど 1 度ずつ並べる。"""
+    """Member IDs in the desired order. Lists each child of the family exactly once."""
 
     membership_ids: list[int]
 
 
-# --- 招待 --------------------------------------------------------------------
+# --- Invitations -------------------------------------------------------------
 
 
 class InvitationCreateRequest(BaseModel):
     role: FamilyRole
-    # role = child の招待では、親が先に作った参加者を必ず指す（ADR-0011）
+    # A role = child invitation always points at the member a parent created beforehand (ADR-0011)
     target_membership_id: int | None = None
 
 
@@ -245,18 +247,18 @@ class InvitationResponse(BaseModel):
     target_membership_id: int | None
     target_display_name: str | None
     expires_at: UtcDatetime
-    # 平文のコードは発行の応答でだけ載る（保存はハッシュのみ）
+    # The plaintext code is only included in the issuing response (only the hash is stored)
     code: str | None
 
 
 class InvitationAcceptRequest(BaseModel):
     code: CodeStr
-    # 参加者を指していない招待（親として加わる場合）でのみ必要
+    # Required only for invitations not pointing at a member (joining as a parent)
     display_name: DisplayNameStr | None = None
 
 
 class InvitationRedeemRequest(BaseModel):
-    """未認証で呼ぶ。招待コードと引き換えにアカウントを作る（ADR-0011）。"""
+    """Called unauthenticated. Creates an account in exchange for an invitation code (ADR-0011)."""
 
     code: CodeStr
     username: Annotated[str, Field(min_length=1, max_length=USERNAME_MAX_LENGTH)]
@@ -279,15 +281,15 @@ class TemporaryPasswordResponse(BaseModel):
     expires_at: UtcDatetime
 
 
-# --- 台帳 --------------------------------------------------------------------
+# --- Ledger ------------------------------------------------------------------
 
 
 class TransactionCreateRequest(BaseModel):
-    # 符号で加算（正）と消費（負）を表す
+    # The sign expresses addition (positive) and spending (negative)
     amount: Annotated[int, Field(ge=-AMOUNT_MAX, le=AMOUNT_MAX), AfterValidator(_non_zero)]
     reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
     idempotency_key: IdempotencyKeyStr
-    # 未指定なら受け付けた時刻（UTC）
+    # If omitted, the time it was received (UTC)
     occurred_at: datetime | None = None
 
 
@@ -296,12 +298,12 @@ class ReversalCreateRequest(BaseModel):
 
 
 class CorrectionCreateRequest(BaseModel):
-    """訂正後の内容（ADR-0022）。書き換えではなく、正しい内容を書き直す。"""
+    """The corrected content (ADR-0022). Not an overwrite; the correct content is written anew."""
 
     amount: Annotated[int, Field(ge=-AMOUNT_MAX, le=AMOUNT_MAX), AfterValidator(_non_zero)]
     reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
     idempotency_key: CorrectionKeyStr
-    # 未指定なら元の記録の発生日時を引き継ぐ
+    # If omitted, inherits the original record's occurrence time
     occurred_at: datetime | None = None
 
 
@@ -312,14 +314,14 @@ class TransactionResponse(BaseModel):
     occurred_at: UtcDatetime
     created_at: UtcDatetime
     reversal_of_id: int | None
-    # 訂正後のレコードなら、言い直した相手の ID（ADR-0022）
+    # For a corrected record, the ID of the record it restates (ADR-0022)
     corrects_id: int | None
     is_reversed: bool
     granted_by: str | None
 
 
 class CorrectionResponse(BaseModel):
-    """1 回の訂正で足された 2 行。元のレコードは履歴に残る。"""
+    """The two rows added by one correction. The original record stays in the history."""
 
     reversal: TransactionResponse
     correction: TransactionResponse
@@ -333,21 +335,21 @@ class LedgerResponse(BaseModel):
     balance: int
     can_modify: bool
     transactions: list[TransactionResponse]
-    # 毎日のボーナスの設定（ADR-0024）。決めていなければ null
+    # Daily bonus settings (ADR-0024). null if unset
     daily_bonus: DailyBonusResponse | None
 
 
-# --- 控え（バックアップ。ADR-0026） ------------------------------------------
+# --- Archives (backup; ADR-0026) ---------------------------------------------
 
-#: 1 つの控えに入れられる参加者と記録の上限。
+#: Upper limits on members and records in one archive.
 #:
-#: 家族の大きさとしては現実離れした数で、通る控えを狭めるためではなく、
-#: 取り込みが 1 リクエストで無限に書けないようにするための蓋。記録の上限は
-#: **控え全体** に掛ける — 台帳ごとに掛けると、参加者の数だけ掛け算で伸びる。
+#: Unrealistically large for a family; not meant to narrow which archives pass, but a cap so
+#: an import cannot write without bound in one request. The record limit applies to the
+#: **whole archive** — applying it per ledger would multiply it by the number of members.
 MAX_ARCHIVED_MEMBERS = 100
 MAX_ARCHIVED_TRANSACTIONS = 20_000
 
-#: ファイルの中だけで通じる名前。DB の ID は載せない（復元先では別物になる）
+#: A name meaningful only inside the file. DB IDs are not included (they differ at the restore destination)
 ArchiveRefStr = Annotated[str, Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")]
 
 
@@ -356,7 +358,7 @@ class ArchivedTransactionDocument(BaseModel):
     amount: Annotated[int, Field(ge=-AMOUNT_MAX, le=AMOUNT_MAX), AfterValidator(_non_zero)]
     reason: Annotated[NonBlankStr, Field(max_length=REASON_MAX_LENGTH)]
     occurred_at: UtcDatetime
-    # 記録した参加者の ref。毎日のボーナスと、家族を離れた人の行では null
+    # Ref of the recording member. null for daily bonuses and rows by people who left the family
     granted_by: ArchiveRefStr | None = None
     reverses: ArchiveRefStr | None = None
     corrects: ArchiveRefStr | None = None
@@ -370,7 +372,7 @@ class ArchivedDailyBonusDocument(BaseModel):
 
 
 class ArchivedLedgerDocument(BaseModel):
-    # 書いた順（古い行が先）。打ち消し・訂正は必ず相手より後に並ぶ
+    # In writing order (oldest first). Reversals/corrections always come after their target
     transactions: Annotated[list[ArchivedTransactionDocument], Field(max_length=MAX_ARCHIVED_TRANSACTIONS)]
     daily_bonus: ArchivedDailyBonusDocument | None = None
 
@@ -379,32 +381,33 @@ class ArchivedMemberDocument(BaseModel):
     ref: ArchiveRefStr
     display_name: DisplayNameStr
     role: FamilyRole
-    # 台帳を持つのは role = child だけ
+    # Only role = child has a ledger
     ledger: ArchivedLedgerDocument | None = None
 
 
 class FamilyArchiveDocument(BaseModel):
-    """家族まるごとの控え。書き出しの応答であり、取り込みの本文でもある。
+    """A whole-family archive. Both the export response and the import body.
 
-    同じ形を両方向で使うので、書き出した JSON をそのまま送り返せば元に戻る。
+    The same shape is used in both directions, so sending back the exported JSON as-is
+    restores it.
     """
 
-    # 別のアプリの JSON を取り違えて渡されたときに気付くための印
+    # A marker to notice when another app's JSON is passed by mistake
     format: str
     version: int
     exported_at: UtcDatetime
     family_name: Annotated[NonBlankStr, Field(max_length=FAMILY_NAME_MAX_LENGTH)]
-    # 家族で決めた約束ごと（ADR-0027）。版 1 の控えには無いので既定は None
+    # Rules agreed in the family (ADR-0027). Absent in version 1 archives, so defaults to None
     family_rules: Annotated[str, Field(max_length=FAMILY_RULES_MAX_LENGTH)] | None = None
     members: Annotated[list[ArchivedMemberDocument], Field(max_length=MAX_ARCHIVED_MEMBERS)]
 
     @model_validator(mode="after")
     def _within_the_transaction_cap(self) -> FamilyArchiveDocument:
-        """記録の上限は控え全体で見る。
+        """The record limit is checked across the whole archive.
 
-        台帳ごとに掛けると、参加者を並べるだけで上限が掛け算で伸びる（100 人 ×
-        20,000 行）。取り込みは 1 リクエストの中で 1 行ずつ書くので、通した分だけ
-        DB とワーカーを占める。
+        Applied per ledger, merely listing members would multiply the limit (100 people ×
+        20,000 rows). An import writes row by row within one request, so whatever passes
+        occupies the DB and a worker accordingly.
         """
         written = sum(len(member.ledger.transactions) for member in self.members if member.ledger)
         if written > MAX_ARCHIVED_TRANSACTIONS:
@@ -413,7 +416,7 @@ class FamilyArchiveDocument(BaseModel):
 
 
 class ImportedFamilyResponse(BaseModel):
-    """取り込みの結果。戻った量を人が確かめられるように数を返す。"""
+    """Import result. Counts are returned so a person can check how much was restored."""
 
     family_id: int
     name: str
