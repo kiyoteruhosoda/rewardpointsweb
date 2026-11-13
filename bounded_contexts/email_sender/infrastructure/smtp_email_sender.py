@@ -1,4 +1,4 @@
-"""``IEmailSender`` の SMTP 実装（接続設定はシステム設定から取得）。"""
+"""SMTP implementation of ``IEmailSender`` (connection settings come from system settings)."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class SmtpEmailSender(IEmailSender):
             client.quit()
 
     def check_reachable(self) -> None:
-        # 送るときと同じところ（接続・TLS・ログイン）まで進めて、何も送らずに閉じる
+        # Go as far as a real send does (connect, TLS, login), then close without sending
         self._connect().quit()
 
     @staticmethod

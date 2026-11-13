@@ -1,13 +1,13 @@
-"""link round trip (連携の往復であることを控えに持たせる)
+"""link round trip (record in the session that the round trip is for linking)
 
-``sso_login_sessions`` に ``link_user_id`` を足す（ADR-0036）。入っていれば
-**既に入っている利用者へ結び付けるための往復**、入っていなければログインの往復。
+Adds ``link_user_id`` to ``sso_login_sessions`` (ADR-0036). When set, it is
+**a round trip to link to a user already signed in**; when not set, it is a login round trip.
 
-⚠ **外部キーは張らない。** この表は短命な控えで、利用者を消したときに道連れに
-する対象ではない（消えた利用者の控えは期限で消える）。
+⚠ **No foreign key.** This table holds short-lived records and is not something to take
+down with a deleted user (records of deleted users expire on their own).
 
-⚠ **移行より前に始まった往復は ``NULL`` になる。** それはログインの往復なので
-正しい ——連携が入る前の往復は必ずログインである。
+⚠ **Round trips started before the migration become ``NULL``.** They are login round trips, so that is
+correct - a round trip from before linking existed is always a login.
 
 Revision ID: link_round_trip
 Revises: password_is_optional

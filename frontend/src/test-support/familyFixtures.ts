@@ -1,9 +1,9 @@
 /**
- * 家族まわりのテストデータ。
+ * Test data for families.
  *
- * ナビゲーション・ダッシュボード・家族設定はどれも同じ `FamilyDetail` を見るので、
- * 組み立ても 1 か所に置く。既定は「アカウントのある子が 1 人いる家族を owner が
- * 見ている」状態で、検証したい違いだけを上書きする。
+ * Navigation, the dashboard and family settings all read the same `FamilyDetail`,
+ * so it is built in one place. The default is "an owner viewing a family with one child
+ * who has an account"; override only the difference under test.
  */
 import type { DailyBonus, FamilyDetail, FamilyRole, Membership } from '../services/families'
 

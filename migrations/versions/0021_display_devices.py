@@ -1,19 +1,19 @@
-"""display devices (表示端末のペアリング)
+"""display devices (display device pairing)
 
-表示端末（サイネージ）をペアリングで入れる（ADR-0047）。
+Adds display devices (signage) through pairing (ADR-0047).
 
-- 家族の中の立場に ``display`` を足す。``family_memberships.role`` と
-  ``family_invitations.role`` は ``native_enum=False`` の VARCHAR で、長さが
-  いちばん長い値（``parent`` の 6 字）で決まっている。``display`` は 7 字なので広げる
-- ペアリング（``display_pairings``）と端末の資格情報（``display_credentials``）の表を足す
-- scope ``display:approve`` と、ロール ``operator``（運用管理者）・``display``（表示端末）を足す。
-  ⚠ **admin には ``display:approve`` を付けない**（admin は家庭の台帳を見ない。ADR-0018）
+- Adds ``display`` as a position within a family. ``family_memberships.role`` and
+  ``family_invitations.role`` are ``native_enum=False`` VARCHARs whose length is set by
+  the longest value (``parent``, 6 characters). ``display`` is 7 characters, so widen them
+- Adds tables for pairings (``display_pairings``) and device credentials (``display_credentials``)
+- Adds the scope ``display:approve`` and the roles ``operator`` (operations administrator) and ``display`` (display device).
+  ⚠ **admin does not get ``display:approve``** (admin does not look at household ledgers; ADR-0018)
 
-付与はこのファイルが持つ定数で行う（0005・0010 と同じ方針。正本の master_data は
-「今あるべき姿」で、このリビジョンの姿ではない）。ロールは id を決め打たずに名前で足す
-——管理画面でロールを作った環境では、5・6 番がもう使われていることがある。
+Grants use constants this file holds (same approach as 0005 and 0010; master_data, the source of truth, is
+"how things should be now", not the state at this revision). Roles are added by name without hard-coding ids
+- in an environment where roles were created in the admin console, ids 5 and 6 may already be taken.
 
-定義の正本は ``bounded_contexts/display_devices/infrastructure/display_devices_models.py``。
+The definitions' source of truth is ``bounded_contexts/display_devices/infrastructure/display_devices_models.py``.
 
 Revision ID: display_devices
 Revises: reward_event_deadline
@@ -39,7 +39,7 @@ _ROLE_AFTER = sa.Enum("owner", "parent", "child", "display", name="family_role",
 _ROLE_TABLES = ("family_memberships", "family_invitations")
 
 _APPROVE = "display:approve"
-# このリビジョンで足すロールと、その scope
+# Roles added in this revision, and their scopes
 _ADDED_ROLES: dict[str, tuple[str, ...]] = {
     "operator": ("dashboard:view", "gui:view", _APPROVE),
     "display": ("dashboard:view", "gui:view", "family:view", "point:view"),
@@ -75,7 +75,7 @@ def _create_tables() -> None:
         sa.UniqueConstraint("user_code_hash"),
         sa.UniqueConstraint("device_code_hash"),
     )
-    # 期限切れの掃除がペアリングを始めるたびに走る。期限で引ける索引を置く
+    # Cleanup of expired rows runs every time a pairing starts. Add an index to look them up by expiry
     op.create_index("ix_display_pairings_expires_at", "display_pairings", ["expires_at"])
     op.create_index("ix_display_pairings_approved_account_id", "display_pairings", ["approved_account_id"])
     op.create_table(
@@ -122,8 +122,8 @@ def _seed_roles(bind: Connection) -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
-    # 戻した後の列には ``display`` が入らない。表示端末の参加を先に外す
-    # （アカウントはロールを失って残る。管理画面から消せる）
+    # The reverted column cannot hold ``display``. Remove display device memberships first
+    # (the accounts remain without the role; they can be deleted from the admin console)
     bind.execute(_memberships.delete().where(_memberships.c.role == "display"))
     _drop_roles(bind)
     op.drop_table("display_credentials")

@@ -1,4 +1,4 @@
-"""``IItemRepository`` の SQLAlchemy 実装。"""
+"""SQLAlchemy implementation of ``IItemRepository``."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ class SqlItemRepository(IItemRepository):
         self._session = session
 
     def save(self, name: str) -> Item:
-        validated_name = ItemName(name)  # ドメイン不変条件を DB 書き込み前に強制する
+        validated_name = ItemName(name)  # enforce domain invariants before writing to the DB
         row = ItemModel(name=validated_name.value)
         self._session.add(row)
         self._session.flush()

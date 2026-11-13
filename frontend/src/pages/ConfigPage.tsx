@@ -1,4 +1,4 @@
-/** システム設定画面（環境変数 > DB > デフォルトの解決結果を編集する）。 */
+/** System settings screen (edits the resolved value of env var > DB > default). */
 import { useEffect, useState } from 'react'
 
 import { ActionButton } from '../components/ActionButton'
@@ -17,9 +17,9 @@ interface SettingItem {
   value_type: 'string' | 'integer' | 'boolean' | 'list'
   secret?: boolean
   choices?: [value: string, label: string][]
-  /** 空でなければ、反映にそのサービスの再起動が必要。 */
+  /** If not empty, applying the change requires restarting that service. */
   restart_scopes: string[]
-  /** 環境変数だけで決める設定。見るだけ（ADR-0056）。 */
+  /** A setting decided by environment variables only. Read-only (ADR-0056). */
   env_only?: boolean
   value: unknown
   default: unknown
@@ -56,8 +56,8 @@ export function ConfigPage() {
   }, [])
 
   const [save, saving] = usePendingAction(async () => {
-    // 保存はサーバー側で拒まれることがある（設定どうしの組み合わせが不正な場合）。
-    // 捨てると画面には何も出ず、保存できたように見えてしまう。
+    // Saving can be rejected by the server (when a combination of settings is invalid).
+    // Discarding the error shows nothing on screen and makes it look saved.
     try {
       const result = await api.put<SaveResult>('/api/admin/config', { values: edits })
       await reload()
@@ -83,8 +83,8 @@ export function ConfigPage() {
 
   const currentValue = (item: SettingItem) => (item.key in edits ? edits[item.key] : item.value)
 
-  // 辞書に訳があればそれを使い、無ければサーバーが返した英語をそのまま出す。
-  // 設定キーを追加したときに、訳を足すまでのあいだ画面が壊れないようにする。
+  // Use the translation if the dictionary has one; otherwise show the English the server returned.
+  // Keeps the screen from breaking after a settings key is added and before its translation is.
   const translateOr = (key: string, fallback: string) => {
     const translated = t(key)
     return translated === key ? fallback : translated
@@ -95,7 +95,7 @@ export function ConfigPage() {
   const choiceLabelFor = (item: SettingItem, value: string, label: string) =>
     translateOr(`config.choice.${item.key}.${value}`, label)
 
-  /** 任意の設定値を表示用の文字列にする（`[object Object]` を出さない）。 */
+  /** Turns any setting value into a display string (never shows `[object Object]`). */
   const asText = (value: unknown): string => {
     if (value === null || value === undefined) return ''
     if (typeof value === 'string') return value
@@ -117,8 +117,8 @@ export function ConfigPage() {
 
   const categories = [...new Set(items.map((i) => i.category))]
 
-  // パスキーの 2 つは、値どうしが合っていても開いている URL と食い違えば使えない。
-  // 照らし合わせるために取り出す（編集中の値で見るので、直した先も即座に分かる）。
+  // The two passkey settings are unusable if they disagree with the open URL, even when consistent with each other.
+  // Extract them for comparison (uses the values being edited, so a fix shows up immediately).
   const rpIdItem = items.find((item) => item.key === 'WEBAUTHN_RP_ID')
   const originItem = items.find((item) => item.key === 'WEBAUTHN_ORIGIN')
   const passkeyDomain =

@@ -1,8 +1,8 @@
-"""ロール管理 API（要 ``role:manage``）。
+"""Role management API (requires ``role:manage``).
 
-権限の割り当ての変更はアプリログへ残す（誰が何を触れるようになったかは、後から
-必ず問われる）。識別子と権限コードは本文に入れる——``log`` テーブルへ入るのは
-列にある項目だけで、``extra`` の残りは stdout の JSON にしか出ない。
+Changes to permission assignments are recorded in the app log (who gained access to what
+will always be asked later). IDs and permission codes go in the message text: only columns
+reach the ``log`` table, and the rest of ``extra`` appears only in the stdout JSON.
 """
 
 from __future__ import annotations
@@ -80,8 +80,8 @@ def update_role(role_id: int, body: RoleUpdateRequest, db: DbDep) -> RoleRespons
     if body.permissions is not None:
         role.permissions = _resolve_permissions(db, body.permissions)
     db.flush()
-    # 権限は「変わった後の姿」を残す。差分だけでは、後から見たときにその時点で
-    # 何が許可されていたかを組み立て直せない。
+    # Record the permissions as they are after the change. A diff alone cannot later
+    # reconstruct what was allowed at that point in time.
     logger.info(
         "admin_role_updated: role_id=%s name=%s permissions=%s",
         role_id,

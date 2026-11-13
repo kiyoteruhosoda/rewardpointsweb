@@ -1,4 +1,4 @@
-/** テーマの初期選択・OS 追従・切り替えの反映。 */
+/** Initial theme choice, following the OS, and applying switches. */
 import { act, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -11,8 +11,8 @@ function settingsOf(overrides: Partial<UiSettings> = {}): UiSettings {
 }
 
 /**
- * `matchMedia` を差し替え、OS 側の切り替えを発火できるようにする。
- * jsdom の実装は `change` を通知しないため、購読の検証には差し替えが必要。
+ * Replaces `matchMedia` so OS-side switches can be fired.
+ * jsdom's implementation does not emit `change`, so verifying the subscription needs a replacement.
  */
 function stubMatchMedia(matches: boolean) {
   const listeners = new Set<(event: MediaQueryListEvent) => void>()
@@ -72,7 +72,7 @@ describe('ThemeProvider', () => {
     document.documentElement.removeAttribute('data-theme')
   })
 
-  it('利用者の選択（localStorage）を最優先する', () => {
+  it('gives top priority to the user choice (localStorage)', () => {
     stubMatchMedia(false)
     localStorage.setItem('theme', 'dark')
     renderWith(settingsOf({ default_theme: 'light' }))
@@ -80,26 +80,26 @@ describe('ThemeProvider', () => {
     expect(screen.getByTestId('resolved').textContent).toBe('dark')
   })
 
-  it('未選択ならサーバーの既定値を使う', () => {
+  it('uses the server default when nothing is chosen', () => {
     stubMatchMedia(false)
     renderWith(settingsOf({ default_theme: 'light' }))
     expect(screen.getByTestId('theme').textContent).toBe('light')
   })
 
-  it('既定値が不正ならライトに落ちる（OS がダークでも従わない）', () => {
+  it('falls back to light when the default is invalid (even if the OS is dark)', () => {
     stubMatchMedia(true)
     renderWith(settingsOf({ default_theme: 'solarized' }))
     expect(screen.getByTestId('theme').textContent).toBe('light')
     expect(screen.getByTestId('resolved').textContent).toBe('light')
   })
 
-  it('system のときは OS の配色を解決結果にする', () => {
+  it('resolves to the OS color scheme for system', () => {
     stubMatchMedia(true)
     renderWith(settingsOf({ default_theme: 'system' }))
     expect(screen.getByTestId('resolved').textContent).toBe('dark')
   })
 
-  it('system のまま OS 側が切り替わると追従する', () => {
+  it('follows OS-side switches while on system', () => {
     const media = stubMatchMedia(false)
     renderWith(settingsOf({ default_theme: 'system' }))
     expect(screen.getByTestId('resolved').textContent).toBe('light')
@@ -110,7 +110,7 @@ describe('ThemeProvider', () => {
     expect(screen.getByTestId('resolved').textContent).toBe('dark')
   })
 
-  it('明示的に選んだテーマは OS の変化に影響されない', () => {
+  it('an explicitly chosen theme is unaffected by OS changes', () => {
     const media = stubMatchMedia(false)
     localStorage.setItem('theme', 'light')
     renderWith(settingsOf())
@@ -121,14 +121,14 @@ describe('ThemeProvider', () => {
     expect(screen.getByTestId('resolved').textContent).toBe('light')
   })
 
-  it('解決結果を <html data-theme> と colorScheme へ反映する', () => {
+  it('applies the resolved value to <html data-theme> and colorScheme', () => {
     stubMatchMedia(true)
     renderWith(settingsOf({ default_theme: 'system' }))
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(document.documentElement.style.colorScheme).toBe('dark')
   })
 
-  it('選択を localStorage に保存する', () => {
+  it('saves the choice to localStorage', () => {
     stubMatchMedia(false)
     renderWith(settingsOf({ default_theme: 'dark' }))
 
@@ -139,7 +139,7 @@ describe('ThemeProvider', () => {
     expect(screen.getByTestId('resolved').textContent).toBe('light')
   })
 
-  it('アンマウント時に OS の購読を解除する', () => {
+  it('unsubscribes from the OS on unmount', () => {
     const media = stubMatchMedia(false)
     const { unmount } = renderWith(settingsOf())
     expect(media.listenerCount()).toBe(1)
@@ -150,7 +150,7 @@ describe('ThemeProvider', () => {
 })
 
 describe('useTheme', () => {
-  it('Provider の外で使うと例外を投げる', () => {
+  it('throws when used outside the Provider', () => {
     stubMatchMedia(false)
     try {
       withSuppressedRenderErrors(() => {

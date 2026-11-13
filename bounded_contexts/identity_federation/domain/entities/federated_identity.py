@@ -1,7 +1,7 @@
-"""外部 IdP のアカウントと、このアプリの利用者の結び付き。
+"""Link between an external IdP account and a user of this app.
 
-鍵は ``(issuer, subject)``。メールアドレスは変わり得るので鍵にしない。
-1 人の利用者が複数の IdP を持てるよう、利用者側には一意制約を置かない。
+The key is ``(issuer, subject)``. The email address can change, so it is not the key.
+So that one user can have multiple IdPs, there is no unique constraint on the user side.
 """
 
 from __future__ import annotations
@@ -15,10 +15,10 @@ class FederatedIdentity:
     issuer: str
     subject: str
     user_id: int
-    #: 結び付けた日時。保存されている行を引いたときだけ入る（画面の表示用）。
+    #: When it was linked. Set only when a stored row is loaded (for display on screen).
     linked_at: datetime | None = None
-    #: 最後に SSO で入った日時。保存されている行を引いたときだけ入る。
-    #: 定期照合が「どのログインに対する失効か」を決める材料になる（ADR-0040）。
+    #: When the user last signed in via SSO. Set only when a stored row is loaded.
+    #: Used by periodic reconciliation to decide "which login the revocation applies to" (ADR-0040).
     last_login_at: datetime | None = None
 
 

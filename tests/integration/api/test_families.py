@@ -1,4 +1,4 @@
-"""家族を共有単位とする認可（ADR-0009）。"""
+"""Authorization with the family as the unit of sharing (ADR-0009)."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def test_siblings_cannot_see_each_other(client: TestClient, parent: Account) -> 
 
     detail = client.get(f"/api/families/{family_id}", headers=child_headers).json()
     by_name = {m["display_name"]: m for m in detail["memberships"]}
-    # 同じ家族に誰がいるかは見えてよいが、兄弟の残高・台帳は見えない
+    # Who is in the same family may be visible, but siblings' balances and ledgers are not
     assert by_name["あに"]["ledger_id"] is not None
     assert by_name["おとうと"]["ledger_id"] is None
     assert by_name["おとうと"]["balance"] is None
@@ -110,7 +110,7 @@ def test_child_cannot_modify_own_ledger(client: TestClient, parent: Account) -> 
     assert ledger.status_code == 200
     assert ledger.json()["can_modify"] is False
 
-    # scope（guest ロールに point:manage が無い）で止まる
+    # Stopped by scope (the guest role has no point:manage)
     denied = client.post(
         f"/api/families/{family_id}/ledgers/{ledger_id}/transactions",
         headers=child_headers,
@@ -119,11 +119,11 @@ def test_child_cannot_modify_own_ledger(client: TestClient, parent: Account) -> 
     assert denied.status_code == 403
 
 
-# --- 家族を作れるのは親（member）だけ（ADR-0018） ----------------------------
+# --- Only parents (member) can create a family (ADR-0018) -------------------
 
 
 def _linked_child_headers(client: TestClient, parent: Account, family_id: int, *, username: str) -> dict[str, str]:
-    """アカウントの結び付いた子（guest ロール）を用意してログインする。"""
+    """Set up a child with a linked account (guest role) and log in."""
     child = add_child(client, parent.headers, family_id, display_name=username)
     invitation = issue_invitation(
         client, parent.headers, family_id, role="child", target_membership_id=int(str(child["id"]))
@@ -137,9 +137,9 @@ def _linked_child_headers(client: TestClient, parent: Account, family_id: int, *
 
 
 def test_member_creates_and_manages_without_relogin(client: TestClient, parent: Account) -> None:
-    """親（member）は最初から family:manage / point:manage を持つ。
+    """A parent (member) has family:manage / point:manage from the start.
 
-    作成した直後、同じトークンのまま子の追加もポイントの記録もできる。
+    Right after creating, they can add children and record points with the same token.
     """
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="こども")
@@ -148,7 +148,7 @@ def test_member_creates_and_manages_without_relogin(client: TestClient, parent: 
 
 
 def test_child_cannot_create_a_family(client: TestClient, parent: Account) -> None:
-    """子（guest ロール）は family:manage を持たないので、入口の scope で止まる。"""
+    """A child (guest role) has no family:manage, so they are stopped by the scope at the entrance."""
     family_id = create_family(client, parent.headers)
     child_headers = _linked_child_headers(client, parent, family_id, username="taro")
 
@@ -159,11 +159,11 @@ def test_child_cannot_create_a_family(client: TestClient, parent: Account) -> No
 def test_guest_cannot_accept_a_parent_invitation(
     client: TestClient, admin_headers: dict[str, str], parent: Account
 ) -> None:
-    """親（parent）の招待を使えるのは保護者になれるアカウントだけ。
+    """Only accounts that can be guardians can use a parent invitation.
 
-    未所属の guest は運用上は生まれない（ADR-0018）が、管理者が手動で作った
-    場合でも「名ばかりの保護者」にはなれない。断られた招待コードは消費されず、
-    正しい相手（member）が改めて使える。
+    An unaffiliated guest does not arise in normal operation (ADR-0018), but even one
+    created by hand by an admin cannot become a "guardian in name only". The refused
+    invitation code is not consumed, and the right person (member) can use it afterwards.
     """
     family_id = create_family(client, parent.headers)
     outsider = create_account(client, admin_headers, username="visitor", role="guest")
@@ -188,7 +188,7 @@ def test_guest_cannot_accept_a_parent_invitation(
 
 
 def test_removing_a_linked_child_deletes_the_account(client: TestClient, parent: Account) -> None:
-    """除名は縁切り。子アカウントは家族の参加としてだけ存在するので、一緒に消す。"""
+    """Removal cuts ties. A child account exists only as a family membership, so it is deleted too."""
     family_id = create_family(client, parent.headers)
     child_headers = _linked_child_headers(client, parent, family_id, username="taro")
     detail = client.get(f"/api/families/{family_id}", headers=parent.headers).json()
@@ -197,40 +197,40 @@ def test_removing_a_linked_child_deletes_the_account(client: TestClient, parent:
     removed = client.delete(f"/api/families/{family_id}/memberships/{membership_id}", headers=parent.headers)
     assert removed.status_code == 204, removed.text
 
-    # アカウントごと消えている: 再ログインはできない
+    # The account itself is gone: logging in again is impossible
     failed = client.post("/api/auth/login", json={"username": "taro", "password": "taro-pass-123"})
     assert failed.status_code == 401
-    # ⚠ **古いトークンは寿命まで読める**（ADR-0037。検証は DB を引かない）。
-    #   家族はもう引けないので、見えるものは無い。
+    # ⚠ **An old token stays readable until it expires** (ADR-0037; validation does not hit the DB).
+    #   The family can no longer be looked up, so nothing is visible.
     assert client.get("/api/families", headers=child_headers).json() == []
-    # 出し直す経路は通らない ——消えた利用者に新しいトークンは出ない。
+    # The reissue path does not go through: a deleted user gets no new token.
     settled = client.post("/api/auth/login", json={"username": "taro", "password": "taro-pass-123"})
     assert settled.status_code == 401
 
 
 def test_removing_an_unlinked_child_keeps_other_accounts(client: TestClient, parent: Account) -> None:
-    """アカウントの無い子の除名は従来どおり参加と空の台帳だけを消す。"""
+    """Removing a child without an account deletes only the membership and the empty ledger, as before."""
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
 
     removed = client.delete(f"/api/families/{family_id}/memberships/{child['id']}", headers=parent.headers)
     assert removed.status_code == 204, removed.text
 
-    # 親のアカウントは無事
+    # The parent's account is intact
     assert client.get("/api/families", headers=parent.headers).status_code == 200
 
 
 def test_admin_has_no_family_access(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """システム管理者は家族・ポイントに関与しない（ADR-0018）。"""
+    """The system admin has no part in families or points (ADR-0018)."""
     assert client.get("/api/families", headers=admin_headers).status_code == 403
     denied = client.post("/api/families", headers=admin_headers, json={"name": "かんりしゃの家"})
     assert denied.status_code == 403
 
 
 def test_partial_guardian_scope_cannot_create_a_family(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """保護者の scope が一部欠けるカスタムロールでは家族を作れない。
+    """A custom role missing some guardian scopes cannot create a family.
 
-    family:manage だけで通すと、閲覧も記録もできない owner が生まれてしまう。
+    Allowing it on family:manage alone would produce an owner who can neither view nor record.
     """
     created_role = client.post(
         "/api/admin/roles",
@@ -247,11 +247,11 @@ def test_partial_guardian_scope_cannot_create_a_family(client: TestClient, admin
 def test_existing_account_cannot_accept_a_child_invitation(
     client: TestClient, admin_headers: dict[str, str], parent: Account
 ) -> None:
-    """子の招待コードは redeem（アカウント新規作成）専用。
+    """A child invitation code is for redeem (creating a new account) only.
 
-    既存アカウントを子として結び付けられると、除名の後始末（アカウント削除）が
-    独立に存在するアカウントを巻き込んでしまう。断られたコードは消費されず、
-    本来の使い方（redeem）でそのまま使える。
+    If an existing account could be linked as a child, the cleanup on removal (account
+    deletion) would drag in an independently existing account. The refused code is not
+    consumed and can still be used the intended way (redeem).
     """
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
@@ -303,7 +303,7 @@ def _join_as_parent(client: TestClient, joining: Account, *, invitation: dict[st
 
 
 def test_parent_cannot_administer_family(client: TestClient, parent: Account, other_parent: Account) -> None:
-    """除名と「新しい大人を入れる招待」は owner のみ（ADR-0009 / ADR-0020）。"""
+    """Removal and "invitations that bring in a new adult" are owner only (ADR-0009 / ADR-0020)."""
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
     _join_as_parent(client, other_parent, invitation=issue_invitation(client, parent.headers, family_id, role="parent"))
@@ -320,7 +320,7 @@ def test_parent_cannot_administer_family(client: TestClient, parent: Account, ot
     assert inviting_a_parent.status_code == 403
     assert inviting_a_parent.json()["detail"]["error"] == "family_access_denied"
 
-    # 子の作成はできる
+    # Creating a child is allowed
     assert (
         client.post(
             f"/api/families/{family_id}/memberships",
@@ -332,7 +332,7 @@ def test_parent_cannot_administer_family(client: TestClient, parent: Account, ot
 
 
 def test_parent_hands_a_child_its_own_code(client: TestClient, parent: Account, other_parent: Account) -> None:
-    """子ども宛の招待は親メンバーも配れる（ADR-0020）。顔ぶれは変わらないため。"""
+    """Parent members can also issue invitations for children (ADR-0020), since the membership does not change."""
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
     _join_as_parent(client, other_parent, invitation=issue_invitation(client, parent.headers, family_id, role="parent"))
@@ -344,7 +344,7 @@ def test_parent_hands_a_child_its_own_code(client: TestClient, parent: Account, 
     )
     assert issued.status_code == 201, issued.text
 
-    # 配った本人が確かめて取り消せる（平文のコードは一覧に載らない）
+    # The issuer can check and revoke it (the plaintext code is not in the list)
     listed = client.get(f"/api/families/{family_id}/invitations", headers=other_parent.headers)
     assert listed.status_code == 200, listed.text
     assert [i["code"] for i in listed.json()] == [None]
@@ -364,7 +364,7 @@ def test_membership_with_records_cannot_be_removed(client: TestClient, parent: A
     assert response.status_code == 409
     assert response.json()["detail"]["error"] == "ledger_not_empty"
 
-    # 記録が無ければ外せる
+    # Can be removed if there are no records
     empty = add_child(client, parent.headers, family_id, display_name="はなこ")
     assert (
         client.delete(f"/api/families/{family_id}/memberships/{empty['id']}", headers=parent.headers).status_code == 204

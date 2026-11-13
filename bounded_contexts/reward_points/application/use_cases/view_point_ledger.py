@@ -1,8 +1,8 @@
-"""台帳（残高と履歴）を見る。
+"""View a ledger (balance and history).
 
-残高は履歴の合計として毎回導出する（残高列は持たない。ADR-0010）。応答に
-``can_modify`` を含めるので、画面側は「変更 UI を出すか」をこの 1 つの値で
-決められる（立場の名前で分岐しない）。
+The balance is derived from the history every time (there is no balance column;
+ADR-0010). The response includes ``can_modify``, so the screen decides whether to
+show editing UI from this single value (no branching on role names).
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ class ViewPointLedgerUseCase:
         if owner is None:
             raise MembershipNotFoundError
         statement = LedgerStatement(self._transactions.list_by_ledger(ledger_id))
-        # 毎日のボーナス（ADR-0024）は台帳と一緒に返す。設定を出すためだけに
-        # もう 1 往復させると、開いた直後の画面に一瞬「設定なし」が出る
+        # Return the daily bonus (ADR-0024) together with the ledger. An extra round
+        # trip just for the setting would briefly show "not set" right after opening
         bonus = self._bonuses.find_by_ledger(ledger_id)
         return LedgerDTO(
             ledger_id=found.ledger.id,

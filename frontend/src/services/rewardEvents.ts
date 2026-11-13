@@ -1,16 +1,16 @@
 /**
- * イベント（がんばりカード。ADR-0042）の API クライアント。
+ * API client for events (effort cards, ADR-0042).
  *
- * 目標・達成でもらえるポイント・達成回数を決めて作り、1 回達成するたびにシールを
- * 1 枚貼る。マスが全部埋まると、サーバーが台帳へ達成のポイントを 1 行足す。
+ * Created with a goal, points awarded on completion and a completion count; each completion adds
+ * one sticker. When all cells are filled, the server adds one completion points row to the ledger.
  *
- * シールは **番号つき** で貼る。送るのは「次に貼る番号」で、同じ番号を 2 度送っても
- * 1 枚にしかならない（二重タップ・通信の再送で 2 枚にならない）。
+ * Stickers are added **by number**. The client sends "the next number to add", and sending the same number twice
+ * still yields one sticker (a double tap or network retry does not make two).
  */
 import { api } from './api'
 
 export interface Sticker {
-  /** 1 から始まる通し番号。 */
+  /** Sequence number starting at 1. */
   number: number
   stuck_at: string
 }
@@ -18,28 +18,28 @@ export interface Sticker {
 export interface RewardEvent {
   id: number
   ledger_id: number
-  /** 目標。達成したときの台帳の理由にもなる。 */
+  /** Goal. Also used as the ledger reason on completion. */
   title: string
   reward_points: number
-  /** 達成回数（＝マスの数）。 */
+  /** Completion count (= number of cells). */
   goal_count: number
-  /** 番号の小さい順。 */
+  /** Ascending by number. */
   stickers: Sticker[]
-  /** マスが埋まった日時。まだなら null。 */
+  /** When the cells were filled. null if not yet. */
   completed_at: string | null
   created_at: string
-  /** この日のうちに埋めれば達成（YYYY-MM-DD）。決めていなければ null。ADR-0043 */
+  /** Completed if filled by the end of this day (YYYY-MM-DD). null if not set. ADR-0043 */
   deadline: string | null
-  /** 期限を過ぎても埋まっていない。判定はサーバー（家族の 1 日の区切り）。 */
+  /** Past the deadline and not filled. Decided by the server (the family's day boundary). */
   is_expired: boolean
 }
 
 export interface RewardEventBoard {
   ledger_id: number
   display_name: string
-  /** 作る・貼る・はがす・消すの入口を出すか。 */
+  /** Whether to show the create, add, remove and delete entry points. */
   can_modify: boolean
-  /** 作った順。 */
+  /** In creation order. */
   events: RewardEvent[]
 }
 
@@ -47,14 +47,14 @@ export interface NewRewardEvent {
   title: string
   reward_points: number
   goal_count: number
-  /** YYYY-MM-DD。null で期限なし。 */
+  /** YYYY-MM-DD. null for no deadline. */
   deadline: string | null
 }
 
-/** 達成回数の上限（サーバーの MAX_GOAL_COUNT と同じ）。 */
+/** Maximum completion count (same as the server's MAX_GOAL_COUNT). */
 export const MAX_GOAL_COUNT = 50
 
-/** 目標の長さの上限（サーバーの TITLE_MAX_LENGTH と同じ）。 */
+/** Maximum goal length (same as the server's TITLE_MAX_LENGTH). */
 export const TITLE_MAX_LENGTH = 100
 
 const eventsPath = (familyId: number, ledgerId: number) =>
@@ -70,19 +70,19 @@ export const rewardEvents = {
   create: (familyId: number, ledgerId: number, event: NewRewardEvent) =>
     api.post<RewardEvent>(eventsPath(familyId, ledgerId), event),
 
-  /** *number* 枚目を貼る。最後のマスならポイントが台帳に入る。 */
+  /** Add sticker number *number*. If it is the last cell, the points go into the ledger. */
   stick: (familyId: number, ledgerId: number, eventId: number, number: number) =>
     api.put<RewardEvent>(stickerPath(familyId, ledgerId, eventId, number)),
 
-  /** 期限を決め直す（null で期限なし）。期限切れのカードも、延ばせばまた貼れる。 */
+  /** Reset the deadline (null for none). An expired card can be added to again once extended. */
   changeDeadline: (familyId: number, ledgerId: number, eventId: number, deadline: string | null) =>
     api.put<RewardEvent>(`${eventsPath(familyId, ledgerId)}/${eventId}/deadline`, { deadline }),
 
-  /** 最後の 1 枚をはがす（押し間違いを戻す）。達成した後ははがせない。 */
+  /** Remove the last sticker (undo a mis-tap). Not possible after completion. */
   peel: (familyId: number, ledgerId: number, eventId: number, number: number) =>
     api.delete<RewardEvent>(stickerPath(familyId, ledgerId, eventId, number)),
 
-  /** 消す。達成で足したポイントは台帳に残る。 */
+  /** Delete. Points added on completion stay in the ledger. */
   remove: (familyId: number, ledgerId: number, eventId: number) =>
     api.delete<undefined>(`${eventsPath(familyId, ledgerId)}/${eventId}`),
 }

@@ -1,17 +1,17 @@
 /**
- * 画面が手元に戻ってきたときに読み直す。
+ * Reloads when the screen comes back to the user.
  *
- * ポイントは同じ家族の複数の端末から記録される。ホーム画面から開いた PWA は
- * タブが何日も生きたままになるので、開いた時点の残高を持ち続けると、別の親が
- * 足したポイントがいつまでも出ない。「見に戻ってきた」瞬間を取得のきっかけに
- * する。
+ * Points are recorded from several devices in the same family. A PWA opened from the home screen
+ * keeps its tab alive for days, so if it keeps the balance from when it was opened, points
+ * added by another parent never show up. Use the moment the user "comes back to look" as the
+ * trigger to fetch.
  *
- * 裏に回っているあいだは読み直さない（見ていない画面のために通信しない）。
- * 圏外から戻ったとき（`online`）も同じ扱いにする — オフラインで出していたのは
- * キャッシュ（ADR-0015）なので、回線が戻ったら最新へ差し替える。
+ * No reload while in the background (no traffic for an unseen screen).
+ * Coming back from offline (`online`) is treated the same way: what was shown offline was the
+ * cache (ADR-0015), so replace it with the latest once the connection is back.
  *
- * 読み直しの中身は呼び出し側が決める。失敗の扱いも呼び出し側に任せるため、
- * ここでは待たずに投げっぱなしにする（`refresh` は自分で失敗を処理すること）。
+ * The caller decides what reloading means. Failure handling is also left to the caller, so
+ * this fires and forgets without waiting (`refresh` must handle its own failures).
  */
 import { useEffect } from 'react'
 

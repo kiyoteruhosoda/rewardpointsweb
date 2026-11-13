@@ -1,4 +1,4 @@
-"""ロール・権限のモデル（認可は scope = 権限コード値で行う）。"""
+"""Role and permission models (authorization uses scope = permission code values)."""
 
 from __future__ import annotations
 

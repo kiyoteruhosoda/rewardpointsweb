@@ -1,11 +1,11 @@
-"""表示端末のペアリング（ADR-0047。RFC 8628 に倣う）。
+"""Display device pairing (ADR-0047; modeled on RFC 8628).
 
-1. 端末が始める（:class:`StartPairingUseCase`）——確認コードと端末の秘密を受け取る
-2. 運用管理者が確認コードで承認する（:class:`ApprovePairingUseCase`）——表示アカウントが生まれる
-3. 端末が端末の秘密で受け取る（:class:`ClaimPairingUseCase`）——端末の資格情報を 1 度だけ受け取る
+1. The device starts (:class:`StartPairingUseCase`) — receives a confirmation code and a device secret
+2. An operator approves with the confirmation code (:class:`ApprovePairingUseCase`) — a display account is created
+3. The device claims with its secret (:class:`ClaimPairingUseCase`) — receives the device credential exactly once
 
-表示アカウントを作るのは reward_points（家族の参加として作る）。承認はそれを
-``enroll`` として受け取り、確認コードが使えると分かってから呼ぶ。
+reward_points creates the display account (as a family membership). Approval takes
+that as ``enroll`` and calls it only once the confirmation code is known to be usable.
 """
 
 from __future__ import annotations
@@ -34,17 +34,17 @@ from bounded_contexts.display_devices.domain.services.pairing_rules import (
 )
 from shared.kernel.timestamps import utcnow
 
-# 確認コードが残っている行と重なったときに引き直す回数。31 種 8 字なので、まず起きない
+# Retries when a confirmation code collides with a live row. 31 symbols x 8 chars, so it practically never happens
 _USER_CODE_ATTEMPTS = 5
 
 
 @dataclass(frozen=True, kw_only=True)
 class StartedPairing:
-    """端末に返すもの。平文はこの 1 回しか取り出せない。"""
+    """What is returned to the device. The plaintext is available this one time only."""
 
-    #: 画面に出す確認コード（``KQ7M-3XPA``）
+    #: Confirmation code shown on screen (``KQ7M-3XPA``)
     user_code: str
-    #: 端末だけが知る秘密。受け取りに要る
+    #: Secret known only to the device; required to claim
     device_code: str
     expires_in: int
     interval: int
@@ -56,7 +56,7 @@ class StartPairingUseCase:
 
     def execute(self) -> StartedPairing:
         now = utcnow()
-        # 誰でも始められる口なので、古い行はここで掃除して溜めない
+        # Anyone can call this endpoint, so clean up old rows here to keep them from piling up
         self._pairings.delete_expired_before(now - PAIRING_RETENTION)
         user_code = self._fresh_user_code()
         device_code = pairing_secrets.new_secret()
@@ -85,10 +85,10 @@ class ApprovePairingUseCase:
         self._pairings = pairings
 
     def execute(self, *, user_code: str, enroll: Callable[[], int]) -> int:
-        """確認コードを承認し、``enroll`` が作った表示アカウントを結び付ける。
+        """Approve the confirmation code and link the display account created by ``enroll``.
 
-        ``enroll`` は確認コードが使えると分かってから 1 度だけ呼ぶ。打ち間違いで
-        表示アカウントが生まれないようにするため。結び付けたアカウントの ID を返す。
+        ``enroll`` is called once, only after the code is known to be usable, so a
+        typo never creates a display account. Returns the linked account's ID.
         """
         pairing = self._approvable(user_code)
         account_id = enroll()
@@ -113,7 +113,7 @@ class ClaimPairingUseCase:
         self._credentials = credentials
 
     def execute(self, device_code: str) -> str:
-        """承認済みなら端末の資格情報（平文）を 1 度だけ返す。"""
+        """If approved, return the device credential (plaintext) exactly once."""
         now = utcnow()
         pairing = self._pairings.find_by_device_code(pairing_secrets.hash_secret(device_code))
         if pairing is None or pairing.is_claimed or pairing.is_expired(now):

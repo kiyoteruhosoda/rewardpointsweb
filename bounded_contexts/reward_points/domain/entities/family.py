@@ -1,11 +1,11 @@
-"""家族（集約ルート）。
+"""Family (aggregate root).
 
-共有は家族への参加によってのみ表現する。メンバー単位の個別共有は持たない
-（ADR-0009）。家族はデータ分離の明示的な境界で、台帳・参加者・招待はすべて
-どれか 1 つの家族に属する。
+Sharing is expressed only by joining a family; there is no per-member sharing
+(ADR-0009). The family is the explicit data-isolation boundary: every ledger,
+member and invitation belongs to exactly one family.
 
-家族で決めた約束ごと（``rules``）も家族が持つ。子ども一人ひとりではなく家族に
-1 つで、参加している全員が同じ文面を読む（ADR-0027）。
+The family also holds its agreed rules (``rules``): one per family, not per child,
+and every member reads the same text (ADR-0027).
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from bounded_contexts.reward_points.domain.value_objects.family_rules import Fam
 class Family:
     id: int
     name: FamilyName
-    #: 家族のルール。まだ書いていなければ ``None``（空文字とは区別する）
+    #: The family's rules. ``None`` if not written yet (distinct from an empty string)
     rules: FamilyRules | None
     created_at: datetime
 

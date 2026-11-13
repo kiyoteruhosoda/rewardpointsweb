@@ -1,11 +1,12 @@
-"""家族を作る。作った人がそのまま ``owner`` として参加する。
+"""Create a family. The creator joins it as ``owner``.
 
-作れるのはどの家族にも所属していないアカウントだけ（ADR-0013）。すでに所属して
-いる場合は、先に抜けて初期状態へ戻る。
+Only an account that belongs to no family can create one (ADR-0013). An
+account that already belongs to one must leave first and return to the
+initial state.
 
-入口の scope は ``family:manage``。親（member ロール）は最初から持っており、
-子（guest ロール）は持たないので、子が家族を作る経路は scope で閉じる
-（ADR-0018）。
+The entry scope is ``family:manage``. Parents (member role) have it from the
+start and children (guest role) do not, so the scope closes the path for a
+child to create a family (ADR-0018).
 """
 
 from __future__ import annotations

@@ -1,16 +1,18 @@
-"""家族・台帳へのアクセスを解決する入口。
+"""Entry point that resolves access to families and ledgers.
 
-すべてのユースケースは、対象を触る前にここを通す。判定そのものはドメインの
-:mod:`~bounded_contexts.reward_points.domain.services.family_access_policy` が持ち、
-ここは「読み込んで、判定させて、足りなければ例外にする」までを受け持つ。
+Every use case goes through here before touching its target. The decision itself
+belongs to the domain's
+:mod:`~bounded_contexts.reward_points.domain.services.family_access_policy`;
+this handles "load, have it decide, and raise if not allowed".
 
-届かないときは **403**（``family_access_denied``）で揃える。「所属していない」
-「立場が足りない」「他家族のものだった」を呼び出し元から区別させない。
+Denials are uniformly **403** (``family_access_denied``). The caller cannot tell
+"not a member", "insufficient role" and "belongs to another family" apart.
 
-存在しない家族 ID でも同じ 403 になる（参加が引けない、という同じ結末を辿る）
-ため、この応答から家族の実在は分からない。台帳だけは、そもそも行が無い場合に
-404（``ledger_not_found``）を返す — 存在しないものを「権限が無い」と言う方が
-誤解を招くため。
+A nonexistent family ID also yields the same 403 (it ends the same way: no
+membership found), so this response does not reveal whether a family exists.
+Only for ledgers, when the row does not exist at all, it returns 404
+(``ledger_not_found``), because calling something nonexistent "no permission"
+would be more misleading.
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ from bounded_contexts.reward_points.domain.services import family_access_policy
 
 @dataclass(frozen=True, kw_only=True)
 class LedgerAccess:
-    """台帳と、そこへ届いた参加者。"""
+    """A ledger and the member who reached it."""
 
     membership: FamilyMembership
     ledger: PointLedger
@@ -66,7 +68,7 @@ class FamilyAccessResolver:
         if ledger is None:
             raise LedgerNotFoundError
         membership = self._memberships.find_in_family(family_id=ledger.family_id, account_id=account_id)
-        # 兄弟の台帳・他家族の台帳は、どちらもここで止まる（ADR-0009）
+        # Siblings' ledgers and other families' ledgers both stop here (ADR-0009)
         if membership is None or not family_access_policy.can_view_ledger(membership, ledger):
             raise FamilyAccessDeniedError
         return LedgerAccess(membership=membership, ledger=ledger)

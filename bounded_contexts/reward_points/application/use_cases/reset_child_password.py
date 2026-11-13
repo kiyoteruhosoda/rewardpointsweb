@@ -1,11 +1,11 @@
-"""親が子の一時パスワードを発行する（ADR-0011）。
+"""A parent issues a temporary password for a child (ADR-0011).
 
-メールアドレスを持たないアカウントでは SMTP 経由のリセットが成立しないため、
-回復経路を家庭内で完結させる。発行できるのは同一家族の ``role = child`` に
-対してだけで、親から親へのリセットは許可しない。
+Accounts without an email address cannot use SMTP-based reset, so recovery is kept
+within the household. Only ``role = child`` members of the same family can receive one;
+parent-to-parent resets are not allowed.
 
-一時パスワードでログインした後は、パスワードの変更を完了するまで他の操作を
-許可しない（``users.must_change_password``）。
+After signing in with a temporary password, no other operation is allowed until the
+password change is completed (``users.must_change_password``).
 """
 
 from __future__ import annotations

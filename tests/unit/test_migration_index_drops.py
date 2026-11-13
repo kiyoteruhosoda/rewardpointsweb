@@ -1,17 +1,17 @@
-"""マイグレーションが「テーブルごと落とす索引」を単独で DROP していないこと。
+"""Migrations must not separately DROP an index that goes away with its table.
 
-MariaDB（InnoDB）は外部キーが使う索引を単独で落とせない::
+MariaDB (InnoDB) cannot drop an index used by a foreign key on its own::
 
     (1553, "Cannot drop index 'ix_point_entries_member_id': needed in a foreign
      key constraint")
 
-``DROP TABLE`` は索引も一緒に消すため、テーブルを落とすなら索引を先に落とす必要は
-無い。書けば動作は変わらないどころか、外部キー列の索引だと本番だけで落ちる。開発・
-テストの SQLite は同じ DDL を通してしまい気付けないので、静的に検査する。
+``DROP TABLE`` removes the indexes along with it, so there is no need to drop the indexes first when
+dropping the table. Writing it changes nothing at best, and for a foreign-key column index it fails only in production.
+The development/test SQLite accepts the same DDL so it would go unnoticed, hence this static check.
 
-対象は「同じ関数の中で ``drop_index`` と ``drop_table`` の両方が同じテーブルに
-向いている」場合だけ。テーブルを残したまま索引を張り替える正当な ``drop_index``
-は妨げない。
+It only targets cases where "``drop_index`` and ``drop_table`` in the same function point at
+the same table". A legitimate ``drop_index`` that rebuilds an index while keeping the table
+is not blocked.
 """
 
 from __future__ import annotations
@@ -26,12 +26,12 @@ _MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations" / "versions
 
 def _migration_files() -> list[Path]:
     files = sorted(path for path in _MIGRATIONS_DIR.glob("*.py") if path.name != "__init__.py")
-    assert files, f"マイグレーションが見つからない: {_MIGRATIONS_DIR}"
+    assert files, f"no migrations found: {_MIGRATIONS_DIR}"
     return files
 
 
 def _op_call_name(node: ast.Call) -> str | None:
-    """``op.drop_index(...)`` の ``drop_index`` を返す。``op`` 以外なら ``None``。"""
+    """Return ``drop_index`` for ``op.drop_index(...)``; ``None`` if not on ``op``."""
     func = node.func
     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == "op":
         return func.attr
@@ -39,9 +39,9 @@ def _op_call_name(node: ast.Call) -> str | None:
 
 
 def _string_argument(node: ast.Call, position: int, keyword: str) -> str | None:
-    """位置引数またはキーワード引数から文字列リテラルを取り出す。
+    """Extract a string literal from a positional or keyword argument.
 
-    ``op.f("ix_...")`` のようなラップは対象外（索引名は見ないため必要ない）。
+    Wrappers such as ``op.f("ix_...")`` are ignored (not needed, since index names are not checked).
     """
     if len(node.args) > position:
         argument = node.args[position]
@@ -90,14 +90,14 @@ def test_no_index_is_dropped_from_a_table_that_is_dropped(path: Path) -> None:
     )
 
     assert not violations, (
-        f"{path.name}: DROP TABLE する表の索引を先に落としている（MariaDB では"
-        f"外部キーが使う索引を単独で DROP できない）: {violations}"
+        f"{path.name}: drops indexes of a table that is DROP TABLEd (MariaDB cannot DROP"
+        f" an index used by a foreign key on its own): {violations}"
     )
 
 
-# --- 検査そのものの検証 -------------------------------------------------------
-# 「違反が無いこと」だけを見るテストは、検査側が壊れると黙って通る。検出と
-# 見逃してよい形の双方に、テストを当てる。
+# --- Testing the check itself ---------------------------------------------------
+# A test that only checks "there are no violations" silently passes if the check breaks. So both
+# detection and the shapes that may be let through get tests.
 
 
 def _violations(source: str) -> list[str]:
@@ -112,11 +112,11 @@ def _violations(source: str) -> list[str]:
 @pytest.mark.parametrize(
     "source",
     [
-        # 位置引数
+        # positional argument
         'def downgrade():\n    op.drop_index("ix_a", "a")\n    op.drop_table("a")\n',
-        # table_name キーワード（既存のマイグレーションの書き方）
+        # table_name keyword (how existing migrations write it)
         'def downgrade():\n    op.drop_index(op.f("ix_a"), table_name="a")\n    op.drop_table("a")\n',
-        # 順序が逆でも同じ関数内なら検出する
+        # detected even in reverse order within the same function
         'def downgrade():\n    op.drop_table("a")\n    op.drop_index("ix_a", table_name="a")\n',
     ],
 )
@@ -127,11 +127,11 @@ def test_a_redundant_index_drop_is_detected(source: str) -> None:
 @pytest.mark.parametrize(
     "source",
     [
-        # テーブルを残したまま索引を張り替える（正当な drop_index）
+        # rebuild an index while keeping the table (legitimate drop_index)
         'def upgrade():\n    op.drop_index("ix_a", table_name="a")\n    op.create_index("ix_a2", "a", ["b"])\n',
-        # 別のテーブルを落とすだけ
+        # only drops a different table
         'def downgrade():\n    op.drop_index("ix_a", table_name="a")\n    op.drop_table("b")\n',
-        # 落とす表が別の関数（同じ関数内でないものまで拾わない）
+        # the dropped table is in a different function (do not pick up what is not in the same function)
         'def a():\n    op.drop_index("ix_a", table_name="a")\ndef b():\n    op.drop_table("a")\n',
     ],
 )

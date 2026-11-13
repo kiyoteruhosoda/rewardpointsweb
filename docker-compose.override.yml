@@ -1,15 +1,15 @@
-# ソースツリーから直接 `docker compose up -d` するための上書き。
+# Override for running `docker compose up -d` directly from the source tree.
 #
-# docker-compose.yml 本体は image を参照するだけで build を持たない。そのままだと
-# `docker compose up` がイメージを registry へ探しに行ってしまうので、ここで build を
-# 足し、手元では compose がそのままビルドしてから起動するようにする。
+# The main docker-compose.yml only references an image and has no build. As is,
+# `docker compose up` would look for the image in the registry, so add build here
+# so that locally compose builds the image and then starts it.
 #
-# .env を任意にするのもここ。本体の `env_file: [.env]` と同じパスを長い書式で
-# 上書きすると `required: false` が勝ち、.env が無くても起動する（${VAR:-default}
-# が値を供給する）。長い書式は Compose 2.24.0 以降でしか読めないため、配置先が
-# 使う本体には置かない。
+# This is also where .env becomes optional. Overriding the same path as the main `env_file: [.env]`
+# with the long syntax makes `required: false` win, so it starts without .env (${VAR:-default}
+# supplies the values). The long syntax is only understood by Compose 2.24.0+, so it is not put
+# in the main file used by deployments.
 #
-# このファイルは `-f` を付けずに実行したときだけ自動で読まれる。
+# This file is loaded automatically only when run without `-f`.
 services:
   db:
     build:
@@ -24,7 +24,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        # version.json 用。未指定なら Dockerfile 側の既定値（dev）が入る。
+        # For version.json. If unset, the Dockerfile default (dev) is used.
         COMMIT_HASH: ${COMMIT_HASH:-dev}
         COMMIT_HASH_FULL: ${COMMIT_HASH_FULL:-dev}
         BRANCH: ${BRANCH:-unknown}

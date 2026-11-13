@@ -1,12 +1,12 @@
 """family rules
 
-家族で決めた約束ごとのメモを ``families`` に持たせる（ADR-0027）。子ども一人ひとり
-ではなく家族に 1 つで、参加している全員が同じ文面を読む。
+Gives ``families`` a memo of the rules the family agreed on (ADR-0027). There is one per family,
+not one per child, and every participant reads the same text.
 
-既存の家族には NULL が入る（＝まだ書いていない）。書いていない状態と空文字を
-区別するため、既定値は置かない。
+Existing families get NULL (= not written yet). No default is set, so that "not written"
+can be told apart from an empty string.
 
-定義の正本は ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``。
+The definitions' source of truth is ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``.
 
 Revision ID: family_rules
 Revises: daily_bonus

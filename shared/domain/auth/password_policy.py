@@ -1,7 +1,7 @@
-"""パスワードの長さの決まり。
+"""Password length rules.
 
-上限は、ログインなしで届く口（ログイン・再設定）に大きな文字列を送らせて
-ハッシュの計算をさせないため（task #733）。128 字はパスフレーズにも足りる。
+The upper limit stops callers from sending huge strings to endpoints reachable without login
+(login, password reset) to force hash computation (task #733). 128 characters is enough for passphrases.
 """
 
 from __future__ import annotations

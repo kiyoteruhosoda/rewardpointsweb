@@ -1,4 +1,4 @@
-"""家族への参加の永続化インターフェース。"""
+"""Persistence interface for family memberships."""
 
 from __future__ import annotations
 
@@ -26,18 +26,18 @@ class IFamilyMembershipRepository(ABC):
 
     @abstractmethod
     def find_in_family(self, *, family_id: int, account_id: int) -> FamilyMembership | None:
-        """呼び出し元がその家族でどの立場かを引く（認可の起点）。"""
+        """Look up the caller's role in that family (the starting point of authorization)."""
 
     @abstractmethod
     def list_for_family(self, family_id: int) -> list[FamilyMembership]: ...
 
     @abstractmethod
     def list_for_account(self, account_id: int) -> list[FamilyMembership]:
-        """*account_id* の参加。所属は 1 家族までなので通常 0 件か 1 件（ADR-0013）。"""
+        """Memberships of *account_id*. At most one family, so usually 0 or 1 items (ADR-0013)."""
 
     @abstractmethod
     def link_account(self, *, membership_id: int, account_id: int) -> FamilyMembership:
-        """招待の受諾でアカウントを結び付ける。"""
+        """Link the account when an invitation is accepted."""
 
     @abstractmethod
     def delete(self, membership_id: int) -> None: ...
@@ -47,21 +47,22 @@ class IFamilyMembershipRepository(ABC):
 
     @abstractmethod
     def update_role(self, *, membership_id: int, role: FamilyRole) -> FamilyMembership:
-        """立場を変える（owner 脱退時の引き継ぎ。ADR-0013）。"""
+        """Change the role (handover when the owner leaves; ADR-0013)."""
 
     @abstractmethod
     def propose_independence(self, *, membership_id: int, proposed_at: datetime) -> FamilyMembership:
-        """独立の指示を記録する（ADR-0014）。子本人の承認までは所属のまま。"""
+        """Record an independence proposal (ADR-0014). The child stays a member until they approve."""
 
     @abstractmethod
     def clear_independence_proposal(self, membership_id: int) -> FamilyMembership:
-        """独立の指示を取り下げる（ADR-0014）。"""
+        """Withdraw an independence proposal (ADR-0014)."""
 
     @abstractmethod
     def reorder(self, *, family_id: int, membership_ids: Sequence[int]) -> None:
-        """並び順を、渡された順（先頭が 0）に振り直す。
+        """Renumber the sort order to the given order (the first one is 0).
 
-        一覧の並びは実装がまとめて決めるので、呼び出し側は順番の列だけを渡す。
+        The implementation sets the whole list's order at once, so the caller
+        passes only the sequence of IDs.
         """
 
     @abstractmethod
@@ -69,7 +70,7 @@ class IFamilyMembershipRepository(ABC):
 
     @abstractmethod
     def list_displays(self) -> list[FamilyMembership]:
-        """全ての家族の表示端末（ADR-0047）。運用管理者の一覧に使う。"""
+        """Display devices of all families (ADR-0047). Used for the operator's list."""
 
 
 __all__ = ["IFamilyMembershipRepository"]

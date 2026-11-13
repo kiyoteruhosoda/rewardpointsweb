@@ -1,14 +1,14 @@
-"""ログの DB 書き込みが、リクエストのトランザクションと衝突しないこと。
+"""Writing logs to the DB must not collide with the request's transaction.
 
-**ファイル実体の SQLite** を使う。共通フィクスチャの in-memory + ``StaticPool`` は
-全員が 1 本のコネクションを共有するため、ロックの競合が起きず、この不具合を
-再現できない（実運用の既定 ``sqlite:///app.db`` では起きる）。
+Uses a **file-backed SQLite**. The shared fixtures' in-memory DB + ``StaticPool``
+makes everyone share a single connection, so lock contention never happens and this bug
+cannot be reproduced (it does happen with the production default ``sqlite:///app.db``).
 
-不具合の形（ADR-0012）: 処理の途中で別コネクションから書くと、``db.flush()`` 済みの
-リクエストが握った書き込みロックと衝突し、busy timeout（5 秒）待った末に失敗する。
-**操作は成功したのに記録だけ残らない**——しかも 1 行につき 5 秒待たされる。
-書き込みを行う API では、その後に出るログ行（管理操作の記録・アクセスログ）が
-まるごとこれに当たる。
+Shape of the bug (ADR-0012): writing from a separate connection mid-request collides with the
+write lock held by a request that has already run ``db.flush()``, waits out the busy timeout (5 s), then fails.
+**The operation succeeds but its record is lost** -- and each line costs a 5-second wait.
+For any API that writes, every log line emitted after that point (admin operation records, access log)
+falls into this.
 """
 
 from __future__ import annotations
@@ -27,21 +27,21 @@ from sqlalchemy.orm import sessionmaker
 import bounded_contexts.account_security.infrastructure.account_security_models
 import bounded_contexts.example.infrastructure.item_model
 import bounded_contexts.reward_points.infrastructure.reward_points_models  # noqa: F401
-import shared.infrastructure.models  # noqa: F401 — メタデータ登録
+import shared.infrastructure.models  # noqa: F401 — registers metadata
 from shared.domain.auth import master_data
 from shared.infrastructure.master_data_seeder import seed_master_data
 from shared.kernel.database import db as db_module
 from shared.kernel.database.db import Base
 from shared.kernel.settings.settings import settings
 
-# 別コネクションからの書き込みが詰まると busy timeout（既定 5 秒）まで待つ。
-# 1 リクエストがこれを超えるようなら、ロックで待たされている。
+# A write from a separate connection that gets stuck waits until the busy timeout (5 s by default).
+# If a single request takes longer than this, it is waiting on the lock.
 _SLOW_REQUEST_SECONDS = 3.0
 
 
 @pytest.fixture
 def file_engine(tmp_path: Path) -> Iterator[sa.Engine]:
-    """コネクションを共有しない、ファイル実体の SQLite。"""
+    """File-backed SQLite that does not share a connection."""
     engine = create_engine(f"sqlite:///{tmp_path / 'logs.db'}")
     Base.metadata.create_all(engine)
     db_module.set_engine(engine)
@@ -57,20 +57,20 @@ def file_engine(tmp_path: Path) -> Iterator[sa.Engine]:
 
 @pytest.fixture
 def file_client(file_engine: sa.Engine, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    """DB へのログ書き込みを有効にしたアプリ。
+    """App with DB log writes enabled.
 
-    共通のテスト環境は ``TESTING=1`` で ``log`` テーブルへの書き込みを切っている
-    （テストのたびにログ行が増えないようにするため）。ここは**その書き込み経路
-    そのもの**を見るので、このモジュールでだけ有効にする。
+    The shared test environment turns off writes to the ``log`` table with ``TESTING=1``
+    (so log rows do not pile up on every test). This module looks at **that write path
+    itself**, so it is enabled only here.
 
-    ``setup_logging`` はルートロガーを差し替えるので、後始末で元へ戻す。戻さないと
-    後続のテストが、破棄済みのエンジンへ書きに行くハンドラを抱えたままになる。
+    ``setup_logging`` replaces the root logger, so restore it during teardown. Otherwise
+    later tests keep a handler that writes to an already-disposed engine.
 
-    **テストクライアント自身の httpx2 のログ（"HTTP Request: …"）は DB へ流さない。**
-    Starlette 1.10 から TestClient は応答の頭が届いた時点で返し、アプリは裏で動き続ける。
-    httpx2 はそこで行を出すので、リクエストの外（控えの無い文脈）からの直書きになり、
-    まだ書き込みロックを握っているアプリと衝突して 5 秒待つ。本番には無いクライアント側の
-    行で、見たいのはアプリが出す行なので、このロガーだけ止める。
+    **The test client's own httpx2 logs ("HTTP Request: ...") are not sent to the DB.**
+    Since Starlette 1.10, TestClient returns as soon as the response head arrives while the app keeps running.
+    httpx2 emits its line at that point, so it is a direct write from outside the request (a context with no buffer),
+    and it collides with the app still holding the write lock and waits 5 s. It is a client-side line that does not
+    exist in production, and what we want to see are the app's lines, so only this logger is silenced.
     """
     from presentation.fastapi.app import create_app
 
@@ -110,7 +110,7 @@ def _messages(engine: sa.Engine, like: str) -> list[str]:
 def test_a_log_line_emitted_after_a_write_is_stored(
     file_client: TestClient, file_admin_headers: dict[str, str], file_engine: sa.Engine
 ) -> None:
-    """``db.flush()`` の後に出た記録が残り、ロック待ちで遅くならないこと。"""
+    """A record emitted after ``db.flush()`` is stored and is not slowed down by lock waits."""
     started = time.perf_counter()
     created = file_client.post(
         "/api/admin/users",
@@ -120,7 +120,7 @@ def test_a_log_line_emitted_after_a_write_is_stored(
     elapsed = time.perf_counter() - started
 
     assert created.status_code == 201, created.text
-    assert elapsed < _SLOW_REQUEST_SECONDS, f"ログの書き込みがロックを待っている（{elapsed:.1f} 秒）"
+    assert elapsed < _SLOW_REQUEST_SECONDS, f"log write is waiting on the lock ({elapsed:.1f} s)"
     user_id = created.json()["id"]
     assert f"admin_user_created: user_id={user_id}" in _messages(file_engine, "admin_user_created%")
 
@@ -128,10 +128,10 @@ def test_a_log_line_emitted_after_a_write_is_stored(
 def test_the_access_log_line_is_stored(
     file_client: TestClient, file_admin_headers: dict[str, str], file_engine: sa.Engine
 ) -> None:
-    """アクセスログ（リクエストごとの 1 行）も残ること。
+    """The access log (one line per request) is stored too.
 
-    まとめ書きをリクエストログの**外側**に置いているのはこのため。内側だと
-    アクセスログの行が控えに間に合わない。
+    This is why the batched write sits **outside** the request logging. Inside it,
+    the access log line would not make it into the buffer in time.
     """
     assert file_client.get("/info").status_code == 200
 
@@ -141,11 +141,11 @@ def test_the_access_log_line_is_stored(
 
 
 def test_the_error_code_reaches_the_log_table(file_client: TestClient, file_engine: sa.Engine) -> None:
-    """失敗の記録が「何が起きたか」ごと DB に残ること。
+    """A failure record reaches the DB together with "what happened".
 
-    ``log`` テーブルへ入るのは列にある項目だけで、``extra`` の残りは stdout の
-    JSON にしか出ない。エラーコードを本文にも入れているのはこのため——管理画面
-    （`/admin/logs`）から読めなければ、記録した意味がない。
+    Only the column fields go into the ``log`` table; the rest of ``extra`` only appears in
+    the stdout JSON. That is why the error code is also put in the message -- if it cannot be
+    read from the admin screen (`/admin/logs`), recording it is pointless.
     """
     assert file_client.get("/api/admin/users", headers={"Authorization": "Bearer nope"}).status_code == 401
 
@@ -153,7 +153,7 @@ def test_the_error_code_reaches_the_log_table(file_client: TestClient, file_engi
 
 
 def test_a_failed_login_is_stored(file_client: TestClient, file_engine: sa.Engine) -> None:
-    """401 でリクエストがロールバックされても、ログインの失敗は残ること。"""
+    """A failed login is stored even when the request is rolled back with a 401."""
     assert file_client.post("/api/auth/login", json={"username": "nobody", "password": "wrong"}).status_code == 401
 
     assert "login_failed: invalid_credentials" in _messages(file_engine, "login_failed%")

@@ -1,7 +1,7 @@
-"""利用者ごとに「どの IdP と結び付いているか」を並べる（ADR-0035）。
+"""List, per user, "which IdPs they are linked to" (ADR-0035).
 
-「入れる手段の一覧」の IdP 側の 1 行。⚠ **結び付きがあること＝入れること**である
-——ローカルのパスワードを取り上げても、この行が残っていれば SSO では入れる。
+The IdP-side row of "the list of ways to sign in". ⚠ **Having a link = being able to sign in**
+-- even if the local password is taken away, as long as this row remains they can sign in via SSO.
 """
 
 from __future__ import annotations

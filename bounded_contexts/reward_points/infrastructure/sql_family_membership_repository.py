@@ -1,4 +1,4 @@
-"""``IFamilyMembershipRepository`` の SQLAlchemy 実装。"""
+"""SQLAlchemy implementation of ``IFamilyMembershipRepository``."""
 
 from __future__ import annotations
 
@@ -17,8 +17,9 @@ from bounded_contexts.reward_points.domain.value_objects.display_name import Dis
 from bounded_contexts.reward_points.domain.value_objects.family_role import FamilyRole
 from bounded_contexts.reward_points.infrastructure.reward_points_models import FamilyMembershipModel
 
-# 一覧の並びは「親が先、次に子、最後に表示端末、同じ立場なら家族が決めた並び順、それも
-# 同じなら作られた順」。並びは 1 か所で決めるので、どの画面でも家族の見え方が揃う。
+# List order: parents first, then children, then display devices; within the same role,
+# the order the family chose; ties broken by creation order. Decided in one place so
+# every screen shows the family the same way.
 _ROLE_ORDER = {
     FamilyRole.OWNER.value: 0,
     FamilyRole.PARENT.value: 1,
@@ -139,7 +140,7 @@ class SqlFamilyMembershipRepository(IFamilyMembershipRepository):
         ).all()
 
     def _next_display_order(self, family_id: int) -> int:
-        """末尾に置く。新しく加わった人が既存の並びに割り込まないようにする。"""
+        """Place at the end so a newcomer does not cut into the existing order."""
         highest = self._session.scalar(
             select(func.max(FamilyMembershipModel.display_order)).where(FamilyMembershipModel.family_id == family_id)
         )

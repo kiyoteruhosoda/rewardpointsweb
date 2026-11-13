@@ -1,35 +1,35 @@
 /**
- * ログイン画面を開いたとき、IdP で入っていればボタンを押さずに入れる（ADR-0052）。
+ * When the login screen opens, sign in without pressing the button if already signed in at the IdP (ADR-0052).
  *
- * 画面を描く前に `prompt=none` で IdP へ送り出す。入っていれば code が返ってふつうの SSO と
- * 同じ道で入り、入っていなければ IdP は画面を出さずに戻す（サーバーが `?sso_silent=declined`
- * を付けてログイン画面へ戻す）。
+ * Before rendering, send the user to the IdP with `prompt=none`. If signed in, a code comes back and the login follows
+ * the same path as normal SSO; if not, the IdP returns without showing a screen (the server adds `?sso_silent=declined`
+ * and returns to the login screen).
  *
- * 試さないとき（ループと、頼んでいない入り直しを防ぐ）:
+ * When not to try (to prevent loops and unrequested re-logins):
  *
- * - **サインアウトした後**。サインアウトは既定で IdP の SSO を切らないので、試すとすぐに
- *   入り直してしまう。印は `localStorage`（ほかのタブで開いても試さない）
- * - **このタブで一度試した後**。印は `sessionStorage`
- * - ログイン画面に行き先（`redirect_to`）以外のもの（エラー・サインアウトの知らせ・試した印）が
- *   付いているとき
+ * - **After signing out.** Sign-out does not end the IdP's SSO by default, so trying would immediately
+ *   sign the user back in. The marker is in `localStorage` (no attempt in other tabs either)
+ * - **After one attempt in this tab.** The marker is in `sessionStorage`
+ * - When the login screen carries anything besides the destination (`redirect_to`)
+ *   (an error, a sign-out notice, the attempted marker)
  *
- * ただし**本人が再読み込みしたときは、このタブの印と試した印（`sso_silent`）があってももう 1 回試す**
- * （別のタブで IdP に入ってから戻ってきたとき。ADR-0054）。断られて戻る遷移は再読み込みではないので
- * ループにはならない。サインアウトの印とエラーの知らせは再読み込みでも守る。
+ * However, **when the user reloads, try once more even with this tab's marker and the attempted marker (`sso_silent`)**
+ * (for coming back after signing in to the IdP in another tab, ADR-0054). The navigation back after a decline is not a reload,
+ * so it does not loop. The sign-out marker and error notices are honored even on reload.
  *
- * どちらの印も、どの入口でも**入れたら消す**（次に期限が切れたときはまた試す）。
+ * Both markers are **cleared on successful sign-in** through any entry point (so the next expiry tries again).
  *
- * ⚠ **印を書けないブラウザでは試さない。** 書けないまま試すと、戻ってきたときに試したことが
- * 分からず、行き来が止まらない。
+ * ⚠ **Do not try in browsers that cannot write the markers.** Trying without them means that on return
+ * there is no way to know an attempt was made, and the back-and-forth never stops.
  */
 import { REDIRECT_TO_PARAM } from './returnTo'
 
 const TRIED_KEY = 'ssoSilentTried'
 const SIGNED_OUT_KEY = 'ssoSignedOut'
-/** 試して断られた印（サーバーが付ける）。再読み込みのときだけ、付いていても試してよい。 */
+/** Marker for an attempt that was declined (added by the server). Only on reload may we try despite it. */
 const SILENT_DECLINED_PARAM = 'sso_silent'
 
-/** この画面は本人の再読み込みで開かれたか。 */
+/** Whether this screen was opened by the user reloading. */
 function openedByReload(): boolean {
   try {
     const [entry] = window.performance.getEntriesByType(
@@ -41,7 +41,7 @@ function openedByReload(): boolean {
   }
 }
 
-/** この画面の URL のクエリと印から見て、試してよいか（印は付けない）。 */
+/** Whether we may try, judging from this screen's URL query and the markers (does not set a marker). */
 export function maySilentSso(params: URLSearchParams, reloaded = openedByReload()): boolean {
   for (const name of params.keys()) {
     if (name === REDIRECT_TO_PARAM || (reloaded && name === SILENT_DECLINED_PARAM)) continue
@@ -55,7 +55,7 @@ export function maySilentSso(params: URLSearchParams, reloaded = openedByReload(
   }
 }
 
-/** 送り出す直前に「このタブで試した」印を付ける。付けられなければ偽（そのときは試さない）。 */
+/** Set the "tried in this tab" marker right before sending. false if it cannot be set (then do not try). */
 export function markSilentSsoTried(): boolean {
   try {
     window.sessionStorage.setItem(TRIED_KEY, '1')
@@ -65,7 +65,7 @@ export function markSilentSsoTried(): boolean {
   }
 }
 
-/** サインアウトした印があるか（切れたログインを続ける問い合わせもしない。ADR-0058）。読めなければ真。 */
+/** Whether the signed-out marker is set (no request to continue an expired login either, ADR-0058). true if unreadable. */
 export function signedOutHere(): boolean {
   try {
     return window.localStorage.getItem(SIGNED_OUT_KEY) !== null
@@ -74,21 +74,21 @@ export function signedOutHere(): boolean {
   }
 }
 
-/** サインアウトした。次にログイン画面を開いても試さない。 */
+/** Signed out. Do not try the next time the login screen opens. */
 export function markSignedOut(): void {
   try {
     window.localStorage.setItem(SIGNED_OUT_KEY, '1')
   } catch {
-    // 書けないブラウザでは、そもそも試さない（markSilentSsoTried）
+    // Browsers that cannot write never try in the first place (markSilentSsoTried)
   }
 }
 
-/** 入れた。印を消し、次に期限が切れたときはまた試す。 */
+/** Signed in. Clear the markers so the next expiry tries again. */
 export function clearSilentSsoMarks(): void {
   try {
     window.localStorage.removeItem(SIGNED_OUT_KEY)
     window.sessionStorage.removeItem(TRIED_KEY)
   } catch {
-    // 消せなくても入れている
+    // Even if they cannot be cleared, the user is signed in
   }
 }

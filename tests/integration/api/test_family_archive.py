@@ -1,9 +1,10 @@
-"""家族まるごとの控え — 書き出しと取り込み（ADR-0026）。
+"""Whole-family archive — export and import (ADR-0026).
 
-バックアップの値打ちは「戻せること」なので、確かめ方も往復で見る。書き出した
-JSON をそのまま取り込み、**もう一度書き出した控えが元と一致する**ことを主な
-基準にする（書き出した時刻だけは当然ずれる）。個々の項目を突き合わせるだけだと、
-控えに載せ忘れた項目は最初から比較の対象にならない。
+A backup is only worth something if it can be restored, so we check it with a round
+trip. Import the exported JSON as is; the main criterion is that **exporting again
+yields an archive identical to the original** (only the export time naturally
+differs). Comparing individual fields alone would never catch a field that was left
+out of the archive in the first place.
 """
 
 from __future__ import annotations
@@ -63,10 +64,10 @@ def _member(archive: Json, display_name: str) -> Json:
 
 @dataclass(frozen=True, kw_only=True)
 class Backup:
-    """控えと、それを取り込む側（まだどの家族にも所属していない親）。
+    """An archive and the importer (a parent who does not belong to any family yet).
 
-    取り込みのテストはどれも「この控えを、この人が取り込む」から始まるので
-    1 つにまとめる（引数を 3 つに収める意味もある。ADR-0016）。
+    Every import test starts from "this person imports this archive", so they are
+    bundled into one (also keeps the arguments at three. ADR-0016).
     """
 
     client: TestClient
@@ -94,7 +95,7 @@ class Backup:
 
 @pytest.fixture
 def guardian(client: TestClient, admin_headers: dict[str, str]) -> Account:
-    """控えを取り込む側。まだどの家族にも所属していない親。"""
+    """The importer. A parent who does not belong to any family yet."""
     return create_account(client, admin_headers, username="aunt", role="member", display_name="おば")
 
 
@@ -105,10 +106,10 @@ def backup(client: TestClient, guardian: Account, family: Json) -> Backup:
 
 @pytest.fixture
 def family(client: TestClient, admin_headers: dict[str, str], db_session: Session) -> Json:
-    """親 2 人・子 2 人と、ひととおりの記録が入った家族の控え。
+    """Archive of a family with 2 parents, 2 children and a full set of records.
 
-    打ち消し・訂正・毎日のボーナス・記録した人の違いを一度に含める。どれか 1 つ
-    でも控えから落ちれば往復で食い違う。
+    Includes reversals, corrections, the daily bonus and different recorders at once.
+    If any one of them drops out of the archive, the round trip mismatches.
     """
     dad = create_account(client, admin_headers, username="dad", role="member", display_name="おとうさん")
     mom = create_account(client, admin_headers, username="mom", role="member", display_name="おかあさん")
@@ -134,7 +135,7 @@ def family(client: TestClient, admin_headers: dict[str, str], db_session: Sessio
     taro_ledger = Ledger(family_id=family_id, ledger_id=int(str(taro["ledger_id"])))
     hana_ledger = Ledger(family_id=family_id, ledger_id=int(str(hana["ledger_id"])))
 
-    # 素の加算・消費と、打ち消し・訂正（ADR-0010 / ADR-0022）
+    # Plain grants and spends, plus a reversal and a correction (ADR-0010 / ADR-0022)
     kept = taro_ledger.record(client, dad.headers, amount=10, reason="おてつだい", key="k1")
     taro_ledger.record(client, dad.headers, amount=-3, reason="おかし", key="k2")
     reversed_entry = taro_ledger.record(client, dad.headers, amount=50, reason="うちまちがい", key="k3")
@@ -151,7 +152,7 @@ def family(client: TestClient, admin_headers: dict[str, str], db_session: Sessio
     )
     assert corrected.status_code == 201, corrected.text
 
-    # もう 1 人の子は、記録した人が違う行と毎日のボーナス（ADR-0024）を持つ
+    # The other child has a row by a different recorder and the daily bonus (ADR-0024)
     hana_ledger.record(client, mom.headers, amount=5, reason="おかたづけ", key="k6")
     bonus = client.put(
         f"{hana_ledger.path()}/daily-bonus",
@@ -165,7 +166,7 @@ def family(client: TestClient, admin_headers: dict[str, str], db_session: Sessio
 
 
 def _grant_one_day(db_session: Session, *, starts_on: date) -> None:
-    """最初の 1 日分だけ配る。``granted_through`` が控えに載るようにするため。"""
+    """Grant only the first day, so that ``granted_through`` appears in the archive."""
     use_case = GrantDueDailyBonusesUseCase(
         bonuses=SqlDailyBonusRepository(db_session),
         transactions=SqlPointTransactionRepository(db_session),
@@ -176,14 +177,14 @@ def _grant_one_day(db_session: Session, *, starts_on: date) -> None:
     db_session.commit()
 
 
-# --- 書き出し ----------------------------------------------------------------
+# --- Export ----------------------------------------------------------------
 
 
 def test_the_archive_holds_the_whole_family(family: Json) -> None:
     assert family["format"] == "rewardpointsweb.family"
     assert family["version"] == 2
     assert family["family_name"] == "ほその家"
-    # 家族で決めた約束ごとも控えに入る（ADR-0027）
+    # The family's agreed rules are also in the archive (ADR-0027)
     assert family["family_rules"] == "おてつだい 10 pt"
     assert [member["role"] for member in family["members"]] == ["owner", "parent", "child", "child"]
     assert [member["display_name"] for member in family["members"]] == [
@@ -195,7 +196,7 @@ def test_the_archive_holds_the_whole_family(family: Json) -> None:
 
 
 def test_the_archive_holds_no_account(family: Json) -> None:
-    """ログイン ID もパスワードも招待コードも載らない（ADR-0026）。"""
+    """Neither login IDs, passwords nor invitation codes are included (ADR-0026)."""
     written = str(family)
 
     assert "dad" not in written
@@ -213,7 +214,7 @@ def test_the_ledger_keeps_who_recorded_each_entry(family: Json) -> None:
     entries = _member(family, "たろう")["ledger"]["transactions"]
     dad, mom = family["members"][0]["ref"], family["members"][1]["ref"]
 
-    # 訂正後の行だけ、書いたのはおかあさん
+    # Only the corrected row was written by mom
     assert [entry["granted_by"] for entry in entries] == [dad, dad, dad, dad, mom, mom]
 
 
@@ -223,7 +224,7 @@ def test_the_ledger_keeps_reversals_and_corrections_linked(family: Json) -> None
     reversal = next(entry for entry in entries if entry["reverses"] and entry["amount"] == -50)
     correction = next(entry for entry in entries if entry["corrects"])
 
-    # 打ち消しは逆符号で、相手より後ろに並ぶ
+    # A reversal has the opposite sign and comes after the row it reverses
     assert by_ref[reversal["reverses"]]["amount"] == 50
     assert entries.index(reversal) > entries.index(by_ref[reversal["reverses"]])
     assert by_ref[correction["corrects"]]["reason"] == "おてつだい"
@@ -237,7 +238,7 @@ def test_the_daily_bonus_keeps_the_day_it_was_granted_through(family: Json) -> N
     assert bonus["granted_through"] == bonus["starts_on"]
 
 
-# --- 取り込み ----------------------------------------------------------------
+# --- Import ----------------------------------------------------------------
 
 
 def test_importing_rebuilds_the_same_family(backup: Backup) -> None:
@@ -252,7 +253,7 @@ def test_importing_reports_what_came_back(backup: Backup) -> None:
 
     assert imported["name"] == "ほその家"
     assert imported["member_count"] == 4
-    # たろうの 6 行 ＋ はなこの 2 行（手で書いた 1 行とボーナス 1 日分）
+    # 6 rows for Taro + 2 rows for Hanako (1 manual row and 1 day of bonus)
     assert imported["transaction_count"] == 8
 
 
@@ -260,7 +261,7 @@ def test_the_importer_becomes_the_owner(backup: Backup) -> None:
     detail = backup.view(backup.restore()["family_id"])
 
     me = next(member for member in detail["memberships"] if member["is_me"])
-    # 控えに載っていた owner の呼び名を継ぐ（並びが書き出したときと同じに戻る）
+    # Takes over the owner's display name from the archive (order returns to what it was at export)
     assert (me["role"], me["display_name"]) == ("owner", "おとうさん")
 
 
@@ -268,7 +269,7 @@ def test_the_restored_ledger_keeps_its_balance(backup: Backup) -> None:
     detail = backup.view(backup.restore()["family_id"])
 
     balances = {member["display_name"]: member["balance"] for member in detail["memberships"]}
-    # たろう: 10 - 3 + 50 - 50 - 10 + 20、はなこ: 5 + ボーナス 7
+    # Taro: 10 - 3 + 50 - 50 - 10 + 20, Hanako: 5 + bonus 7
     assert (balances["たろう"], balances["はなこ"]) == (17, 12)
 
 
@@ -280,16 +281,16 @@ def test_the_restored_history_still_shows_what_was_undone(backup: Backup) -> Non
     ledger = backup.client.get(f"/api/families/{family_id}/ledgers/{taro['ledger_id']}", headers=backup.headers).json()
     undone = [entry for entry in ledger["transactions"] if entry["is_reversed"]]
 
-    # 打ち消された 2 行（打ち間違いの 50 と、訂正で言い直された 10）
+    # The 2 reversed rows (the mistyped 50 and the 10 restated by the correction)
     assert sorted(entry["amount"] for entry in undone) == [10, 50]
 
 
 def test_an_offset_in_the_archive_is_stored_as_the_same_instant(backup: Backup) -> None:
-    """控えの時刻にオフセットが付いていても、入るのは同じ瞬間（HANDOVER §14）。
+    """Even if archive timestamps carry an offset, the same instant is stored (HANDOVER §14).
 
-    書き出しは末尾 ``Z`` で出すので、素直に読むと tz 付きの値になる。それを
-    tz を落とさずに書くと、``+09:00`` の行は 9 時間ずれた壁時計のまま入る。
-    取り込み口で ``as_naive_utc`` を通していることをここで固定する。
+    Export writes a trailing ``Z``, so parsing it naively yields a tz-aware value. If
+    that were written without dropping the tz, a ``+09:00`` row would be stored as a
+    wall clock shifted by 9 hours. This pins that the import path goes through ``as_naive_utc``.
     """
     entries = _member(backup.archive, "はなこ")["ledger"]["transactions"]
     hand_written = next(entry for entry in entries if entry["amount"] == 5)
@@ -305,7 +306,7 @@ def test_an_offset_in_the_archive_is_stored_as_the_same_instant(backup: Backup) 
 
 
 def test_the_others_come_back_without_an_account(backup: Backup) -> None:
-    """控えにアカウントは入らない。本人が入り直す道は招待コード（ADR-0011）。"""
+    """Accounts are not in the archive. The way for a person to rejoin is an invitation code (ADR-0011)."""
     detail = backup.view(backup.restore()["family_id"])
 
     linked = {member["display_name"]: member["is_linked"] for member in detail["memberships"]}
@@ -326,10 +327,11 @@ def test_the_restored_daily_bonus_does_not_hand_out_the_same_day_twice(backup: B
 def test_a_restored_member_can_be_invited_back_into_their_own_place(
     backup: Backup, admin_headers: dict[str, str]
 ) -> None:
-    """招待は戻ってきた参加者を **指して** 配れる。
+    """An invitation can be issued **targeting** a restored member.
 
-    新しく入れ直すと参加者が 1 人増え、台帳の「記録した人」は元の（未紐付けの）
-    方を指したままになる。指して配れば、履歴の名前がそのまま生き続ける。
+    Adding them anew would create one more member, and the ledger's "recorded by"
+    would keep pointing at the original (unlinked) one. Targeting keeps the names in
+    the history alive as they are.
     """
     family_id = backup.restore()["family_id"]
     mom = next(m for m in backup.view(family_id)["memberships"] if m["display_name"] == "おかあさん")
@@ -348,11 +350,11 @@ def test_a_restored_member_can_be_invited_back_into_their_own_place(
     assert next(m for m in after if m["display_name"] == "おかあさん")["is_linked"] is True
 
 
-# --- 断るとき ----------------------------------------------------------------
+# --- Refusals --------------------------------------------------------------
 
 
 def test_a_child_cannot_export_the_family(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """子は自分の台帳しか見られない（ADR-0009）。家族全員分の控えは渡さない。"""
+    """A child can only see their own ledger (ADR-0009). The whole family's archive is not handed out."""
     dad = create_account(client, admin_headers, username="dad2", role="member")
     family_id = create_family(client, dad.headers)
     child = add_child(client, dad.headers, family_id, display_name="たろう")
@@ -401,10 +403,10 @@ def test_an_archive_from_a_newer_app_is_refused(backup: Backup) -> None:
 
 
 def test_an_archive_from_before_the_family_rules_still_restores(backup: Backup) -> None:
-    """版 1 の控え（ルールを持たない）は今も取り込める（ADR-0027）。
+    """A version 1 archive (without rules) can still be imported (ADR-0027).
 
-    増えたのは「無くても家族を作り直せる」項目だけなので、すでに手元にある控えを
-    読めなくしない。
+    The only added field is one the family can be rebuilt without, so archives people
+    already have must stay readable.
     """
     older = {key: value for key, value in backup.archive.items() if key != "family_rules"}
 
@@ -423,11 +425,11 @@ def test_some_other_json_is_refused(backup: Backup) -> None:
 
 
 def test_an_archive_beyond_the_transaction_cap_is_refused(backup: Backup) -> None:
-    """上限は控え全体に掛かる。
+    """The cap applies to the archive as a whole.
 
-    台帳ごとに掛けると、参加者を並べるだけで上限が掛け算で伸びる（100 人 ×
-    20,000 行）。取り込みは 1 リクエストの中で 1 行ずつ書くので、通した分だけ
-    DB とワーカーを占める。
+    A per-ledger cap would multiply just by listing more members (100 members ×
+    20,000 rows). Import writes rows one by one within a single request, so whatever
+    is let through occupies the DB and a worker.
     """
     backup.archive["members"][2]["ledger"]["transactions"] = [
         {
@@ -475,14 +477,14 @@ def test_an_archive_beyond_the_transaction_cap_is_refused(backup: Backup) -> Non
             id="the-same-name-used-twice",
         ),
         pytest.param(
-            # 記録した人の欄に子（3 人目 = たろう）を置く。台帳へ書けるのは親だけ
+            # Put a child (the 3rd member = Taro) in the recorder field. Only parents can write to a ledger
             lambda archive: archive["members"][2]["ledger"]["transactions"][0].update(
                 {"granted_by": archive["members"][2]["ref"]}
             ),
             id="recorded-by-a-child",
         ),
         pytest.param(
-            # 訂正が伴っていた打ち消しを、ただの記録に変えてしまう
+            # Turn a reversal that came with a correction into a plain record
             lambda archive: archive["members"][2]["ledger"]["transactions"][4].update({"reverses": None}),
             id="a-correction-without-the-undo",
         ),
@@ -502,7 +504,7 @@ def test_an_archive_that_does_not_add_up_is_refused(backup: Backup, break_it: An
 
 
 def test_nothing_is_written_when_the_archive_is_refused(backup: Backup) -> None:
-    """半端に作られた家族が残らない（取り込みは 1 つのトランザクション）。"""
+    """No half-built family is left behind (import is a single transaction)."""
     backup.archive["members"][2]["ledger"]["transactions"][0]["reverses"] = "t9"
 
     assert backup.send().status_code == 400
@@ -522,7 +524,7 @@ def test_a_family_can_be_imported_after_the_refusal(backup: Backup) -> None:
 def test_the_archive_of_a_family_without_children_round_trips(
     client: TestClient, guardian: Account, admin_headers: dict[str, str]
 ) -> None:
-    """子も記録も無い家族。作った直後でも控えとして成り立つ。"""
+    """A family with no children and no records. Valid as an archive even right after creation."""
     dad = create_account(client, admin_headers, username="dad4", role="member", display_name="おとうさん")
     archive = _export(client, dad.headers, create_family(client, dad.headers, name="はじめの家"))
 
@@ -531,14 +533,14 @@ def test_the_archive_of_a_family_without_children_round_trips(
     assert (imported["name"], imported["member_count"], imported["transaction_count"]) == ("はじめの家", 1, 0)
 
 
-# --- 控えに載らないもの ------------------------------------------------------
+# --- What the archive leaves out --------------------------------------------
 
 
 def test_pending_invitations_are_not_part_of_the_archive(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """未使用の招待は控えに入らない。
+    """Unused invitations are not in the archive.
 
-    コードのハッシュを持ち出しても復元先では意味を成さず、載せれば「そのうち
-    使えるコードがある」という誤解だけが残る。
+    A code hash means nothing at the restore target, and including it would only
+    leave the false impression that "there is a code that will work some day".
     """
     dad = create_account(client, admin_headers, username="dad3", role="member")
     family_id = create_family(client, dad.headers)

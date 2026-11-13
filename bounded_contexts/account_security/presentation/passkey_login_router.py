@@ -1,10 +1,10 @@
-"""パスキーによるログイン API（未認証で呼べる）。
+"""Passkey login API (callable unauthenticated).
 
-パスワードの代わりに認証器の署名で本人確認を行う。検証に成功したら通常の
-ログインと同じトークン対を発行する。
+Identity is verified with the authenticator's signature instead of a password. On successful verification,
+the same token pair as a normal login is issued.
 
-失敗は WARNING で残す。401 の既定は INFO（期限切れトークンの再取得で埋まるため）
-だが、ログインの失敗が続いていないかは運用で見たい（ADR-0012）。
+Failures are logged at WARNING. The default for 401 is INFO (since expired-token refreshes would flood it),
+but operations want to see whether login failures keep happening (ADR-0012).
 """
 
 from __future__ import annotations
@@ -42,10 +42,10 @@ DbDep = Annotated[Session, Depends(get_db)]
 def create_login_challenge(
     use_case: Annotated[StartPasskeyAuthentication, Depends(dependencies.start_passkey_authentication)],
 ) -> PasskeyChallengeResponse:
-    """ログイン用のチャレンジを発行する（``navigator.credentials.get`` 用）。
+    """Issue a login challenge (for ``navigator.credentials.get``).
 
-    誰がログインするかは指定しない。認証器に登録済みの資格情報を選ばせることで、
-    メールアドレスの入力なしにログインできる。
+    Who is logging in is not specified. By letting the authenticator pick a registered credential,
+    login works without entering an email address.
     """
     challenge = use_case.execute()
     return PasskeyChallengeResponse(challenge_id=challenge.challenge_id, public_key=challenge.public_key)
@@ -65,15 +65,15 @@ def login_with_passkey(
     try:
         user_id = use_case.execute(challenge_id=body.challenge_id, credential=body.credential)
     except AccountSecurityError as error:
-        # 応答への対応付けはドメイン例外のハンドラに任せ、ここでは記録だけ足す。
-        # 署名の検証失敗・チャレンジ切れも「ログインの失敗」として見たいため。
+        # Mapping to the response is left to the domain exception handler; here we only add logging.
+        # Signature verification failures and expired challenges should also be visible as "login failures".
         logger.warning("passkey_login_failed: %s", error.code)
         raise
 
     user = db.get(User, user_id)
     if user is None or not user.is_active:
-        # パスワードのログインと同じく WARNING で残す。401 の既定は INFO だが、
-        # ログインの失敗が続いていないかは運用で見たい（ADR-0012）。
+        # Log at WARNING like password login. The default for 401 is INFO,
+        # but operations want to see whether login failures keep happening (ADR-0012).
         logger.warning("passkey_login_failed: invalid_credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

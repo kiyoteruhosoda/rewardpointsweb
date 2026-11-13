@@ -1,4 +1,4 @@
-"""毎日のボーナスの出力 DTO（ADR-0024）。"""
+"""Output DTO for the daily bonus (ADR-0024)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ class DailyBonusDTO:
     amount: int
     reason: str
     starts_on: date
-    #: 渡し終えた最後の日。まだ 1 日も渡していなければ ``None``
+    #: Last day already granted. ``None`` if no day has been granted yet
     granted_through: date | None
 
 

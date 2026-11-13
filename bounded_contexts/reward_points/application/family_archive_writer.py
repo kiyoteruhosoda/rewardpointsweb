@@ -1,14 +1,14 @@
-"""家族まるごとを控えの形へ組み立てる（ADR-0026）。
+"""Assemble an entire family into the archive shape (ADR-0026).
 
-参加者・台帳・記録は別々の入口から来るため、まとめて読んでから 1 回で突き合わせる
-（``FamilyOverviewBuilder`` と同じ形）。閲覧者による出し分けはしない — 控えは
-「この家族の全部」であって、誰かから見た眺めではない。届いてよい相手かどうかは
-呼び出し側（``ExportFamilyUseCase``）が先に決める。
+Members, ledgers and records come from separate sources, so they are read in bulk and
+matched up in one pass (same shape as ``FamilyOverviewBuilder``). Nothing is filtered by
+viewer — the archive is "everything in this family", not a view from someone's perspective.
+Whether the recipient may receive it is decided beforehand by the caller (``ExportFamilyUseCase``).
 
-記録は **ID の昇順** に並べる。打ち消し・訂正は必ず相手より後に書かれているので、
-この順なら「相手が先に並ぶ」が保証される。発生日時で並べるとこれが崩れる —
-訂正は元の行の発生日時を引き継ぐ（ADR-0022）うえ、日付そのものを直す訂正では
-元より前の日時にもなる。
+Records are ordered by **ascending ID**. Reversals and corrections are always written after
+their target, so this order guarantees "the target comes first". Ordering by occurrence time
+breaks this — a correction inherits the original row's occurrence time (ADR-0022), and a
+correction that fixes the date itself can even be earlier than the original.
 """
 
 from __future__ import annotations
@@ -61,8 +61,8 @@ class FamilyArchiveWriter:
         family = self._families.find_by_id(family_id)
         if family is None:
             raise FamilyNotFoundError
-        # 表示端末は控えに入れない。端末は家族の持ち物ではなく、運用管理者の承認でだけ
-        # 生まれる（ADR-0047）。取り込んでも映す端末が無い
+        # Display devices are not archived. A device is not owned by the family; it only comes
+        # into being through operator approval (ADR-0047). On import there would be no device to show it
         members = [member for member in self._memberships.list_for_family(family_id) if not member.role.is_display]
         ledgers = {ledger.membership_id: ledger for ledger in self._ledgers.list_for_family(family_id)}
         histories = self._transactions.list_by_ledgers([ledger.id for ledger in ledgers.values()])
@@ -126,7 +126,7 @@ def _to_entry(
         amount=transaction.amount.value,
         reason=transaction.reason.value,
         occurred_at=transaction.occurred_at,
-        # 記録した人が家族を離れていれば参照は外れている（``SET NULL``）。控えでも空欄
+        # If the recorder has left the family the reference is cleared (``SET NULL``). Blank in the archive too
         granted_by=_ref_of(transaction.granted_by_membership_id, member_refs),
         reverses=_ref_of(transaction.reversal_of_id, entry_refs),
         corrects=_ref_of(transaction.corrects_id, entry_refs),

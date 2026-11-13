@@ -24,9 +24,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    # starlette 1.6.0 以降、TestClient は httpx2 を使う（httpx は非推奨）。
-    # ⚠ 本番コード（identity_federation の httpx_* / oidc_metadata）は httpx のまま。
-    #    TestClient を使う試験だけが httpx2 の型を見る。
+    # Since starlette 1.6.0, TestClient uses httpx2 (httpx is deprecated).
+    # ⚠ Production code (identity_federation's httpx_* / oidc_metadata) still uses httpx.
+    #    Only tests that use TestClient see httpx2's types.
     "httpx2>=2.13.0",
     "mypy>=1.14",
     "pillow>=12.3.0",
@@ -38,7 +38,7 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths  = ["tests"]
-# importlib: 同名テストファイルの衝突回避 / smtp: 外部リソース要のため既定除外
+# importlib: avoid clashes between same-named test files / smtp: excluded by default as it needs external resources
 addopts = "--import-mode=importlib -m 'not smtp'"
 markers = [
     "smtp: requires a real SMTP server (excluded by default)",
@@ -47,8 +47,8 @@ markers = [
 [tool.mypy]
 python_version = "3.12"
 
-# 検査対象。この構成に "src/" は無いため、実際のパッケージルートを列挙する
-# （引数なしの `uv run mypy` がそのまま品質ゲートになる）。
+# Targets to check. There is no "src/" in this layout, so list the actual package roots
+# (so `uv run mypy` with no arguments is the quality gate as is).
 files = [
     "asgi.py",
     "main.py",
@@ -90,57 +90,57 @@ quote-style = "double"
 
 [tool.ruff.lint]
 select = [
-    "E",    # pycodestyle: PEP8 準拠
-    "F",    # Pyflakes: 未使用変数・import
-    "I",    # isort: import 順
-    "B",    # flake8-bugbear: バグになりやすい記述
-    "UP",   # pyupgrade: 古い Python 構文の検出
-    "SIM",  # flake8-simplify: 不要な分岐の簡略化
-    "C4",   # flake8-comprehensions: comprehension 改善
-    "ARG",  # flake8-unused-arguments: 未使用引数
-    "N",    # pep8-naming: 命名規則
-    "RET",  # flake8-return: return 改善
-    "PTH",  # flake8-use-pathlib: pathlib 利用推奨
-    "RUF",  # Ruff 独自ルール
-    # 設計品質の定量基準（ADR-0008）。閾値は [tool.ruff.lint.mccabe] /
-    # [tool.ruff.lint.pylint] に置く。
-    "C901",    # 複雑度
-    "PLR0912", # 分岐の数
-    "PLR0913", # 引数の数
-    "PLR0915", # 文の数（関数長の代替）
+    "E",    # pycodestyle: PEP8 compliance
+    "F",    # Pyflakes: unused variables and imports
+    "I",    # isort: import order
+    "B",    # flake8-bugbear: bug-prone patterns
+    "UP",   # pyupgrade: detect outdated Python syntax
+    "SIM",  # flake8-simplify: simplify unnecessary branches
+    "C4",   # flake8-comprehensions: better comprehensions
+    "ARG",  # flake8-unused-arguments: unused arguments
+    "N",    # pep8-naming: naming conventions
+    "RET",  # flake8-return: better returns
+    "PTH",  # flake8-use-pathlib: prefer pathlib
+    "RUF",  # Ruff-specific rules
+    # Quantitative design-quality limits (ADR-0008). Thresholds live in [tool.ruff.lint.mccabe] /
+    # [tool.ruff.lint.pylint].
+    "C901",    # complexity
+    "PLR0912", # number of branches
+    "PLR0913", # number of arguments
+    "PLR0915", # number of statements (proxy for function length)
 ]
 
 ignore = [
-    # FastAPI の Depends()/Cookie()/Query() は引数デフォルトでの呼び出しが正しい用法
+    # FastAPI's Depends()/Cookie()/Query() are meant to be called in argument defaults
     "B008",
-    # 本プロジェクトのコメント・docstring は日本語であり、全角括弧・読点は意図的な表記。
-    # RUF001-003（ambiguous-unicode-character）は誤検知にしかならないため除外する。
+    # This project contains Japanese text, where full-width brackets and commas are intentional.
+    # RUF001-003 (ambiguous-unicode-character) only produce false positives, so they are excluded.
     "RUF001",
     "RUF002",
     "RUF003",
 ]
 
 [tool.ruff.lint.mccabe]
-# 開発標準どおり。導入時点の違反は 0 件（ADR-0008）。
+# As in the development standard. There were 0 violations when introduced (ADR-0008).
 max-complexity = 10
 
 [tool.ruff.lint.pylint]
-# 分岐と文の数。関数長 30 行そのものを見るルールは Ruff に無いため、
-# 文の数（30）で近似する。導入時点の違反はいずれも 0 件（ADR-0008）。
+# Branches and statements. Ruff has no rule for the 30-line function length itself,
+# so approximate it with the statement count (30). There were 0 violations of either when introduced (ADR-0008).
 max-branches = 8
 max-statements = 30
-# 引数は開発標準の 3 ではなく 5。PLR0913 はキーワード専用引数と FastAPI の
-# Depends() も 1 個として数えるため、3 にすると呼び出し側の読みやすさを
-# 損なっていない箇所まで落ちる（理由と計測結果は ADR-0008）。
+# Arguments: 5, not the development standard's 3. PLR0913 also counts keyword-only arguments and FastAPI's
+# Depends() as one each, so a limit of 3 would flag places where caller readability
+# is not harmed (reasoning and measurements in ADR-0008).
 max-args = 5
-# ネスト深度と位置引数は開発標準どおり 3。対応する PLR1702 / PLR0917 は
-# preview のため `ruff check` 本体の select には入れず、この 2 ルールだけを
-# 明示 select した別コマンド（Makefile check-backend / CI 参照）で検証する
-# （ADR-0016）。
+# Nesting depth and positional arguments are 3, as in the development standard. The matching PLR1702 / PLR0917 are
+# preview rules, so they are not in the main `ruff check` select; instead a separate command that
+# selects just these 2 rules checks them (see Makefile check-backend / CI)
+# (ADR-0016).
 max-nested-blocks = 3
 max-positional-args = 3
 
 [tool.ruff.lint.per-file-ignores]
-# ARG001: pytest フィクスチャは引数として受け取るだけで参照しないことがある
-# ARG002: テストダブルはインターフェースを満たすために使わない引数も宣言する
+# ARG001: pytest fixtures are sometimes received as arguments without being referenced
+# ARG002: test doubles declare unused arguments to satisfy an interface
 "tests/*" = ["ARG001", "ARG002"]

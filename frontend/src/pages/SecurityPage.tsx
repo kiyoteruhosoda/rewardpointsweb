@@ -1,4 +1,4 @@
-/** アカウントのセキュリティ設定（二要素認証・パスキー・IdP との連携）。 */
+/** Account security settings (two-factor authentication, passkeys, IdP linking). */
 import { useCallback, useEffect, useState, type SubmitEvent } from 'react'
 
 import { ActionButton } from '../components/ActionButton'
@@ -44,7 +44,7 @@ export function SecurityPage() {
 
   const [passkeys, setPasskeys] = useState<Passkey[]>([])
   const [passkeyName, setPasskeyName] = useState('')
-  // 削除中のパスキー（その行にだけスピナーを出す）。
+  // Passkey being deleted (shows a spinner on that row only).
   const [removingPasskeyId, setRemovingPasskeyId] = useState<number | null>(null)
   const [passkeyError, setPasskeyError] = useState<string | null>(null)
 
@@ -78,7 +78,7 @@ export function SecurityPage() {
   const formatDate = (value: string | null) =>
     value ? new Date(value).toLocaleString(locale) : '—'
 
-  // --- 二要素認証 -------------------------------------------------------
+  // --- Two-factor authentication ----------------------------------------
 
   const [startEnrollment, starting] = usePendingAction(async () => {
     setTwoFactorError(null)
@@ -117,7 +117,7 @@ export function SecurityPage() {
     }
   })
 
-  // --- パスキー ---------------------------------------------------------
+  // --- Passkeys ---------------------------------------------------------
 
   const [registerPasskey, registering] = usePendingAction(async () => {
     setPasskeyError(null)
@@ -217,8 +217,8 @@ export function SecurityPage() {
 
       <section>
         <h2>{t('security.passkeys')}</h2>
-        {/* 設定の食い違いを伝えるメッセージだけが {domain} を使う（他のキーには
-            プレースホルダが無く、渡しても何も起きない）。 */}
+        {/* Only the message reporting a configuration mismatch uses {domain} (the other keys
+            have no placeholder, so passing it does nothing). */}
         {passkeyError && (
           <p className="error">{t(passkeyError, { domain: window.location.hostname })}</p>
         )}

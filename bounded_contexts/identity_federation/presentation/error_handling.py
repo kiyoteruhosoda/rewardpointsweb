@@ -1,9 +1,9 @@
-"""ドメイン例外 -> HTTP 応答の対応付け。
+"""Mapping of domain exceptions -> HTTP responses.
 
-ここが受けるのは **JSON を返す経路**（``POST /api/auth/sso/token`` と
-``/api/auth/sso/link``）だけ。
-ブラウザの画面遷移で使う ``/login`` と ``/callback`` はルーター自身が例外を捕まえ、
-ログイン画面への転送に変える（JSON を返しても SPA は読めないため）。
+This handles only the **routes that return JSON** (``POST /api/auth/sso/token`` and
+``/api/auth/sso/link``).
+``/login`` and ``/callback``, used for browser navigation, catch exceptions in the router itself
+and turn them into a redirect to the login screen (the SPA cannot read a JSON response there).
 """
 
 from __future__ import annotations
@@ -28,11 +28,11 @@ _STATUS_BY_ERROR: dict[type[IdentityFederationError], int] = {
     IdentityProviderUnavailableError: status.HTTP_502_BAD_GATEWAY,
     SsoNotConfiguredError: status.HTTP_404_NOT_FOUND,
     SsoTicketNotFoundError: status.HTTP_401_UNAUTHORIZED,
-    # 停止の通知を送るのは IdP であって利用者ではない。401 で返すと「認証し直せ」に
-    # 読めてしまうので、仕様どおり「要求が不正」として返す（Back-Channel Logout 1.0 §2.8）。
+    # The logout notice is sent by the IdP, not by a user. Returning 401 would read as
+    # "re-authenticate", so return "invalid request" as the spec says (Back-Channel Logout 1.0 §2.8).
     InvalidLogoutTokenError: status.HTTP_400_BAD_REQUEST,
-    # 連携の解除・結び付け（ADR-0036）。⚠ **401 で返さない** ——呼んでいる本人は
-    # 認証を通っており、「認証し直せ」と読めると利用者が無意味な操作を繰り返す。
+    # Unlinking / linking (ADR-0036). ⚠ **Do not return 401** -- the caller has already
+    # authenticated; if it reads as "re-authenticate", the user repeats a pointless action.
     SsoIdentityNotLinkedError: status.HTTP_404_NOT_FOUND,
     SsoIdentityTakenError: status.HTTP_409_CONFLICT,
     SsoAlreadyLinkedError: status.HTTP_409_CONFLICT,
@@ -41,7 +41,7 @@ _STATUS_BY_ERROR: dict[type[IdentityFederationError], int] = {
 
 
 def status_for(error: IdentityFederationError) -> int:
-    """既定は 401。SSO の失敗はどれもログインが通らなかったことを意味する。"""
+    """Default is 401: every SSO failure means the login did not go through."""
     return _STATUS_BY_ERROR.get(type(error), status.HTTP_401_UNAUTHORIZED)
 
 

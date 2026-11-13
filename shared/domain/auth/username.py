@@ -1,12 +1,12 @@
-"""ログイン識別子（``users.username``）。
+"""Login identifier (``users.username``).
 
-メールアドレスから識別子を分離したことで、識別子は「アプリが決める文字列」に
-なった（ADR-0011）。既存アカウントの移行値はメールアドレスなので、``@`` と
-``.`` を含む値も受け付ける必要がある。
+Separating the identifier from the email address made it "a string the app decides"
+(ADR-0011). Existing accounts were migrated with their email address, so values
+containing ``@`` and ``.`` must still be accepted.
 
-大文字・小文字は区別しない。区別すると ``Taro`` と ``taro`` が別アカウントとして
-並び、家庭内での取り違えを招く。正規化（小文字化）はここで 1 度だけ行い、
-保存・検索の双方がこの値を使う。
+Case-insensitive. Being case-sensitive would list ``Taro`` and ``taro`` as separate
+accounts and cause mix-ups within a household. Normalization (lowercasing) happens
+only here, once, and both saving and lookup use this value.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from dataclasses import dataclass
 MIN_LENGTH = 3
 MAX_LENGTH = 255
 
-# 子どもが手で入力することを踏まえ、空白と紛らわしい記号を許さない。
+# Children type this by hand, so whitespace and confusing symbols are not allowed.
 _ALLOWED = re.compile(r"^[a-z0-9._@+-]+$")
 
 
@@ -37,7 +37,7 @@ class Username:
 
 
 def normalize_username(value: str) -> str:
-    """検索のために同じ正規化を通す（不正な値はここで弾かれる）。"""
+    """Apply the same normalization for lookup (invalid values are rejected here)."""
     return Username(value).value
 
 

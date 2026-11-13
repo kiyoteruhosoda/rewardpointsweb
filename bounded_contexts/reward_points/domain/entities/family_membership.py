@@ -1,8 +1,8 @@
-"""家族への参加（誰が、どの立場で入っているか）。
+"""Membership in a family (who belongs, and in which role).
 
-``account_id`` は ``None`` を取りうる。親が子の参加を先に作り、子が招待コードで
-アカウントを作った時点で結び付くため（ADR-0011）。同一家族では 1 アカウント
-1 参加（``UNIQUE (family_id, account_id)``）。
+``account_id`` may be ``None``: a parent creates the child's membership first, and it is
+linked when the child creates an account with an invitation code (ADR-0011). Within one
+family, one account has one membership (``UNIQUE (family_id, account_id)``).
 """
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ class FamilyMembership:
     role: FamilyRole
     display_name: DisplayName
     created_at: datetime
-    # 親メンバーが独立を指示した日時（ADR-0014）。role = child 以外では常に None
+    # When a parent member proposed independence (ADR-0014). Always None unless role = child
     independence_proposed_at: datetime | None = None
-    # 家族の中での並び順。小さいほど先に出す。同じ値なら作られた順（ID）に落ちる
+    # Sort order within the family. Smaller comes first; ties fall back to creation order (ID)
     display_order: int = 0
 
     @property
@@ -33,12 +33,12 @@ class FamilyMembership:
 
     @property
     def is_linked(self) -> bool:
-        """アカウントと結び付いているか（結び付くまで本人はログインできない）。"""
+        """Whether linked to an account (the member cannot sign in until linked)."""
         return self.account_id is not None
 
     @property
     def independence_proposed(self) -> bool:
-        """独立が指示され、子本人の承認を待っているか（ADR-0014）。"""
+        """Whether independence was proposed and awaits the child's own approval (ADR-0014)."""
         return self.independence_proposed_at is not None
 
     def is_held_by(self, account_id: int) -> bool:

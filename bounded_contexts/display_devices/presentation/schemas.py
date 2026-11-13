@@ -1,4 +1,4 @@
-"""表示端末 API のリクエスト・レスポンス（ADR-0047）。"""
+"""Requests and responses for the display devices API (ADR-0047)."""
 
 from __future__ import annotations
 
@@ -8,20 +8,20 @@ from presentation.fastapi.schemas.types import UtcDatetime
 
 
 class PairingStartRequest(BaseModel):
-    #: 端末が開いている入口（``https://…``）。承認の画面を指す QR コードの宛先に使う。
-    #: 省くと QR コードを返さない（確認コードを打てば承認できる）
+    #: Origin the device has open (``https://…``). Used as the target of the QR code pointing to the approval screen.
+    #: If omitted, no QR code is returned (approval still works by typing the confirmation code)
     origin: str | None = Field(default=None, max_length=200, pattern=r"^https?://[^/\s#?]+$")
 
 
 class PairingStartResponse(BaseModel):
-    #: 画面に出す確認コード（``KQ7M-3XPA``）。運用管理者が承認の画面で打つ
+    #: Confirmation code shown on screen (``KQ7M-3XPA``). The operator types it on the approval screen
     user_code: str
-    #: 端末だけが知る秘密。受け取りに要る。画面には出さない
+    #: Secret known only to the device. Needed to claim the credential. Never shown on screen
     device_code: str
     expires_in: int
-    #: 受け取りを問い合わせる間隔（秒）
+    #: Interval for polling the claim endpoint (seconds)
     interval: int
-    #: 承認の画面（確認コード入り）を指す QR コード（SVG の data URI）。``origin`` を送らなければ ``None``
+    #: QR code pointing to the approval screen (with the confirmation code), as an SVG data URI. ``None`` if ``origin`` was not sent
     qr_code: str | None = None
 
 
@@ -30,14 +30,14 @@ class PairingClaimRequest(BaseModel):
 
 
 class PairingClaimResponse(BaseModel):
-    #: 端末の資格情報。``POST /api/display/session`` でアクセストークンに換える
+    #: Device credential. Exchanged for an access token via ``POST /api/display/session``
     device_credential: str
 
 
 class PairingApproveRequest(BaseModel):
     user_code: str = Field(min_length=1, max_length=32)
     family_id: int
-    #: 端末の名前（例「リビング」）。家族の参加者一覧にもこの名前で並ぶ
+    #: Device name (e.g. "Living room"). Also listed under this name among the family members
     name: str = Field(min_length=1, max_length=100)
 
 
@@ -62,7 +62,7 @@ class DisplayDeviceResponse(BaseModel):
     family_name: str
     name: str
     created_at: UtcDatetime
-    #: 最後にアクセストークンを取り直した日時。受け取る前なら ``None``
+    #: When an access token was last obtained. ``None`` before the credential is claimed
     last_used_at: UtcDatetime | None
 
 

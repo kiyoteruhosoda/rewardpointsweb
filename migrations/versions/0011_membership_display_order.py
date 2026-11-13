@@ -1,12 +1,12 @@
 """membership display order
 
-家族が参加者の並び順を決められるようにする。ナビゲーションとダッシュボードは
-この順で子を並べる。
+Lets a family decide the order of its participants. Navigation and the dashboard
+list children in this order.
 
-既存の行はすべて 0 で入り、同じ値のあいだは ID 順（＝作られた順）に落ちるので、
-このリビジョンの前後で見え方は変わらない。
+All existing rows get 0, and ties fall back to ID order (= creation order), so
+nothing looks different before and after this revision.
 
-定義の正本は ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``。
+The definitions' source of truth is ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``.
 
 Revision ID: membership_display_order
 Revises: realign_roles

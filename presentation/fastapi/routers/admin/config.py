@@ -1,8 +1,8 @@
-"""システム設定 API（要 ``admin:system-settings``）。
+"""System settings API (requires ``admin:system-settings``).
 
-保存はアプリログへ残す。挙動が変わる操作で、後から「いつ設定が変わったか」を
-追えないと障害の切り分けができない。**残すのはキー名だけ**——値には秘匿項目
-（``MAIL_PASSWORD`` 等）が含まれる（CLAUDE.md「ログ」）。
+Saves are recorded in the app log. They change behavior, and without being able to trace
+"when did the setting change" later, incidents cannot be narrowed down. **Only key names are
+logged**: values include secrets (``MAIL_PASSWORD`` etc.) (CLAUDE.md "Logging").
 """
 
 from __future__ import annotations
@@ -44,10 +44,10 @@ def get_config(db: DbDep) -> list[SystemSettingItemResponse]:
 
 @router.put("", response_model=SystemSettingsUpdateResponse)
 def update_config(body: SystemSettingsUpdateRequest, db: DbDep) -> SystemSettingsUpdateResponse:
-    """設定を保存する。
+    """Save the settings.
 
-    起動時にしか読まれない設定を変更した場合は ``restart_required`` を返す。
-    実際の再起動は ``POST /api/admin/system/restart`` で要求する。
+    Returns ``restart_required`` when a setting that is only read at startup changed.
+    The actual restart is requested with ``POST /api/admin/system/restart``.
     """
     try:
         saved = SystemSettingService.save(db, body.values)
@@ -57,12 +57,12 @@ def update_config(body: SystemSettingsUpdateRequest, db: DbDep) -> SystemSetting
             detail={"error": refused.error, "key": refused.key},
         ) from refused
     except PasskeyConfigurationError as error:
-        # 既定のハンドラは「サーバーの設定不備」として 500 を返す。ここでは
-        # 管理者が今まさに入力している値の誤りなので、入力エラーとして返す。
+        # The default handler returns 500 as "server misconfiguration". Here it is an error
+        # in the value the admin is entering right now, so return it as an input error.
         logger.info("system_settings_rejected: %s", error.code)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": error.code}) from error
-    # 実際に採り込んだキーだけを残す。要求されたキーを使うと、未知のキーや伏せ字の
-    # ままの秘匿項目（どちらも保存されない）まで「変更した」ことになってしまう。
+    # Log only the keys actually applied. Using the requested keys would count unknown keys
+    # and still-masked secrets (neither is saved) as "changed".
     logger.info("system_settings_updated: keys=%s", ",".join(saved.accepted_keys) or "none")
     return SystemSettingsUpdateResponse(
         status="ok",

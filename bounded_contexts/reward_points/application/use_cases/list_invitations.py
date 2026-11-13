@@ -1,8 +1,8 @@
-"""未使用かつ期限内の招待の一覧（親メンバー）。
+"""List unused, unexpired invitations (parent members).
 
-子ども宛の招待は親も配れる（ADR-0020）ので、配った本人が確かめられるよう
-一覧も親に開ける。平文のコードは保存していないため、この一覧には載らない
-（残っているのは「誰宛に、いつまで」だけ）。
+Parents can also hand out invitations for children (ADR-0020), so the list is open
+to parents too, letting whoever issued one check on it. Plaintext codes are not
+stored, so they do not appear here (only "for whom, until when" remains).
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
-"""ポイント台帳。
+"""Point ledger.
 
-``role = child`` の参加者に対して 1 対 1 で存在する（ADR-0009）。残高は持たず、
-トランザクションの合計として導出する（ADR-0010、:class:`LedgerStatement`）。
+Exists one-to-one for each membership with ``role = child`` (ADR-0009). It holds no
+balance; the balance is derived as the sum of transactions (ADR-0010, :class:`LedgerStatement`).
 """
 
 from __future__ import annotations

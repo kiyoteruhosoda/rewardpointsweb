@@ -1,7 +1,7 @@
-"""権限コード一覧 API（要 ``permission:manage``）。
+"""Permission code list API (requires ``permission:manage``).
 
-権限コードの正本は ``shared/domain/auth/master_data.py``。追加・削除は
-マスタデータ + マイグレーションで行うため、この API は読み取り専用。
+The source of truth for permission codes is ``shared/domain/auth/master_data.py``. Codes are
+added and removed via master data + migrations, so this API is read-only.
 """
 
 from __future__ import annotations

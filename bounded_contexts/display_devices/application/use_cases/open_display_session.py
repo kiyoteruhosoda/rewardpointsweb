@@ -1,7 +1,8 @@
-"""端末の資格情報から、どの表示アカウントとして入るかを決める（ADR-0047）。
+"""Decide, from a device credential, which display account to sign in as (ADR-0047).
 
-⚠ **この口は毎回 DB を引く**（ADR-0037 の決定 3・4「出し直す経路は引く」）。外された
-端末の資格情報は行ごと消えているので、次の取り直しで断られる。
+⚠ **This entry point hits the DB every time** (ADR-0037 decisions 3 and 4: "paths
+that reissue do the lookup"). A removed device's credential row is deleted, so its
+next refresh is refused.
 """
 
 from __future__ import annotations
@@ -26,10 +27,11 @@ class OpenDisplaySessionUseCase:
         self._credentials = credentials
 
     def execute(self, device_credential: str) -> int:
-        """表示アカウントの ID を返し、最後に使った日時を書く。
+        """Return the display account ID and record the last-used time.
 
-        使われないまま :data:`CREDENTIAL_IDLE_LIMIT` を過ぎていたら資格情報を消し、
-        :class:`DeviceCredentialExpiredError` で知らせる（端末を外すのは呼び出し側）。
+        If the credential has been unused for longer than :data:`CREDENTIAL_IDLE_LIMIT`,
+        delete it and raise :class:`DeviceCredentialExpiredError` (the caller removes
+        the device).
         """
         now = utcnow()
         found = self._credentials.find_by_hash(pairing_secrets.hash_secret(device_credential))
@@ -43,7 +45,7 @@ class OpenDisplaySessionUseCase:
 
 
 class DescribeDisplayCredentialsUseCase:
-    """資格情報の棚卸し（入れる手段・最後に使った日時）。"""
+    """Inventory of credentials (how one can sign in, and when each was last used)."""
 
     def __init__(self, credentials: IDisplayCredentialRepository) -> None:
         self._credentials = credentials

@@ -1,15 +1,15 @@
 /**
- * ログインを続けられなかった（ADR-0058）ことの知らせ。
+ * Notification that the login could not be continued (ADR-0058).
  *
- * API の層（`api.ts`）が 401 のあとログインを続けられなかったときに知らせ、認証の状態
- * （`AuthContext`）が聞いて利用者を外す。画面はログイン画面へ移る（行き先は `redirect_to`、
- * 書きかけは `useSessionDraft` が残す）。
+ * The API layer (`api.ts`) emits it when the login cannot be continued after a 401, and the auth state
+ * (`AuthContext`) listens and drops the user. The screen moves to the login screen (destination in `redirect_to`,
+ * unsaved input kept by `useSessionDraft`).
  */
 type Listener = () => void
 
 const listeners = new Set<Listener>()
 
-/** 知らせを聞く。戻り値で聞くのをやめる。 */
+/** Listen for the notification. Call the return value to stop listening. */
 export function subscribeSessionEnded(listener: Listener): () => void {
   listeners.add(listener)
   return () => {

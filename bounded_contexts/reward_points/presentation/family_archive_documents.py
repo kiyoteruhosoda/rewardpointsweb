@@ -1,10 +1,10 @@
-"""控えの JSON（Pydantic）と Application 層の DTO を行き来する（ADR-0026）。
+"""Convert between the backup JSON (Pydantic) and Application-layer DTOs (ADR-0026).
 
-入れ子が深いぶん変換も長くなるので、ルーターから外へ出す。ルーター本体は
-「ユースケースを 1 回呼んで、1 回変換する」だけに保つ。
+The nesting is deep, so the conversion is long; it lives outside the router, which
+stays at "call the use case once, convert once".
 
-向きは 2 つあるが、形は 1 つ。書き出した JSON をそのまま取り込めることが控えの
-値打ちなので、応答と本文でスキーマを分けない。
+Two directions, one shape. The value of a backup is that exported JSON can be
+imported as is, so the response and request body share one schema.
 """
 
 from __future__ import annotations

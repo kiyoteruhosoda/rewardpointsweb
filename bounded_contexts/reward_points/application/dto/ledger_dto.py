@@ -1,4 +1,4 @@
-"""台帳・トランザクションの出力 DTO。"""
+"""Output DTOs for ledgers and transactions."""
 
 from __future__ import annotations
 
@@ -16,18 +16,18 @@ class TransactionDTO:
     reason: str
     occurred_at: datetime
     created_at: datetime
-    # 打ち消しレコードなら、打ち消した相手の ID
+    # For a reversal record, the ID of the record it reverses
     reversal_of_id: int | None
-    # 訂正後のレコードなら、言い直した相手の ID（ADR-0022）
+    # For a correction record, the ID of the record it restates (ADR-0022)
     corrects_id: int | None
-    # このレコードが打ち消されているか（UI は対で表示する）
+    # Whether this record has been reversed (the UI shows them as a pair)
     is_reversed: bool
     granted_by: str | None
 
 
 @dataclass(frozen=True, kw_only=True)
 class CorrectionDTO:
-    """1 回の訂正で台帳に足された 2 行（ADR-0022）。"""
+    """The two rows added to the ledger by one correction (ADR-0022)."""
 
     reversal: TransactionDTO
     correction: TransactionDTO
@@ -40,20 +40,20 @@ class LedgerDTO:
     membership_id: int
     display_name: str
     balance: int
-    # 画面が変更 UI を出すかはこの 1 つの値で決める（role 名で分岐しない）
+    # The screen decides whether to show editing UI from this single value (no branching on role names)
     can_modify: bool
     transactions: tuple[TransactionDTO, ...]
-    # 毎日のボーナスの設定（ADR-0024）。決めていなければ ``None``
+    # Daily bonus setting (ADR-0024); ``None`` if not set
     daily_bonus: DailyBonusDTO | None
 
 
 def just_written(transaction: PointTransaction, *, granted_by: str | None) -> TransactionDTO:
-    """書き込んだ直後の 1 行。
+    """The row just written.
 
-    追記した本人へ返すためのもので、``is_reversed`` は常に偽になる（書いた
-    そばから打ち消されている行は無い）。台帳を読み直すときの組み立ては
-    ``ViewPointLedgerUseCase`` が別に行う（そちらは打ち消し済みかを台帳全体から
-    決める）。
+    Returned to whoever appended it, so ``is_reversed`` is always false (no row is
+    reversed the moment it is written). Building rows when re-reading the ledger is
+    done separately by ``ViewPointLedgerUseCase`` (which decides reversal from the
+    whole ledger).
     """
     return TransactionDTO(
         id=transaction.id,

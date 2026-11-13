@@ -14,7 +14,7 @@ import { ThemeProvider } from './theme'
 
 function render(settings: UiSettings) {
   const container = document.getElementById('root')
-  if (!container) throw new Error('#root が index.html に見つかりません')
+  if (!container) throw new Error('#root not found in index.html')
 
   createRoot(container).render(
     <StrictMode>
@@ -22,8 +22,8 @@ function render(settings: UiSettings) {
         <ThemeProvider settings={settings}>
           <AuthProvider>
             <ToastProvider>
-              {/* 新しい版の知らせはどの画面でもいちばん上に出す（ADR-0059）。
-                  帯がヘッダーの上に来るよう、画面より前に置く。 */}
+              {/* Show the new-version notice at the very top of every screen (ADR-0059).
+                  Place it before the screens so the bar sits above the header. */}
               <AppUpdatePrompt watch={watchForUpdate} />
               <BrowserRouter>
                 <App />
@@ -36,6 +36,6 @@ function render(settings: UiSettings) {
   )
 }
 
-// 言語・テーマの既定値は描画前に取得する。取得後に切り替えると、初回表示で
-// 一瞬だけ違う言語・配色が見えてしまう。取得に失敗しても既定値で描画する。
+// Fetch the language and theme defaults before rendering. Switching after the fetch
+// briefly shows the wrong language/colors on first paint. Render with defaults if the fetch fails.
 void loadUiSettings().then(render)

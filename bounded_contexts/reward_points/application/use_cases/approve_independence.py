@@ -1,12 +1,12 @@
-"""子（ゲスト）が独立を承認し、独立が成立する（ADR-0014）。
+"""A child (guest) approves independence, and independence takes effect (ADR-0014).
 
-承認できるのは、親メンバーから独立を指示されている子本人だけ。成立すると
+Only the child themself, once a parent member has directed independence, can approve. On completion:
 
-- 参加・台帳・全ての記録を家族から削除する（追記専用 — ADR-0010 — の
-  明示的な例外。独立は儀式であり、黙って消える経路ではない）
-- アカウントは残り、どの家族にも所属しない初期状態になる
-- 親（メンバー）と同じアプリケーションロールへ昇格し、自分の家族を作ることも
-  招待をメンバーとして受けることもできるようになる
+- The membership, ledger and all records are deleted from the family (an explicit exception
+  to append-only — ADR-0010. Independence is a ceremony, not a path for silently disappearing)
+- The account remains, in the initial state of belonging to no family
+- It is promoted to the same application role as parents (members), so it can create its own
+  family and accept invitations as a member
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ class ApproveIndependenceUseCase:
     def execute(self, *, family_id: int, account_id: int) -> None:
         me = self._access.membership_in(family_id=family_id, account_id=account_id)
         if not me.role.has_own_ledger:
-            # 親には独立は無い。家族を離れたい親は脱退（leave）を使う
+            # Parents have no independence. A parent who wants to leave the family uses leave
             raise FamilyAccessDeniedError
         if not me.independence_proposed:
             raise IndependenceNotProposedError

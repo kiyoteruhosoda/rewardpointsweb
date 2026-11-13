@@ -1,11 +1,11 @@
 """init master schema (consolidated baseline)
 
-現行の SQLAlchemy モデル定義から生成した、全テーブルを一括作成する
-単一のベースライン・マイグレーション。
+A single baseline migration, generated from the current SQLAlchemy model definitions,
+that creates all tables at once.
 
-ロール・権限・管理者ユーザー等のマスタデータは本マイグレーションには
-含めず、直後の ``0002_seed_master_data``（および
-``python scripts/seed_master_data.py``）で投入する（冪等）。
+Master data such as roles, permissions, and the admin user is not part of this migration;
+it is seeded right after by ``0002_seed_master_data`` (and
+``python scripts/seed_master_data.py``), idempotently.
 
 Revision ID: init_master
 Revises:
@@ -117,8 +117,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # 索引はテーブルと一緒に消えるので落とさない（MariaDB は外部キー列の索引を
-    # 単独で DROP できない）
+    # Do not drop the indexes; they go away with the tables (MariaDB cannot DROP an index on a
+    # foreign key column on its own)
     op.drop_table("items")
     op.drop_table("log")
     op.drop_table("system_settings")

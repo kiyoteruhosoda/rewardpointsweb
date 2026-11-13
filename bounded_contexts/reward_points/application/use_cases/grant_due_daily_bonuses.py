@@ -1,12 +1,13 @@
-"""まだ渡していない日のボーナスを台帳へ書く（ADR-0024）。
+"""Write bonuses for days not yet granted into the ledger (ADR-0024).
 
-家族を跨いで回る唯一のユースケースで、呼ぶのは定期実行だけ（利用者の要求から
-呼ばれる口は無い）。認可を通さないのはそのため — 誰の代理でもなく、決まった
-約束を果たしているだけなので、``granted_by_membership_id`` も ``NULL`` で書く。
+The only use case that runs across families, and only the scheduled job calls it
+(no user request reaches it). That is why it skips authorization — it acts on no
+one's behalf, just keeps an agreed promise — and writes ``granted_by_membership_id``
+as ``NULL``.
 
-同じ日を 2 度書こうとしても台帳には 1 行しか入らない（冪等キーが日付を持つ。
-:mod:`~bounded_contexts.reward_points.domain.entities.daily_bonus`）。ワーカーが
-複数あっても、途中で落ちて再開しても、二重に渡ることは無い。
+Writing the same day twice still yields one ledger row (the idempotency key carries
+the date; :mod:`~bounded_contexts.reward_points.domain.entities.daily_bonus`). With
+several workers, or after a crash and restart, nothing is granted twice.
 """
 
 from __future__ import annotations
@@ -25,10 +26,11 @@ from bounded_contexts.reward_points.domain.services.day_boundary import DayBound
 
 @dataclass(frozen=True, kw_only=True)
 class GrantedDailyBonuses:
-    """1 周分の結果。
+    """Result of one pass.
 
-    ``skipped`` は遡る上限を超えて渡さなかった日数。0 でないときは呼び出し側が
-    ログへ残す — 黙って切り捨てると「毎日渡している」という前提だけが残る。
+    ``skipped`` is the number of days not granted because they exceeded the catch-up
+    limit. When non-zero the caller logs it — dropping them silently would leave only
+    the false assumption that bonuses are granted every day.
     """
 
     granted: int
@@ -69,7 +71,7 @@ class GrantDueDailyBonusesUseCase:
             ledger_id=bonus.ledger_id,
             amount=bonus.amount.value,
             reason=bonus.reason.value,
-            # 誰かの操作ではないので記録者を持たない。画面では「—」で出る
+            # Not anyone's action, so there is no recorder; the screen shows "—"
             granted_by_membership_id=None,
             occurred_at=self._boundary.starts_at(day),
             idempotency_key=idempotency_key_for(day),

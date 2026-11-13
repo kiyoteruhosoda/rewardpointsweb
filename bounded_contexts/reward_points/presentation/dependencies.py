@@ -1,7 +1,7 @@
-"""``Depends()`` 用の組み立て。
+"""Wiring for ``Depends()``.
 
-具象リポジトリを作ってユースケースへ注入するのはこの層の仕事（最も外側で配線する）。
-ルーター本体は「ユースケースを 1 回呼ぶ」だけに保つ。
+Building concrete repositories and injecting them into use cases is this layer's job
+(wiring happens at the outermost layer). Router bodies only "call a use case once".
 """
 
 from __future__ import annotations
@@ -109,11 +109,11 @@ DbDep = Annotated[Session, Depends(get_db)]
 
 
 def resolve_day_boundary() -> DayBoundary:
-    """設定の地域で 1 日を区切る（ADR-0024）。
+    """Split days by the configured time zone (ADR-0024).
 
-    読めない地域名（打ち間違い・OS に tzdata が無い）でも起動は止めない。UTC へ
-    落として 1 行残す — 区切りが 1 日ずれることはあっても、ボーナスが止まるより
-    直しやすい。
+    An unreadable zone name (typo, or no tzdata in the OS) does not stop startup. Fall
+    back to UTC and log one line — the day boundary may be off by a day, but that is
+    easier to fix than the bonus stopping.
     """
     name = settings.daily_bonus_time_zone
     try:
@@ -123,7 +123,7 @@ def resolve_day_boundary() -> DayBoundary:
         return DayBoundary(UTC)
 
 
-# --- リポジトリ --------------------------------------------------------------
+# --- Repositories ------------------------------------------------------------
 
 
 def get_family_repository(db: DbDep) -> SqlFamilyRepository:
@@ -173,7 +173,7 @@ DirectoryDep = Annotated[SqlAccountDirectory, Depends(get_account_directory)]
 ProvisioningDep = Annotated[SqlAccountProvisioning, Depends(get_account_provisioning)]
 
 
-# --- 組み立て済みの協調オブジェクト ------------------------------------------
+# --- Assembled collaborators -------------------------------------------------
 
 
 def get_access_resolver(memberships: MembershipRepoDep, ledgers: LedgerRepoDep) -> FamilyAccessResolver:
@@ -234,7 +234,7 @@ def get_invitation_binder(
 BinderDep = Annotated[InvitationBinder, Depends(get_invitation_binder)]
 
 
-# --- ユースケース ------------------------------------------------------------
+# --- Use cases ---------------------------------------------------------------
 
 
 def get_list_families_use_case(families: FamilyRepoDep, memberships: MembershipRepoDep) -> ListFamiliesUseCase:
@@ -389,7 +389,7 @@ def get_redeem_invitation_use_case(
         invitations=invitations,
         families=families,
         provisioning=provisioning,
-        # ログイン画面に SSO のボタンが出るのと同じ条件（ADR-0048）
+        # Same condition as showing the SSO button on the sign-in screen (ADR-0048)
         adults_sign_in_through_idp=settings.oidc_enabled,
     )
 

@@ -1,10 +1,10 @@
-"""画面の初期設定を配る公開 API。
+"""Public API that serves the initial UI settings.
 
-言語・テーマの既定値は管理画面（system_settings）で運用者が決めるが、実際に
-適用するのはブラウザ側。ログイン前の画面でも必要になるため認証は要求しない。
+Operators set the default language and theme in the admin console (system_settings), but
+the browser is what applies them. They are needed on pre-login screens too, so no auth is required.
 
-利用者が自分で選んだ言語・テーマはブラウザの ``localStorage`` が優先で、ここで
-返すのは「まだ何も選んでいないときの初期値」と「選択肢」だけ。
+A language or theme the user picked themselves wins via the browser's ``localStorage``; this
+only returns "the initial value when nothing has been picked yet" and "the choices".
 """
 
 from __future__ import annotations

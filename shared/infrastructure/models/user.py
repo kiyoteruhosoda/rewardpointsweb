@@ -1,11 +1,11 @@
-"""ユーザー・パスワードリセットトークンのモデル。
+"""Models for users and password reset tokens.
 
-ログインの識別子は ``username``（UNIQUE）で、``email`` は任意項目（ADR-0011）。
-メールアドレスを持たないアカウント（子ども）を作れるようにするための分離で、
-設定されている場合は従来どおり通知・パスワードリセットに使う。
+The login identifier is ``username`` (UNIQUE) and ``email`` is optional (ADR-0011).
+They are separated so accounts without an email address (children) can be created;
+when set, the email is used for notifications and password resets as before.
 
-``display_name`` は画面に出す名前。識別子とは別に持つので、名乗りを変えても
-ログインの手順は変わらない。
+``display_name`` is the name shown on screen. It is kept apart from the identifier, so changing
+the name does not change how one logs in.
 """
 
 from __future__ import annotations
@@ -28,20 +28,20 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
-    # ログイン識別子。小文字へ正規化して保存する（shared/domain/auth/username.py）
+    # Login identifier. Stored normalized to lowercase (shared/domain/auth/username.py)
     username: Mapped[str] = mapped_column(sa.String(255), unique=True, nullable=False)
-    # 任意項目。設定されていれば通知・パスワードリセットに使う
+    # Optional. When set, used for notifications and password resets
     email: Mapped[str | None] = mapped_column(sa.String(255), unique=True, nullable=True)
     display_name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
-    #: ⚠ **NULL は「ローカルのパスワードが無い」**（ADR-0034）。「空のパスワード」でも
-    #: 「誰も知らない値が入っている」でもない。判定は :attr:`has_local_password` を通す。
+    #: ⚠ **NULL means "no local password"** (ADR-0034). It is neither "an empty password"
+    #: nor "a value nobody knows". Check it through :attr:`has_local_password`.
     password_hash: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False, default=True, server_default=sa.true())
-    # 一時パスワードでログインした状態。変更を終えるまで他の操作を許可しない
+    # Logged in with a temporary password. No other action is allowed until it is changed
     must_change_password: Mapped[bool] = mapped_column(
         sa.Boolean(), nullable=False, default=False, server_default=sa.false()
     )
-    # 一時パスワードの有効期限（通常のパスワードでは NULL）
+    # Expiry of the temporary password (NULL for a normal password)
     temporary_password_expires_at = mapped_column(sa.DateTime(), nullable=True)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
@@ -50,17 +50,17 @@ class User(Base):
 
     @property
     def has_local_password(self) -> bool:
-        """パスワードでこのアプリへ入れるか（ADR-0034）。
+        """Whether this user can sign in to this app with a password (ADR-0034).
 
-        ⚠ **偽を「まだ決めていない」と読まないこと。** 偽は「この利用者に
-        パスワードという入り口は無い」であり、リセットでも生やさない。持たせるのは
-        管理者が明示的にパスワードを設定したときだけ。
+        ⚠ **Do not read false as "not decided yet".** False means "this user has
+        no password entry point", and a reset does not create one either. A password is
+        given only when an admin sets one explicitly.
         """
         return self.password_hash is not None
 
     @property
     def permission_codes(self) -> frozenset[str]:
-        """有効 scope = 全ロールが持つ権限の和集合。"""
+        """Effective scope = union of the permissions of all roles."""
         return frozenset(p.code for r in self.roles for p in r.permissions)
 
 
@@ -68,8 +68,8 @@ class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
 
     id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
-    # アカウントの削除に追随して消える（拒否ではなく CASCADE。トークンは
-    # 本人が居なければ意味を持たない）
+    # Deleted along with the account (CASCADE rather than reject; a token
+    # means nothing without its owner)
     user_id: Mapped[int] = mapped_column(
         BigIntPk, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )

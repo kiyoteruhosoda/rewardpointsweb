@@ -3,9 +3,9 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
 
-// jsdom は matchMedia を実装していない。テーマの OS 追従（theme/index.tsx）が
-// これを参照するため、「ライト配色・通知なし」の既定を置く。切り替えの検証など
-// 挙動そのものを見るテストは vi.stubGlobal で差し替える（theme.test.tsx）。
+// jsdom does not implement matchMedia. Following the OS theme (theme/index.tsx)
+// reads it, so provide a default of "light scheme, no notifications". Tests that check
+// the behavior itself, such as switching, replace it with vi.stubGlobal (theme.test.tsx).
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: string) =>
@@ -19,7 +19,7 @@ Object.defineProperty(window, 'matchMedia', {
     }) as unknown as MediaQueryList,
 })
 
-// テスト間で DOM を持ち越さない（describe をまたいだ副作用を防ぐ）
+// Do not carry the DOM over between tests (prevents side effects across describe blocks)
 afterEach(() => {
   cleanup()
 })

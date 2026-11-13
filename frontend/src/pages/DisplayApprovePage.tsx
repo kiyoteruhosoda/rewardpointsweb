@@ -1,9 +1,9 @@
 /**
- * 表示端末を承認する（運用管理者。`display:approve`。ADR-0047）。
+ * Approves a display device (operations admin, `display:approve`, ADR-0047).
  *
- * 表示端末の QR コードから開くと、確認コードが URL の `#` の後ろに載って入力済みになる
- * （ADR-0025 と同じく、コードをサーバーのログ・Referer に載せない）。ログインして
- * いなければ、ログインの後にこの画面へ戻ってくる（`RequireAuth` が行き先を覚える）。
+ * Opening it from the display device's QR code prefills the confirmation code carried after the URL's `#`
+ * (as in ADR-0025, keeping the code out of server logs and the Referer). If not signed
+ * in, you return to this screen after signing in (`RequireAuth` remembers the destination).
  */
 import { useEffect, useState, type SubmitEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -36,7 +36,7 @@ export function DisplayApprovePage() {
     listDisplayableFamilies()
       .then((loaded) => {
         setChoices(loaded)
-        // 1 家族しか無ければ選ばせない
+        // Don't ask to choose when there is only one family
         const only = loaded.length === 1 ? loaded[0] : undefined
         if (only) setFamilyId(String(only.id))
       })

@@ -27,7 +27,7 @@ log "python : $(python --version 2>&1)"
 log "mode   : ${1:-web}"
 log "================================="
 
-# ===== DB wait（MariaDB 使用時のみ） =====
+# ===== DB wait (only when using MariaDB) =====
 if echo "${DATABASE_URI:-}" | grep -q "mysql"; then
   export _DB_URI="$DATABASE_URI"
   log "Waiting for DB ..."

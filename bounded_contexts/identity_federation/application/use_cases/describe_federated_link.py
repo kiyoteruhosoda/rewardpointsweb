@@ -1,6 +1,6 @@
-"""設定画面に出す「この利用者の連携の状態」（ADR-0036）。
+""""This user's federation status" shown on the settings screen (ADR-0036).
 
-答えるのは**自分の分だけ**で、他人の結び付きは見えない。
+It answers **only for oneself**; other people's links are not visible.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ class DescribeFederatedLink:
 
     def execute(self, *, user_id: int) -> FederatedLinkDto:
         if self.provider is None:
-            # SSO が無効なら、画面にはこの区画そのものを出さない。
+            # If SSO is disabled, the screen does not show this section at all.
             return FederatedLinkDto(available=False)
         identity = self.identities.find_for_user(self.provider.issuer, user_id)
         return FederatedLinkDto(

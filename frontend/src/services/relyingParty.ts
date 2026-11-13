@@ -1,57 +1,57 @@
 /**
- * RP ID（`WEBAUTHN_RP_ID`）と、いま開いている URL の噛み合わせ。
+ * Whether the RP ID (`WEBAUTHN_RP_ID`) fits the URL currently open.
  *
- * ブラウザは `navigator.credentials` を呼んだ時点で「`rp.id` が呼び出し元の実効
- * ドメインと一致するか、その上位ドメインであること」を確かめ、外れていれば失敗
- * させる。同じ規則をこちら側にも置き、2 つに使う。
+ * When `navigator.credentials` is called, the browser checks that "`rp.id` equals the caller's effective
+ * domain or is a parent domain of it", and fails if not. The same rule is
+ * kept on this side and used for two things.
  *
- * 1. パスキーを作る・使う前に噛み合わせを見る（原因の分かる失敗にする。ブラウザ
- *    が投げる例外の名前は実装によって違い、取り消しと見分けが付かないことがある）
- * 2. 設定画面で「その値では、いま開いている URL からは使えない」と出す
+ * 1. Check the fit before creating or using a passkey (so the failure explains its cause; the name of the
+ *    exception the browser throws varies by implementation and can be indistinguishable from a cancel)
+ * 2. Show in the settings screen that "with that value it cannot be used from the URL currently open"
  *
- * 保存する値どうしの整合（RP ID とオリジン）はサーバーが見る
- * （`bounded_contexts/account_security/domain/services/relying_party_configuration.py`）。
- * **開いている URL は画面側にしか分からない**ので、その照合だけをここで行う。
+ * Consistency between the stored values (RP ID and origins) is checked by the server
+ * (`bounded_contexts/account_security/domain/services/relying_party_configuration.py`).
+ * **Only the client knows the URL being opened**, so only that comparison is done here.
  */
 
-/** 照合の相手。`window.location` をそのまま渡せる形にしておく。 */
+/** What to compare against. Shaped so `window.location` can be passed as-is. */
 export interface BrowsingLocation {
   hostname: string
   origin: string
   protocol: string
 }
 
-/** パスキーの設定のうち、開いている URL と突き合わせる 2 つ。 */
+/** The two passkey settings compared against the open URL. */
 export interface RelyingPartySettings {
   rpId: string
   origin: string
 }
 
-// ラベルは英数字とハイフン。国際化ドメインは punycode（`xn--`）へ変換済みの形で持つ。
+// Labels are alphanumerics and hyphens. Internationalized domains are held in punycode (`xn--`) form.
 const LABEL = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 
-// ブラウザが安全な文脈として例外的に扱うホスト（http でもパスキーが動く）。
+// Hosts browsers treat as a secure context by exception (passkeys work even over http).
 const HTTP_ALLOWED_HOSTS = ['localhost']
 
-// ブラウザの送るオリジンには既定ポートが付かない（`https://example.com:443` ではなく
-// `https://example.com`）。サーバー側の正規化と同じ落とし方をしないと、実際には
-// 動いている設定を「食い違っている」と誤って出してしまう。
+// Origins sent by the browser carry no default port (`https://example.com`, not
+// `https://example.com:443`). Unless we strip it the same way as the server normalization,
+// a setting that actually works would be wrongly reported as "mismatched".
 const DEFAULT_PORTS: Record<string, number> = { http: 80, https: 443 }
 
-// `scheme://host[:port]` の切り出し。ホストは IPv6 の `[...]` 表記も受ける。
+// Extracts `scheme://host[:port]`. The host also accepts IPv6 `[...]` notation.
 const ORIGIN = /^(https?):\/\/(\[[^\]]+\]|[^/:]+)(?::(\d+))?$/
 
-/** 比較のために揃える（前後の空白・大文字・末尾のドットを落とす）。 */
+/** Normalize for comparison (drop surrounding whitespace, uppercase and a trailing dot). */
 export function normalizeDomain(value: string): string {
   return value.trim().replace(/\.+$/, '').toLowerCase()
 }
 
 /**
- * 比較のために揃える（前後の空白・大文字・末尾のスラッシュを落とす）。
+ * Normalize for comparison (drop surrounding whitespace, uppercase and a trailing slash).
  *
- * 既定ポートとホスト末尾のドットも落とす。サーバーは保存された値をそのまま持ち、
- * RP を組み立てるときに正規化する（`relying_party_configuration.py`）。ここで
- * 揃えないと `https://example.com:443` のような**動く設定**を食い違いとして出す。
+ * Also drop the default port and a trailing dot on the host. The server keeps the stored value as-is and
+ * normalizes it when building the RP (`relying_party_configuration.py`). Without normalizing
+ * here, a **working setting** like `https://example.com:443` would be reported as a mismatch.
  */
 export function normalizeOrigin(value: string): string {
   const trimmed = value.trim().replace(/\/+$/, '').toLowerCase()
@@ -64,10 +64,10 @@ export function normalizeOrigin(value: string): string {
 }
 
 /**
- * `hostname` から見て `rpId` が使えるか。
+ * Whether `rpId` can be used from `hostname`.
  *
- * 使えるのは「同じドメイン」か「その上位ドメイン」だけ。ただし上位ドメインが
- * `com` のような 1 ラベルだけの公開サフィックスなら、ブラウザが拒む。
+ * Only "the same domain" or "a parent domain of it" works. But if the parent domain is
+ * a single-label public suffix like `com`, the browser rejects it.
  */
 export function isRelyingPartyIdUsable(rpId: string, hostname: string): boolean {
   const identifier = normalizeDomain(rpId)
@@ -79,26 +79,26 @@ export function isRelyingPartyIdUsable(rpId: string, hostname: string): boolean 
 }
 
 /**
- * RP ID にできる形か（ドメイン名か）。
+ * Whether it can be an RP ID (whether it is a domain name).
  *
- * IP アドレスやポート付きの値は RP ID にできない。ラベルの綴りも見るので、
- * `192.168.1.5` のような数字だけのホストはここで落ちる。
+ * IP addresses and values with a port cannot be an RP ID. Label spelling is checked too, so
+ * a digits-only host like `192.168.1.5` fails here.
  */
 export function isDomainName(value: string): boolean {
   const identifier = normalizeDomain(value)
   if (!identifier) return false
   const labels = identifier.split('.')
-  // 数字とドットだけなら IPv4。IPv6 はコロンを含む（ラベルの綴りで落ちる）。
+  // Only digits and dots means IPv4. IPv6 contains colons (fails on label spelling).
   if (labels.every((label) => /^[0-9]+$/.test(label))) return false
   return labels.every((label) => LABEL.test(label))
 }
 
 /**
- * その URL では、設定を直したところでパスキーを使えるか。
+ * Whether passkeys can be used from that URL once the settings are fixed.
  *
- * パスキーは安全な文脈（https、例外として localhost）でしか動かず、RP ID には
- * ドメイン名しか指定できない。IP アドレスで開いている場合は、その URL に合わせた
- * 設定を作っても保存できない（サーバーが弾く）ので、直し方の案内を変える。
+ * Passkeys only work in a secure context (https, with localhost as an exception), and an RP ID
+ * can only be a domain name. When opened by IP address, a setting matched to that URL
+ * cannot be saved (the server rejects it), so the guidance on how to fix it changes.
  */
 export function supportsPasskeys(location: BrowsingLocation): boolean {
   const host = normalizeDomain(location.hostname)
@@ -107,12 +107,12 @@ export function supportsPasskeys(location: BrowsingLocation): boolean {
   return scheme === 'https' || HTTP_ALLOWED_HOSTS.includes(host)
 }
 
-/** その URL を開いたまま使える設定（設定画面の「合わせる」の中身）。 */
+/** Settings that work with that URL open (what "match" does in the settings screen). */
 export function relyingPartyForLocation(location: BrowsingLocation): RelyingPartySettings {
   return { rpId: normalizeDomain(location.hostname), origin: normalizeOrigin(location.origin) }
 }
 
-/** その設定のまま、その URL からパスキーを使えるか。 */
+/** Whether passkeys can be used from that URL with those settings as they are. */
 export function matchesLocation(
   settings: RelyingPartySettings,
   location: BrowsingLocation,
@@ -125,11 +125,11 @@ export function matchesLocation(
 }
 
 /**
- * サーバーが返したオプションから RP ID を取り出す。
+ * Extract the RP ID from the options returned by the server.
  *
- * 登録（create）は `rp.id`、認証（get）は `rpId` に入る。省略されている場合は
- * ブラウザが開いているドメインを使うため、噛み合わせは常に成る（空文字を返し、
- * 呼び出し側が「確かめる必要なし」として扱う）。
+ * Registration (create) puts it in `rp.id`, authentication (get) in `rpId`. When omitted
+ * the browser uses the open domain, so it always fits (return an empty string, which
+ * the caller treats as "no need to check").
  */
 export function relyingPartyIdOf(publicKey: Record<string, unknown>): string {
   const rp = publicKey.rp

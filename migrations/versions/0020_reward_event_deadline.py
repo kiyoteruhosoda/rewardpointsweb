@@ -1,9 +1,9 @@
-"""reward event deadline (イベントの期限)
+"""reward event deadline (event deadlines)
 
-``reward_events`` に任意の期限（日付）を足す（ADR-0043）。既存のイベントは
-``NULL``（期限なし）になり、これまでどおりいつまでも貼れる。
+Adds an optional deadline (date) to ``reward_events`` (ADR-0043). Existing events become
+``NULL`` (no deadline), and stickers can still be placed on them indefinitely, as before.
 
-定義の正本は ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``。
+The definitions' source of truth is ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``.
 
 Revision ID: reward_event_deadline
 Revises: reward_events

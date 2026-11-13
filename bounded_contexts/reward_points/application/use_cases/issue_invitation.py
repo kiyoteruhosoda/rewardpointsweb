@@ -1,15 +1,16 @@
-"""招待コードを発行する。
+"""Issue an invitation code.
 
-配れる立場は招く相手で分かれる（ADR-0020）。新しい大人を入れる親の招待は owner
-だけ、すでにいる子ども宛の招待は親（owner / parent）も配れる。判定は
-``family_access_policy.can_invite`` が持つ。
+Who may issue depends on who is invited (ADR-0020). A parent invitation, which brings in
+a new adult, may be issued only by the owner; an invitation for an existing child may also
+be issued by parents (owner / parent). The decision lives in
+``family_access_policy.can_invite``.
 
-平文のコードはこの応答でだけ返す。保存されるのはハッシュだけなので、失くしたら
-発行し直す。``role = child`` の招待では、親が先に作った参加者を必ず指す
-（ADR-0009 / ADR-0011）。
+The plaintext code is returned only in this response. Only its hash is stored, so a lost
+code must be reissued. A ``role = child`` invitation always points to a membership the
+parent created beforehand (ADR-0009 / ADR-0011).
 
-配れるのは ``parent`` と ``child`` だけ。``owner`` を配ると、受け取った人が元の
-owner を除名して家族を乗っ取れる。
+Only ``parent`` and ``child`` can be issued. If ``owner`` could be issued, the recipient
+could remove the original owner and take over the family.
 """
 
 from __future__ import annotations

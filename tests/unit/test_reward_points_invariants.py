@@ -1,10 +1,10 @@
-"""実装そのものに課した約束（レビューではなく機械で守る）。
+"""Promises imposed on the implementation itself (enforced by machine, not by review).
 
-- 台帳の可否判定を `family_access_policy` の 2 関数の外へ散らさない（ADR-0009）
-- `point_transactions` を追記専用に保つ（ADR-0010）
+- Do not scatter ledger permission checks outside the 2 functions of `family_access_policy` (ADR-0009)
+- Keep `point_transactions` append-only (ADR-0010)
 
-どちらも「うっかり 1 か所書いてしまう」ことで壊れる種類の約束で、壊れても
-既存のテストは通ってしまう。AST で直接見る。
+Both are promises that break by "accidentally writing it in one place", and existing tests
+still pass when they break. So the AST is inspected directly.
 """
 
 from __future__ import annotations
@@ -15,11 +15,11 @@ from pathlib import Path
 
 _CONTEXT_ROOT = Path(__file__).resolve().parents[2] / "bounded_contexts" / "reward_points"
 
-# 立場（FamilyRole）を知ってよい場所。
-# - value_objects/family_role.py: 列挙そのもの
-# - services/family_access_policy.py: 唯一の判定者
-# - infrastructure/: 行 ↔ 列挙の変換と、立場からアプリロールへの対応付け
-# - presentation/schemas.py: リクエスト・レスポンスの型として載せるだけ
+# Places allowed to know about the family role (FamilyRole).
+# - value_objects/family_role.py: the enum itself
+# - services/family_access_policy.py: the sole decider
+# - infrastructure/: row <-> enum conversion and mapping roles to app roles
+# - presentation/schemas.py: only carries it as a request/response type
 _ROLE_AWARE = (
     "domain/value_objects/family_role.py",
     "domain/services/family_access_policy.py",
@@ -38,15 +38,15 @@ def _relative(path: Path) -> str:
 
 
 def _is_role_value(node: ast.AST) -> bool:
-    """``FamilyRole.OWNER`` のような列挙値への参照か。"""
+    """Whether this is a reference to an enum value such as ``FamilyRole.OWNER``."""
     return isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "FamilyRole"
 
 
 def _compares_role(tree: ast.AST) -> bool:
-    """立場を **比較している** か。
+    """Whether the role is being **compared**.
 
-    「どの立場として作るか」を指定するだけの参照（``role=FamilyRole.CHILD``）は
-    判定ではないので数えない。散らかると困るのは分岐の方。
+    A reference that only specifies "which role to create as" (``role=FamilyRole.CHILD``)
+    is not a decision, so it is not counted. It is the branching that hurts when scattered.
     """
     return any(
         isinstance(node, ast.Compare)
@@ -56,17 +56,17 @@ def _compares_role(tree: ast.AST) -> bool:
 
 
 def test_ledger_authorization_does_not_leak_role_comparisons() -> None:
-    """台帳の可否は `can_view_ledger` / `can_modify_ledger` の中だけで決める。
+    """Ledger permissions are decided only inside `can_view_ledger` / `can_modify_ledger`.
 
-    ユースケースやルーターが `role == owner` のような分岐を持ち始めると、
-    可視範囲を変えたいときに直す場所が散る（ADR-0009 が避けたかったこと）。
+    If use cases or routers start branching like `role == owner`, the places to fix
+    get scattered when visibility needs to change (what ADR-0009 wanted to avoid).
     """
     offenders = [
         _relative(path)
         for path in _python_files()
         if not _relative(path).startswith(_ROLE_AWARE) and _compares_role(ast.parse(path.read_text(encoding="utf-8")))
     ]
-    assert offenders == [], f"立場を直接比較している箇所: {offenders}"
+    assert offenders == [], f"places comparing the role directly: {offenders}"
 
 
 def test_access_policy_exposes_exactly_two_ledger_decisions() -> None:
@@ -78,10 +78,10 @@ def test_access_policy_exposes_exactly_two_ledger_decisions() -> None:
 
 
 def test_point_transactions_are_never_updated_or_deleted() -> None:
-    """追記専用（ADR-0010）。訂正は打ち消しの行で表し、行単位では消さない。
+    """Append-only (ADR-0010). Corrections are expressed with reversal rows; rows are never deleted individually.
 
-    唯一の例外は、独立の成立時に台帳ごと消す ``delete_by_ledger``（ADR-0014）。
-    削除の呼び出しがその関数の外に現れないことを見る。
+    The only exception is ``delete_by_ledger`` (ADR-0014), which deletes a whole ledger when independence takes effect.
+    Checks that delete calls do not appear outside that function.
     """
     repository = _CONTEXT_ROOT / "infrastructure" / "sql_point_transaction_repository.py"
     tree = ast.parse(repository.read_text(encoding="utf-8"))
@@ -95,15 +95,15 @@ def test_point_transactions_are_never_updated_or_deleted() -> None:
             for node in ast.walk(function)
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
         }
-        assert "delete" not in called, f"delete_by_ledger の外で削除している: {function.name}"
-        assert "update" not in called, f"更新している: {function.name}"
+        assert "delete" not in called, f"deleting outside delete_by_ledger: {function.name}"
+        assert "update" not in called, f"updating: {function.name}"
 
     methods = {function.name for function in functions}
     assert not {"delete", "update", "remove"} & methods
 
 
 def test_transaction_repository_port_offers_no_way_to_change_a_row() -> None:
-    """行単位の更新・削除の口を持たない。台帳ごと消す独立の例外だけ（ADR-0014）。"""
+    """No per-row update/delete entry points. Only the independence exception that deletes a whole ledger (ADR-0014)."""
     port = _CONTEXT_ROOT / "domain" / "repositories" / "point_transaction_repository.py"
     tree = ast.parse(port.read_text(encoding="utf-8"))
     methods = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}

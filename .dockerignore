@@ -11,7 +11,7 @@ dist/
 frontend/node_modules
 frontend/dist
 logs/
-# docker compose のホストマウント（DB のデータ実体。ビルド文脈へ入れない）
+# Host mount for compose (actual DB data; keep it out of the build context)
 mnt/
-# 手元ビルド専用の上書き（イメージには不要）
+# Override for local builds only (not needed in the image)
 docker-compose.override.yml

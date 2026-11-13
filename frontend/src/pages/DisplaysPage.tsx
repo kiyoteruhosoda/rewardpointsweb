@@ -1,8 +1,8 @@
 /**
- * 表示端末の一覧（運用管理者。`display:approve`。ADR-0047）。
+ * List of display devices (operations admin, `display:approve`, ADR-0047).
  *
- * どの家族をどの端末に映しているかを並べ、外せるようにする。外すと端末の資格情報が
- * 消え、端末は 5 分以内（手元のトークンの寿命）にコードの画面へ戻る。
+ * Lists which family is shown on which device and lets you remove them. Removing deletes
+ * the device's credentials, and the device returns to the code screen within 5 minutes (its token lifetime).
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'

@@ -1,13 +1,13 @@
-"""すでにアカウントを持つ人が、招待コードで家族へ加わる。
+"""Someone who already has an account joins a family with an invitation code.
 
-受諾（accept）で加われるのは親（parent）としてだけ（ADR-0018）。
+Accepting can only join as a parent (ADR-0018).
 
-- 親の招待を使えるのは、保護者になれるアカウント（member ロール）だけ。
-  子（guest）が使うと「名ばかりの保護者」になってしまうため断る。
-  子の大人化は独立（ADR-0014）か管理者のロール変更で行う。
-- 子の招待はアカウントの新規作成（redeem — ADR-0011）でだけ使える。既存の
-  アカウントを子として結び付けると、除名の後始末（アカウント削除）が独立に
-  存在するアカウントを巻き込んでしまう。
+- Only accounts that can be guardians (member role) may use a parent invitation.
+  A child (guest) using one would become a guardian in name only, so we refuse.
+  A child becomes an adult via independence (ADR-0014) or an admin role change.
+- A child invitation can only be used when creating a new account (redeem —
+  ADR-0011). Linking an existing account as a child would let the cleanup after
+  removal (account deletion) take down an account that exists independently.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ class AcceptInvitationCommand:
     account_id: int
     username: str
     display_name: str | None
-    # 呼び出し元が保護者の scope（family:manage）を持つか（Presentation 層で検証済み）
+    # Whether the caller has the guardian scope (family:manage); verified in the Presentation layer
     can_guard: bool
 
 
@@ -45,7 +45,7 @@ class AcceptInvitationUseCase:
             account_id=command.account_id,
             display_name=command.display_name,
         )
-        # ここで弾くとトランザクションごと巻き戻るので、招待コードは消費されない
+        # Rejecting here rolls back the whole transaction, so the invitation code is not consumed
         if membership.role.has_own_ledger:
             raise ChildInvitationRequiresSignupError
         if membership.role.is_guardian and not command.can_guard:

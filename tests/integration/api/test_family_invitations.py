@@ -1,4 +1,4 @@
-"""招待による参加と、親からの一時パスワード発行（ADR-0011）。"""
+"""Joining by invitation, and a parent issuing a temporary password (ADR-0011)."""
 
 from __future__ import annotations
 
@@ -43,14 +43,14 @@ def test_child_creates_an_account_without_an_email(client: TestClient, parent: A
 
     redeemed = _redeem(client, invitation["code"], username="Taro", password="taro-pass-123")
     assert redeemed["role"] == "child"
-    # ログイン識別子は小文字へ正規化する
+    # The login identifier is normalized to lowercase
     assert redeemed["username"] == "taro"
 
     headers = login(client, username="taro", password="taro-pass-123")
     me = client.get("/api/auth/me", headers=headers).json()
     assert me["email"] is None
 
-    # 参加者がアカウントと結び付く
+    # The participant gets linked to the account
     detail = client.get(f"/api/families/{family_id}", headers=parent.headers).json()
     linked = next(m for m in detail["memberships"] if m["id"] == child["id"])
     assert linked["is_linked"] is True
@@ -58,7 +58,7 @@ def test_child_creates_an_account_without_an_email(client: TestClient, parent: A
 
 
 def test_child_can_name_itself_when_creating_the_account(client: TestClient, parent: Account) -> None:
-    """名乗った名前がアカウントの表示名になる（未指定ならログイン識別子）。"""
+    """The name given becomes the account's display name (the login identifier when omitted)."""
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
     invitation = issue_invitation(
@@ -164,7 +164,7 @@ def test_pending_invitations_never_expose_the_code(client: TestClient, parent: A
 
 
 def test_owner_role_cannot_be_handed_out_by_invitation(client: TestClient, parent: Account) -> None:
-    """配れると、受け取った人が元の owner を除名して家族を乗っ取れる。"""
+    """If it could be handed out, the recipient could remove the original owner and take over the family."""
     family_id = create_family(client, parent.headers)
 
     response = client.post(
@@ -178,7 +178,7 @@ def test_owner_role_cannot_be_handed_out_by_invitation(client: TestClient, paren
 
 
 def test_a_code_admits_exactly_one_account(client: TestClient, parent: Account) -> None:
-    """1 回きりであることを、参加を作る前の消費で担保する。"""
+    """Single use is guaranteed by consuming the code before the participation is created."""
     family_id = create_family(client, parent.headers)
     invitation = issue_invitation(client, parent.headers, family_id, role="parent")
 
@@ -208,7 +208,7 @@ def test_a_code_admits_exactly_one_account(client: TestClient, parent: Account) 
 
 
 def test_a_rejected_redemption_does_not_burn_the_code(client: TestClient, parent: Account) -> None:
-    """弾かれた試行はトランザクションごと巻き戻る（コードは使えるまま）。"""
+    """A rejected attempt rolls back the whole transaction (the code stays usable)."""
     family_id = create_family(client, parent.headers)
     invitation = issue_invitation(client, parent.headers, family_id, role="parent")
 
@@ -247,7 +247,7 @@ def test_revoked_invitation_cannot_be_redeemed(client: TestClient, parent: Accou
     assert response.status_code == 404
 
 
-# --- 親による一時パスワードの発行 --------------------------------------------
+# --- Temporary password issued by a parent --------------------------------------------
 
 
 def _linked_child(client: TestClient, parent: Account) -> tuple[int, int]:
@@ -271,7 +271,7 @@ def test_parent_issues_a_temporary_password_and_child_must_change_it(client: Tes
     issued = response.json()
     assert issued["username"] == "taro"
 
-    # 古いパスワードは通らない
+    # The old password no longer works
     assert client.post("/api/auth/login", json={"username": "taro", "password": "taro-pass-123"}).status_code == 401
 
     signed_in = client.post("/api/auth/login", json={"username": "taro", "password": issued["password"]})
@@ -279,11 +279,11 @@ def test_parent_issues_a_temporary_password_and_child_must_change_it(client: Tes
     assert signed_in.json()["must_change_password"] is True
     headers = {"Authorization": f"Bearer {signed_in.json()['access_token']}"}
 
-    # 変更を終えるまで他の操作は通らない
+    # No other operation goes through until the change is done
     blocked = client.get("/api/families", headers=headers)
     assert blocked.status_code == 403
     assert blocked.json()["detail"]["error"] == "password_change_required"
-    # 自分が誰かとパスワード変更だけは開いている
+    # Only "who am I" and the password change stay open
     assert client.get("/api/auth/me", headers=headers).json()["must_change_password"] is True
 
     changed = client.post(
@@ -292,8 +292,8 @@ def test_parent_issues_a_temporary_password_and_child_must_change_it(client: Tes
         json={"current_password": issued["password"], "new_password": "taro-new-pass-1"},
     )
     assert changed.status_code == 200
-    # ⚠ **出し直したトークンを使うこと**（ADR-0037）。一時パスワードの印はアクセス
-    #   トークンに焼かれているので、古いトークンは「まだ変えていない」と言い続ける。
+    # ⚠ **Use the reissued token** (ADR-0037). The temporary-password mark is baked into the access
+    #   token, so the old token keeps saying "not changed yet".
     settled = {"Authorization": f"Bearer {changed.json()['access_token']}"}
     assert client.get("/api/families", headers=settled).status_code == 200
 
@@ -335,7 +335,7 @@ def test_parent_cannot_reset_another_parent(client: TestClient, admin_headers: d
 
 
 def test_temporary_password_blocks_profile_and_security_changes(client: TestClient, parent: Account) -> None:
-    """第二の要素や連絡先を、本人より先に差し替えられないようにする（ADR-0011）。"""
+    """Keep the second factor and contact details from being replaced before the person themselves does it (ADR-0011)."""
     family_id, membership_id = _linked_child(client, parent)
     issued = client.post(
         f"/api/families/{family_id}/memberships/{membership_id}/password-reset",
@@ -354,9 +354,9 @@ def test_temporary_password_blocks_profile_and_security_changes(client: TestClie
         assert response.status_code == 403, response.text
         assert response.json()["detail"]["error"] == "password_change_required"
 
-    # 変更を終えれば通る。
-    # ⚠ **出し直したトークンを使うこと**（ADR-0037）。一時パスワードの印はアクセス
-    #   トークンに焼かれているので、古いトークンは「まだ変えていない」と言い続ける。
+    # Once the change is done, it goes through.
+    # ⚠ **Use the reissued token** (ADR-0037). The temporary-password mark is baked into the access
+    #   token, so the old token keeps saying "not changed yet".
     changed = client.post(
         "/api/auth/change-password",
         headers=headers,
@@ -366,7 +366,7 @@ def test_temporary_password_blocks_profile_and_security_changes(client: TestClie
     assert changed.json()["must_change_password"] is False
     settled = {"Authorization": f"Bearer {changed.json()['access_token']}"}
     assert client.get("/api/account/security/passkeys", headers=settled).status_code == 200
-    # ⚠ 古いトークンは、寿命が切れるまで関門に掛かったままである。
+    # ⚠ The old token stays stuck at the gate until it expires.
     assert client.get("/api/account/security/passkeys", headers=headers).status_code == 403
 
 
@@ -390,10 +390,10 @@ def test_with_an_idp_a_parent_invitation_cannot_create_an_account(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """⚠ IdP があるなら、大人の口座は IdP で入ったときの 1 つだけ（ADR-0048）。
+    """⚠ When an IdP exists, an adult has only the one account created when signing in through the IdP (ADR-0048).
 
-    ここで作るとメールアドレスを持たない別の口座になり、初めて SSO で入ったときに
-    同じ人の口座が 2 つになる。断ってもコードは使えるまま残り、ログインして受諾できる。
+    Creating one here would make a separate account without an email address, so the same person would end up
+    with two accounts on the first SSO sign-in. Even when refused, the code stays usable and can be accepted after signing in.
     """
     monkeypatch.setenv("OIDC_ENABLED", "true")
     family_id = create_family(client, parent.headers)
@@ -419,7 +419,7 @@ def test_with_an_idp_a_parent_invitation_cannot_create_an_account(
 def test_with_an_idp_a_child_invitation_still_creates_the_account(
     client: TestClient, parent: Account, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """子は IdP に口座を持たない（ADR-0011・ADR-0035）。入り口はこれまでどおりここだけ。"""
+    """Children have no account at the IdP (ADR-0011, ADR-0035). This stays their only way in, as before."""
     monkeypatch.setenv("OIDC_ENABLED", "true")
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")

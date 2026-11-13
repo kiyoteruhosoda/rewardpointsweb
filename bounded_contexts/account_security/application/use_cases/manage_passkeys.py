@@ -1,4 +1,4 @@
-"""登録済みパスキーの一覧・削除。"""
+"""Listing and deleting registered passkeys."""
 
 from __future__ import annotations
 

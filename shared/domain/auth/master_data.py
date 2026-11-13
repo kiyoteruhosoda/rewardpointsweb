@@ -1,22 +1,22 @@
-"""認可マスタデータの正本（ユビキタス言語: ロール / 権限 / 権限付与）。
+"""Source of truth for authorization master data (ubiquitous language: role / permission / permission grant).
 
-ロール・権限コード・ロールへの権限付与・初期管理者は、アプリケーションが
-起動時から正しく動作するために必須の「マスタデータ」である。値の重複定義に
-よるドリフトを防ぐため、ここを唯一の出所（single source of truth）とし、
+Roles, permission codes, permission grants to roles and the initial admin are "master data"
+the application needs to work correctly from startup. To prevent drift from duplicated
+definitions, this is the single source of truth, and
 
-- マイグレーション（``migrations/versions/*_seed_master_data.py``）
-- 投入スクリプト（``scripts/seed_master_data.py``）
+- migrations (``migrations/versions/*_seed_master_data.py``)
+- the seeding script (``scripts/seed_master_data.py``)
 
-の双方がこのモジュールを参照する。フレームワーク・DB に依存しない純データの
-ため、どこからでも安全に import できる。
+both refer to this module. It is pure data with no framework or DB dependency,
+so it can be imported safely from anywhere.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-# --- ロール ------------------------------------------------------------------
-# id は外部参照（user_roles 等）の安定キーとして固定する。
+# --- Roles ------------------------------------------------------------------
+# id is fixed as a stable key for external references (user_roles etc.).
 ROLES: Sequence[tuple[int, str]] = (
     (1, "admin"),
     (2, "manager"),
@@ -26,8 +26,8 @@ ROLES: Sequence[tuple[int, str]] = (
     (6, "display"),
 )
 
-# --- 権限コード（scope） -----------------------------------------------------
-# 認可は scope（権限コード値）で行う。コードを安定キーとし、id は DB 採番に任せる。
+# --- Permission codes (scope) -----------------------------------------------
+# Authorization uses scope (permission code values). The code is the stable key; id is assigned by the DB.
 PERMISSION_CODES: Sequence[str] = (
     "admin:system-settings",
     "user:manage",
@@ -39,33 +39,33 @@ PERMISSION_CODES: Sequence[str] = (
     "gui:view",
     "item:view",
     "item:manage",
-    # --- ポイント（reward_points コンテキスト） ---
-    # scope は「その操作を行える立場か」までを決める。「その家族・その台帳を
-    # 触れるか」は家族の中での立場（role）で別に判定する（ADR-0009）。
+    # --- Points (reward_points context) ---
+    # scope only decides "is this a role that may do the operation". "May they touch this family /
+    # this ledger" is decided separately by the role within the family (ADR-0009).
     "family:view",
     "family:manage",
     "point:view",
     "point:manage",
-    # --- 表示端末（display_devices コンテキスト。ADR-0047） ---
-    # 表示端末を承認する・一覧を見る・外す。ある家族の台帳をある端末に映す操作なので、
-    # admin には付けない（admin は家庭の台帳を見ない。ADR-0018）
+    # --- Display devices (display_devices context, ADR-0047) ---
+    # Approve, list and remove display devices. This shows a family's ledger on a device,
+    # so admin does not get it (admin does not see household ledgers, ADR-0018)
     "display:approve",
 )
 
-# --- ロールへの権限付与 ------------------------------------------------------
-# ロール名 -> 付与する権限コードの集合。有効 scope は所属ロールの和集合。
+# --- Permission grants to roles ---------------------------------------------
+# Role name -> set of permission codes granted. The effective scope is the union over the user's roles.
 #
-# ロールはアクター（人）に対応する（ADR-0018）。
-#   admin   = システム管理者。ユーザー・ロール・設定・ログを扱うが、
-#             家族・ポイントは家庭の当事者（member / guest）の領分で関与しない
-#   member  = 親・大人（メンバー）。家族を作り、子を追加し、ポイントを記録できる
-#   guest   = 子（ゲスト）。招待の受諾でのみ生まれ、自分の家族と台帳を見るだけ
-#   manager = ログの閲覧者（画面の呼び名。旧称は運用者）。家族機能とは無関係で、家族のフローでは一切割り当てない
-#   operator = 表示端末の承認者（画面の呼び名。旧称は運用管理者）。
-#              表示端末を承認して、どの家族をどの端末に映すかを決める（ADR-0047）
-#   display  = 表示端末（人ではない）。承認で生まれ、家族の全部の子の台帳を見るだけ（ADR-0047）
+# Roles correspond to actors (people) (ADR-0018).
+#   admin   = system administrator. Handles users, roles, settings and logs, but
+#             families and points belong to the household parties (member / guest) and admin stays out
+#   member  = parent / adult (member). Creates a family, adds children and records points
+#   guest   = child (guest). Created only by accepting an invitation; only views their own family and ledger
+#   manager = log viewer (screen name; formerly "operator"). Unrelated to family features, never assigned in family flows
+#   operator = display device approver (screen name; formerly "operations admin").
+#              Approves display devices and decides which family is shown on which device (ADR-0047)
+#   display  = display device (not a person). Created by approval; only views the ledgers of all children in the family (ADR-0047)
 _FAMILY_POINT_SCOPES: frozenset[str] = frozenset({"family:view", "family:manage", "point:view", "point:manage"})
-# admin に付けない scope。家族・ポイントに加えて、家族を端末へ映す承認も持たせない
+# Scopes admin does not get. Besides families and points, also no approval to show a family on a device
 _OUTSIDE_ADMIN_SCOPES: frozenset[str] = _FAMILY_POINT_SCOPES | {"display:approve"}
 
 ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
@@ -80,7 +80,7 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
         "item:view",
         "dashboard:view",
         "gui:view",
-        # 家族を作り、子を追加し、ポイントを加算・消費できる
+        # Create a family, add children, add and spend points
         "family:view",
         "family:manage",
         "point:view",
@@ -89,7 +89,7 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
     "guest": (
         "dashboard:view",
         "gui:view",
-        # 自分の家族・自分のポイントと履歴は見られるが、変更する scope は持たない
+        # Can see their own family, own points and history, but has no scope to change them
         "family:view",
         "point:view",
     ),
@@ -101,25 +101,25 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
     "display": (
         "dashboard:view",
         "gui:view",
-        # 家族の全部の子の台帳を見るだけ。どの台帳かは家族の中の立場 display が決める
+        # Only views the ledgers of all children in the family. Which ledger is decided by the in-family role display
         "family:view",
         "point:view",
     ),
 }
 
-# --- 初期管理者 --------------------------------------------------------------
-# ログインの識別子は ``username``（ADR-0011）。既定値をメールアドレスと同じ文字列に
-# しているのは、既存アカウントの移行値が ``username = email`` になるためで、
-# 移行前後でログインの手順を変えないための選択。
+# --- Initial admin ----------------------------------------------------------
+# The login identifier is ``username`` (ADR-0011). The default equals the email address
+# because existing accounts are migrated with ``username = email``; this keeps the
+# login procedure the same before and after the migration.
 #
-# パスワードは環境変数 ``ADMIN_INITIAL_PASSWORD`` で上書きできる（推奨）。
-# 未指定時は既定のパスワード（メールアドレスと同じ文字列）が使われる。誰でも
-# 知り得る値なので、本番では初回ログイン後に必ず変更すること。
+# The password can be overridden with the environment variable ``ADMIN_INITIAL_PASSWORD`` (recommended).
+# If unset, the default password (the same string as the email address) is used. Anyone
+# can know it, so in production always change it after the first login.
 #
-# 平文とハッシュの両方を置くのは、平文が公開の既定値（秘密ではない）であり、
-# ドキュメントとハッシュの食い違いを検出できるようにするため
-# （``tests/unit/test_master_data.py`` が両者の一致を検証する）。ハッシュ化は
-# Infrastructure の関心なので、この層では計算せず定数として持つ。
+# Both plaintext and hash are kept because the plaintext is a public default (not a secret),
+# and this lets a mismatch between documentation and hash be detected
+# (``tests/unit/test_master_data.py`` checks they match). Hashing is an
+# Infrastructure concern, so this layer does not compute it and keeps it as a constant.
 DEFAULT_ADMIN_ID: int = 1
 DEFAULT_ADMIN_EMAIL: str = "admin@example.com"
 DEFAULT_ADMIN_USERNAME: str = "admin@example.com"
@@ -132,11 +132,11 @@ DEFAULT_ADMIN_PASSWORD_HASH: str = (
     "fef5f7c1833bac4c15468d546c50c2db67ea93363aec1fddb663f95e"
 )
 
-# 過去に既定として配ったハッシュ。既定のまま運用されている管理者を「触られて
-# いない」と判定するために残す（判定にだけ使い、新規投入には使わない）。
-# 既定値を変えたら、直前の値をここへ積む。
+# Hashes shipped as defaults in the past. Kept to tell that an admin still on the default is
+# "untouched" (used only for that check, never for new seeding).
+# When the default changes, append the previous value here.
 SUPERSEDED_ADMIN_PASSWORD_HASHES: Sequence[str] = (
-    # 平文 "admin"
+    # plaintext "admin"
     "scrypt:32768:8:1$kp58BgWIX2eGuqc6$"
     "879463f4b7684251a26d3ce6d863de80b756a47c42244709a752e0b935ad5f0b7392f598"
     "b9a43436d8af47aba78d78c726eb8fab983fe03e823c19f92108ff27",

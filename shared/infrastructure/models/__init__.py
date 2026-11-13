@@ -1,8 +1,8 @@
-"""共有 SQLAlchemy モデル。
+"""Shared SQLAlchemy models.
 
-Alembic autogenerate・テストが全テーブルを認識できるよう、モデル追加時は
-ここへ import を追加する（コンテキスト固有モデルは ``migrations/env.py`` と
-``tests/conftest.py`` 側で import する）。
+So that Alembic autogenerate and tests see every table, add an import here when
+adding a model (context-specific models are imported in ``migrations/env.py`` and
+``tests/conftest.py``).
 """
 
 from shared.infrastructure.models.log import Log

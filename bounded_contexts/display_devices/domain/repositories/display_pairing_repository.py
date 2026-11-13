@@ -1,4 +1,4 @@
-"""ペアリングの置き場。確認コードと端末の秘密はハッシュで渡す（平文は置かない）。"""
+"""Storage for pairings. The confirmation code and device secret are passed as hashes (no plaintext is stored)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ class IDisplayPairingRepository(ABC):
 
     @abstractmethod
     def is_user_code_in_use(self, user_code_hash: str) -> bool:
-        """同じ確認コードの行が残っているか（作るときの衝突よけ）。"""
+        """Whether a row with the same confirmation code still exists (to avoid collisions on create)."""
 
     @abstractmethod
     def find_by_user_code(self, user_code_hash: str) -> DisplayPairing | None: ...
@@ -30,7 +30,7 @@ class IDisplayPairingRepository(ABC):
 
     @abstractmethod
     def delete_expired_before(self, moment: datetime) -> None:
-        """*moment* より前に期限が切れた行を消す（溜めない）。"""
+        """Delete rows that expired before *moment* (so they do not pile up)."""
 
 
 __all__ = ["IDisplayPairingRepository"]

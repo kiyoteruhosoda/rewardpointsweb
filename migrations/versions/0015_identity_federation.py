@@ -1,20 +1,20 @@
 """identity federation
 
-外部 IdP（OpenID Connect）でのログインに要る 3 つの表を足す（ADR-0029）。
+Adds the three tables needed for login through an external IdP (OpenID Connect) (ADR-0029).
 
-- ``federated_identities`` — IdP のアカウントと利用者の結び付き。鍵は
-  ``(issuer, subject)``。利用者側には一意制約を置かない（1 人が複数の IdP
-  アカウントを持てる）。
-- ``sso_login_sessions`` — 認可要求の控え。複数ワーカーでは送り出したプロセスと
-  戻り先のプロセスが一致しないため DB に置く。
-- ``sso_login_tickets`` — コールバックが発行する 1 回限りの引き換え券
-  （ハッシュのみ保存）。
+- ``federated_identities`` - the link between an IdP account and a user. The key is
+  ``(issuer, subject)``. There is no unique constraint on the user side (one person can have
+  accounts at several IdPs).
+- ``sso_login_sessions`` - a record of the authorization request. With several workers the process
+  that sent the request and the one that receives the callback differ, so it lives in the DB.
+- ``sso_login_tickets`` - one-time exchange tickets issued by the callback
+  (only the hash is stored).
 
-利用者が消えたら結び付きも券も残す意味が無いので ``ON DELETE CASCADE``。
-既存の利用者には行が入らないので、このリビジョンの前後で見え方は変わらない。
+Once a user is deleted there is no point keeping the link or the tickets, so ``ON DELETE CASCADE``.
+Existing users get no rows, so nothing looks different before and after this revision.
 
-定義の正本は
-``bounded_contexts/identity_federation/infrastructure/identity_federation_models.py``。
+The definitions' source of truth is
+``bounded_contexts/identity_federation/infrastructure/identity_federation_models.py``.
 
 Revision ID: identity_federation
 Revises: family_rules
@@ -58,7 +58,7 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
-    # 期限切れの掃除が毎回の発行で走る。期限で引ける索引を置く。
+    # Cleanup of expired rows runs on every issue. Add an index to look them up by expiry.
     op.create_index("ix_sso_login_sessions_expires_at", "sso_login_sessions", ["expires_at"])
 
     op.create_table(
@@ -75,8 +75,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # 索引は表と一緒に消える。外部キーが使う索引を先に落とすと MariaDB が拒む
-    # （CLAUDE.md「DDL 管理」）
+    # Indexes go away with the table. Dropping an index a foreign key uses first is rejected by MariaDB
+    # (CLAUDE.md "DDL management")
     op.drop_table("sso_login_tickets")
     op.drop_table("sso_login_sessions")
     op.drop_table("federated_identities")

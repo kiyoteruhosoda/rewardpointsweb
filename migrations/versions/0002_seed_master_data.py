@@ -1,12 +1,12 @@
 """seed master data
 
-ロール・権限・初期管理者を投入する。値の正本は
-``shared/domain/auth/master_data.py``（ここへ直書きしない）。
+Seeds roles, permissions, and the initial administrator. The source of truth for the values is
+``shared/domain/auth/master_data.py`` (do not hard-code them here).
 
-書き込みは ORM モデルではなく **この時点のスキーマを写した Core のテーブル定義**
-で行う。モデルは後のマイグレーションで変わる（ADR-0011 で ``users`` に
-``username`` / ``display_name`` が入った）ため、モデル経由で書くと、過去の
-リビジョンを適用する途中でまだ存在しない列を参照して落ちる。
+Writes go through **Core table definitions that mirror the schema at this point**, not the
+ORM models. The models change in later migrations (ADR-0011 added ``username`` /
+``display_name`` to ``users``), so writing through the models would fail while applying
+past revisions, because they would reference columns that do not exist yet.
 
 Revision ID: seed_master_data
 Revises: init_master
@@ -29,7 +29,7 @@ down_revision = "init_master"
 branch_labels = None
 depends_on = None
 
-# このリビジョン時点の列だけを書く（後から増えた列は既定値に任せる）
+# Write only the columns that exist at this revision (columns added later use their defaults)
 _roles = sa.table("roles", sa.column("id"), sa.column("name"))
 _permissions = sa.table("permissions", sa.column("id"), sa.column("code"))
 _role_permissions = sa.table("role_permissions", sa.column("role_id"), sa.column("permission_id"))
@@ -98,12 +98,12 @@ def _seed_admin(bind: Connection, roles: dict[str, int]) -> None:
     from werkzeug.security import generate_password_hash
 
     plain = os.environ.get("ADMIN_INITIAL_PASSWORD") or None
-    now = datetime.now(UTC).replace(tzinfo=None)  # 契約: 保存値は naive な UTC
+    now = datetime.now(UTC).replace(tzinfo=None)  # Contract: stored values are naive UTC
     bind.execute(
         _users.insert().values(
             id=master_data.DEFAULT_ADMIN_ID,
             email=master_data.DEFAULT_ADMIN_EMAIL,
-            # このリビジョンの ``username`` は表示名（識別子になるのは ADR-0011 以降）
+            # At this revision ``username`` is the display name (it becomes the identifier from ADR-0011 on)
             username=master_data.DEFAULT_ADMIN_DISPLAY_NAME,
             password_hash=generate_password_hash(plain) if plain else master_data.DEFAULT_ADMIN_PASSWORD_HASH,
             is_active=True,

@@ -1,12 +1,12 @@
-"""子の並び順を決める（親メンバー）。
+"""Set the order of children (parent members).
 
-ナビゲーションもダッシュボードも、家族の決めた順で子を並べる。並びは家族に
-1 つで、誰が見ても同じ順に出る（人ごとに持つと「上から 2 番目の子」が会話で
-通じなくなる）。
+Navigation and the dashboard both list children in the family's chosen order.
+There is one order per family and everyone sees the same one (per-person orders
+would make "the second child from the top" meaningless in conversation).
 
-並べ替えは順番を入れ替えるだけで、参加者を増やしも減らしもしない。渡された
-一覧が家族の子とちょうど一致しない場合は、画面が古い一覧を握っている合図
-なので断る。
+Reordering only swaps positions; it never adds or removes members. If the given
+list does not exactly match the family's children, the screen is holding a stale
+list, so we refuse.
 """
 
 from __future__ import annotations
@@ -52,13 +52,13 @@ class ReorderMembersUseCase:
         family = self._families.find_by_id(family_id)
         if family is None:
             raise FamilyNotFoundError
-        # この入口は family:manage を要求する（router）ので、可否は立場だけで決まる
+        # This entry point requires family:manage (router), so permission depends on role alone
         return detail_of(family, viewer=viewer, memberships=self._overview.build(viewer, can_manage=True))
 
     def _require_same_children(self, *, family_id: int, membership_ids: Sequence[int]) -> None:
         members = self._memberships.list_for_family(family_id)
         orderable = [member.id for member in members if member.role.has_own_ledger]
-        # 抜け・重複・他家族の混入は、どれもここで同時に落ちる
+        # Missing, duplicate, or other-family IDs all fail here at once
         if sorted(membership_ids) != sorted(orderable):
             raise InvalidMemberOrderError
 

@@ -1,8 +1,8 @@
-"""参加者の並び順と、画面へ渡す操作の可否（`can_*`）。
+"""The order of members, and whether each operation is available to the screen (`can_*`).
 
-並びは家族に 1 つで、誰が見ても同じ順に出る。可否は「押してから断られる操作を
-画面に出さない」ための答えなので、サーバーが実際に断るかどうかと揃っている
-必要がある — ここでは両方を突き合わせる。
+There is one order per family, shown the same way to everyone. The `can_*` flags exist so that "operations
+that would be refused after pressing are not shown", so they must agree with whether the server actually
+refuses -- here both are compared.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def _member(client: TestClient, headers: dict[str, str], family_id: int, *, name
 
 
 def _linked_child(client: TestClient, parent: Account, family_id: int, *, username: str) -> dict[str, object]:
-    """アカウントの結び付いた子を用意する。"""
+    """Prepare a child linked to an account."""
     child = add_child(client, parent.headers, family_id, display_name=username)
     invitation = issue_invitation(
         client, parent.headers, family_id, role="child", target_membership_id=int(str(child["id"]))
@@ -51,7 +51,7 @@ def _linked_child(client: TestClient, parent: Account, family_id: int, *, userna
     return child
 
 
-# --- 並び順 ------------------------------------------------------------------
+# --- Order ------------------------------------------------------------------
 
 
 def test_children_keep_the_order_they_were_added(client: TestClient, parent: Account) -> None:
@@ -78,12 +78,12 @@ def test_reordering_changes_the_order_for_everyone(client: TestClient, parent: A
         "おとうと",
         "あに",
     ]
-    # 読み直しても同じ（親は先頭のまま）
+    # Same after reloading (the parent stays first)
     assert _names(client, parent.headers, family_id) == ["おとうさん", "おとうと", "あに"]
 
 
 def test_a_child_added_later_goes_to_the_end(client: TestClient, parent: Account) -> None:
-    """並べ替えた後に増えた子が、決めた並びに割り込まない。"""
+    """A child added after reordering does not cut into the chosen order."""
     family_id = create_family(client, parent.headers)
     older = add_child(client, parent.headers, family_id, display_name="あに")
     younger = add_child(client, parent.headers, family_id, display_name="おとうと")
@@ -122,11 +122,11 @@ def test_a_child_cannot_reorder(client: TestClient, parent: Account) -> None:
         headers=child_headers,
         json={"membership_ids": [child["id"]]},
     )
-    # guest ロールは family:manage を持たない（scope で止まる）
+    # The guest role does not have family:manage (stopped by scope)
     assert refused.status_code == 403
 
 
-# --- 画面へ渡す操作の可否 ----------------------------------------------------
+# --- Operation availability passed to the screen ----------------------------------------------------
 
 
 def test_an_empty_ledger_can_be_removed(client: TestClient, parent: Account) -> None:
@@ -140,7 +140,7 @@ def test_an_empty_ledger_can_be_removed(client: TestClient, parent: Account) -> 
 
 
 def test_a_child_with_records_is_not_offered_removal(client: TestClient, parent: Account) -> None:
-    """記録が 1 件でもあれば削除できない。画面にも出さない（`can_remove` が偽）。"""
+    """With even one record the child cannot be deleted. Not shown on screen either (`can_remove` is false)."""
     family_id = create_family(client, parent.headers)
     child = add_child(client, parent.headers, family_id, display_name="たろう")
     Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"]))).record(
@@ -161,7 +161,7 @@ def test_the_owner_is_never_offered_its_own_removal(client: TestClient, parent: 
 
 
 def test_independence_and_password_need_an_account(client: TestClient, parent: Account) -> None:
-    """ログインできない子には、独立の指示も一時パスワードも出さない。"""
+    """A child who cannot sign in gets neither the independence action nor a temporary password."""
     family_id = create_family(client, parent.headers)
     unlinked = add_child(client, parent.headers, family_id, display_name="たろう")
 
@@ -200,10 +200,10 @@ def test_a_child_is_offered_nothing_about_siblings(client: TestClient, parent: A
 
 
 def test_actions_follow_the_scope_not_only_the_role(client: TestClient, admin_headers: dict[str, str]) -> None:
-    """`family:manage` を失った owner には、どの操作も出さない（ADR-0019）。
+    """An owner who lost `family:manage` is shown no operations (ADR-0019).
 
-    立場（owner）だけで決めると、運用者がロールの権限を編集した後に「押すと 403」
-    のボタンが並ぶ。可否は 2 段の認可（scope と立場）の両方を見る。
+    Deciding by position (owner) alone would show buttons that "return 403 when pressed" after an operator
+    edits the role's permissions. Availability looks at both stages of authorization (scope and position).
     """
     created = client.post(
         "/api/admin/roles",
@@ -226,7 +226,7 @@ def test_actions_follow_the_scope_not_only_the_role(client: TestClient, admin_he
         json={"permissions": ["family:view", "point:view", "point:manage"]},
     )
     assert demoted.status_code == 200, demoted.text
-    # scope はトークンに焼き込まれているので、権限の変更は次のログインから効く
+    # Scope is baked into the token, so permission changes take effect from the next sign-in
     headers = login(client, username=guardian.username, password=guardian.password)
 
     shown = _member(client, headers, family_id, name="たろう")

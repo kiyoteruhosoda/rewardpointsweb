@@ -1,8 +1,8 @@
-"""想定外の例外が、フロントエンドの読めるエラーコードとして返ることの検証。
+"""Verifies that an unexpected exception comes back as an error code the frontend can read.
 
-ハンドラが無いと Starlette は text/plain の ``Internal Server Error`` を返す。
-API クライアントは本文を JSON として読むので、その場合コードを取り出せず
-``unknown_error`` としか表示できない（原因の切り分けもできない）。
+Without a handler, Starlette returns a text/plain ``Internal Server Error``.
+The API client reads the body as JSON, so in that case it cannot extract a code and
+can only show ``unknown_error`` (and the cause cannot be narrowed down either).
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def _add_failing_endpoint(app: FastAPI) -> None:
 @pytest.fixture
 def client_with_failing_endpoint(app: FastAPI) -> TestClient:
     _add_failing_endpoint(app)
-    # 例外を送出させずに応答を確かめる（本番の ASGI サーバーと同じ扱い）。
+    # Check the response without raising the exception (same as the production ASGI server).
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -47,7 +47,7 @@ def cors_client_with_failing_endpoint(
     engine: sa.Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[TestClient]:
-    """別オリジンのフロントエンドを許可した構成でアプリを組み立てる。"""
+    """Build the app with a configuration that allows a cross-origin frontend."""
     from presentation.fastapi.app import create_app
 
     monkeypatch.setenv("CORS_ALLOWED_ORIGINS", f'["{_ALLOWED_ORIGIN}"]')
@@ -72,18 +72,18 @@ def test_unhandled_exception_does_not_leak_the_exception_text(client_with_failin
 
 
 def test_unhandled_exception_carries_the_request_id(client_with_failing_endpoint: TestClient) -> None:
-    """ログの該当行を引けるよう、応答にも requestId を載せる。"""
+    """Put the requestId in the response too, so the matching log line can be looked up."""
     response = client_with_failing_endpoint.get("/api/test/boom")
 
     assert response.headers.get("X-Request-Id")
 
 
 def test_cross_origin_client_can_read_the_error_code(cors_client_with_failing_endpoint: TestClient) -> None:
-    """別オリジンからでも本文を読めるよう、500 応答にも CORS ヘッダーを付ける。
+    """Add CORS headers to the 500 response too, so the body can be read cross-origin.
 
-    ``Exception`` ハンドラは CORS ミドルウェアの外側に載るため、そこだけに頼ると
-    ``Access-Control-Allow-Origin`` が付かない。ブラウザは本文を捨て、画面は
-    ``unknown_error`` へ戻ってしまう（受け皿を足した意味が無くなる）。
+    The ``Exception`` handler sits outside the CORS middleware, so relying on it alone means
+    ``Access-Control-Allow-Origin`` is missing. The browser drops the body and the screen falls
+    back to ``unknown_error`` (defeating the point of adding the catch-all).
     """
     response = cors_client_with_failing_endpoint.get("/api/test/boom", headers={"Origin": _ALLOWED_ORIGIN})
 
@@ -96,7 +96,7 @@ def test_failed_request_is_recorded_in_the_access_log(
     client_with_failing_endpoint: TestClient,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """500 もアクセスログに残す。例外が記録層を素通りすると 500 だけ抜け落ちる。"""
+    """500s go into the access log too. If the exception slips past the logging layer, only 500s go missing."""
     with caplog.at_level(logging.INFO, logger="app.request"):
         client_with_failing_endpoint.get("/api/test/boom")
 
@@ -115,7 +115,7 @@ def test_unhandled_exception_is_logged_with_a_traceback(
     client_with_failing_endpoint: TestClient,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """原因を追えるのは traceback だけ。``log`` テーブルの ``trace`` 列へ入る。"""
+    """Only the traceback lets us trace the cause. It goes into the ``trace`` column of the ``log`` table."""
     with caplog.at_level(logging.DEBUG, logger=_ERROR_LOGGER):
         client_with_failing_endpoint.get("/api/test/boom")
 
@@ -128,10 +128,10 @@ def test_unhandled_exception_is_logged_with_a_traceback(
 def test_client_error_is_logged_with_its_error_code(
     client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """404 のような ``HTTPException`` も「何が起きたか」を残す。
+    """An ``HTTPException`` such as 404 also records "what happened".
 
-    エラーコードは本文にも入れる。``log`` テーブルへ入るのは列にある項目だけで、
-    ``extra`` の残りは stdout の JSON にしか出ないため。
+    The error code is also put in the message. Only the column fields go into the ``log`` table,
+    and the rest of ``extra`` only appears in the stdout JSON.
     """
     with caplog.at_level(logging.DEBUG, logger=_ERROR_LOGGER):
         assert client.delete("/api/admin/users/999999", headers=admin_headers).status_code == 404
@@ -145,10 +145,10 @@ def test_client_error_is_logged_with_its_error_code(
 def test_domain_error_is_logged(
     client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """ドメイン例外のハンドラも同じ受け皿で記録する（レベルと項目が揃う）。
+    """Domain exception handlers record through the same catch-all (level and fields match).
 
-    admin は家族の scope を持たない（ADR-0018）ため、家族の当事者（member）で
-    ドメイン例外まで到達させる。
+    admin has no family scope (ADR-0018), so a family party (member) is used to
+    reach the domain exception.
     """
     password = "dad-pass-123"
     created = client.post(
@@ -170,7 +170,7 @@ def test_domain_error_is_logged(
 def test_validation_failure_logs_the_fields_but_not_the_values(
     client: TestClient, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """項目名と理由だけを残す。入力値を残すと PII がログへ移る（CLAUDE.md「ログ」）。"""
+    """Keep only the field name and reason. Logging the input would move PII into logs (CLAUDE.md "Logging")."""
     with caplog.at_level(logging.DEBUG, logger=_ERROR_LOGGER):
         response = client.post("/api/auth/login", json={"username": "leaked-user"})
 
@@ -184,11 +184,11 @@ def test_validation_failure_logs_the_fields_but_not_the_values(
 def test_the_500_log_line_knows_whose_request_it_was(
     client_with_failing_endpoint: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """認証済みのリクエストで落ちたら、ログ行に ``user_id_hash`` が乗ること。
+    """When an authenticated request fails, the log line carries ``user_id_hash``.
 
-    ``InternalErrorMiddleware`` を ``BaseHTTPMiddleware`` で書くと、下流が**別の
-    タスク**で走るため認証依存関数が設定した ``contextvars`` が伝わらず、
-    500 の行だけ「誰のリクエストか」が空になる。素の ASGI で書いている理由。
+    If ``InternalErrorMiddleware`` were written with ``BaseHTTPMiddleware``, downstream would run in a
+    **separate task**, so the ``contextvars`` set by the auth dependency would not propagate and
+    only the 500 line would lack "whose request it was". That is why it is written as plain ASGI.
     """
     with caplog.at_level(logging.DEBUG, logger=_ERROR_LOGGER):
         response = client_with_failing_endpoint.get("/api/test/authenticated-boom", headers=admin_headers)
@@ -209,10 +209,10 @@ def _access_log_lines(caplog: pytest.LogCaptureFixture, path: str) -> list[loggi
 def test_the_access_log_line_knows_whose_request_it_was(
     client_with_failing_endpoint: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """認証済みのリクエストなら、``http_request`` の行に ``user_id_hash`` が乗ること。
+    """For an authenticated request, the ``http_request`` line carries ``user_id_hash``.
 
-    ``RequestLoggingMiddleware`` を ``BaseHTTPMiddleware`` で書くと、500 の行と同じ理由で空になる。
-    同じ行に同じ利用者が入っていること、未認証の次のリクエストへ値が持ち越されないことも見る。
+    With ``BaseHTTPMiddleware``, ``RequestLoggingMiddleware`` would leave it empty, for the same reason as the 500 line.
+    Also checks the line has the same user and the value does not leak into the next unauthenticated request.
     """
     with caplog.at_level(logging.DEBUG):
         response = client_with_failing_endpoint.get("/api/test/authenticated-boom", headers=admin_headers)

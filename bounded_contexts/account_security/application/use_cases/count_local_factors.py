@@ -1,8 +1,8 @@
-"""利用者ごとに「このアプリが持っている認証の手段」を数える（ADR-0035）。
+"""Count, per user, "the authentication methods this app holds" (ADR-0035).
 
-このコンテキストが答えるのは**自分が持っている分だけ**——二要素認証（TOTP）と
-パスキー。パスワードは ``users`` の列なので shared 側、IdP 経由の入り口は
-ID 連携コンテキストが答える。
+This context answers **only for what it holds itself** -- two-factor authentication (TOTP) and
+passkeys. The password is a column of ``users`` and so belongs to shared; entrances via the IdP
+are answered by the identity federation context.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ class CountLocalFactors:
         return self.directory.factors_by_user()
 
     def for_user(self, user_id: int) -> LocalFactors:
-        """1 人分だけ。自分の設定画面（ADR-0036）のように相手が決まっているとき。"""
+        """For one user only. Used when the target is fixed, like one's own settings screen (ADR-0036)."""
         return self.directory.factors_of(user_id)
 
 

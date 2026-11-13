@@ -1,7 +1,8 @@
-"""受け入れ基準のうち、他のファイルの主題から外れるもの。
+"""Acceptance criteria that fall outside the subject of other files.
 
-家族・台帳・子アカウントの「境界」を確かめる（所属は 1 家族まで・冪等キーの
-必須化・理由の候補・ログに秘密が出ないこと・OpenAPI への反映）。
+Checks the "boundaries" of families, ledgers and child accounts (at most 1 family per
+account, required idempotency keys, reason suggestions, no secrets in logs, reflection
+in OpenAPI).
 """
 
 from __future__ import annotations
@@ -43,17 +44,18 @@ def ledger(client: TestClient, parent: Account) -> Ledger:
     return Ledger(family_id=family_id, ledger_id=int(str(child["ledger_id"])))
 
 
-# --- 家族 --------------------------------------------------------------------
+# --- Families --------------------------------------------------------------
 
 
 def test_accepting_without_a_name_falls_back_to_the_account_display_name(
     client: TestClient, admin_headers: dict[str, str], parent: Account
 ) -> None:
-    """呼び名を省いた受諾はアカウントの表示名で通る（画面はこの形で送る）。
+    """Accepting without a display name goes through with the account's display name (the UI sends this shape).
 
-    親の招待は参加を指していないので `_join_as_new` に入り、呼び名が無いと
-    `display_name_required` で断られる。画面（家族の一覧）は呼び名を尋ねないため、
-    ここが埋まらないと「コードで参加する」が必ず失敗する。
+    A parent invitation does not target a membership, so it enters `_join_as_new`, and
+    without a display name it is refused with `display_name_required`. The UI (family
+    list) does not ask for a display name, so unless this is filled in, "join with a
+    code" always fails.
     """
     mother = create_account(client, admin_headers, username="mom", role="member", display_name="おかあさん")
     family_id = create_family(client, parent.headers)
@@ -72,7 +74,7 @@ def test_accepting_without_a_name_falls_back_to_the_account_display_name(
 
 
 def test_account_cannot_join_the_same_family_twice(client: TestClient, parent: Account) -> None:
-    """DB の UNIQUE 制約に頼らず、アプリケーション層でも断る。"""
+    """Refused in the application layer too, without relying on the DB UNIQUE constraint."""
     family_id = create_family(client, parent.headers)
     invitation = issue_invitation(client, parent.headers, family_id, role="parent")
 
@@ -88,7 +90,7 @@ def test_account_cannot_join_the_same_family_twice(client: TestClient, parent: A
 def test_account_in_a_family_cannot_join_another(
     client: TestClient, admin_headers: dict[str, str], parent: Account
 ) -> None:
-    """所属できる家族は 1 アカウント 1 つまで(ADR-0013)。招待では増やせない。"""
+    """An account can belong to at most 1 family (ADR-0013). Invitations cannot add more."""
     other_owner = create_account(client, admin_headers, username="grandma", role="member")
     first = create_family(client, parent.headers, name="ほその家")
     second = create_family(client, other_owner.headers, name="となりの家")
@@ -107,7 +109,7 @@ def test_account_in_a_family_cannot_join_another(
 
 
 def test_account_in_a_family_cannot_create_another(client: TestClient, parent: Account) -> None:
-    """家族を作れるのは、どの家族にも所属していないアカウントだけ(ADR-0013)。"""
+    """Only an account that belongs to no family can create a family (ADR-0013)."""
     create_family(client, parent.headers, name="ほその家")
 
     response = client.post("/api/families", headers=parent.headers, json={"name": "ふたつめの家"})
@@ -134,7 +136,7 @@ def test_account_outside_any_family_reaches_no_ledger(
 
 @dataclass(frozen=True, kw_only=True)
 class LedgerCall:
-    """台帳を対象とする 1 つの入口（閲覧・記録・訂正）。"""
+    """One entrance targeting a ledger (view, record, correct)."""
 
     suffix: str
     body: dict[str, object] | None = None
@@ -162,7 +164,7 @@ def test_every_ledger_endpoint_blocks_other_families(
     ledger: Ledger,
     call: LedgerCall,
 ) -> None:
-    """他家族の親が台帳 ID を直接指定しても、どの入口も通らない。"""
+    """Even if a parent of another family specifies a ledger ID directly, no entrance lets them through."""
     stranger = create_account(client, admin_headers, username="stranger", role="member")
     create_family(client, stranger.headers, name="よその家")
 
@@ -171,11 +173,11 @@ def test_every_ledger_endpoint_blocks_other_families(
     assert response.json()["detail"]["error"] == "family_access_denied"
 
 
-# --- 台帳 --------------------------------------------------------------------
+# --- Ledgers ---------------------------------------------------------------
 
 
 def test_ledger_table_holds_no_balance_column() -> None:
-    """残高は導出値。列として持つと加算との不整合が起こりうる（ADR-0010）。"""
+    """The balance is derived. Storing it as a column could drift from the additions (ADR-0010)."""
     columns = {column.name for column in inspect(PointLedgerModel).columns}
     assert columns == {"id", "family_id", "membership_id", "created_at"}
 
@@ -222,7 +224,7 @@ def test_history_is_newest_first(client: TestClient, parent: Account, ledger: Le
     ).json()
 
     view = client.get(ledger.path(), headers=parent.headers).json()
-    # occurred_at の降順。同値なら id の降順
+    # Descending by occurred_at; ties by descending id
     assert [t["id"] for t in view["transactions"]] == [same_moment["id"], new["id"], old["id"]]
 
 
@@ -261,7 +263,7 @@ def test_reason_suggestions_are_per_family_and_by_frequency(
 
 
 def test_reversal_does_not_inflate_reason_suggestions(client: TestClient, parent: Account, ledger: Ledger) -> None:
-    """打ち消しは元の理由を引き継ぐため、数えると同じ言葉が二重に効いてしまう。"""
+    """A reversal inherits the original reason, so counting it would double-count the same word."""
     once = ledger.record(client, parent.headers, amount=10, reason="いちど", key="k1")
     ledger.record(client, parent.headers, amount=10, reason="ふたつ", key="k2")
     ledger.record(client, parent.headers, amount=10, reason="ふたつ", key="k3")
@@ -286,11 +288,11 @@ def test_reason_suggestions_are_closed_to_children(client: TestClient, parent: A
     )
     headers = login(client, username="hanako", password="hanako-pass-1")
 
-    # 理由の文言は他の子の記録から来ることがある（兄弟間の非公開）
+    # Reason texts can come from another child's records (private between siblings)
     assert client.get(f"/api/families/{ledger.family_id}/reason-suggestions", headers=headers).status_code == 403
 
 
-# --- 招待・ログ・OpenAPI -----------------------------------------------------
+# --- Invitations, logs, OpenAPI --------------------------------------------
 
 
 def test_invitation_code_is_never_stored_in_the_clear(client: TestClient, parent: Account, db_session: Session) -> None:
@@ -324,13 +326,13 @@ def test_temporary_password_issue_is_logged_without_the_password(
 
     records = [record for record in caplog.records if record.message == "temporary_password_issued"]
     assert len(records) == 1
-    # 発行者・対象・日時（レコードの時刻）が残る
+    # The issuer, target and time (the record's timestamp) are kept
     issued_log = vars(records[0])
     assert issued_log["issued_by_membership_id"] == 1
     assert issued_log["membership_id"] == child["id"]
     assert issued_log["family_id"] == family_id
     assert records[0].created > 0
-    # 平文はどのログにも出さない
+    # The plaintext appears in no log
     assert all(issued["password"] not in record.getMessage() for record in caplog.records)
     assert all(issued["password"] not in json.dumps(vars(record), default=str) for record in caplog.records)
 
@@ -338,10 +340,10 @@ def test_temporary_password_issue_is_logged_without_the_password(
 def test_secrets_never_reach_the_log(
     client: TestClient, admin_headers: dict[str, str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """パスワード・招待コード・トークンをログに残さない。
+    """Passwords, invitation codes and tokens are not logged.
 
-    ログは JSON で stdout と ``log`` テーブルの両方へ出るため、1 度混ざると
-    取り消せない。
+    Logs go as JSON to both stdout and the ``log`` table, so once mixed in they cannot
+    be taken back.
     """
     password = "logging-check-123"
     with caplog.at_level(logging.INFO):
@@ -367,7 +369,7 @@ def test_ledger_changes_are_traceable_by_request_id(
 
     recorded = [r for r in caplog.records if r.message == "point_transaction_recorded"]
     assert len(recorded) == 1
-    # 同じ requestId で API リクエストの行と突き合わせられる
+    # Can be matched against the API request line by the same requestId
     request_id = vars(recorded[0])["request_id"]
     assert request_id
     assert any(r.message == "http_request" and vars(r).get("request_id") == request_id for r in caplog.records)

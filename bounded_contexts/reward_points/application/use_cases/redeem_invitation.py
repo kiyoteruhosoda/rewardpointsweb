@@ -1,15 +1,19 @@
-"""招待コードでアカウントを作り、そのまま家族へ加わる（未認証で呼べる）。
+"""Create an account with an invitation code and join the family right away
+(callable without authentication).
 
-子アカウントの作り方はこの 1 本だけ。子ども自身では作れず、親が参加を作って
-招待コードを渡した場合にのみ成立する（ADR-0011）。メールアドレスは受け取らない。
+This is the only way to create a child account. A child cannot create one alone;
+it works only when a parent has created the membership and handed over an
+invitation code (ADR-0011). No email address is accepted.
 
-作成後はログインしていない。呼び出し側（画面）は、設定した ``username`` と
-パスワードで通常どおりログインする。
+The new account is not signed in. The caller (the screen) signs in as usual with
+the chosen ``username`` and password.
 
-⚠ **IdP（SSO）があるとき、親の招待はここで使えない**（ADR-0048）。大人の口座は
-IdP で入ったときに作る 1 つだけにし、親はログインしてから受諾（accept）で加わる。
-ここで作るとメールアドレスを持たない別の口座になり、IdP の口座と結び付ける手掛かりが
-無いので、初めて SSO で入ったときに同じ人の口座が 2 つになる。
+⚠ **When an IdP (SSO) is configured, parent invitations cannot be used here**
+(ADR-0048). An adult has exactly one account, created when they sign in through
+the IdP, and a parent joins by accepting after signing in. Creating it here would
+make a separate account without an email address and nothing to link it to the
+IdP account, so the same person would end up with two accounts on their first
+SSO sign-in.
 """
 
 from __future__ import annotations
@@ -58,8 +62,8 @@ class RedeemInvitationUseCase:
 
     def execute(self, command: RedeemInvitationCommand) -> RedeemedInvitationDTO:
         invitation = self._invitations.find_by_code(command.code)
-        # アカウントを作る前にコードを確かめる。作ってから弾くと、無効なコードでも
-        # ログイン ID を消費できてしまう
+        # Check the code before creating the account. Rejecting it afterwards would let
+        # an invalid code use up a login ID
         if invitation is None or not invitation.is_usable_at(utcnow()):
             raise InvitationNotFoundError
         if invitation.role.is_guardian and self._adults_sign_in_through_idp:
@@ -71,9 +75,9 @@ class RedeemInvitationUseCase:
             username=command.username,
             password=command.password,
             role=invitation.role,
-            # 本人が名乗った名前をアカウントの表示名にもする。参加が用意済みの
-            # 招待では家族の中での呼び名は親が決めた値のままなので、ここで使わないと
-            # 入力した名前がどこにも残らない
+            # Also use the name the person gave as the account's display name. For an
+            # invitation with a prepared membership, the in-family name stays as the
+            # parent set it, so otherwise the entered name would be kept nowhere
             display_name=command.display_name,
         )
         membership = self._binder.bind(

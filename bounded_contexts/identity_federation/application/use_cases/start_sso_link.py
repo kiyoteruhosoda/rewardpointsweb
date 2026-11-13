@@ -1,12 +1,12 @@
-"""連携の開始 ——**既にログインしている利用者**の IdP 往復を始める（ADR-0036）。
+"""Starting a link -- begin an IdP round trip for **a user who is already logged in** (ADR-0036).
 
-ログインの往復との違いは控えの中身だけで、IdP へ送る認可要求は同じものになる
-（戻り先の URI も 1 つしか登録しない）。控えには **始めた本人**（``link_user_id``）を
-入れる。
+The only difference from the login round trip is the content of the saved request; the authorization request sent to the IdP
+is the same (only one redirect URI is registered). The saved request holds **the user who started it** (``link_user_id``)
+.
 
-⚠ **これがこの往復の要である。** 入れておかないと、戻ってきたときに「いま入って
-いる人」を見て決めることになり、往復の途中で入れ替わったブラウザが**別人の口座へ**
-結び付ける。
+⚠ **This is the crux of this round trip.** Without it, the return would be decided by looking at "who is signed in
+now", and a browser that switched users mid-round-trip would link to **someone else's account**
+.
 """
 
 from __future__ import annotations
@@ -39,8 +39,8 @@ from bounded_contexts.identity_federation.domain.value_objects.identity_provider
 )
 from shared.kernel.timestamps import utcnow
 
-#: 連携が終わったあとの戻り先（設定画面）。ログインの ``redirect_to`` と違い、
-#: 利用者に選ばせる余地は無い ——押した画面へ返すだけである。
+#: Where to go after linking (the settings screen). Unlike login's ``redirect_to``,
+#: there is no room for the user to choose -- it just returns to the screen where the button was pressed.
 LINK_REDIRECT_TO = "/profile/security"
 
 
@@ -50,7 +50,7 @@ class StartSsoLink:
     gateway: OidcProviderGateway
     sessions: SsoLoginSessionRepository
     session_ttl_seconds: int
-    #: 認可要求に載せる ``acr_values``（空 = 要求しない）。ADR-0039。
+    #: ``acr_values`` to put on the authorization request (empty = not requested). ADR-0039.
     acr_values: tuple[str, ...] = ()
 
     def execute(self, *, user_id: int) -> SsoAuthorizationDto:

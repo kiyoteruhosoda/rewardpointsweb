@@ -1,4 +1,4 @@
-"""表示端末（ADR-0047）の出力 DTO。"""
+"""Output DTOs for display devices (ADR-0047)."""
 
 from __future__ import annotations
 
@@ -8,20 +8,20 @@ from datetime import datetime
 
 @dataclass(frozen=True, kw_only=True)
 class DisplayDTO:
-    """家族を映している表示端末 1 台。1 端末 = 1 アカウント = 1 参加。"""
+    """One display device showing a family. 1 device = 1 account = 1 membership."""
 
     account_id: int
     membership_id: int
     family_id: int
     family_name: str
-    #: 端末の名前（例「リビング」）。家族の参加者一覧にもこの名前で並ぶ
+    #: Device name (e.g. "Living room"). It is listed under this name among the family's members too
     name: str
     created_at: datetime
 
 
 @dataclass(frozen=True, kw_only=True)
 class DisplayableFamilyDTO:
-    """運用管理者が映す先として選べる家族。名前だけで、台帳は載せない。"""
+    """A family the operator can choose to display. Name only; no ledgers included."""
 
     id: int
     name: str

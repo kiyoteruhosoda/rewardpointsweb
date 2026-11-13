@@ -20,7 +20,7 @@ interface Permission {
   code: string
 }
 
-/** 行の中で実行しうる操作（実行中の目印をどこに出すかが変わる）。 */
+/** Operations that can run within a row (decides where the in-progress marker goes). */
 type RowAction = 'update' | 'removal'
 
 export function RolesPage() {
@@ -28,7 +28,7 @@ export function RolesPage() {
   const { notify } = useToast()
   const [roles, setRoles] = useState<Role[]>([])
   const [permissions, setPermissions] = useState<Permission[]>([])
-  // 書きかけはログインの往復をまたいで残す（ADR-0058）
+  // Keep the draft across the login round trip (ADR-0058)
   const [name, setName] = useSessionValue('roles.name', '')
   const { pendingActionOf, runForRow } = usePendingRows<RowAction>()
 
@@ -55,7 +55,7 @@ export function RolesPage() {
     }
   })
 
-  /** 1 行分の更新。終わるまでその行の次の操作を受け付けない。 */
+  /** Updates one row. Rejects further operations on that row until it finishes. */
   const runExclusively = (roleId: number, action: RowAction, request: () => Promise<unknown>) =>
     runForRow(roleId, action, async () => {
       try {
@@ -137,7 +137,7 @@ export function RolesPage() {
                     >
                       {t('common.delete')}
                     </ActionButton>
-                    {/* チェックの付け外しは押しても表示が変わらないので、行に目印を出す。 */}
+                    {/* Toggling a checkbox does not change the display on press, so show a marker on the row. */}
                     {rowAction === 'update' && (
                       <span className="spinner" role="status" aria-label={t('common.processing')} />
                     )}

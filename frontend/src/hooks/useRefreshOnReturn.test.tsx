@@ -1,10 +1,10 @@
-/** 手元に戻ってきたときの読み直し: きっかけと、鳴らせてはいけない場面。 */
+/** Reloading when the user comes back: the triggers, and the cases where it must not fire. */
 import { fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useRefreshOnReturn } from './useRefreshOnReturn'
 
-/** フックだけを動かすための入れ物（画面は出さない）。 */
+/** A host that only runs the hook (renders nothing). */
 function Probe({ refresh }: { refresh: () => Promise<void> }) {
   useRefreshOnReturn(refresh)
   return null
@@ -19,7 +19,7 @@ afterEach(() => {
 })
 
 describe('useRefreshOnReturn', () => {
-  it('前面に戻ってきたら読み直す', () => {
+  it('reloads when brought back to the foreground', () => {
     const refresh = vi.fn<() => Promise<void>>().mockResolvedValue()
     render(<Probe refresh={refresh} />)
 
@@ -28,7 +28,7 @@ describe('useRefreshOnReturn', () => {
     expect(refresh).toHaveBeenCalledTimes(1)
   })
 
-  it('裏に回ったときは読み直さない（見ていない画面のために通信しない）', () => {
+  it('does not reload when sent to the background (no traffic for an unseen screen)', () => {
     const refresh = vi.fn<() => Promise<void>>().mockResolvedValue()
     render(<Probe refresh={refresh} />)
 
@@ -38,7 +38,7 @@ describe('useRefreshOnReturn', () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
-  it('回線が戻ったら読み直す（オフラインで出していたのはキャッシュ）', () => {
+  it('reloads when the connection comes back (what was shown offline was the cache)', () => {
     const refresh = vi.fn<() => Promise<void>>().mockResolvedValue()
     render(<Probe refresh={refresh} />)
 
@@ -47,7 +47,7 @@ describe('useRefreshOnReturn', () => {
     expect(refresh).toHaveBeenCalledTimes(1)
   })
 
-  it('画面を離れたら読み直さない', () => {
+  it('does not reload after leaving the screen', () => {
     const refresh = vi.fn<() => Promise<void>>().mockResolvedValue()
     const { unmount } = render(<Probe refresh={refresh} />)
 

@@ -1,4 +1,4 @@
-"""イベントの出力 DTO（ADR-0042）。"""
+"""Output DTOs for events (ADR-0042)."""
 
 from __future__ import annotations
 
@@ -21,20 +21,20 @@ class RewardEventDTO:
     title: str
     reward_points: int
     goal_count: int
-    #: 番号の小さい順
+    #: In ascending number order
     stickers: tuple[StickerDTO, ...]
-    #: マスが埋まった日時。まだなら ``None``
+    #: When all squares were filled; ``None`` if not yet
     completed_at: datetime | None
     created_at: datetime
-    #: この日のうちに埋めれば達成。決めていなければ ``None``
+    #: Achieved if filled by the end of this day; ``None`` if no deadline was set
     deadline: date | None
-    #: 期限を過ぎても埋まっていない（家族の 1 日の区切りで判定済み）
+    #: Past the deadline and still not filled (judged by the family's day boundary)
     is_expired: bool
 
 
 @dataclass(frozen=True, kw_only=True)
 class RewardEventBoardDTO:
-    """1 人の子のイベント一覧。画面の出し分けに要るものを一緒に返す。"""
+    """One child's events, returned with what the screen needs to decide what to show."""
 
     ledger_id: int
     display_name: str
@@ -43,7 +43,7 @@ class RewardEventBoardDTO:
 
 
 def to_dto(event: RewardEvent, *, today: date) -> RewardEventDTO:
-    """*today* は家族の 1 日の区切りでの今日。期限切れの判定に使う。"""
+    """*today* is today by the family's day boundary; used to judge expiry."""
     return RewardEventDTO(
         id=event.id,
         ledger_id=event.ledger_id,

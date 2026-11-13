@@ -1,7 +1,7 @@
-"""停止の伝播（IdP → RP）が効いているか（ADR-0032）。
+"""Whether stop propagation (IdP -> RP) works (ADR-0032).
 
-IdP との通信はゲートウェイを差し替えて止める。ここで確かめたいのは、**届いた通知が
-実際にセッションを終わらせること**と、終わらせる範囲を間違えないことである。
+Communication with the IdP is cut by swapping the gateway. What we want to confirm here is that **a received
+notice actually ends the session**, and that it does not get the scope of what it ends wrong.
 """
 
 from __future__ import annotations
@@ -43,10 +43,10 @@ LOGOUT = "/api/auth/sso/backchannel-logout"
 
 @dataclass
 class FakeGateway:
-    """ID トークンと ``logout_token`` を、検証済みのクレームとして返すだけの IdP。
+    """An IdP that just returns the ID token and ``logout_token`` as verified claims.
 
-    ``logout_token`` は「``<sid>|<jti>``」という綴りにする。**署名の検証は
-    Infrastructure 層の責任**なので、ここではそこを模さない。
+    ``logout_token`` is spelled as "``<sid>|<jti>``". **Signature verification is the
+    Infrastructure layer's responsibility**, so it is not imitated here.
     """
 
     sid: str = "session-1"
@@ -89,7 +89,7 @@ def sso_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OIDC_CLIENT_ID", CLIENT_ID)
     monkeypatch.setenv("OIDC_CLIENT_SECRET", "client-secret")
     monkeypatch.setenv("OIDC_REDIRECT_URI", "https://app.example/api/auth/sso/callback")
-    # 既存の利用者へ寄せる（この試験の主題は結び付け方ではない）。
+    # Link to an existing user (how linking works is not the subject of this test).
     monkeypatch.setenv("OIDC_LINK_BY_EMAIL", "true")
 
 
@@ -108,7 +108,7 @@ def sso_client(app: FastAPI, gateway: FakeGateway, sso_settings: None) -> Iterat
 
 @pytest.fixture
 def parent(engine: sa.Engine) -> int:
-    """メールアドレスを持つ既存の利用者（SSO で寄せる先）。"""
+    """An existing user with an email address (the account SSO links to)."""
     session: Session = sessionmaker(bind=engine, expire_on_commit=False)()
     user = User(
         username="parent",
@@ -124,7 +124,7 @@ def parent(engine: sa.Engine) -> int:
 
 
 def _sign_in_with_sso(client: TestClient) -> dict[str, Any]:
-    """SSO で入る（認可要求 → 戻り → 券の引き換え）。"""
+    """Sign in with SSO (authorization request -> callback -> code exchange)."""
     start = client.get("/api/auth/sso/login", params={"redirect_to": "/families"})
     state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
     callback = client.get("/api/auth/sso/callback", params={"code": "authorization-code", "state": state})
@@ -140,12 +140,12 @@ def _bearer(body: dict[str, Any]) -> dict[str, str]:
 
 
 def _post_logout(client: TestClient, logout_token: str) -> int:
-    """IdP のサーバーが叩く経路。**Cookie も資格情報も持たない。**"""
+    """The path the IdP server calls. **It carries no cookie and no credentials.**"""
     return client.post(LOGOUT, data={"logout_token": logout_token}).status_code
 
 
 def _legacy_refresh_of(session: dict[str, Any]) -> str:
-    """この仕組み（ADR-0058）より前に出していた、SSO のログインの更新の札を作る（宛名と時刻は同じ）。"""
+    """Build the SSO login refresh token issued before this mechanism (ADR-0058) (same subject and time)."""
     claims = jwt.decode(
         session["access_token"],
         settings.jwt_secret_key,
@@ -159,8 +159,8 @@ def _legacy_refresh_of(session: dict[str, Any]) -> str:
 
 
 def _refresh(client: TestClient, session: dict[str, Any]) -> int:
-    """延ばす道があるか。SSO で入ったログインは更新の札を持たず（ADR-0058）、続けるのは IdP への
-    問い合わせだけ（止められていれば IdP が断る）。前の仕組みの札も更新の口が断る。"""
+    """Whether there is a way to extend. An SSO login holds no refresh token (ADR-0058); it continues only by
+    asking the IdP (which refuses if stopped). The refresh endpoint also refuses tokens from the old mechanism."""
     assert session["refresh_token"] is None
     return client.post("/api/auth/refresh", json={"refresh_token": _legacy_refresh_of(session)}).status_code
 
@@ -171,14 +171,14 @@ def test_a_stop_from_the_idp_ends_the_session_at_the_next_refresh(sso_client: Te
 
     assert _post_logout(sso_client, "session-1|delivery-1") == 200
 
-    # ⚠ **手元のアクセストークンは寿命まで通る**（ADR-0037。検証は DB を引かない）。
+    # ⚠ **The access token in hand keeps working until it expires** (ADR-0037; verification does not hit the DB).
     assert sso_client.get("/api/auth/me", headers=_bearer(session)).status_code == 200
-    # 終わるのは更新のとき。
+    # It ends at the next refresh.
     assert _refresh(sso_client, session) == 401
 
 
 def test_the_access_token_outlives_the_stop_only_until_it_expires(sso_client: TestClient, parent: int) -> None:
-    """⚠ **これが引き受けた緩さである**（ADR-0037）。"""
+    """⚠ **This is the looseness we accepted** (ADR-0037)."""
     session = _sign_in_with_sso(sso_client)
     assert _post_logout(sso_client, "session-1|delivery-1") == 200
     assert sso_client.get("/api/auth/me", headers=_bearer(session)).status_code == 200
@@ -186,7 +186,7 @@ def test_the_access_token_outlives_the_stop_only_until_it_expires(sso_client: Te
 
 
 def test_a_stopped_session_cannot_be_refreshed(sso_client: TestClient, parent: int) -> None:
-    """⚠ ここが抜けると、更新を 1 回通すだけで停止をすり抜けられる。"""
+    """⚠ Without this, passing a single refresh would be enough to slip past the stop."""
     session = _sign_in_with_sso(sso_client)
     assert _post_logout(sso_client, "session-1|delivery-1") == 200
     assert _refresh(sso_client, session) == 401
@@ -205,7 +205,7 @@ def test_a_stop_without_a_sid_ends_every_session_of_that_user(sso_client: TestCl
 
 
 def test_signing_in_again_after_a_stop_works(sso_client: TestClient, gateway: FakeGateway, parent: int) -> None:
-    """止めるのは**そのときのセッション**であって、利用者ではない。"""
+    """What gets stopped is **that session**, not the user."""
     _sign_in_with_sso(sso_client)
     assert _post_logout(sso_client, "|delivery-1") == 200
     gateway.sid = "session-2"
@@ -214,10 +214,10 @@ def test_signing_in_again_after_a_stop_works(sso_client: TestClient, gateway: Fa
 
 
 def test_a_resent_notice_is_accepted_but_changes_nothing(sso_client: TestClient, parent: int) -> None:
-    """送り手は再送でも同じ ``jti`` を使う（idp の ADR-0024）。
+    """The sender reuses the same ``jti`` on resend (idp ADR-0024).
 
-    ⚠ **弾かないと、古い通知の再送で「いま生きているセッション」を落とせる**
-    ——ここでは、同じ ``sid`` を使い回す IdP を想定して最悪の形にしてある。
+    ⚠ **Without rejecting it, a resend of an old notice could kill "a session that is alive now"**
+    -- here it is made the worst case by assuming an IdP that reuses the same ``sid``.
     """
     assert _post_logout(sso_client, "session-1|delivery-1") == 200
     session = _sign_in_with_sso(sso_client)
@@ -226,7 +226,7 @@ def test_a_resent_notice_is_accepted_but_changes_nothing(sso_client: TestClient,
 
 
 def test_a_local_login_is_not_touched(sso_client: TestClient, admin_headers: dict[str, str], parent: int) -> None:
-    """停止の伝播が消せるのは IdP 経由で始まったセッションだけ（ADR-0032）。"""
+    """Stop propagation can only end sessions that started via the IdP (ADR-0032)."""
     assert _post_logout(sso_client, "|delivery-1") == 200
     assert sso_client.get("/api/auth/me", headers=admin_headers).status_code == 200
 

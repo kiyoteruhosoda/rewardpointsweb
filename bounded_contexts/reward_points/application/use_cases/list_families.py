@@ -1,7 +1,8 @@
-"""ログイン中のアカウントが所属する家族の一覧。
+"""List of the families the signed-in account belongs to.
 
-所属できる家族は 1 つまでのため通常は 0 件か 1 件（ADR-0013）。過去データが
-複数残っていても壊れないよう、形は一覧のままにしてある。
+An account can belong to at most one family, so this is usually 0 or 1 items
+(ADR-0013). The shape stays a list so that leftover past data with several
+entries does not break it.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ class ListFamiliesUseCase:
         summaries: list[FamilySummaryDTO] = []
         for membership in mine:
             family = families.get(membership.family_id)
-            if family is None:  # 参加は残っているのに家族が消えている場合の保険
+            if family is None:  # Safety net for a membership whose family is gone
                 continue
             summaries.append(
                 FamilySummaryDTO(
@@ -32,7 +33,7 @@ class ListFamiliesUseCase:
                     name=family.name_value,
                     my_membership_id=membership.id,
                     my_role=membership.role,
-                    # 表示端末は人ではないので数えない（ADR-0047）
+                    # Display devices are not people, so they are not counted (ADR-0047)
                     member_count=sum(
                         1 for member in self._memberships.list_for_family(family.id) if not member.role.is_display
                     ),

@@ -30,10 +30,10 @@ def test_login_wrong_password(client: TestClient) -> None:
 
 
 def test_login_with_an_expired_temporary_password_says_so(client: TestClient, db_session: Session) -> None:
-    """期限切れの一時パスワードは通さないが、理由は伝える（ADR-0011）。
+    """An expired temporary password is rejected, but the reason is given (ADR-0011).
 
-    ``invalid_credentials`` に丸めていたため、本人には「合っているはずのものが
-    通らない」としか見えず、親へ再発行を頼めばよいと分からなかった。
+    It used to be collapsed into ``invalid_credentials``, so the user only saw "something that should be right
+    does not work" and could not tell that they should ask a parent to reissue it.
     """
     from datetime import timedelta
 
@@ -58,7 +58,7 @@ def test_login_with_an_expired_temporary_password_says_so(client: TestClient, db
     assert expired.status_code == 401
     assert expired.json()["detail"]["error"] == "temporary_password_expired"
 
-    # 値を知らない相手には、これまでどおり何も明かさない
+    # Someone who does not know the value learns nothing, as before
     wrong = client.post("/api/auth/login", json={"username": "kid", "password": "not-the-password"})
     assert wrong.json()["detail"]["error"] == "invalid_credentials"
 
@@ -129,19 +129,19 @@ def test_forgot_password_does_not_leak_user_existence(client: TestClient, mail_o
     unknown = client.post("/api/auth/forgot-password", json={"username": "nobody"})
     assert known.status_code == unknown.status_code == 200
     assert known.json() == unknown.json() == {"status": "accepted"}
-    # 応答は同じでも、実在するアカウントにだけ実際に送られている
+    # The response is the same, but it is actually sent only for an existing account
     assert len(mail_outbox) == 1
 
 
 def test_forgot_password_reports_when_mail_cannot_be_sent(
     client: TestClient, db_session: Session, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """送れないのに「送りました」と返さない。
+    """Do not answer "sent" when it cannot be sent.
 
-    ``MAIL_ENABLED`` が無効なまま ``accepted`` を返していたため、利用者は決して
-    届かないメールを待っていた。ログインできない状態からの回復手段が、そこで
-    事実上失われる。送信手段の有無は利用者に依らないので、実在しないユーザー名
-    でも同じ応答になる（実在は漏れない）。
+    With ``MAIL_ENABLED`` off it returned ``accepted``, so users waited for an email that
+    would never arrive. That effectively removes the way to recover from being unable to log in.
+    Whether a delivery method exists does not depend on the user, so a non-existent username
+    gets the same response (existence does not leak).
     """
     with caplog.at_level(logging.WARNING):
         known = client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
@@ -149,7 +149,7 @@ def test_forgot_password_reports_when_mail_cannot_be_sent(
 
     assert known.status_code == unknown.status_code == 200
     assert known.json() == unknown.json() == {"status": "mail_unavailable"}
-    # メールで届かない代わりに、運用者が手渡せるようリンクがログに出ている
+    # Instead of email delivery, the link is in the log so an operator can hand it over
     assert db_session.scalar(select(PasswordResetToken)) is not None
     issued = [m for m in caplog.messages if m.startswith("password_reset_link_issued: ")]
     assert len(issued) == 1
@@ -157,7 +157,7 @@ def test_forgot_password_reports_when_mail_cannot_be_sent(
 
 
 def test_forgot_password_logs_a_link_that_actually_works(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
-    """ログに出たリンクだけでパスワードを取り戻せる（メール無効時の回復経路）。"""
+    """The link from the log alone is enough to recover the password (recovery path when mail is disabled)."""
     with caplog.at_level(logging.WARNING):
         client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
 
@@ -177,7 +177,7 @@ def test_forgot_password_logs_a_link_that_actually_works(client: TestClient, cap
 def test_forgot_password_reports_when_the_smtp_server_is_unreachable(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """SMTP に届かないときも案内を返す（以前は 500 になっていた）。"""
+    """Still returns guidance when SMTP is unreachable (it used to be a 500)."""
     monkeypatch.setenv("MAIL_ENABLED", "true")
 
     def _refuse(_self: SmtpEmailSender, _message: EmailMessage) -> None:
@@ -193,10 +193,10 @@ def test_forgot_password_reports_when_the_smtp_server_is_unreachable(
 def test_forgot_password_while_smtp_is_down_does_not_leak_user_existence(
     client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """SMTP に届かない間も、実在する大人と実在しない名前・子どもで応答が同じ。
+    """While SMTP is unreachable, an existing adult, a non-existent name and a child get the same response.
 
-    以前は実在する大人にだけ ``mail_unavailable`` を返し、他は ``accepted`` だったので、
-    障害中だけ大人のユーザー名が実在するかを外から確かめられた（task #768）。
+    Previously only an existing adult got ``mail_unavailable`` and everyone else got ``accepted``, so
+    during an outage anyone could check from outside whether an adult username existed (task #768).
     """
     monkeypatch.setenv("MAIL_ENABLED", "true")
 
@@ -221,10 +221,10 @@ def test_forgot_password_while_smtp_is_down_does_not_leak_user_existence(
 def test_forgot_password_without_email_answers_like_an_unknown_name(
     client: TestClient, db_session: Session, mail_outbox: list[EmailMessage]
 ) -> None:
-    """メールアドレスを持たないアカウント（子ども）にも、実在しない名前と同じ応答を返す。
+    """An account without an email address (a child) gets the same response as a non-existent name.
 
-    違えると、子どものユーザー名が実在するかを外から確かめられる（task #733）。
-    親への依頼（ADR-0011）は画面が常に案内する。
+    Otherwise anyone could check from outside whether a child's username exists (task #733).
+    The screen always points to asking a parent (ADR-0011).
     """
     db_session.add(User(username="kid", email=None, display_name="こども", password_hash="x", is_active=True))
     db_session.commit()
@@ -233,7 +233,7 @@ def test_forgot_password_without_email_answers_like_an_unknown_name(
     nobody = client.post("/api/auth/forgot-password", json={"username": "nobody-here"})
     assert kid.status_code == nobody.status_code == 200
     assert kid.json() == nobody.json() == {"status": "accepted"}
-    # 送る先が無いので、トークンも発行しない
+    # There is nowhere to send it, so no token is issued either
     assert db_session.scalar(select(PasswordResetToken)) is None
     assert mail_outbox == []
 
@@ -244,10 +244,10 @@ def test_reset_password_with_valid_token(
     client.post("/api/auth/forgot-password", json={"username": master_data.DEFAULT_ADMIN_USERNAME})
     row = db_session.scalar(select(PasswordResetToken))
     assert row is not None
-    # リンクは本文に載って実際に送られている
+    # The link is in the body and was actually sent
     assert "/reset-password?token=" in mail_outbox[0].body
 
-    # 平文トークンはハッシュしか保存されないため、ここで発行し直して検証する
+    # Only the hash of the plaintext token is stored, so reissue one here to verify
     import hashlib
     import secrets
 
@@ -267,7 +267,7 @@ def test_reset_password_with_valid_token(
         ).status_code
         == 200
     )
-    # トークンは使い捨て
+    # Tokens are single-use
     again = client.post(
         "/api/auth/reset-password",
         json={"token": token, "new_password": "another-password-1"},
@@ -276,9 +276,9 @@ def test_reset_password_with_valid_token(
 
 
 def test_reset_password_clears_a_pending_temporary_password(client: TestClient, db_session: Session) -> None:
-    """一時パスワードの途中でも、本人がメールから取り戻せる。
+    """Even mid temporary password, the user can recover via email.
 
-    期限を残すと、再設定した新しいパスワードまで期限切れ扱いになってしまう。
+    If the expiry were kept, the newly reset password would also be treated as expired.
     """
     import hashlib
     import secrets
@@ -340,9 +340,9 @@ def test_profile_update_changes_display_name_and_email(client: TestClient, admin
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["display_name"] == "おとうさん"
-    # メールアドレスは小文字へ正規化する（同じアドレスが 2 つ並ばないように）
+    # Email addresses are normalized to lowercase (so the same address does not appear twice)
     assert data["email"] == "dad@example.com"
-    # ログイン識別子はプロフィールでは変わらない
+    # The login identifier does not change via the profile
     assert data["username"] == master_data.DEFAULT_ADMIN_USERNAME
 
     again = client.get("/api/auth/me", headers=admin_headers)
@@ -353,7 +353,7 @@ def test_profile_update_can_clear_email(client: TestClient, admin_headers: dict[
     response = client.put("/api/auth/me", headers=admin_headers, json={"email": None})
     assert response.status_code == 200
     assert response.json()["email"] is None
-    # 表示名は送っていないので変わらない
+    # Display name was not sent, so it does not change
     assert response.json()["display_name"] == master_data.DEFAULT_ADMIN_DISPLAY_NAME
 
 

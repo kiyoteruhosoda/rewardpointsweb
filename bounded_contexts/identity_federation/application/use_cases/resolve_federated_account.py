@@ -1,20 +1,20 @@
-"""IdP の名乗りを、このアプリの利用者へ落とす。
+"""Map the IdP's assertion to a user of this app.
 
-順に、
+In order, it tries
 
-1. ``(issuer, subject)`` の結び付きがあればその利用者
-2. 無ければ**検証済みの**メールアドレスで既存の利用者へ寄せる（既定は寄せない。ADR-0033）
-3. どちらでもなければ**口座を作る**（ADR-0041）
+1. the user linked by ``(issuer, subject)``, if any
+2. otherwise, merging into an existing user by **verified** email address (off by default. ADR-0033)
+3. if neither, **creating an account** (ADR-0041)
 
-を試す。3 で作るのは、**assay から code を持って戻ってきた相手＝このアプリの利用を
-割り当てられた人**だからである。割り当てが無い人は assay の画面で止まり、ここまで
-来ない（idp の ADR-0054）。結び付けた時点で ``federated_identities`` に控えを残すので、
-2 回目以降は 1 で決まる。
+. Step 3 creates one because **someone who came back from assay with a code = someone assigned
+to use this app**. People without an assignment are stopped on assay's screen and never get
+this far (idp ADR-0054). A record is left in ``federated_identities`` when linked, so
+from the second time on it is decided by step 1.
 
-⚠ **作れないときは断る。** 同じメールアドレスの口座が既にある（``sso_account_not_linked``。
-識別子（``username``）がそのアドレスの口座も含む）、
-``username`` を決められない（``sso_username_unavailable``）。どちらも黙って別の値で
-作ると、同じ人の口座が 2 つになるか、本人の知らない識別子になる。
+⚠ **Refuse when it cannot be created.** An account with the same email address already exists (``sso_account_not_linked``;
+this includes accounts whose identifier (``username``) is that address),
+or the ``username`` cannot be decided (``sso_username_unavailable``). Silently creating it with another value
+in either case would give the same person two accounts, or an identifier the person does not know.
 """
 
 from __future__ import annotations
@@ -64,8 +64,8 @@ class ResolveFederatedAccount:
         known = self._known_account(issuer, user.subject)
         if known is not None:
             _ensure_active(known)
-            # ⚠ **写しは IdP を正とする**（ADR-0038）。ここで上書きしないと、
-            #   向こうで改名・メール変更をしても表示が永久に古いままになる。
+            # ⚠ **The copy treats the IdP as the source of truth** (ADR-0038). Without overwriting here,
+            #   renames or email changes over there would leave the display stale forever.
             self.directory.refresh_profile(known.user_id, email=user.email, display_name=user.display_name)
             return ResolvedAccountDto(user_id=known.user_id)
         return self._welcome(issuer, user)
@@ -76,40 +76,40 @@ class ResolveFederatedAccount:
             return None
         account = self.directory.find_by_id(identity.user_id)
         if account is None:
-            # 利用者が消されたのに結び付きだけ残っている。結び付け直しへ回す。
+            # The user was deleted but the link remains. Hand it over to re-linking.
             return None
         self.identities.touch(identity)
         return account
 
     def _welcome(self, issuer: str, user: FederatedUser) -> ResolvedAccountDto:
-        """初めての相手。寄せられる口座があれば寄せ、無ければ作る（ADR-0041）。
+        """A first-time user. Merge into an account if one can be merged, otherwise create one (ADR-0041).
 
-        ⚠ **メールアドレスが要るのはここだけである**（ADR-0038）。既に結び付いて
-        いる相手は ``sub`` で引けるので、無くても入れる。
+        ⚠ **This is the only place that needs an email address** (ADR-0038). Users already
+        linked can be found by ``sub``, so they can sign in without one.
         """
         existing = self._account_holding(user.email) if user.email else None
         if existing is not None:
             if not self.policy.may_link(user):
-                # ⚠ **作らずに断る**（ADR-0041）。作ると同じ人の口座が 2 つになる。寄せる
-                #   設定は既定で閉じている（ADR-0033）ので、本人がその口座へ入って結び付ける。
+                # ⚠ **Refuse instead of creating** (ADR-0041). Creating would give the same person two accounts. Merging
+                #   is off by default (ADR-0033), so the person signs in to that account and links it.
                 raise SsoAccountNotLinkedError
             _ensure_active(existing)
             return self._link(issuer, user.subject, existing, provisioned=False)
         username = self._free_username(user)
         created = self.directory.provision(username=username, email=user.email, display_name=user.display_name)
         if created is None:
-            # 確かめてから作るまでのあいだに、同じ値を別の往復が取った。
+            # Between checking and creating, another round trip took the same value.
             logger.warning("sso_username_unavailable", extra={"reason": "raced"})
             raise SsoUsernameUnavailableError
         return self._link(issuer, user.subject, created, provisioned=True)
 
     def _account_holding(self, email: str) -> FederatedAccount | None:
-        """このメールアドレスを持つ口座。``email`` の列か、識別子がそのアドレスの口座。
+        """The account with this email address: the ``email`` column, or an account whose identifier is that address.
 
-        ⚠ **``email`` の列だけでは見落とす。** 招待の受諾で作った口座は ``email`` を
-        持たず（ADR-0011）、メールアドレスを識別子にしている口座が多い（移行値もそう）。
-        ``email`` だけで探すと、その人が初めて SSO で来たときに 2 つ目の口座を作り、
-        家族から外れる（2026-10-05 に本番で起きた）。
+        ⚠ **The ``email`` column alone misses some.** Accounts created by accepting an invitation have no
+        ``email`` (ADR-0011), and many accounts use their email address as the identifier (so do migrated values).
+        Searching by ``email`` alone creates a second account when that person first arrives via SSO,
+        and they drop out of the family (happened in production on 2026-10-05).
         """
         holder = self.directory.find_by_email(email)
         if holder is not None:
@@ -121,10 +121,10 @@ class ResolveFederatedAccount:
         return self.directory.find_by_username(username)
 
     def _free_username(self, user: FederatedUser) -> str:
-        """IdP の ``preferred_username`` を、このアプリの ``username`` にする。
+        """Turn the IdP's ``preferred_username`` into this app's ``username``.
 
-        ⚠ **使えなければ断る。黙って連番や別の値を付けない**（ADR-0041）。ログには
-        理由の区別だけを残し、値そのもの（PII）は残さない。
+        ⚠ **If unusable, refuse. Do not silently add a sequence number or another value** (ADR-0041). Logs keep
+        only which reason it was, not the value itself (PII).
         """
         if user.preferred_username is None:
             logger.warning("sso_username_unavailable", extra={"reason": "missing"})

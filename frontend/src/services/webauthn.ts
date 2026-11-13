@@ -1,9 +1,9 @@
 /**
- * パスキー（WebAuthn）のブラウザ側処理。
+ * Browser-side handling of passkeys (WebAuthn).
  *
- * サーバーは base64url 文字列の JSON でオプションを返し、同じ形式で
- * レスポンスを受け取る（py_webauthn 互換）。ここではその変換と
- * `navigator.credentials` の呼び出しだけを行う。外部ライブラリは使わない。
+ * The server returns options as JSON with base64url strings and accepts
+ * responses in the same format (py_webauthn compatible). This only does that conversion and
+ * calls `navigator.credentials`. No external library is used.
  */
 
 import { isRelyingPartyIdUsable, relyingPartyIdOf } from './relyingParty'
@@ -13,15 +13,15 @@ export interface PasskeyChallenge {
   public_key: Record<string, unknown>
 }
 
-/** 利用者が操作を取り消したときに投げる。エラー表示を分けるため。 */
+/** Thrown when the user cancels the operation, so the error message can differ. */
 export const PASSKEY_CANCELLED = 'passkey_cancelled'
 
 /**
- * RP ID がいま開いているドメインで使えないときに投げる。
+ * Thrown when the RP ID cannot be used on the domain currently open.
  *
- * ブラウザに任せると失敗の伝わり方が実装ごとに違い（`SecurityError` を投げる
- * ものもあれば、取り消しと同じ `NotAllowedError` にするものもある）、設定の誤りが
- * 「取り消しました」と出てしまう。呼び出す前に確かめて、原因を残す。
+ * Left to the browser, how the failure surfaces differs by implementation (some throw `SecurityError`,
+ * others turn it into the same `NotAllowedError` as a cancel), and a misconfiguration
+ * shows up as "cancelled". Check before calling so the cause is kept.
  */
 export class PasskeyRelyingPartyMismatchError extends Error {
   constructor(
@@ -33,10 +33,10 @@ export class PasskeyRelyingPartyMismatchError extends Error {
   }
 }
 
-/** サーバーの返した RP ID が、いま開いているドメインで使えることを確かめる。 */
+/** Check that the RP ID returned by the server can be used on the domain currently open. */
 function assertRelyingParty(publicKey: Record<string, unknown>): void {
   const relyingPartyId = relyingPartyIdOf(publicKey)
-  // 省略されていればブラウザが開いているドメインを使う。食い違いようがない。
+  // If omitted, the browser uses the open domain, so there can be no mismatch.
   if (!relyingPartyId) return
   const { hostname } = window.location
   if (isRelyingPartyIdUsable(relyingPartyId, hostname)) return
@@ -67,7 +67,7 @@ function bufferToBase64url(buffer: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-/** base64url の資格情報リストを WebAuthn の記述子へ変換する。 */
+/** Convert a base64url credential list into WebAuthn descriptors. */
 function toDescriptors(source: unknown): PublicKeyCredentialDescriptor[] {
   if (!Array.isArray(source)) return []
   return source.map((item) => {
@@ -79,7 +79,7 @@ function toDescriptors(source: unknown): PublicKeyCredentialDescriptor[] {
   })
 }
 
-/** サーバーが返した JSON のうち、ArrayBuffer が要る項目だけを変換する。 */
+/** Convert only the fields of the server's JSON that need an ArrayBuffer. */
 function toCreationOptions(source: Record<string, unknown>): PublicKeyCredentialCreationOptions {
   const user = source.user as { id: string; name: string; displayName: string }
   return {
@@ -103,7 +103,7 @@ function assertCredential(credential: Credential | null): PublicKeyCredential {
   return credential as PublicKeyCredential
 }
 
-/** 認証器へ新しいパスキーを作らせ、サーバーへ送る形へ整える。 */
+/** Have the authenticator create a new passkey and shape it for sending to the server. */
 export async function createPasskey(
   publicKey: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
@@ -126,7 +126,7 @@ export async function createPasskey(
   }
 }
 
-/** 登録済みのパスキーで署名させ、サーバーへ送る形へ整える。 */
+/** Have a registered passkey sign and shape it for sending to the server. */
 export async function assertPasskey(
   publicKey: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
@@ -150,28 +150,28 @@ export async function assertPasskey(
   }
 }
 
-/** ブラウザが投げる取り消し（NotAllowedError）を判定する。 */
+/** Detect a cancel (NotAllowedError) thrown by the browser. */
 export function isPasskeyCancellation(error: unknown): boolean {
   if (error instanceof Error && error.message === PASSKEY_CANCELLED) return true
   return error instanceof DOMException && error.name === 'NotAllowedError'
 }
 
-/** `navigator.credentials` が投げる DOMException の名前 → 翻訳キー。 */
+/** Name of a DOMException thrown by `navigator.credentials` -> translation key. */
 const BROWSER_ERROR_KEYS: Record<string, string> = {
-  // RP ID が開いている URL のドメインと噛み合っていない（設定の誤り）。
+  // The RP ID does not match the domain of the open URL (misconfiguration).
   SecurityError: 'error.passkey_domain_mismatch',
-  // その認証器にはすでに同じアカウントのパスキーがある（excludeCredentials）。
+  // The authenticator already has a passkey for the same account (excludeCredentials).
   InvalidStateError: 'error.passkey_already_on_device',
-  // 認証器が要求された方式に対応していない。
+  // The authenticator does not support the requested method.
   NotSupportedError: 'error.passkey_unsupported_authenticator',
 }
 
 /**
- * ブラウザ由来の失敗を翻訳キーへ変換する。サーバー由来なら `null`。
+ * Convert a browser-originated failure into a translation key. `null` if it came from the server.
  *
- * `navigator.credentials` の失敗は `ApiError` ではないため、そのまま
- * `errorMessageKey()` へ渡すと原因を問わず「エラーが発生しました」になる。
- * 呼び出し側は `passkeyErrorKey(err) ?? errorMessageKey(err)` と書く。
+ * Failures from `navigator.credentials` are not `ApiError`, so passing them straight to
+ * `errorMessageKey()` yields "An error occurred" whatever the cause.
+ * Callers write `passkeyErrorKey(err) ?? errorMessageKey(err)`.
  */
 export function passkeyErrorKey(error: unknown): string | null {
   if (error instanceof PasskeyRelyingPartyMismatchError) return 'error.passkey_domain_mismatch'

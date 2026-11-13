@@ -1,5 +1,5 @@
 /**
- * 家族への入口: すでに所属していれば詳細へ送り、していなければ作成・参加だけを出す。
+ * Entry to families: if already a member, go to the details; otherwise show only create and join.
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,20 +26,20 @@ describe('FamiliesPage', () => {
     vi.clearAllMocks()
   })
 
-  it('親（family:manage）には「作る」を出す', () => {
+  it('shows "Create" to a parent (family:manage)', () => {
     renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES })
 
     expect(screen.getByRole('button', { name: 'Create a family' })).toBeInTheDocument()
   })
 
-  it('子（family:view のみ）には「作る」を出さず、招待コードの入口だけ出す', () => {
+  it('shows only the invitation code entry, not "Create", to a child (family:view only)', () => {
     renderWithProviders(<FamiliesPage />, { scopes: ['family:view', 'point:view'] })
 
     expect(screen.getByRole('button', { name: 'Join with a code' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Create a family' })).not.toBeInTheDocument()
   })
 
-  it('すでに家族に参加していれば、作成も参加も出さずに詳細へ送る', () => {
+  it('goes to the details without showing create or join when already in a family', () => {
     renderWithProviders(<FamiliesPage />, {
       scopes: PARENT_SCOPES,
       family: familyOf('parent', [member()]),
@@ -51,7 +51,7 @@ describe('FamiliesPage', () => {
     expect(screen.queryByRole('button', { name: 'Join with a code' })).not.toBeInTheDocument()
   })
 
-  it('所属を確かめられなかったら作成・参加を出さない（押せば必ず失敗する）', () => {
+  it('does not show create or join when membership could not be confirmed (pressing would always fail)', () => {
     renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES, familyFailed: true })
 
     expect(screen.getByText('This family could not be loaded.')).toBeInTheDocument()
@@ -59,7 +59,7 @@ describe('FamiliesPage', () => {
     expect(screen.queryByRole('button', { name: 'Join with a code' })).not.toBeInTheDocument()
   })
 
-  it('作ったらその家族の詳細へ移る', async () => {
+  it('moves to the new family details after creating it', async () => {
     create.mockResolvedValue(familyOf('owner', []))
     const reloadFamily = vi.fn<() => Promise<void>>().mockResolvedValue()
     renderWithProviders(<FamiliesPage />, { scopes: PARENT_SCOPES, reloadFamily })
@@ -70,13 +70,13 @@ describe('FamiliesPage', () => {
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith('ほその家')
     })
-    // 詳細へ送る前に読み直す（左のナビゲーションも同時に新しい家族へ変わる）
+    // Reload before going to the details (the left navigation switches to the new family at the same time)
     await waitFor(() => {
       expect(reloadFamily).toHaveBeenCalled()
     })
   })
 
-  it('招待コードで参加できる', async () => {
+  it('can join with an invitation code', async () => {
     acceptInvitation.mockResolvedValue({
       family_id: 1,
       family_name: 'ほその家',
@@ -92,7 +92,7 @@ describe('FamiliesPage', () => {
     expect(await screen.findByText('You joined the family.')).toBeInTheDocument()
   })
 
-  it('ログイン前に入力したコードを引き継いで入れておく', async () => {
+  it('prefills the code entered before signing in', async () => {
     renderWithProviders(<FamiliesPage />, {
       scopes: PARENT_SCOPES,
       route: '/families#code=CODE1234',

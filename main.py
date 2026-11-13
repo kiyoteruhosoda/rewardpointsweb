@@ -1,8 +1,8 @@
-"""開発用エントリポイント。
+"""Development entry point.
 
-本番では ``uvicorn asgi:app``（または Gunicorn + UvicornWorker）を使用すること。
+In production, use ``uvicorn asgi:app`` (or Gunicorn + UvicornWorker).
 
-開発時の起動方法::
+To start during development::
 
     uv run python main.py
 """

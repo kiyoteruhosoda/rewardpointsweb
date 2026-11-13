@@ -1,4 +1,4 @@
-"""アカウントセキュリティ API の Pydantic スキーマ。"""
+"""Pydantic schemas of the account security API."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ class TwoFactorStatusResponse(BaseModel):
 
 
 class TotpEnrollmentResponse(BaseModel):
-    # 認証アプリに手入力するための共有鍵
+    # Shared key for manual entry into the authenticator app
     secret: str
     otpauth_uri: str
-    # QR コード（SVG の data URI）。読み取り用。
+    # QR code (SVG data URI). For scanning.
     qr_code: str
 
 
@@ -34,7 +34,7 @@ class PasskeyResponse(BaseModel):
 
 class PasskeyChallengeResponse(BaseModel):
     challenge_id: str
-    # ブラウザの navigator.credentials へそのまま渡す WebAuthn オプション
+    # WebAuthn options passed as is to the browser's navigator.credentials
     public_key: dict[str, Any]
 
 

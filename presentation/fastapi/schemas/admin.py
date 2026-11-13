@@ -1,4 +1,4 @@
-"""管理 API の Pydantic スキーマ。"""
+"""Pydantic schemas for the admin API."""
 
 from __future__ import annotations
 
@@ -8,38 +8,38 @@ from shared.domain.auth.username import MAX_LENGTH as USERNAME_MAX_LENGTH
 
 
 class SignInEntrances(BaseModel):
-    """この利用者が**このアプリへ入れる手段**の一覧（ADR-0035）。
+    """List of **ways this user can sign in to this app** (ADR-0035).
 
-    ⚠ **認証系が 2 つあることを前提にした棚卸しのための値である。** IdP 側で
-    多要素を必須にしても、こちらのパスワード・パスキーには掛からない。何本の口が
-    開いているのかは、並べて見ないと分からない。
+    ⚠ **This is an inventory that assumes there are two auth systems.** Requiring MFA on
+    the IdP does not apply to this app's passwords and passkeys. How many entrances are
+    open only becomes clear when they are listed side by side.
     """
 
-    #: パスワードで入れるか（``users.password_hash`` が NULL でない。ADR-0034）。
+    #: Whether the user can sign in with a password (``users.password_hash`` is not NULL. ADR-0034).
     password: bool = False
-    #: このアプリ側の二要素認証（TOTP）が有効か。**IdP 側の多要素とは別物。**
+    #: Whether this app's two-factor auth (TOTP) is enabled. **Separate from MFA on the IdP.**
     totp: bool = False
-    #: このアプリ側に登録されたパスキーの本数。**IdP 側のパスキーとは別物。**
+    #: Number of passkeys registered in this app. **Separate from passkeys on the IdP.**
     passkeys: int = 0
-    #: 結び付いている IdP の issuer。空 = SSO では入れない。
+    #: Issuers of linked IdPs. Empty = cannot sign in via SSO.
     identity_providers: list[str] = []
-    #: ペアリングした表示端末として入れるか（ADR-0047）。表示アカウントはこれだけが真になる。
+    #: Whether the user can sign in as a paired display device (ADR-0047). Only this is true for display accounts.
     display_device: bool = False
 
 
 class UserResponse(BaseModel):
     id: int
-    # ログイン識別子。メールアドレスは任意項目（ADR-0011）
+    # Login identifier. Email address is optional (ADR-0011)
     username: str
     email: str | None
     display_name: str
     is_active: bool
     must_change_password: bool
     roles: list[str]
-    # 実際に効いている scope（所属ロールの権限の和集合）。ロールを付け替えた
-    # 結果その人が何を行えるようになったかは、ロール名だけでは読み取れない。
+    # Scopes actually in effect (union of the permissions of the user's roles). What a person
+    # can do after their roles change cannot be read from role names alone.
     permissions: list[str]
-    #: 入れる手段の一覧（ADR-0035）。一覧・作成・更新のどれでも同じ形で返す。
+    #: List of sign-in entrances (ADR-0035). Returned in the same shape by list, create and update.
     entrances: SignInEntrances = SignInEntrances()
 
 
@@ -85,11 +85,11 @@ class SystemSettingItemResponse(BaseModel):
     label: str
     value_type: str
     secret: bool = False
-    # 選択肢を持つ項目のみ。[値, 表示ラベル] の並び。
+    # Only for items with choices. A list of [value, display label].
     choices: list[list[str]] | None = None
-    # 反映に再起動が必要なサービス（空 = 保存と同時に反映）
+    # Services that need a restart to apply (empty = applied on save)
     restart_scopes: list[str] = []
-    # 環境変数だけで決める設定（見るだけ。ADR-0056）
+    # Setting decided only by environment variables (read-only. ADR-0056)
     env_only: bool = False
     value: object = None
     default: object = None
@@ -98,12 +98,12 @@ class SystemSettingItemResponse(BaseModel):
 
 
 class SystemSettingsUpdateRequest(BaseModel):
-    # key -> 新しい値（null でその key の DB 上書きを削除しデフォルトへ戻す）
+    # key -> new value (null deletes the DB override for that key and reverts to the default)
     values: dict[str, object]
 
 
 class RestartRequirementResponse(BaseModel):
-    """保存した設定のうち、反映に再起動が必要なもの。"""
+    """Saved settings that need a restart to take effect."""
 
     scopes: list[str] = []
     keys: list[str] = []
@@ -128,7 +128,7 @@ class RestartStatusResponse(BaseModel):
 
 
 class RestartCommandRequest(BaseModel):
-    # 省略時は全サービスが対象
+    # If omitted, all services are targeted
     scopes: list[str] | None = None
     reason: str | None = None
 

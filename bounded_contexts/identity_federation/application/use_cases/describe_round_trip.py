@@ -1,7 +1,7 @@
-"""戻ってきた往復が「ログイン」か「連携」か、画面を出さずに試した往復か（ADR-0036・ADR-0052）を答える。
+"""Answer whether a returned round trip is a "login", a "link", or one tried without showing a screen (ADR-0036, ADR-0052).
 
-⚠ **これで認証しない。** 控えを**消さずに**覗くだけで、合言葉の照合も消費も
-しない ——どちらの後始末を呼ぶかを決めるためだけの問い合わせである。
+⚠ **This does not authenticate.** It only peeks at the saved request **without deleting it**, neither checking
+nor consuming the passphrase -- it is a query only for deciding which completion to call.
 """
 
 from __future__ import annotations
@@ -19,15 +19,15 @@ class DescribeRoundTrip:
     sessions: SsoLoginSessionRepository
 
     def execute(self, *, state: str) -> int | None:
-        """連携の往復ならそれを始めた利用者、ログインの往復なら ``None``。"""
+        """For a link round trip, the user who started it; for a login round trip, ``None``."""
         session = self.sessions.peek(state)
         return None if session is None else session.link_user_id
 
     def silently_declined(self, *, state: str, browser_binding: str | None) -> str | None:
-        """画面を出さずに試した往復が「入っていない」で戻ったなら、その行き先（ADR-0052）。
+        """If a round trip tried without showing a screen came back as "not signed in", its destination (ADR-0052).
 
-        ふつうの往復・別のブラウザの往復なら ``None``（今までどおり失敗として扱う）。
-        控えは消さない（期限で消える。この往復の code は IdP が出していない）。
+        For a normal round trip or one from another browser, ``None`` (treated as a failure as before).
+        The saved request is not deleted (it expires; the IdP did not issue a code for this round trip).
         """
         session = self.sessions.peek(state)
         if session is None or not session.declined_silently(hash_secret(browser_binding or "")):
@@ -35,7 +35,7 @@ class DescribeRoundTrip:
         return session.redirect_to
 
     def is_renewal(self, *, state: str, browser_binding: str | None) -> bool:
-        """送り出したブラウザへ戻った、切れたログインを続ける往復か（ADR-0058）。"""
+        """Whether this is a round trip back to the sending browser that continues an expired login (ADR-0058)."""
         session = self.sessions.peek(state)
         return session is not None and session.renewal_from(hash_secret(browser_binding or ""))
 

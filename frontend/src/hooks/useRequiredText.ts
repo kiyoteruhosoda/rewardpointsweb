@@ -1,12 +1,12 @@
 /**
- * 空白だけの入力を「未入力」としてブラウザの必須チェックに乗せる。
+ * Feeds whitespace-only input into the browser's required check as "empty".
  *
- * `required` は 1 文字でも入っていれば通るので、空白だけの理由は素通りする。
- * 通した先で `trim()` して弾くと、画面には何も出ないまま操作が終わる（押しても
- * 何も起きない）。判定を入力欄そのものへ移し、ブラウザに必須エラーを出させる。
+ * `required` passes as soon as there is one character, so a whitespace-only reason slips through.
+ * Rejecting it later with `trim()` ends the operation with nothing shown on screen (pressing
+ * does nothing). Move the check into the input itself and let the browser show its required error.
  *
- * 文言は `setCustomValidity()` で渡す。ブラウザ既定の未入力メッセージは閲覧者の
- * ブラウザの言語で出るため、画面で選んでいる言語と揃わない。
+ * The message is passed with `setCustomValidity()`. The browser's default empty-field message is
+ * in the viewer's browser language, which may not match the language chosen in the app.
  */
 import { useEffect, useRef } from 'react'
 

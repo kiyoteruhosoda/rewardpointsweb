@@ -1,8 +1,9 @@
-"""記録を打ち消す（訂正）。
+"""Reverse a record (correction).
 
-元のレコードは書き換えない。逆符号の行を足し、``reversal_of_id`` で対応を示す。
-二重取り消しは DB の UNIQUE 制約でも防がれるが、先にここで分かりやすい
-エラーコードへ落とす。打ち消しレコード自体は打ち消せない（ADR-0010）。
+The original record is never rewritten. A row with the opposite sign is added, linked
+via ``reversal_of_id``. Double reversal is also blocked by a UNIQUE constraint in the DB,
+but it is turned into a clear error code here first. A reversal record itself cannot be
+reversed (ADR-0010).
 """
 
 from __future__ import annotations

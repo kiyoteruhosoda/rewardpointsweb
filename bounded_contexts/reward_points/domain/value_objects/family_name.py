@@ -1,4 +1,4 @@
-"""家族の名前。"""
+"""A family's name."""
 
 from __future__ import annotations
 

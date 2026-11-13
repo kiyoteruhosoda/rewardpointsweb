@@ -1,4 +1,4 @@
-/** プロフィール設定: 自分の情報・表示設定（言語・テーマ）・セキュリティ。 */
+/** Profile settings: your own info, display settings (language, theme) and security. */
 import { fireEvent, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -10,13 +10,13 @@ describe('ProfilePage', () => {
     localStorage.clear()
   })
 
-  it('表示名とログイン ID を出す', () => {
+  it('shows the display name and login ID', () => {
     renderWithProviders(<ProfilePage />, { scopes: ['family:view'] })
     expect(screen.getByText('Signs in as manager')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument()
   })
 
-  it('表示名とメールアドレスを変えられる（ログイン ID は編集させない）', () => {
+  it('lets you change the display name and email (login ID is not editable)', () => {
     renderWithProviders(<ProfilePage />, { scopes: ['family:view'] })
 
     expect(screen.getByLabelText('Display name')).toHaveValue('manager')
@@ -24,13 +24,13 @@ describe('ProfilePage', () => {
     expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
   })
 
-  it('表示設定として言語とテーマを持つ（ヘッダーではなくこの画面に置く）', () => {
+  it('holds language and theme as display settings (on this screen, not in the header)', () => {
     renderWithProviders(<ProfilePage />)
     expect(screen.getByLabelText('Language')).toBeInTheDocument()
     expect(screen.getByLabelText('Theme')).toBeInTheDocument()
   })
 
-  it('テーマを選ぶと保存して即座に反映する', () => {
+  it('saves and applies a theme immediately when chosen', () => {
     renderWithProviders(<ProfilePage />)
 
     fireEvent.change(screen.getByLabelText('Theme'), { target: { value: 'dark' } })
@@ -38,7 +38,7 @@ describe('ProfilePage', () => {
     expect(document.documentElement.dataset.theme).toBe('dark')
   })
 
-  it('システム管理の入口は置かない（Sidebar の独立した節にある）', () => {
+  it('has no entry to system administration (it is a separate Sidebar section)', () => {
     renderWithProviders(<ProfilePage />, { scopes: ['user:manage', 'log:view'] })
     expect(screen.queryByText('System administration')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()

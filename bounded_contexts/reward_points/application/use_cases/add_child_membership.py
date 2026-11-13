@@ -1,7 +1,7 @@
-"""子の参加を作る（owner / parent）。
+"""Create a child membership (owner / parent).
 
-この時点ではアカウントが無い。台帳だけ先に用意し、子が招待コードで自分の
-アカウントを作った時点で結び付く（ADR-0009 / ADR-0011）。
+There is no account yet at this point. Only the ledger is prepared up front; it is
+linked once the child creates their own account with an invitation code (ADR-0009 / ADR-0011).
 """
 
 from __future__ import annotations

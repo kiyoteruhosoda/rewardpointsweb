@@ -1,13 +1,13 @@
-"""reward events (イベントとシール)
+"""reward events (events and stickers)
 
-子の台帳ごとの「がんばりカード」（ADR-0042）。目標・達成でもらえるポイント・
-達成回数を ``reward_events`` に、貼ったシールを 1 枚 1 行で ``reward_event_stickers``
-に持つ。台帳が消えればイベントも、イベントが消えればシールも消える
-（``ON DELETE CASCADE``）。
+"Effort cards" per child ledger (ADR-0042). The goal, the points earned on completion, and
+the completion count go in ``reward_events``, and each sticker placed is one row in ``reward_event_stickers``.
+Deleting a ledger deletes its events, and deleting an event deletes its stickers
+(``ON DELETE CASCADE``).
 
-既存の台帳には行が入らないので、このリビジョンの前後で見え方は変わらない。
+Existing ledgers get no rows, so nothing looks different before and after this revision.
 
-定義の正本は ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``。
+The definitions' source of truth is ``bounded_contexts/reward_points/infrastructure/reward_points_models.py``.
 
 Revision ID: reward_events
 Revises: link_round_trip
@@ -61,7 +61,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # 索引は表と一緒に消える。外部キーが使う索引を先に落とすと MariaDB が拒む
-    # （CLAUDE.md「DDL 管理」）
+    # Indexes go away with the table. Dropping an index a foreign key uses first is rejected by MariaDB
+    # (CLAUDE.md "DDL management")
     op.drop_table("reward_event_stickers")
     op.drop_table("reward_events")

@@ -1,16 +1,16 @@
-"""参加者を家族から外す（owner のみ。表示端末だけは親なら外せる）。
+"""Remove a member from a family (owner only; display devices can be removed by any parent).
 
-台帳は追記専用で、消す手段を用意していない（ADR-0010）。記録が 1 件でも
-残っている参加者は外せない — 外せてしまうと、履歴が黙って消える経路になる。
+Ledgers are append-only and there is no way to delete them (ADR-0010). A member with even
+one remaining record cannot be removed — otherwise it would become a path for history to silently vanish.
 
-子アカウントは招待の受諾（redeem）で生まれ、家族の参加としてだけ存在するので、
-除名ではアカウントごと削除する（ADR-0018）。結び付いた子のアカウントが redeem
-由来であることは、accept が子の招待を断ること
-（``child_invitation_requires_signup``）が保証する。親のアカウントは家族と
-独立に存在する（管理者が作る）ため消さない。
+Child accounts are created by redeeming an invitation and exist only as a family membership,
+so removal deletes the account as well (ADR-0018). That a linked child account came from
+redeem is guaranteed by accept rejecting child invitations
+(``child_invitation_requires_signup``). Parent accounts exist independently of the family
+(created by an administrator), so they are not deleted.
 
-表示端末（ADR-0047）は親（owner / parent）なら外せる。端末のアカウントも承認で
-生まれ、その家族を映すためだけに在るので、参加と一緒に消す。
+Display devices (ADR-0047) can be removed by parents (owner / parent). The device account
+is also created on approval and exists only to show that family, so it is deleted with the membership.
 """
 
 from __future__ import annotations
@@ -50,11 +50,11 @@ class RemoveMembershipUseCase:
         self._provisioning = provisioning
 
     def execute(self, *, family_id: int, membership_id: int, account_id: int) -> int | None:
-        """外す。表示端末を外したときは、その端末のアカウント ID を返す（監査ログ用）。"""
+        """Remove. When a display device is removed, return that device's account ID (for the audit log)."""
         actor = self._access.membership_in(family_id=family_id, account_id=account_id)
         target = self._memberships.find_by_id(membership_id)
         if target is None or target.family_id != family_id:
-            # 外せない立場の人には、相手の有無より先に 403 を返す（require_owner と同じ順）
+            # Return 403 to those not allowed to remove before revealing whether the target exists (same order as require_owner)
             if not family_access_policy.can_administer_family(actor):
                 raise FamilyAccessDeniedError
             raise MembershipNotFoundError
@@ -62,7 +62,7 @@ class RemoveMembershipUseCase:
             self._detach_display(actor, target)
             return target.account_id
         if not family_access_policy.can_administer_family(actor) or target.id == actor.id:
-            # owner が自分を外すと家族を管理できる人がいなくなる
+            # If the owner removed themself, nobody would be left to manage the family
             raise FamilyAccessDeniedError
         self._remove_ledger_of(target.id)
         self._memberships.delete(target.id)
@@ -76,7 +76,7 @@ class RemoveMembershipUseCase:
         self._delete_owned_account_of(target)
 
     def _delete_owned_account_of(self, target: FamilyMembership) -> None:
-        """家族の参加としてだけ存在するアカウント（子・表示端末）を消す。"""
+        """Delete accounts that exist only as a family membership (children, display devices)."""
         owned = target.role.has_own_ledger or target.role.is_display
         if owned and target.account_id is not None:
             self._provisioning.delete_account(target.account_id)

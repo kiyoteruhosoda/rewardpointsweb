@@ -1,7 +1,7 @@
-"""引き換え券をログイン結果へ換える（SPA からの ``POST``）。
+"""Exchange an exchange ticket for a login result (``POST`` from the SPA).
 
-券は 1 回限りで、消費は削除の成否で決める（同じ券を 2 本同時に送られても
-トークンを 2 つ得られないようにする。パスキーのチャレンジと同じ作法）。
+A ticket is one-time, and consumption is decided by whether the delete succeeded (so that sending the same ticket
+twice at once cannot yield two tokens; same approach as passkey challenges).
 """
 
 from __future__ import annotations

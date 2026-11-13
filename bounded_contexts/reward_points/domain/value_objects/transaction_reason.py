@@ -1,4 +1,4 @@
-"""付与・消費の理由（自由入力）。"""
+"""Reason for a grant or spend (free text)."""
 
 from __future__ import annotations
 

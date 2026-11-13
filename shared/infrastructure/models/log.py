@@ -1,6 +1,6 @@
-"""構造化ログの永続化モデル（``requestId`` でリクエスト単位に追跡する）。
+"""Persistence model for structured logs (traced per request via ``requestId``).
 
-PII を含めない。ユーザー識別子は ``user_id_hash`` のみ。traceback は例外時のみ。
+No PII. The only user identifier is ``user_id_hash``. traceback is set only on exceptions.
 """
 
 from __future__ import annotations

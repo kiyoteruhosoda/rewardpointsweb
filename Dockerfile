@@ -1,5 +1,5 @@
 # ===== frontend build stage =====
-# Node / node_modules はビルドにしか使わないため、最終イメージには含めない。
+# Node / node_modules are only used for the build, so they are not in the final image.
 FROM node:26-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS frontend-builder
 
 WORKDIR /app/frontend
@@ -22,13 +22,13 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# uv（依存管理）。依存レイヤーを分けてキャッシュを効かせる。
-# ⚠ 版を固定する。`:latest` だと同じコミットからでも解決器の版が変わりうる。
-#   CI（setup-uv の version）と同じ版に揃える。
-# ⚠ **ghcr.io の像から COPY しない。** 像のビルドが GitHub に頼らないよう、
-#   PyPI の wheel から入れる（task #172）。
-# uv は依存を入れるときにしか使わないので、/tmp に入れて同じ RUN の中で消す
-# （最終イメージに残さない）。
+# uv (dependency management). Keep dependencies in a separate layer so the cache works.
+# ⚠ Pin the version. With `:latest` the resolver version can change even for the same commit.
+#   Keep it the same as CI (setup-uv's version).
+# ⚠ **Do not COPY from the ghcr.io image.** Install from the PyPI wheel so the image
+#   build does not depend on GitHub (task #172).
+# uv is only needed to install dependencies, so put it in /tmp and remove it in the same RUN
+# (it does not stay in the final image).
 # renovate: datasource=pypi depName=uv
 ARG UV_VERSION=0.12.5
 
@@ -43,19 +43,19 @@ COPY . /app
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 ENV PATH="/app/.venv/bin:$PATH"
 
-# バージョン情報（shared/kernel/version.json）は **ビルドの前に生成してコンテキストへ入れる**。
+# Version info (shared/kernel/version.json) is **generated before the build and placed in the context**.
 #
-# ⚠ build-arg で渡す形はやめた（ADR-0028）。.dockerignore が .git を除いているので
-#   Dockerfile の中から git は引けない。build の「版を刻む」段（deploy-repo の
-#   resources/build-matrix.json で pre_build: true）が scripts/generate_version.sh を
-#   実行し、その出力がここへ COPY されてくる。
-# この RUN は「無かったときに dev として印を付ける」だけで、既にある内容は書き換えない。
+# ⚠ Passing it via build-arg was dropped (ADR-0028). .dockerignore excludes .git, so
+#   git is not available inside the Dockerfile. The build's version-stamping stage
+#   (pre_build: true in deploy-repo's resources/build-matrix.json) runs
+#   scripts/generate_version.sh, and its output is COPYed in here.
+# This RUN only marks the version as dev when the file is missing; it never rewrites existing content.
 RUN bash scripts/generate_version.sh
 
 RUN chmod +x /app/scripts/entrypoint.sh
 RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
 USER appuser
 
-# エントリポイントはイメージに焼き込む。compose は command でモードのみ指定する。
+# The entrypoint is baked into the image. compose only selects the mode via command.
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 CMD ["web"]

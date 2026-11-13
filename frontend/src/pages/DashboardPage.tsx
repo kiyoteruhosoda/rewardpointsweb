@@ -1,17 +1,17 @@
 /**
- * ホーム。所属する家族の子どもたちの残高をひと目で見わたす画面。
+ * Home. A screen that shows the balances of the children in your family at a glance.
  *
- * **家族の中での立場で見た目を変えない。** owner でも、招待で加わった親でも、
- * 同じ並び・同じカードが出る。家族の管理（招待・改名・解散）だけが owner の
- * 役目であって、日々の残高の見え方はそこに引きずられない（ADR-0009）。
- * 何人分が並ぶかはサーバーが返す台帳の範囲で決まる — 子には自分の台帳だけが
- * 返るので、兄弟の残高はここにも出ない。
+ * **The view does not change with your role in the family.** An owner and a parent who joined by invitation
+ * see the same order and the same cards. Managing the family (invite, rename, dissolve) is the owner's
+ * job alone, and how daily balances look is not tied to it (ADR-0009).
+ * How many are listed depends on the ledgers the server returns: a child gets only their own ledger,
+ * so siblings' balances don't appear here either.
  *
- * 並ぶ順は家族が決めた順（家族設定で変えられる）。左のナビゲーションと同じ順に
- * するため、並べ替えはサーバーが済ませて返す。
+ * The order is the one the family chose (changeable in family settings). To match the left navigation,
+ * the server does the sorting and returns the result.
  *
- * 管理者は親（家族）なので、システム運用の情報（API ドキュメント等）はここに
- * 置かない。システム管理へは ProfilePage（プロフィール設定）から入る。
+ * Admins are parents (the family), so system operation info (API docs etc.) does not belong
+ * here. System administration is reached from ProfilePage (profile settings).
  */
 import { Link } from 'react-router-dom'
 
@@ -23,8 +23,8 @@ import { useFamily } from '../store/FamilyContext'
 export function DashboardPage() {
   const { t } = useI18n()
   const { user, hasScope } = useAuth()
-  // guest 等、family:view を持たないアカウントもログイン直後にここへ来る。
-  // scope が無い人に「家族がない」と案内しても行き先が無いので、空の案内は出さない。
+  // Accounts without family:view, such as guest, also land here right after login.
+  // Telling someone without the scope "no family" leads nowhere, so show no empty-state guidance.
   const canView = hasScope('family:view')
   const { family, failed, loading } = useFamily()
 
@@ -52,7 +52,7 @@ interface BalancesProps {
 function Balances({ family, failed }: BalancesProps) {
   const { t } = useI18n()
 
-  // 読めなかったときに「子どもがいない」と案内すると嘘になる（家族はあるかもしれない）
+  // Saying "no children" when loading failed would be false (there may be a family)
   if (failed) {
     return (
       <div className="card">

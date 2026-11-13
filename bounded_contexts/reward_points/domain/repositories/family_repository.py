@@ -1,4 +1,4 @@
-"""家族の永続化インターフェース。"""
+"""Persistence interface for families."""
 
 from __future__ import annotations
 
@@ -11,37 +11,37 @@ from bounded_contexts.reward_points.domain.entities.family import Family
 class IFamilyRepository(ABC):
     @abstractmethod
     def add(self, *, name: str, rules: str | None = None) -> Family:
-        """家族を作る。``rules`` は控えからの復元でだけ渡す（ADR-0026）。"""
+        """Create a family. ``rules`` is passed only when restoring from an archive (ADR-0026)."""
 
     @abstractmethod
     def find_by_id(self, family_id: int) -> Family | None: ...
 
     @abstractmethod
     def list_by_ids(self, family_ids: Sequence[int]) -> list[Family]:
-        """一覧表示のためにまとめて読む（1 件ずつ引かない）。"""
+        """Read in bulk for list views (not one at a time)."""
 
     @abstractmethod
     def list_all(self) -> list[Family]:
-        """全ての家族（名前の順）。運用管理者が映す家族を選ぶときだけ使う（ADR-0047）。"""
+        """All families (by name). Used only when the operator picks a family to display (ADR-0047)."""
 
     @abstractmethod
     def count_owned_by(self, account_id: int) -> int:
-        """*account_id* が owner として参加している家族の数。
+        """Number of families in which *account_id* is a member as owner.
 
-        アカウントを削除してよいかの判断に使う。
+        Used to decide whether the account may be deleted.
         """
 
     @abstractmethod
     def update_name(self, *, family_id: int, name: str) -> Family:
-        """家族名を変える（改名は owner だけができる。ADR-0013）。"""
+        """Change the family name (only the owner can rename; ADR-0013)."""
 
     @abstractmethod
     def update_rules(self, *, family_id: int, rules: str | None) -> Family:
-        """家族のルールを書き換える（``None`` で消す。ADR-0027）。"""
+        """Rewrite the family rules (``None`` clears them; ADR-0027)."""
 
     @abstractmethod
     def delete(self, family_id: int) -> None:
-        """家族を消す（解散）。参加・招待は家族と一緒に消える。"""
+        """Delete a family (dissolve). Memberships and invitations go with it."""
 
 
 __all__ = ["IFamilyRepository"]
