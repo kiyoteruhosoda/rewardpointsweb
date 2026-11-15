@@ -1983,6 +1983,7 @@ tr.reversed {
 
 .gacha-form-weight {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 0.35rem;
   white-space: nowrap;
@@ -1994,6 +1995,7 @@ tr.reversed {
 
 .gacha-form-miss {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 0.25rem;
   white-space: nowrap;
