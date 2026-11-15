@@ -26,7 +26,8 @@ export function DisplayPet({ ledgerId, name, pet }: Props) {
   const chosen = pet.species !== null
 
   useEffect(() => {
-    if (!chosen || !takeStageUp(ledgerId, pet.stage)) return
+    // Without a species the pet is drawn as an egg: remember stage 0 so choosing shows it hatch
+    if (!takeStageUp(ledgerId, chosen ? pet.stage : 0) || !chosen) return
     setCelebrating(true)
     const timer = window.setTimeout(() => {
       setCelebrating(false)

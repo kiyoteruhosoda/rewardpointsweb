@@ -38,10 +38,10 @@ export function PetPanel({ familyId, ledgerId, pet, onChanged }: Props) {
     setCelebrating(false)
   }, [])
 
-  // A pet without a species is still drawn as an egg, so its growth is not celebrated (or
-  // remembered) until it has one — choosing then shows it hatch
+  // A pet without a species is drawn as an egg, so that is what this screen remembers having
+  // shown (stage 0) — choosing then shows it hatch at its real stage
   useEffect(() => {
-    if (chosen && takeStageUp(ledgerId, pet.stage)) setCelebrating(true)
+    if (takeStageUp(ledgerId, chosen ? pet.stage : 0) && chosen) setCelebrating(true)
   }, [chosen, ledgerId, pet.stage])
 
   const [choose, choosing] = usePendingAction(async (species: PetSpecies) => {
