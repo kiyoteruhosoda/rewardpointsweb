@@ -1983,6 +1983,7 @@ tr.reversed {
 
 .gacha-form-weight {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 0.35rem;
   white-space: nowrap;
@@ -1994,6 +1995,7 @@ tr.reversed {
 
 .gacha-form-miss {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 0.25rem;
   white-space: nowrap;
@@ -2067,8 +2069,9 @@ tr.reversed {
   gap: 0.5rem;
 }
 
-.gacha-card-title {
+.gacha-card .gacha-card-title {
   margin: 0;
+  color: var(--text);
   font-family: var(--font-round);
   font-size: 1.25rem;
   font-weight: 800;
