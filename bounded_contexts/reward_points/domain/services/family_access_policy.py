@@ -39,8 +39,19 @@ def can_draw_gacha(membership: FamilyMembership, ledger: PointLedger) -> bool:
     the price and the prizes are set by a parent, so a child can only spend within what a
     parent has offered. Display devices never can (they only view; ADR-0047).
     """
-    if can_modify_ledger(membership, ledger):
-        return True
+    return can_modify_ledger(membership, ledger) or _is_own_ledger(membership, ledger)
+
+
+def can_choose_pet(membership: FamilyMembership, ledger: PointLedger) -> bool:
+    """Whether one can choose the species of the pet on this ledger (ADR-0061).
+
+    Parents can for any child; a child for their own pet. Display devices never can.
+    """
+    return can_modify_ledger(membership, ledger) or _is_own_ledger(membership, ledger)
+
+
+def _is_own_ledger(membership: FamilyMembership, ledger: PointLedger) -> bool:
+    """The child who holds this ledger."""
     return (
         ledger.belongs_to_family(membership.family_id)
         and membership.role.has_own_ledger
@@ -152,6 +163,7 @@ def can_issue_temporary_password_for(actor: FamilyMembership, target: FamilyMemb
 
 __all__ = [
     "can_administer_family",
+    "can_choose_pet",
     "can_create_child",
     "can_detach_display",
     "can_draw_gacha",

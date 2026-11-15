@@ -13,6 +13,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { DisplayPet } from '../components/DisplayPet'
 import { useVersionLabel } from '../hooks/useVersionLabel'
 import { useI18n } from '../i18n'
 import {
@@ -26,6 +27,7 @@ import {
 import { DISPLAY_UPDATE_CHECK_INTERVAL_MS, watchForUpdate } from '../services/appUpdate'
 import { claimPairing, startPairing, type StartedPairing } from '../services/display'
 import { families, parseUtc, type FamilyDetail, type Transaction } from '../services/families'
+import type { Pet } from '../services/pet'
 
 /** Interval for reloading the board. Records added on a parent's phone appear within 1 minute. */
 export const BOARD_REFRESH_MS = 60 * 1000
@@ -36,8 +38,10 @@ const RECENT_RECORDS = 3
 
 interface ChildBoard {
   id: number
+  ledgerId: number
   name: string
   balance: number
+  pet: Pet
   recent: Transaction[]
 }
 
@@ -63,8 +67,10 @@ async function loadBoard(): Promise<Board | null> {
         const ledger = await families.viewLedger(family.id, member.ledger_id ?? 0)
         return {
           id: member.id,
+          ledgerId: member.ledger_id ?? 0,
           name: member.display_name,
           balance: ledger.data.balance,
+          pet: ledger.data.pet,
           recent: effective(ledger.data.transactions).slice(0, RECENT_RECORDS),
         }
       }),
@@ -314,6 +320,7 @@ function DisplayBoard({ onRemoved }: { onRemoved: () => void }) {
           <li key={child.id} className="display-child">
             <p className="display-child-name">{child.name}</p>
             <p className="display-child-balance">{t('points.value', { points: child.balance })}</p>
+            <DisplayPet ledgerId={child.ledgerId} name={child.name} pet={child.pet} />
             <RecentRecords records={child.recent} />
           </li>
         ))}

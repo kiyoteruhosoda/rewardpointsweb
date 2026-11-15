@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from bounded_contexts.reward_points.application.dto.daily_bonus_dto import to_dto as bonus_to_dto
 from bounded_contexts.reward_points.application.dto.ledger_dto import LedgerDTO, TransactionDTO
+from bounded_contexts.reward_points.application.dto.pet_dto import to_dto as pet_to_dto
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
 from bounded_contexts.reward_points.domain.entities.point_transaction import PointTransaction
 from bounded_contexts.reward_points.domain.exceptions import MembershipNotFoundError
@@ -16,6 +17,7 @@ from bounded_contexts.reward_points.domain.repositories.daily_bonus_repository i
 from bounded_contexts.reward_points.domain.repositories.family_membership_repository import (
     IFamilyMembershipRepository,
 )
+from bounded_contexts.reward_points.domain.repositories.pet_repository import IPetRepository
 from bounded_contexts.reward_points.domain.repositories.point_transaction_repository import (
     IPointTransactionRepository,
 )
@@ -31,11 +33,13 @@ class ViewPointLedgerUseCase:
         transactions: IPointTransactionRepository,
         memberships: IFamilyMembershipRepository,
         bonuses: IDailyBonusRepository,
+        pets: IPetRepository,
     ) -> None:
         self._access = access
         self._transactions = transactions
         self._memberships = memberships
         self._bonuses = bonuses
+        self._pets = pets
 
     def execute(self, *, ledger_id: int, account_id: int) -> LedgerDTO:
         found = self._access.viewable_ledger(ledger_id=ledger_id, account_id=account_id)
@@ -55,6 +59,13 @@ class ViewPointLedgerUseCase:
             can_modify=family_access_policy.can_modify_ledger(found.membership, found.ledger),
             transactions=self._to_dtos(statement),
             daily_bonus=bonus_to_dto(bonus) if bonus else None,
+            # Returned with the ledger (like the bonus) so the ledger screen and display devices
+            # show the pet without another round trip (ADR-0061)
+            pet=pet_to_dto(
+                species=self._pets.species_of(ledger_id),
+                earned=statement.earned_points,
+                can_choose=family_access_policy.can_choose_pet(found.membership, found.ledger),
+            ),
         )
 
     def _to_dtos(self, statement: LedgerStatement) -> tuple[TransactionDTO, ...]:

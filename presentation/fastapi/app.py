@@ -43,6 +43,7 @@ from bounded_contexts.reward_points.presentation.error_handling import (
     register_reward_points_error_handler,
 )
 from bounded_contexts.reward_points.presentation.gacha_router import router as gacha_router
+from bounded_contexts.reward_points.presentation.pet_router import router as pet_router
 from bounded_contexts.reward_points.presentation.router import router as families_router
 from presentation.fastapi.error_handling import register_error_handling
 from presentation.fastapi.middleware.deferred_log_writes import (
@@ -164,6 +165,7 @@ def _include_routers(app: FastAPI) -> None:
         items_router,
         families_router,
         gacha_router,
+        pet_router,
         display_router,
     ):
         app.include_router(router)

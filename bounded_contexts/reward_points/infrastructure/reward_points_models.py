@@ -21,6 +21,7 @@ from shared.infrastructure.models.base import BigIntPk, utcnow
 from shared.kernel.database.db import Base
 
 FAMILY_ROLE = sa.Enum("owner", "parent", "child", "display", name="family_role", native_enum=False)
+PET_SPECIES = sa.Enum("cat", "rabbit", "bird", "dragon", name="pet_species", native_enum=False)
 
 
 class FamilyModel(Base):
@@ -279,6 +280,23 @@ class GachaDrawModel(Base):
     )
 
 
+class PetModel(Base):
+    """The species chosen for the pet on a child ledger (ADR-0061).
+
+    Growth is not stored (it comes from the ledger). No row means "an egg, not chosen yet".
+    """
+
+    __tablename__ = "pets"
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    ledger_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("point_ledgers.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    species: Mapped[str] = mapped_column(PET_SPECIES, nullable=False)
+    created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
+    updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
+
+
 class FamilyInvitationModel(Base):
     __tablename__ = "family_invitations"
 
@@ -300,6 +318,7 @@ class FamilyInvitationModel(Base):
 
 __all__ = [
     "FAMILY_ROLE",
+    "PET_SPECIES",
     "DailyBonusModel",
     "FamilyInvitationModel",
     "FamilyMembershipModel",
@@ -307,6 +326,7 @@ __all__ = [
     "GachaDrawModel",
     "GachaModel",
     "GachaPrizeModel",
+    "PetModel",
     "PointLedgerModel",
     "PointTransactionModel",
     "RewardEventModel",

@@ -58,3 +58,48 @@ def test_order_is_left_to_the_repository() -> None:
     rows = [_transaction(id=2, amount=10), _transaction(id=1, amount=20)]
 
     assert [t.id for t in LedgerStatement(rows).transactions] == [2, 1]
+
+
+# --- Points ever earned (the pet; ADR-0061) -------------------------------------------
+
+
+def test_spending_never_lowers_what_was_earned() -> None:
+    statement = LedgerStatement([_transaction(id=1, amount=100), _transaction(id=2, amount=-80)])
+
+    assert statement.earned_points == 100
+
+
+def test_a_reversed_addition_was_never_earned() -> None:
+    statement = LedgerStatement(
+        [
+            _transaction(id=1, amount=100),
+            _transaction(id=2, amount=50),
+            _transaction(id=3, amount=-50, reversal_of_id=2),
+        ]
+    )
+
+    assert statement.earned_points == 100
+
+
+def test_reversing_a_spending_earns_nothing_new() -> None:
+    statement = LedgerStatement(
+        [
+            _transaction(id=1, amount=100),
+            _transaction(id=2, amount=-30),
+            _transaction(id=3, amount=30, reversal_of_id=2),
+        ]
+    )
+
+    assert statement.earned_points == 100
+
+
+def test_a_corrected_addition_counts_at_its_corrected_amount() -> None:
+    statement = LedgerStatement(
+        [
+            _transaction(id=1, amount=100),
+            _transaction(id=2, amount=-100, reversal_of_id=1),
+            _transaction(id=3, amount=10, corrects_id=1),
+        ]
+    )
+
+    assert statement.earned_points == 10

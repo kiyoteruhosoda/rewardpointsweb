@@ -30,6 +30,24 @@ class LedgerStatement:
         return PointBalance(sum(transaction.signed_points for transaction in self._transactions))
 
     @property
+    def earned_points(self) -> int:
+        """Points ever added, as the ledger stands now (ADR-0061).
+
+        Spending never lowers it. Reversed records and the reversal rows themselves are left
+        out as pairs, the same as the balance trend (ADR-0050): a reversed addition never
+        happened, and a reversed spending gives nothing new. A correction's restated row is an
+        ordinary row and counts if it adds.
+        """
+        reversed_ids = self.reversed_transaction_ids
+        return sum(
+            transaction.amount.value
+            for transaction in self._transactions
+            if transaction.amount.value > 0
+            and transaction.reversal_of_id is None
+            and transaction.id not in reversed_ids
+        )
+
+    @property
     def reversed_transaction_ids(self) -> frozenset[int]:
         """IDs of the reversed transactions. The UI uses these to show pairs."""
         return frozenset(

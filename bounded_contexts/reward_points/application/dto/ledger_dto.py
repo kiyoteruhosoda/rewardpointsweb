@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from bounded_contexts.reward_points.application.dto.daily_bonus_dto import DailyBonusDTO
+from bounded_contexts.reward_points.application.dto.pet_dto import PetDTO
 from bounded_contexts.reward_points.domain.entities.point_transaction import PointTransaction
 
 
@@ -45,6 +46,8 @@ class LedgerDTO:
     transactions: tuple[TransactionDTO, ...]
     # Daily bonus setting (ADR-0024); ``None`` if not set
     daily_bonus: DailyBonusDTO | None
+    # The pet that grows with earned points (ADR-0061). Always present (an egg at first)
+    pet: PetDTO
 
 
 def just_written(transaction: PointTransaction, *, granted_by: str | None) -> TransactionDTO:

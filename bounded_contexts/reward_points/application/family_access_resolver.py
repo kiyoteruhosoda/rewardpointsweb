@@ -86,5 +86,12 @@ class FamilyAccessResolver:
             raise FamilyAccessDeniedError
         return access
 
+    def pet_owner_ledger(self, *, ledger_id: int, account_id: int) -> LedgerAccess:
+        """A ledger whose pet one may choose (parents, and the child for their own; ADR-0061)."""
+        access = self.viewable_ledger(ledger_id=ledger_id, account_id=account_id)
+        if not family_access_policy.can_choose_pet(access.membership, access.ledger):
+            raise FamilyAccessDeniedError
+        return access
+
 
 __all__ = ["FamilyAccessResolver", "LedgerAccess"]

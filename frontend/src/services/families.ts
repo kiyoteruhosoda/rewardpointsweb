@@ -6,6 +6,7 @@
  * role names).
  */
 import { api, type Fetched } from './api'
+import type { Pet } from './pet'
 
 /** `display` is not a person but a display device (signage, ADR-0047). */
 export type FamilyRole = 'owner' | 'parent' | 'child' | 'display'
@@ -135,6 +136,8 @@ export interface Ledger {
   transactions: Transaction[]
   /** null if not set. */
   daily_bonus: DailyBonus | null
+  /** The pet that grows with points ever added (ADR-0061). Always present (an egg at first). */
+  pet: Pet
 }
 
 /**

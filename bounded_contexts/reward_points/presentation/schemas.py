@@ -12,6 +12,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, Field, model_validator
 
+from bounded_contexts.reward_points.domain.entities.pet import PetSpecies
 from bounded_contexts.reward_points.domain.entities.reward_event import (
     MAX_GOAL_COUNT as EVENT_GOAL_COUNT_MAX,
 )
@@ -327,6 +328,26 @@ class CorrectionResponse(BaseModel):
     correction: TransactionResponse
 
 
+class PetResponse(BaseModel):
+    """The pet on a ledger (ADR-0061). Grows with points ever added; spending never shrinks it."""
+
+    # null until someone chooses (still an egg)
+    species: PetSpecies | None
+    # 0 is the egg
+    stage: int
+    stage_count: int
+    earned: int
+    current_threshold: int
+    # null at the final stage
+    next_threshold: int | None
+    # Whether the viewer may choose the species (parents, and the child for their own)
+    can_choose: bool
+
+
+class PetChooseRequest(BaseModel):
+    species: PetSpecies
+
+
 class LedgerResponse(BaseModel):
     ledger_id: int
     family_id: int
@@ -337,6 +358,8 @@ class LedgerResponse(BaseModel):
     transactions: list[TransactionResponse]
     # Daily bonus settings (ADR-0024). null if unset
     daily_bonus: DailyBonusResponse | None
+    # Always present (an egg at first)
+    pet: PetResponse
 
 
 # --- Archives (backup; ADR-0026) ---------------------------------------------

@@ -24,6 +24,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ActionButton } from '../components/ActionButton'
 import { Pager } from '../components/Pager'
 import { BalanceTrend } from '../components/BalanceTrend'
+import { PetPanel } from '../components/PetPanel'
 import { PointEntryForm } from '../components/PointEntryForm'
 import { useToast } from '../components/ToastNotification'
 import { usePaged } from '../hooks/usePaged'
@@ -232,6 +233,16 @@ export function LedgerPage() {
           </p>
         )}
       </section>
+
+      {/* The pet grows with points ever added (ADR-0061). It comes with the ledger response */}
+      <PetPanel
+        familyId={family}
+        ledgerId={id}
+        pet={ledger.pet}
+        onChanged={(pet) => {
+          setLedger((current) => (current === null ? current : { ...current, pet }))
+        }}
+      />
 
       <section className="card">
         {ledger.can_modify ? entryForm : <p>{t('points.readOnly')}</p>}
