@@ -29,6 +29,7 @@ from bounded_contexts.reward_points.application.dto.family_dto import (
     RedeemedInvitationDTO,
 )
 from bounded_contexts.reward_points.application.dto.ledger_dto import CorrectionDTO, TransactionDTO
+from bounded_contexts.reward_points.application.dto.pet_dto import PetDTO
 from bounded_contexts.reward_points.application.dto.reward_event_dto import RewardEventDTO
 from bounded_contexts.reward_points.application.use_cases.accept_invitation import AcceptInvitationCommand
 from bounded_contexts.reward_points.application.use_cases.add_child_membership import (
@@ -112,6 +113,7 @@ from bounded_contexts.reward_points.presentation.schemas import (
     LedgerResponse,
     MemberOrderRequest,
     MembershipResponse,
+    PetResponse,
     RedeemedInvitationResponse,
     ReversalCreateRequest,
     RewardEventBoardResponse,
@@ -207,6 +209,18 @@ def _to_transaction(dto: TransactionDTO) -> TransactionResponse:
         corrects_id=dto.corrects_id,
         is_reversed=dto.is_reversed,
         granted_by=dto.granted_by,
+    )
+
+
+def to_pet_response(dto: PetDTO) -> PetResponse:
+    return PetResponse(
+        species=dto.species,
+        stage=dto.stage,
+        stage_count=dto.stage_count,
+        earned=dto.earned,
+        current_threshold=dto.current_threshold,
+        next_threshold=dto.next_threshold,
+        can_choose=dto.can_choose,
     )
 
 
@@ -691,6 +705,7 @@ def view_ledger(ledger_id: int, use_case: ViewLedgerDep, principal: PointViewer)
         can_modify=dto.can_modify,
         transactions=[_to_transaction(transaction) for transaction in dto.transactions],
         daily_bonus=_to_daily_bonus(dto.daily_bonus) if dto.daily_bonus else None,
+        pet=to_pet_response(dto.pet),
     )
 
 

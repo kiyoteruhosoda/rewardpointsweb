@@ -6,6 +6,7 @@
  * who has an account"; override only the difference under test.
  */
 import type { DailyBonus, FamilyDetail, FamilyRole, Membership } from '../services/families'
+import type { Pet } from '../services/pet'
 
 export function member(overrides: Partial<Membership> = {}): Membership {
   return {
@@ -37,6 +38,20 @@ export function dailyBonus(overrides: Partial<DailyBonus> = {}): DailyBonus {
     reason: 'まいにちのボーナス',
     starts_on: '2026-08-01',
     granted_through: '2026-08-01',
+    ...overrides,
+  }
+}
+
+/** A pet (ADR-0061). The default is a cat at stage 1 with 40 pt earned. */
+export function pet(overrides: Partial<Pet> = {}): Pet {
+  return {
+    species: 'cat',
+    stage: 1,
+    stage_count: 6,
+    earned: 40,
+    current_threshold: 30,
+    next_threshold: 100,
+    can_choose: true,
     ...overrides,
   }
 }

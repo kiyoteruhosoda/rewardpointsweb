@@ -14,7 +14,7 @@ import type {
   NewTransaction,
   Transaction,
 } from '../services/families'
-import { familyOf, member } from '../test-support/familyFixtures'
+import { familyOf, member, pet } from '../test-support/familyFixtures'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { LedgerPage } from './LedgerPage'
 
@@ -65,6 +65,7 @@ function ledger(overrides: Partial<Ledger> = {}): Fetched<Ledger> {
       can_modify: true,
       transactions: [transaction()],
       daily_bonus: null,
+      pet: pet(),
       ...overrides,
     },
     fetchedAt: null,

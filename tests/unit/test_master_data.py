@@ -17,7 +17,15 @@ def test_every_role_has_permission_assignment() -> None:
 
 def test_admin_role_has_everything_except_family_and_points() -> None:
     """The system admin stays out of families and points and cannot approve display devices (ADR-0018, ADR-0047)."""
-    outside = {"family:view", "family:manage", "point:view", "point:manage", "gacha:draw", "display:approve"}
+    outside = {
+        "family:view",
+        "family:manage",
+        "point:view",
+        "point:manage",
+        "gacha:draw",
+        "pet:choose",
+        "display:approve",
+    }
     granted = set(master_data.ROLE_PERMISSIONS["admin"])
     assert granted == set(master_data.PERMISSION_CODES) - outside
     assert not granted & outside
@@ -34,7 +42,7 @@ def test_display_role_only_views() -> None:
     granted = set(master_data.ROLE_PERMISSIONS["display"])
     assert {"family:view", "point:view"} <= granted
     assert not {code for code in granted if code.endswith(":manage") or code == "display:approve"}
-    assert "gacha:draw" not in granted
+    assert not granted & {"gacha:draw", "pet:choose"}
 
 
 def test_parents_and_children_may_draw_a_gacha() -> None:
@@ -62,3 +70,9 @@ def test_default_admin_password_hash_matches_documented_password() -> None:
 def test_superseded_hashes_do_not_contain_the_current_default() -> None:
     """If the current value is mixed into the old defaults, every seeding would keep overwriting the password."""
     assert master_data.DEFAULT_ADMIN_PASSWORD_HASH not in master_data.SUPERSEDED_ADMIN_PASSWORD_HASHES
+
+
+def test_parents_and_children_may_choose_a_pet() -> None:
+    """Choosing the pet is the household's, like the gacha — not admin, operator or display (ADR-0061)."""
+    holders = {role for role, codes in master_data.ROLE_PERMISSIONS.items() if "pet:choose" in codes}
+    assert holders == {"member", "guest"}

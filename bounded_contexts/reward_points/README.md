@@ -34,7 +34,7 @@ API 仕様は Swagger UI（`/docs`）・`/openapi.json` を参照（手書きし
 | child | × | × | × | 自分の台帳のみ |
 | display | × | × | × | 全ての子（表示端末。ADR-0047） |
 
-子は台帳を動かせないが、親が作ったガチャを自分の台帳で引くことだけはできる（下の「ガチャ」。ADR-0060）。
+子は台帳を動かせないが、親が作ったガチャを自分の台帳で引くことと、自分のペットの種類を選ぶことはできる（下の「ガチャ」「ペット」。ADR-0060・ADR-0061）。
 
 兄弟の残高・履歴は相互に参照できない。1 つのアカウントが所属できるのは **1 家族まで**
 （ADR-0013。家族の作成・招待の受諾のどちらでも、既に家族があれば `already_belongs_to_family` で断る）。
@@ -196,6 +196,18 @@ DB の ID・冪等キー。
 - 全部はずれの機械は 400 `gacha_needs_a_prize`。はずれに「渡した」は 409 `miss_cannot_be_handed_over`
 - 控え（上）には入らない
 
+## ペット
+
+子の台帳ごとに 1 匹（ADR-0061）。台帳の応答（`GET .../ledgers/{id}`）の `pet` に載る。
+
+- 育ちの値は **これまでにもらったポイント**（プラスの行の合計。打ち消しと打ち消された行は組で外す・使った行は数えない）。
+  `LedgerStatement.earned_points`。段階は保存せず、読むたびにここから出す
+- 段階は 6 つ（0 たまご〜5 スター）。区切りは `domain/entities/pet.py` の `STAGE_THRESHOLDS`
+- 保存するのは種類だけ（`pets`）。無ければ「まだ選んでいないたまご」
+- 種類を選ぶ（`PUT .../ledgers/{id}/pet`）のは親と、自分の台帳の子（`pet:choose` ＋ `can_choose_pet`）。表示端末は選べない
+- お祝いを出すかは画面が決める（端末ごとに最後に見せた段階を覚える）
+- 控え（上）には入らない
+
 ## テーブル
 
 | テーブル | 用途 |
@@ -206,6 +218,7 @@ DB の ID・冪等キー。
 | `point_transactions` | 記録（追記専用）。`amount` / `reversal_of_id` / `corrects_id` / `idempotency_key` |
 | `family_invitations` | 招待。`code_hash`・`role`・`target_membership_id`・有効期限 |
 | `gachas` / `gacha_prizes` | ガチャの機械と景品（並び順 `position`・重み・はずれ） |
+| `pets` | ペットの種類（台帳に 1 行。育ちは台帳から出す） |
 | `gacha_draws` | 引いた 1 回。写した名前・値段・`transaction_id`・`idempotency_key`・`handed_over_at` |
 
 定義の正本は `infrastructure/reward_points_models.py`。DDL の変更は Alembic で行う。

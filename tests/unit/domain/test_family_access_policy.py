@@ -173,3 +173,24 @@ def test_nobody_draws_a_gacha_on_another_familys_ledger() -> None:
 
     assert not family_access_policy.can_draw_gacha(guardian, elsewhere)
     assert not family_access_policy.can_draw_gacha(child, elsewhere)
+
+
+# --- Pet (ADR-0061) -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("role", [FamilyRole.OWNER, FamilyRole.PARENT])
+def test_guardians_choose_any_childs_pet(role: FamilyRole) -> None:
+    assert family_access_policy.can_choose_pet(_membership(id=1, role=role), _ledger(id=10, membership_id=2))
+
+
+def test_a_child_chooses_only_their_own_pet() -> None:
+    child = _membership(id=2, role=FamilyRole.CHILD)
+
+    assert family_access_policy.can_choose_pet(child, _ledger(id=10, membership_id=2))
+    assert not family_access_policy.can_choose_pet(child, _ledger(id=11, membership_id=3))
+
+
+def test_a_display_device_never_chooses_a_pet() -> None:
+    display = _membership(id=5, role=FamilyRole.DISPLAY)
+
+    assert not family_access_policy.can_choose_pet(display, _ledger(id=10, membership_id=2))

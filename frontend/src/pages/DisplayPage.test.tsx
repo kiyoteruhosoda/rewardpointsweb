@@ -8,7 +8,7 @@ import type * as ApiModule from '../services/api'
 import type { DisplaySessionOutcome, Fetched } from '../services/api'
 import type { ClaimOutcome, StartedPairing } from '../services/display'
 import type { FamilyDetail, FamilySummary, Ledger } from '../services/families'
-import { familyOf, member } from '../test-support/familyFixtures'
+import { familyOf, member, pet } from '../test-support/familyFixtures'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { DisplayPage } from './DisplayPage'
 
@@ -71,6 +71,7 @@ function ledgerOf(balance: number): Fetched<Ledger> {
         },
       ],
       daily_bonus: null,
+      pet: pet(),
     },
     fetchedAt: null,
   }
@@ -133,6 +134,24 @@ describe('DisplayPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'ほその家' })).toBeInTheDocument()
     expect(startPairing).not.toHaveBeenCalled()
+  })
+
+  it("shows each child's pet and how far it is to the next stage (ADR-0061)", async () => {
+    localStorage.setItem('display_credential', 'device-credential')
+
+    renderWithProviders(<DisplayPage />)
+
+    expect(await screen.findByText('Just hatched')).toBeInTheDocument()
+    expect(screen.getByText('60 pt to the next stage')).toBeInTheDocument()
+  })
+
+  it('celebrates in place when a pet grew since the display last showed it', async () => {
+    localStorage.setItem('display_credential', 'device-credential')
+    localStorage.setItem('pet-seen-stage:20', '0')
+
+    renderWithProviders(<DisplayPage />)
+
+    expect(await screen.findByRole('status')).toHaveTextContent("ハナ's pet grew!")
   })
 
   it('returns to the pairing screen when removed (session is removed)', async () => {

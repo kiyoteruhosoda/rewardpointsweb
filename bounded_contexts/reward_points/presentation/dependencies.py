@@ -91,6 +91,7 @@ from bounded_contexts.reward_points.infrastructure.sql_family_membership_reposit
     SqlFamilyMembershipRepository,
 )
 from bounded_contexts.reward_points.infrastructure.sql_family_repository import SqlFamilyRepository
+from bounded_contexts.reward_points.infrastructure.sql_pet_repository import SqlPetRepository
 from bounded_contexts.reward_points.infrastructure.sql_point_ledger_repository import (
     SqlPointLedgerRepository,
 )
@@ -406,14 +407,24 @@ def get_reset_child_password_use_case(
     )
 
 
+def get_pet_repository(db: DbDep) -> SqlPetRepository:
+    return SqlPetRepository(db)
+
+
+PetRepoDep = Annotated[SqlPetRepository, Depends(get_pet_repository)]
+
+
 def get_view_ledger_use_case(
     *,
     access: AccessDep,
     transactions: TransactionRepoDep,
     memberships: MembershipRepoDep,
     bonuses: DailyBonusRepoDep,
+    pets: PetRepoDep,
 ) -> ViewPointLedgerUseCase:
-    return ViewPointLedgerUseCase(access=access, transactions=transactions, memberships=memberships, bonuses=bonuses)
+    return ViewPointLedgerUseCase(
+        access=access, transactions=transactions, memberships=memberships, bonuses=bonuses, pets=pets
+    )
 
 
 def get_configure_daily_bonus_use_case(access: AccessDep, bonuses: DailyBonusRepoDep) -> ConfigureDailyBonusUseCase:
@@ -557,6 +568,7 @@ __all__ = [
     "ListInvitationsDep",
     "MembershipRepoDep",
     "PeelRewardEventStickerDep",
+    "PetRepoDep",
     "ProposeIndependenceDep",
     "RecordTransactionDep",
     "RedeemInvitationDep",
