@@ -140,3 +140,36 @@ def test_both_guardians_reorder_members() -> None:
     for role in (FamilyRole.OWNER, FamilyRole.PARENT):
         assert family_access_policy.can_reorder_members(_membership(id=1, role=role))
     assert not family_access_policy.can_reorder_members(_membership(id=3, role=FamilyRole.CHILD))
+
+
+# --- Gacha (ADR-0060) ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("role", [FamilyRole.OWNER, FamilyRole.PARENT])
+def test_guardians_draw_a_gacha_for_any_child(role: FamilyRole) -> None:
+    guardian = _membership(id=1, role=role)
+
+    assert family_access_policy.can_draw_gacha(guardian, _ledger(id=10, membership_id=2))
+
+
+def test_a_child_draws_a_gacha_only_on_its_own_ledger() -> None:
+    child = _membership(id=2, role=FamilyRole.CHILD)
+
+    assert family_access_policy.can_draw_gacha(child, _ledger(id=10, membership_id=2))
+    # Not on a sibling's ledger
+    assert not family_access_policy.can_draw_gacha(child, _ledger(id=11, membership_id=3))
+
+
+def test_a_display_device_never_draws_a_gacha() -> None:
+    display = _membership(id=5, role=FamilyRole.DISPLAY)
+
+    assert not family_access_policy.can_draw_gacha(display, _ledger(id=10, membership_id=2))
+
+
+def test_nobody_draws_a_gacha_on_another_familys_ledger() -> None:
+    guardian = _membership(id=1, role=FamilyRole.OWNER, family_id=1)
+    child = _membership(id=2, role=FamilyRole.CHILD, family_id=1)
+    elsewhere = _ledger(id=10, membership_id=2, family_id=2)
+
+    assert not family_access_policy.can_draw_gacha(guardian, elsewhere)
+    assert not family_access_policy.can_draw_gacha(child, elsewhere)

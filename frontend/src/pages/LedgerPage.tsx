@@ -209,9 +209,15 @@ export function LedgerPage() {
       <div className="page-heading page-heading-row">
         <h1>{t('points.title', { name: ledger.display_name })}</h1>
         {/* Events (effort cards, ADR-0042) are per child, so they are entered from the ledger */}
-        <Link className="page-heading-link" to={`/families/${family}/ledgers/${id}/events`}>
-          {t('events.open')}
-        </Link>
+        <div className="page-heading-links">
+          <Link className="page-heading-link" to={`/families/${family}/ledgers/${id}/events`}>
+            {t('events.open')}
+          </Link>
+          {/* Gacha (ADR-0060) spends from this ledger, so it is entered from here too */}
+          <Link className="page-heading-link" to={`/families/${family}/ledgers/${id}/gacha`}>
+            {t('gacha.open')}
+          </Link>
+        </div>
       </div>
 
       <section className="card">

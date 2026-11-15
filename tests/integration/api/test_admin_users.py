@@ -106,7 +106,9 @@ def test_roles_can_be_changed_and_effective_scopes_follow(client: TestClient, ad
     )
     assert created.status_code == 201, created.text
     user_id = created.json()["id"]
-    assert created.json()["permissions"] == sorted(["dashboard:view", "gui:view", "family:view", "point:view"])
+    assert created.json()["permissions"] == sorted(
+        ["dashboard:view", "gui:view", "family:view", "point:view", "gacha:draw"]
+    )
 
     login = client.post("/api/auth/login", json={"username": "swappable", "password": "swap-pass-123"})
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}

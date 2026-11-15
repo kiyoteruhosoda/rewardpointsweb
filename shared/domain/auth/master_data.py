@@ -46,6 +46,9 @@ PERMISSION_CODES: Sequence[str] = (
     "family:manage",
     "point:view",
     "point:manage",
+    # Draw a gacha paid from a ledger (ADR-0060). Parents and children; which ledger is decided
+    # by the role within the family (a child only their own)
+    "gacha:draw",
     # --- Display devices (display_devices context, ADR-0047) ---
     # Approve, list and remove display devices. This shows a family's ledger on a device,
     # so admin does not get it (admin does not see household ledgers, ADR-0018)
@@ -66,7 +69,9 @@ PERMISSION_CODES: Sequence[str] = (
 #              Approves display devices and decides which family is shown on which device (ADR-0047)
 #   display  = display device (not a person). Created by approval; only views the ledgers of all
 #              children in the family (ADR-0047)
-_FAMILY_POINT_SCOPES: frozenset[str] = frozenset({"family:view", "family:manage", "point:view", "point:manage"})
+_FAMILY_POINT_SCOPES: frozenset[str] = frozenset(
+    {"family:view", "family:manage", "point:view", "point:manage", "gacha:draw"}
+)
 # Scopes admin does not get. Besides families and points, also no approval to show a family on a device
 _OUTSIDE_ADMIN_SCOPES: frozenset[str] = _FAMILY_POINT_SCOPES | {"display:approve"}
 
@@ -87,13 +92,16 @@ ROLE_PERMISSIONS: Mapping[str, Sequence[str]] = {
         "family:manage",
         "point:view",
         "point:manage",
+        "gacha:draw",
     ),
     "guest": (
         "dashboard:view",
         "gui:view",
-        # Can see their own family, own points and history, but has no scope to change them
+        # Can see their own family, own points and history, but has no scope to change them.
+        # The one exception is drawing a gacha a parent set up on their own ledger (ADR-0060)
         "family:view",
         "point:view",
+        "gacha:draw",
     ),
     "operator": (
         "dashboard:view",

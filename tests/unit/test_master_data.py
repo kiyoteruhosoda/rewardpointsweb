@@ -17,7 +17,7 @@ def test_every_role_has_permission_assignment() -> None:
 
 def test_admin_role_has_everything_except_family_and_points() -> None:
     """The system admin stays out of families and points and cannot approve display devices (ADR-0018, ADR-0047)."""
-    outside = {"family:view", "family:manage", "point:view", "point:manage", "display:approve"}
+    outside = {"family:view", "family:manage", "point:view", "point:manage", "gacha:draw", "display:approve"}
     granted = set(master_data.ROLE_PERMISSIONS["admin"])
     assert granted == set(master_data.PERMISSION_CODES) - outside
     assert not granted & outside
@@ -34,6 +34,13 @@ def test_display_role_only_views() -> None:
     granted = set(master_data.ROLE_PERMISSIONS["display"])
     assert {"family:view", "point:view"} <= granted
     assert not {code for code in granted if code.endswith(":manage") or code == "display:approve"}
+    assert "gacha:draw" not in granted
+
+
+def test_parents_and_children_may_draw_a_gacha() -> None:
+    """Drawing spends points, so only the household's people get it — not admin, operator or display (ADR-0060)."""
+    holders = {role for role, codes in master_data.ROLE_PERMISSIONS.items() if "gacha:draw" in codes}
+    assert holders == {"member", "guest"}
 
 
 def test_default_admin_role_exists() -> None:

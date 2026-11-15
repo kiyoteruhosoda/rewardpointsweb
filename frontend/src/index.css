@@ -31,6 +31,13 @@
   --hanko-blend: multiply;
   --deadline-soon-soft: #ffe2d6;
   --deadline-soon-ink: #a33a12;
+  /* Gacha (ADR-0060): glass dome, chute, handed-over badge */
+  --gacha-glass: #e9f6ff;
+  --gacha-glass-rim: #b9d7ef;
+  --gacha-chute: #2a2f52;
+  --gacha-done-soft: #dcf5e3;
+  --gacha-done-ink: #1f6b35;
+  --gacha-backdrop: rgb(20 22 40 / 55%);
 }
 
 :root[data-theme='dark'] {
@@ -55,6 +62,12 @@
   --hanko-blend: normal;
   --deadline-soon-soft: #4a2418;
   --deadline-soon-ink: #ffb08f;
+  --gacha-glass: #1e2a3a;
+  --gacha-glass-rim: #3a5470;
+  --gacha-chute: #0b0d14;
+  --gacha-done-soft: #183824;
+  --gacha-done-ink: #8fe0a6;
+  --gacha-backdrop: rgb(0 0 0 / 65%);
 }
 
 :root {
@@ -1166,6 +1179,12 @@ tr.reversed {
   text-decoration: none;
 }
 
+.page-heading-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .page-heading-link:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -1885,4 +1904,593 @@ tr.reversed {
 
 .display-screen-hint {
   font-size: 0.85rem;
+}
+
+/* --- Gacha (ADR-0060) -------------------------------------------------------- */
+
+.gacha-balance {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.gacha-balance strong {
+  font-family: var(--font-round);
+  font-size: 1.6rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.gacha-create summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.gacha-form-hint,
+.gacha-empty,
+.gacha-history-empty {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.gacha-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.gacha-form-head {
+  display: grid;
+  grid-template-columns: minmax(12rem, 2fr) minmax(8rem, 1fr);
+  gap: 0.8rem;
+}
+
+.gacha-form-prizes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--surface-inset);
+}
+
+.gacha-form-prizes legend {
+  padding: 0 0.3rem;
+  font-weight: 700;
+}
+
+.gacha-form-prizes ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gacha-form-prize {
+  display: grid;
+  grid-template-columns: auto minmax(8rem, 1fr) auto auto 3.5rem auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gacha-form-prize input:not([type='checkbox']) {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.gacha-form-weight {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.gacha-form-weight input {
+  width: 4.5rem;
+}
+
+.gacha-form-miss {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.gacha-form-chance {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.gacha-form-actions,
+.gacha-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.gacha-text-button {
+  padding: 0.2rem 0.5rem;
+  background: none;
+  border-color: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+@media (width <= 40rem) {
+  .gacha-form-head {
+    grid-template-columns: 1fr;
+  }
+
+  .gacha-form-prize {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .gacha-form-prize > label:first-of-type {
+    grid-column: 2 / -1;
+  }
+}
+
+.gacha-prize-dot {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  border: 2px solid var(--surface-raised);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.gacha-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.gacha-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1rem 1.1rem 1.1rem;
+  border-radius: 1.1rem;
+}
+
+.gacha-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.gacha-card-title {
+  margin: 0;
+  font-family: var(--font-round);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.gacha-card-price {
+  flex: none;
+  padding: 0.1rem 0.65rem;
+  border-radius: 999px;
+  background: var(--reward-soft);
+  color: var(--reward-ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.gacha-card-machine {
+  display: flex;
+  justify-content: center;
+}
+
+.gacha-machine-art {
+  width: min(11rem, 60%);
+  height: auto;
+  overflow: visible;
+}
+
+.gacha-art-glass {
+  fill: var(--gacha-glass);
+}
+
+.gacha-art-glass-rim {
+  fill: none;
+  stroke: var(--gacha-glass-rim);
+  stroke-width: 4;
+}
+
+.gacha-art-gloss {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
+
+.gacha-art-body {
+  fill: var(--accent);
+}
+
+.gacha-art-body-band {
+  fill: var(--accent-strong);
+}
+
+.gacha-art-handle-base {
+  fill: var(--surface-raised);
+  stroke: var(--accent-strong);
+  stroke-width: 3;
+}
+
+.gacha-art-handle-bar {
+  fill: var(--accent-strong);
+}
+
+.gacha-art-chute {
+  fill: var(--gacha-chute);
+}
+
+.gacha-art-handle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.gacha-machine-art.is-spinning {
+  animation: gacha-shake 0.35s ease-in-out infinite;
+}
+
+.gacha-machine-art.is-spinning .gacha-art-handle {
+  animation: gacha-turn 0.7s linear infinite;
+}
+
+.gacha-card-draw {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+/* Big enough for a small finger; the one action of the card. */
+.gacha-card .gacha-draw-button {
+  padding: 0.75rem 1rem;
+  border-color: var(--accent);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-round);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.gacha-card .gacha-draw-button:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.gacha-card-short {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.gacha-card-prizes summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.gacha-card-prizes ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gacha-card-prizes li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gacha-card-prizes li.is-miss .gacha-prize-name {
+  color: var(--text-muted);
+}
+
+.gacha-prize-chance {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.gacha-history h2 {
+  margin-top: 0;
+}
+
+.gacha-history-waiting {
+  margin: 0 0 0.6rem;
+  font-weight: 600;
+  color: var(--reward-ink);
+}
+
+.gacha-history-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gacha-history-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.gacha-history-list li:first-child {
+  border-top: none;
+}
+
+.gacha-history-what {
+  display: flex;
+  flex-direction: column;
+}
+
+.gacha-history-prize {
+  font-weight: 700;
+}
+
+.gacha-history-list li.is-miss .gacha-history-prize {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.gacha-history-meta {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.gacha-history-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gacha-status {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: var(--reward-soft);
+  color: var(--reward-ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.gacha-status-done {
+  background: var(--gacha-done-soft);
+  color: var(--gacha-done-ink);
+}
+
+/* Result: a capsule drops in, pops open, and the prize comes out big. */
+.gacha-reveal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: var(--gacha-backdrop);
+  animation: gacha-fade 0.2s ease-out both;
+}
+
+.gacha-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(26rem, 100%);
+  box-sizing: border-box;
+  padding: 1.4rem 1.2rem 1.2rem;
+  background: var(--surface-raised);
+  border-radius: 1.4rem;
+  box-shadow: var(--shadow-card-hover);
+  text-align: center;
+}
+
+.gacha-reveal-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 12rem;
+}
+
+.gacha-reveal-capsule {
+  width: 9rem;
+  animation: gacha-drop 0.6s cubic-bezier(0.3, 1.4, 0.6, 1) both;
+}
+
+.gacha-capsule-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.gacha-capsule-top,
+.gacha-capsule-bottom {
+  transform-box: fill-box;
+}
+
+.gacha-capsule-art.is-opening .gacha-capsule-top {
+  transform-origin: left bottom;
+  animation: gacha-open-top 0.45s 0.7s ease-out both;
+}
+
+.gacha-capsule-art.is-opening .gacha-capsule-bottom {
+  transform-origin: left top;
+  animation: gacha-open-bottom 0.45s 0.7s ease-out both;
+}
+
+.gacha-reveal-prize {
+  position: absolute;
+  inset: auto 0;
+  margin: 0;
+  padding: 0 0.5rem;
+  font-family: var(--font-round);
+  font-size: clamp(1.8rem, 8vw, 2.6rem);
+  font-weight: 900;
+  line-height: 1.2;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  text-shadow:
+    0 0 0.4rem var(--surface-raised),
+    0 0 0.8rem var(--surface-raised);
+  animation: gacha-pop 0.45s 1.05s cubic-bezier(0.3, 1.6, 0.6, 1) both;
+}
+
+.gacha-reveal.is-miss .gacha-reveal-prize {
+  font-size: clamp(1.4rem, 6vw, 1.9rem);
+  color: var(--text-muted);
+}
+
+.gacha-sparkles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.gacha-sparkles path {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: gacha-twinkle 1.4s ease-in-out infinite both;
+}
+
+.gacha-reveal-title {
+  margin: 0;
+  font-family: var(--font-round);
+  font-size: 1.3rem;
+  color: var(--accent);
+}
+
+.gacha-reveal.is-miss .gacha-reveal-title {
+  color: var(--text-muted);
+}
+
+.gacha-reveal-meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.gacha-reveal .gacha-reveal-close {
+  min-width: 10rem;
+  padding: 0.7rem 1.2rem;
+  border-color: var(--accent);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+@keyframes gacha-shake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(-2deg);
+  }
+
+  75% {
+    transform: rotate(2deg);
+  }
+}
+
+@keyframes gacha-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes gacha-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes gacha-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-6rem) rotate(-30deg);
+  }
+}
+
+@keyframes gacha-open-top {
+  to {
+    opacity: 0;
+    transform: translate(-1.5rem, -3rem) rotate(-35deg);
+  }
+}
+
+@keyframes gacha-open-bottom {
+  to {
+    opacity: 0;
+    transform: translate(1.5rem, 3rem) rotate(25deg);
+  }
+}
+
+@keyframes gacha-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+
+@keyframes gacha-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* For people who ask for less motion: no shaking or popping; the prize is shown straight away. */
+@media (prefers-reduced-motion: reduce) {
+  .gacha-machine-art.is-spinning,
+  .gacha-machine-art.is-spinning .gacha-art-handle,
+  .gacha-reveal-backdrop,
+  .gacha-reveal-capsule,
+  .gacha-reveal-prize,
+  .gacha-sparkles path {
+    animation: none;
+  }
+
+  .gacha-capsule-art.is-opening .gacha-capsule-top,
+  .gacha-capsule-art.is-opening .gacha-capsule-bottom {
+    animation: none;
+    opacity: 0;
+  }
 }

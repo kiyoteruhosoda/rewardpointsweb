@@ -203,6 +203,82 @@ class RewardEventStickerModel(Base):
     )
 
 
+class GachaModel(Base):
+    """A gacha machine on a child ledger (ADR-0060). Deleted along with the ledger."""
+
+    __tablename__ = "gachas"
+    __table_args__ = (sa.CheckConstraint("price > 0", name="ck_gachas_price_positive"),)
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    ledger_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("point_ledgers.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(sa.String(50), nullable=False)
+    price: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
+    created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
+    updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class GachaPrizeModel(Base):
+    """One prize of a machine (ADR-0060). ``position`` is the display order starting at 0."""
+
+    __tablename__ = "gacha_prizes"
+    __table_args__ = (
+        sa.UniqueConstraint("gacha_id", "position", name="uq_gacha_prizes_position"),
+        sa.CheckConstraint("weight >= 1", name="ck_gacha_prizes_weight_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    gacha_id: Mapped[int] = mapped_column(BigIntPk, sa.ForeignKey("gachas.id", ondelete="CASCADE"), nullable=False)
+    position: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
+    name: Mapped[str] = mapped_column(sa.String(50), nullable=False)
+    weight: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
+    is_miss: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False, default=False)
+
+
+class GachaDrawModel(Base):
+    """One draw and what it won (ADR-0060).
+
+    Names and price are copied from the machine at draw time, so the machine may be edited or
+    deleted afterwards (``gacha_id`` becomes NULL). ``UNIQUE (ledger_id, idempotency_key)``
+    keeps a resent press from drawing twice.
+    """
+
+    __tablename__ = "gacha_draws"
+    __table_args__ = (
+        sa.UniqueConstraint("ledger_id", "idempotency_key", name="uq_gacha_draws_idempotency"),
+        sa.UniqueConstraint("transaction_id", name="uq_gacha_draws_transaction"),
+        sa.CheckConstraint("price > 0", name="ck_gacha_draws_price_positive"),
+        sa.Index("ix_gacha_draws_ledger_drawn", "ledger_id", "drawn_at", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    ledger_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("point_ledgers.id", ondelete="CASCADE"), nullable=False
+    )
+    gacha_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("gachas.id", ondelete="SET NULL"), nullable=True
+    )
+    gacha_name: Mapped[str] = mapped_column(sa.String(50), nullable=False)
+    prize_name: Mapped[str] = mapped_column(sa.String(50), nullable=False)
+    is_miss: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False)
+    price: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
+    # The key the client sent for the press (the ledger row uses it split by step)
+    idempotency_key: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    # Ledger row that paid for it. SET NULL because independence deletes ledger rows first
+    transaction_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("point_transactions.id", ondelete="SET NULL"), nullable=True
+    )
+    drawn_by_membership_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("family_memberships.id", ondelete="SET NULL"), nullable=True
+    )
+    drawn_at = mapped_column(sa.DateTime(), nullable=False)
+    handed_over_at = mapped_column(sa.DateTime(), nullable=True)
+    handed_over_by_membership_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("family_memberships.id", ondelete="SET NULL"), nullable=True
+    )
+
+
 class FamilyInvitationModel(Base):
     __tablename__ = "family_invitations"
 
@@ -228,6 +304,9 @@ __all__ = [
     "FamilyInvitationModel",
     "FamilyMembershipModel",
     "FamilyModel",
+    "GachaDrawModel",
+    "GachaModel",
+    "GachaPrizeModel",
     "PointLedgerModel",
     "PointTransactionModel",
     "RewardEventModel",

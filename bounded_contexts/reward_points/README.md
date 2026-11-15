@@ -34,6 +34,8 @@ API 仕様は Swagger UI（`/docs`）・`/openapi.json` を参照（手書きし
 | child | × | × | × | 自分の台帳のみ |
 | display | × | × | × | 全ての子（表示端末。ADR-0047） |
 
+子は台帳を動かせないが、親が作ったガチャを自分の台帳で引くことだけはできる（下の「ガチャ」。ADR-0060）。
+
 兄弟の残高・履歴は相互に参照できない。1 つのアカウントが所属できるのは **1 家族まで**
 （ADR-0013。家族の作成・招待の受諾のどちらでも、既に家族があれば `already_belongs_to_family` で断る）。
 同一家族では 1 アカウント 1 参加（`UNIQUE (family_id, account_id)`。DB 制約に頼らず
@@ -168,13 +170,31 @@ DB の ID・冪等キー。
 - owner がちょうど 1 人／台帳を持つのは子だけ、そして子は必ず持つ
 - 打ち消しは打ち消せない・同じ行を 2 度打ち消せない・打ち消しは逆符号
 - 訂正は打ち消しを伴う・同じ行の言い直しは 1 度だけ・打ち消しの行は訂正できない
-- 記録した人は親（台帳へ書けるのは親だけ）
+- 記録した人は親（台帳へ書けるのは親だけ）。例外は、その台帳の子が自分の台帳で使った行（ガチャ。ADR-0060）
 - 毎日のボーナスの `granted_through` が `starts_on` より前にならない
 - 打ち消し・訂正の相手は、並び順でそれより前にある
 
 合わなければ 1 行も書かずに 400（`invalid_family_archive`）。読めない版は 400
 （`unsupported_archive_version`）。参加者 100・記録は控え全体で 20,000 までを
 スキーマで受ける（超えたら 422）。
+
+## ガチャ
+
+子の台帳ごとに機械を何台でも持てる（ADR-0060）。中身は名前・1 回の値段・景品（名前と重み。「はずれ」可）。
+
+| 操作 | 誰が |
+|---|---|
+| 見る | 台帳を見られる人（子は自分の台帳） |
+| 作る・直す・消す・「渡した」 | 親（`point:manage`） |
+| 引く | 親と、自分の台帳の子（`gacha:draw` ＋ `can_draw_gacha`）。表示端末は引けない |
+
+- 1 回引くと、同じ処理で台帳へ `-値段` の 1 行（理由「機械の名前: 景品の名前」・記録した人は押した人）が入り、
+  サーバーが重みで 1 つ選ぶ。台帳の行の鍵は `<送られた鍵>#gacha`
+- 残高が値段に届かなければ 409 `insufficient_balance`。台帳の行を `FOR UPDATE` で押さえてから残高を読む
+- 同じ鍵の再送は前の結果を返す。同じ鍵で別の機械なら 409 `idempotency_key_reused`
+- 当たりは機械の名前・景品・値段を写して持つ。機械を直しても消しても変わらない（消すと `gacha_id` が NULL）
+- 全部はずれの機械は 400 `gacha_needs_a_prize`。はずれに「渡した」は 409 `miss_cannot_be_handed_over`
+- 控え（上）には入らない
 
 ## テーブル
 
@@ -185,5 +205,7 @@ DB の ID・冪等キー。
 | `point_ledgers` | 台帳。`membership_id` は一意（`role = child` と 1 対 1） |
 | `point_transactions` | 記録（追記専用）。`amount` / `reversal_of_id` / `corrects_id` / `idempotency_key` |
 | `family_invitations` | 招待。`code_hash`・`role`・`target_membership_id`・有効期限 |
+| `gachas` / `gacha_prizes` | ガチャの機械と景品（並び順 `position`・重み・はずれ） |
+| `gacha_draws` | 引いた 1 回。写した名前・値段・`transaction_id`・`idempotency_key`・`handed_over_at` |
 
 定義の正本は `infrastructure/reward_points_models.py`。DDL の変更は Alembic で行う。

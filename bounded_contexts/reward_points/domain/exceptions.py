@@ -333,6 +333,43 @@ class StickerOutOfOrderError(RewardPointsError):
     code = "sticker_out_of_order"
 
 
+class GachaNotFoundError(RewardPointsError):
+    """The gacha machine does not exist (including when pointing at another ledger's; ADR-0060)."""
+
+    code = "gacha_not_found"
+
+
+class GachaDrawNotFoundError(RewardPointsError):
+    """The draw does not exist (including when pointing at another ledger's; ADR-0060)."""
+
+    code = "gacha_draw_not_found"
+
+
+class GachaNeedsAPrizeError(RewardPointsError):
+    """Attempted to make a gacha whose prizes are all misses (ADR-0060).
+
+    It would take points on every draw and never give anything.
+    """
+
+    code = "gacha_needs_a_prize"
+
+
+class InsufficientBalanceError(RewardPointsError):
+    """The balance does not cover the price of one draw (ADR-0060).
+
+    Hand-written spending may take a ledger below zero (ADR-0010), but a draw never does: a
+    child pressing a button should not borrow against future points.
+    """
+
+    code = "insufficient_balance"
+
+
+class MissCannotBeHandedOverError(RewardPointsError):
+    """Attempted to mark a "miss" as handed over. There is nothing to hand over (ADR-0060)."""
+
+    code = "miss_cannot_be_handed_over"
+
+
 __all__ = [
     "AccountAlreadyInFamilyError",
     "AlreadyBelongsToFamilyError",
@@ -345,10 +382,14 @@ __all__ = [
     "FamilyAccessDeniedError",
     "FamilyNotEmptyError",
     "FamilyNotFoundError",
+    "GachaDrawNotFoundError",
+    "GachaNeedsAPrizeError",
+    "GachaNotFoundError",
     "GuardianAccountRequiredError",
     "GuardianInvitationRequiresSignInError",
     "IdempotencyKeyReusedError",
     "IndependenceNotProposedError",
+    "InsufficientBalanceError",
     "InvalidFamilyArchiveError",
     "InvalidMemberOrderError",
     "InvitationNotFoundError",
@@ -358,6 +399,7 @@ __all__ = [
     "LedgerNotFoundError",
     "MembershipNotFoundError",
     "MembershipNotLinkedError",
+    "MissCannotBeHandedOverError",
     "ReversalOfReversalError",
     "RewardEventCompletedError",
     "RewardEventDeadlinePassedError",
