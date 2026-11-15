@@ -6,8 +6,12 @@
  * A machine of only misses cannot be saved (the server refuses it too).
  *
  * On failure the input is kept (no retyping). After creating, it is cleared for the next one.
+ *
+ * The form checks its own input instead of the browser's `required` bubbles: those speak the
+ * browser's language (not the app's) and, on a phone, point at a field hidden under the sticky
+ * header. A miss may be left unnamed; it is saved as "Miss" in the current language.
  */
-import { useRef, useState, type SubmitEvent } from 'react'
+import { useEffect, useRef, useState, type SubmitEvent } from 'react'
 
 import { usePendingAction } from '../hooks/usePendingAction'
 import { useI18n } from '../i18n'
@@ -55,18 +59,44 @@ function weightOf(row: PrizeRow): number {
   return Number.isInteger(weight) && weight >= 1 && weight <= MAX_WEIGHT ? weight : 0
 }
 
+function isPositiveInteger(value: string): boolean {
+  const number = Number(value)
+  return value.trim() !== '' && Number.isInteger(number) && number >= 1
+}
+
 export function GachaForm({ initial, onSubmit, onCancel }: Props) {
   const { t } = useI18n()
   const [name, setName] = useState(initial?.name ?? '')
   const [price, setPrice] = useState(initial === undefined ? '' : String(initial.price))
   const [rows, setRows] = useState<PrizeRow[]>(() => toRows(initial?.prizes ?? STARTER_ROWS))
   const nextKey = useRef(rows.length)
+  const formRef = useRef<HTMLFormElement>(null)
+  // Errors show only after the first attempt to save, then follow the input live
+  const [tried, setTried] = useState(false)
+  // Bumped on each rejected attempt so the first invalid field gets focus again
+  const [attempt, setAttempt] = useState(0)
 
   const prizes: GachaPrize[] = rows.map((row) => ({
-    name: row.name.trim(),
+    name: row.name.trim() === '' && row.isMiss ? t('gacha.miss') : row.name.trim(),
     weight: weightOf(row),
     is_miss: row.isMiss,
   }))
+  const nameError = name.trim() === '' ? t('gacha.errorName') : null
+  const priceError = isPositiveInteger(price) ? null : t('gacha.errorPrice')
+  const rowErrorsOf = (row: PrizeRow) => ({
+    name: row.name.trim() === '' && !row.isMiss ? t('gacha.errorPrizeName') : null,
+    weight: weightOf(row) === 0 ? t('gacha.errorWeight', { max: MAX_WEIGHT }) : null,
+  })
+  const rowErrors = rows.map(rowErrorsOf)
+  const hasErrors =
+    nameError !== null ||
+    priceError !== null ||
+    rowErrors.some((errors) => errors.name !== null || errors.weight !== null)
+
+  useEffect(() => {
+    if (attempt === 0) return
+    formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+  }, [attempt])
   const chances = prizes.map((prize) => chanceOf(prize, prizes))
   const onlyMisses = rows.every((row) => row.isMiss)
 
@@ -81,6 +111,11 @@ export function GachaForm({ initial, onSubmit, onCancel }: Props) {
 
   const [submit, submitting] = usePendingAction(async (event: SubmitEvent) => {
     event.preventDefault()
+    if (hasErrors) {
+      setTried(true)
+      setAttempt((count) => count + 1)
+      return
+    }
     try {
       await onSubmit({ name: name.trim(), price: Number(price), prizes })
     } catch {
@@ -91,106 +126,133 @@ export function GachaForm({ initial, onSubmit, onCancel }: Props) {
       setName('')
       setPrice('')
       setRows(toRows(STARTER_ROWS))
+      setTried(false)
     }
   })
 
   return (
-    <form className="gacha-form" onSubmit={submit}>
+    <form ref={formRef} className="gacha-form" onSubmit={submit} noValidate>
       <div className="gacha-form-head">
-        <label>
-          {t('gacha.fieldName')}
-          <input
-            value={name}
-            maxLength={NAME_MAX_LENGTH}
-            placeholder={t('gacha.fieldNamePlaceholder')}
-            onChange={(event) => {
-              setName(event.target.value)
-            }}
-            required
-          />
-        </label>
-        <label>
-          {t('gacha.fieldPrice')}
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            step={1}
-            value={price}
-            onChange={(event) => {
-              setPrice(event.target.value)
-            }}
-            required
-          />
-        </label>
+        <div className="gacha-form-field">
+          <label>
+            {t('gacha.fieldName')}
+            <input
+              value={name}
+              maxLength={NAME_MAX_LENGTH}
+              placeholder={t('gacha.fieldNamePlaceholder')}
+              onChange={(event) => {
+                setName(event.target.value)
+              }}
+              aria-invalid={tried && nameError !== null}
+              aria-describedby={tried && nameError !== null ? 'gacha-form-name-error' : undefined}
+            />
+          </label>
+          {tried && nameError !== null && (
+            <span id="gacha-form-name-error" className="gacha-form-error">
+              {nameError}
+            </span>
+          )}
+        </div>
+        <div className="gacha-form-field">
+          <label>
+            {t('gacha.fieldPrice')}
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={price}
+              onChange={(event) => {
+                setPrice(event.target.value)
+              }}
+              aria-invalid={tried && priceError !== null}
+              aria-describedby={tried && priceError !== null ? 'gacha-form-price-error' : undefined}
+            />
+          </label>
+          {tried && priceError !== null && (
+            <span id="gacha-form-price-error" className="gacha-form-error">
+              {priceError}
+            </span>
+          )}
+        </div>
       </div>
 
       <fieldset className="gacha-form-prizes">
         <legend>{t('gacha.prizes')}</legend>
         <p className="gacha-form-hint">{t('gacha.weightHint')}</p>
         <ul>
-          {rows.map((row, index) => (
-            <li key={row.key} className="gacha-form-prize">
-              <span
-                className="gacha-prize-dot"
-                style={{ background: row.isMiss ? 'var(--slot-line)' : capsuleColor(index) }}
-                aria-hidden="true"
-              />
-              <label>
-                <span className="visually-hidden">{t('gacha.fieldPrizeName')}</span>
-                <input
-                  value={row.name}
-                  maxLength={NAME_MAX_LENGTH}
-                  placeholder={row.isMiss ? t('gacha.miss') : t('gacha.fieldPrizeName')}
-                  aria-label={t('gacha.fieldPrizeNameFor', { number: index + 1 })}
-                  onChange={(event) => {
-                    change(row.key, { name: event.target.value })
-                  }}
-                  required
+          {rows.map((row, index) => {
+            const errors = rowErrorsOf(row)
+            const nameInvalid = tried && errors.name !== null
+            const weightInvalid = tried && errors.weight !== null
+            return (
+              <li key={row.key} className="gacha-form-prize">
+                <span
+                  className="gacha-prize-dot"
+                  style={{ background: row.isMiss ? 'var(--slot-line)' : capsuleColor(index) }}
+                  aria-hidden="true"
                 />
-              </label>
-              <label className="gacha-form-weight">
-                {t('gacha.fieldWeight')}
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={MAX_WEIGHT}
-                  step={1}
-                  value={row.weight}
-                  aria-label={t('gacha.fieldWeightFor', { number: index + 1 })}
-                  onChange={(event) => {
-                    change(row.key, { weight: event.target.value })
+                <label className="gacha-form-prize-name">
+                  <span className="visually-hidden">{t('gacha.fieldPrizeName')}</span>
+                  <input
+                    value={row.name}
+                    maxLength={NAME_MAX_LENGTH}
+                    placeholder={row.isMiss ? t('gacha.miss') : t('gacha.fieldPrizeName')}
+                    aria-label={t('gacha.fieldPrizeNameFor', { number: index + 1 })}
+                    onChange={(event) => {
+                      change(row.key, { name: event.target.value })
+                    }}
+                    aria-invalid={nameInvalid}
+                  />
+                </label>
+                <label className="gacha-form-weight">
+                  {t('gacha.fieldWeight')}
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={MAX_WEIGHT}
+                    step={1}
+                    value={row.weight}
+                    aria-label={t('gacha.fieldWeightFor', { number: index + 1 })}
+                    onChange={(event) => {
+                      change(row.key, { weight: event.target.value })
+                    }}
+                    aria-invalid={weightInvalid}
+                  />
+                </label>
+                <label className="gacha-form-miss">
+                  <input
+                    type="checkbox"
+                    checked={row.isMiss}
+                    onChange={(event) => {
+                      change(row.key, { isMiss: event.target.checked })
+                    }}
+                  />
+                  {t('gacha.miss')}
+                </label>
+                <span className="gacha-form-chance">
+                  {t('gacha.chance', { percent: chances[index] ?? 0 })}
+                </span>
+                <button
+                  type="button"
+                  className="gacha-text-button"
+                  disabled={rows.length === 1}
+                  aria-label={t('gacha.removePrizeFor', { number: index + 1 })}
+                  onClick={() => {
+                    setRows((current) => current.filter((r) => r.key !== row.key))
                   }}
-                  required
-                />
-              </label>
-              <label className="gacha-form-miss">
-                <input
-                  type="checkbox"
-                  checked={row.isMiss}
-                  onChange={(event) => {
-                    change(row.key, { isMiss: event.target.checked })
-                  }}
-                />
-                {t('gacha.miss')}
-              </label>
-              <span className="gacha-form-chance">
-                {t('gacha.chance', { percent: chances[index] ?? 0 })}
-              </span>
-              <button
-                type="button"
-                className="gacha-text-button"
-                disabled={rows.length === 1}
-                aria-label={t('gacha.removePrizeFor', { number: index + 1 })}
-                onClick={() => {
-                  setRows((current) => current.filter((r) => r.key !== row.key))
-                }}
-              >
-                {t('gacha.removePrize')}
-              </button>
-            </li>
-          ))}
+                >
+                  {t('gacha.removePrize')}
+                </button>
+                {(nameInvalid || weightInvalid) && (
+                  <span className="gacha-form-error gacha-form-prize-error" role="alert">
+                    {[errors.name, errors.weight].filter((message) => message !== null).join(' ')}
+                  </span>
+                )}
+              </li>
+            )
+          })}
         </ul>
         <button type="button" disabled={rows.length >= MAX_PRIZES} onClick={addRow}>
           {t('gacha.addPrize')}

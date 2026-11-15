@@ -1938,6 +1938,26 @@ tr.reversed {
   gap: 0.8rem;
 }
 
+/* When the form focuses the first invalid field, keep it clear of the sticky header */
+.gacha-form input {
+  scroll-margin-top: calc(var(--update-bar-height, 0px) + 5rem);
+}
+
+.gacha-form input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.gacha-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.gacha-form-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
 .gacha-form-head {
   display: grid;
   grid-template-columns: minmax(12rem, 2fr) minmax(8rem, 1fr);
@@ -1972,8 +1992,39 @@ tr.reversed {
 .gacha-form-prize {
   display: grid;
   grid-template-columns: auto minmax(8rem, 1fr) auto auto 3.5rem auto;
+  grid-template-areas:
+    'dot name weight miss chance remove'
+    '.   error error error error error';
   align-items: center;
   gap: 0.5rem;
+}
+
+.gacha-form-prize > .gacha-prize-dot {
+  grid-area: dot;
+}
+
+.gacha-form-prize > .gacha-form-prize-name {
+  grid-area: name;
+}
+
+.gacha-form-prize > .gacha-form-weight {
+  grid-area: weight;
+}
+
+.gacha-form-prize > .gacha-form-miss {
+  grid-area: miss;
+}
+
+.gacha-form-prize > .gacha-form-chance {
+  grid-area: chance;
+}
+
+.gacha-form-prize > .gacha-text-button {
+  grid-area: remove;
+}
+
+.gacha-form-prize > .gacha-form-prize-error {
+  grid-area: error;
 }
 
 .gacha-form-prize input:not([type='checkbox']) {
@@ -1981,7 +2032,8 @@ tr.reversed {
   box-sizing: border-box;
 }
 
-.gacha-form-weight {
+/* `.gacha-form` is added so these beat `.card label`, which stacks a label's text over its input */
+.gacha-form .gacha-form-weight {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -1989,11 +2041,11 @@ tr.reversed {
   white-space: nowrap;
 }
 
-.gacha-form-weight input {
+.gacha-form .gacha-form-weight input {
   width: 4.5rem;
 }
 
-.gacha-form-miss {
+.gacha-form .gacha-form-miss {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -2029,12 +2081,25 @@ tr.reversed {
     grid-template-columns: 1fr;
   }
 
+  /* Two lines per prize on a phone: the name, then its weight, miss toggle and remove */
   .gacha-form-prize {
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto auto auto 1fr auto;
+    grid-template-areas:
+      'dot name   name  name   chance'
+      '.   weight miss  .      remove'
+      '.   error  error error  error';
+    row-gap: 0.35rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px dashed var(--border);
   }
 
-  .gacha-form-prize > label:first-of-type {
-    grid-column: 2 / -1;
+  .gacha-form-prize:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
+  .gacha-form .gacha-form-weight input {
+    width: 4rem;
   }
 }
 
