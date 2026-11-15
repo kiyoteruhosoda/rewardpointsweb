@@ -176,6 +176,13 @@ def test_a_child_cannot_be_the_one_who_recorded_it() -> None:
         family_archive_rules.require_importable(_archive(_entry("t1", 10, granted_by="m2")))
 
 
+def test_a_child_can_be_the_one_who_spent_on_their_own_ledger() -> None:
+    """A child spends on their own ledger by drawing a gacha (ADR-0060), so that history is genuine."""
+    family_archive_rules.require_importable(
+        _archive(_entry("t1", 100, granted_by="m1"), _entry("t2", -30, granted_by="m2"))
+    )
+
+
 def test_someone_outside_the_family_cannot_be_the_one_who_recorded_it() -> None:
     with pytest.raises(InvalidFamilyArchiveError):
         family_archive_rules.require_importable(_archive(_entry("t1", 10, granted_by="m9")))

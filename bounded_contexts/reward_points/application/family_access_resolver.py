@@ -79,5 +79,12 @@ class FamilyAccessResolver:
             raise FamilyAccessDeniedError
         return access
 
+    def drawable_ledger(self, *, ledger_id: int, account_id: int) -> LedgerAccess:
+        """A ledger one may draw a gacha from (parents, and the child on their own; ADR-0060)."""
+        access = self.viewable_ledger(ledger_id=ledger_id, account_id=account_id)
+        if not family_access_policy.can_draw_gacha(access.membership, access.ledger):
+            raise FamilyAccessDeniedError
+        return access
+
 
 __all__ = ["FamilyAccessResolver", "LedgerAccess"]

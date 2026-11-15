@@ -32,6 +32,22 @@ def can_modify_ledger(membership: FamilyMembership, ledger: PointLedger) -> bool
     return ledger.belongs_to_family(membership.family_id) and membership.role.is_guardian
 
 
+def can_draw_gacha(membership: FamilyMembership, ledger: PointLedger) -> bool:
+    """Whether one can draw a gacha paid from this ledger (ADR-0060).
+
+    Parents can, for any child of the family. A child can too, but only on their own ledger:
+    the price and the prizes are set by a parent, so a child can only spend within what a
+    parent has offered. Display devices never can (they only view; ADR-0047).
+    """
+    if can_modify_ledger(membership, ledger):
+        return True
+    return (
+        ledger.belongs_to_family(membership.family_id)
+        and membership.role.has_own_ledger
+        and ledger.membership_id == membership.id
+    )
+
+
 def can_administer_family(membership: FamilyMembership) -> bool:
     """Administering the family itself (renaming, removing members). Owner only."""
     return membership.role.can_administer_family
@@ -138,6 +154,7 @@ __all__ = [
     "can_administer_family",
     "can_create_child",
     "can_detach_display",
+    "can_draw_gacha",
     "can_edit_family_rules",
     "can_invite",
     "can_issue_temporary_password_for",

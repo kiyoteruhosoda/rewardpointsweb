@@ -35,14 +35,15 @@ def require_importable(archive: FamilyArchiveDTO) -> None:
     _require_readable_format(archive)
     _unique_refs(member.ref for member in archive.members)
     _require_single_owner(archive.members)
-    # Only parents can write to ledgers (``can_modify_ledger``). An archive with a child in the
-    # recorder field holds a history that could not be created through this API
+    # Only parents can write to ledgers (``can_modify_ledger``), with one exception: a child
+    # spends on their own ledger by drawing a gacha (ADR-0060). An archive with any other child
+    # in the recorder field holds a history that could not be created through this API
     recorders = frozenset(member.ref for member in archive.members if member.role.is_guardian)
     for member in archive.members:
         _require_person(member)
         _require_ledger_matches_role(member)
         if member.ledger is not None:
-            _require_writable_ledger(member.ledger, recorders=recorders)
+            _require_writable_ledger(member.ledger, recorders=recorders, owner=member.ref)
 
 
 def _require_readable_format(archive: FamilyArchiveDTO) -> None:
@@ -87,9 +88,9 @@ def _require_ledger_matches_role(member: ArchivedMemberDTO) -> None:
         raise InvalidFamilyArchiveError
 
 
-def _require_writable_ledger(ledger: ArchivedLedgerDTO, *, recorders: frozenset[str]) -> None:
+def _require_writable_ledger(ledger: ArchivedLedgerDTO, *, recorders: frozenset[str], owner: str) -> None:
     _require_consistent_bonus(ledger.daily_bonus)
-    _require_writable_history(ledger.transactions, recorders=recorders)
+    _require_writable_history(ledger.transactions, recorders=recorders, owner=owner)
 
 
 def _require_consistent_bonus(bonus: ArchivedDailyBonusDTO | None) -> None:
@@ -106,13 +107,25 @@ def _require_consistent_bonus(bonus: ArchivedDailyBonusDTO | None) -> None:
         raise InvalidFamilyArchiveError
 
 
-def _require_writable_history(entries: Sequence[ArchivedTransactionDTO], *, recorders: frozenset[str]) -> None:
+def _require_writable_history(
+    entries: Sequence[ArchivedTransactionDTO], *, recorders: frozenset[str], owner: str
+) -> None:
     history = _WrittenHistory()
     for entry in entries:
-        # The recorder must be a member of this family allowed to write ledgers (a parent)
-        if entry.granted_by is not None and entry.granted_by not in recorders:
+        if not _recordable_by(entry, recorders=recorders, owner=owner):
             raise InvalidFamilyArchiveError
         history.append(entry)
+
+
+def _recordable_by(entry: ArchivedTransactionDTO, *, recorders: frozenset[str], owner: str) -> bool:
+    """Whether the recorder could have written this row through the API.
+
+    A parent of this family can write any row. The child who owns the ledger can only spend
+    on it (a gacha draw; ADR-0060). Nobody recorded daily bonuses (``None``).
+    """
+    if entry.granted_by is None or entry.granted_by in recorders:
+        return True
+    return entry.granted_by == owner and entry.amount < 0
 
 
 class _WrittenHistory:
