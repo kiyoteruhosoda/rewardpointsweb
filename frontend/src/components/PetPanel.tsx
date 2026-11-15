@@ -82,7 +82,8 @@ export function PetPanel({ familyId, ledgerId, pet, onChanged }: Props) {
         <PetArt species={pet.species} stage={pet.stage} className="pet-panel-art" />
         <div className="pet-panel-info">
           <p className="pet-panel-stage">
-            {t(`pet.stage.${pet.stage}`)}
+            {/* Until a species is chosen it is drawn as an egg, so it is named one too */}
+            {t(`pet.stage.${chosen ? pet.stage : 0}`)}
             {chosen && <span className="pet-panel-species">{t(`pet.species.${pet.species}`)}</span>}
           </p>
           <p className="pet-panel-earned">{t('pet.earned', { points: pet.earned })}</p>

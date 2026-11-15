@@ -78,6 +78,16 @@ describe('PetPanel', () => {
     expect(onChanged).toHaveBeenCalledWith(chosen)
   })
 
+  it('a grown egg without a kind is still called an egg', () => {
+    renderPanel(
+      pet({ species: null, stage: 2, earned: 120, current_threshold: 100, next_threshold: 300 }),
+    )
+
+    expect(screen.getByText('Egg')).toBeInTheDocument()
+    expect(screen.getByText('Hatching soon! Choose what it will be.')).toBeInTheDocument()
+    expect(screen.getByText('180 pt to the next stage')).toBeInTheDocument()
+  })
+
   it('someone who cannot choose sees no picker', () => {
     renderPanel(pet({ species: null, can_choose: false }))
 

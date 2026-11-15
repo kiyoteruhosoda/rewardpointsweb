@@ -47,7 +47,7 @@ export function DisplayPet({ ledgerId, name, pet }: Props) {
             {t('display.petGrew', { name })}
           </p>
         )}
-        <p className="display-pet-stage">{t(`pet.stage.${pet.stage}`)}</p>
+        <p className="display-pet-stage">{t(`pet.stage.${chosen ? pet.stage : 0}`)}</p>
         <p className="display-note">
           {toNext === null ? t('pet.final') : t('pet.toNext', { points: toNext })}
         </p>
