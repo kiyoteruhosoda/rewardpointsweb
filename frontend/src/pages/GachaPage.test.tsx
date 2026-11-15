@@ -19,6 +19,7 @@ let keys = 0
 
 vi.mock('../services/families', () => ({
   newIdempotencyKey: () => `key-${++keys}`,
+  parseUtc: (value: string) => new Date(value),
 }))
 
 vi.mock('../services/gacha', async (importOriginal) => {

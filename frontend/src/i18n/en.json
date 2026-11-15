@@ -536,7 +536,6 @@
   "gacha.short": "{points} pt more to draw",
   "gacha.chance": "{percent}%",
   "gacha.miss": "Miss",
-  "gacha.missPrize": "Miss ({name})",
   "gacha.prizes": "What's inside",
   "gacha.machinesSection": "Gacha machines",
   "gacha.resultTitle": "You got it!",

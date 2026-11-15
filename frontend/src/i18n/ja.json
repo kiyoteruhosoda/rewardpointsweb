@@ -536,7 +536,6 @@
   "gacha.short": "あと {points} pt でひけるよ",
   "gacha.chance": "{percent}%",
   "gacha.miss": "はずれ",
-  "gacha.missPrize": "はずれ（{name}）",
   "gacha.prizes": "なかみ",
   "gacha.machinesSection": "ガチャの一覧",
   "gacha.resultTitle": "あたり！",

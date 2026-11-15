@@ -3,9 +3,10 @@
  *
  * Won prizes are real things a parent gives, so each row says whether it was handed over yet.
  * Parents mark it (and can take a mis-tap back); a child only sees the mark. Misses have nothing
- * to hand over and show no mark.
+ * to hand over: they are greyed out and show no mark.
  */
 import { useI18n } from '../i18n'
+import { parseUtc } from '../services/families'
 import type { GachaDraw } from '../services/gacha'
 import { ActionButton } from './ActionButton'
 
@@ -34,13 +35,9 @@ export function GachaHistory({ draws, canModify, pendingOf, onToggleHandOver }: 
             {draws.map((draw) => (
               <li key={draw.id} className={draw.is_miss ? 'is-miss' : undefined}>
                 <div className="gacha-history-what">
-                  <span className="gacha-history-prize">
-                    {draw.is_miss
-                      ? t('gacha.missPrize', { name: draw.prize_name })
-                      : draw.prize_name}
-                  </span>
+                  <span className="gacha-history-prize">{draw.prize_name}</span>
                   <span className="gacha-history-meta">
-                    {draw.gacha_name} · {new Date(draw.drawn_at).toLocaleString(locale)}
+                    {draw.gacha_name} · {parseUtc(draw.drawn_at).toLocaleString(locale)}
                   </span>
                 </div>
                 {!draw.is_miss && (
