@@ -3,6 +3,7 @@
  * and a celebration once per screen when the stage has gone up.
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as PetModule from '../services/pet'
@@ -19,6 +20,12 @@ vi.mock('../services/pet', async (importOriginal) => ({
     choose: (_family: number, _ledger: number, species: PetSpecies) => choose(species),
   },
 }))
+
+/** Holds the pet like the ledger screen does, so a choice comes back as the new prop. */
+function WithState({ initial }: { initial: Pet }) {
+  const [value, setValue] = useState(initial)
+  return <PetPanel familyId={1} ledgerId={20} pet={value} onChanged={setValue} />
+}
 
 function renderPanel(value: Pet, onChanged: (pet: Pet) => void = () => undefined) {
   return renderWithProviders(
@@ -89,6 +96,23 @@ describe('PetPanel', () => {
 
     renderPanel(pet({ stage: 2 }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('choosing the kind of a grown egg shows it hatch', async () => {
+    const egg = pet({
+      species: null,
+      stage: 2,
+      earned: 120,
+      current_threshold: 100,
+      next_threshold: 300,
+    })
+    choose.mockResolvedValue({ ...egg, species: 'dragon' })
+    renderWithProviders(<WithState initial={egg} />)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dragon' }))
+
+    expect(await screen.findByRole('dialog', { name: 'It grew!' })).toHaveTextContent('Now: Baby')
   })
 
   it('the first time a screen sees the pet it only remembers the stage', () => {
