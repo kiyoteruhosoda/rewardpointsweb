@@ -99,13 +99,13 @@ def _create(client: TestClient, home: Home, payload: dict[str, object] | None = 
 
 
 def _draw_response(
-    client: TestClient, ledger: Ledger, headers: dict[str, str], gacha: dict[str, Any], *, key: str
+    client: TestClient, ledger: Ledger, gacha: dict[str, Any], *, headers: dict[str, str], key: str
 ) -> Any:
     return client.post(f"{_gachas_path(ledger)}/{gacha['id']}/draws", headers=headers, json={"idempotency_key": key})
 
 
 def _draw(client: TestClient, home: Home, gacha: dict[str, Any], *, key: str) -> dict[str, Any]:
-    response = _draw_response(client, home.ledger, home.headers, gacha, key=key)
+    response = _draw_response(client, home.ledger, gacha, headers=home.headers, key=key)
     assert response.status_code == 201, response.text
     body: dict[str, Any] = response.json()
     return body
@@ -269,7 +269,7 @@ def test_the_same_press_key_on_another_machine_is_refused(client: TestClient, ho
     rolls.append(0)
     _draw(client, home, first, key="press-1")
 
-    response = _draw_response(client, home.ledger, home.headers, second, key="press-1")
+    response = _draw_response(client, home.ledger, second, headers=home.headers, key="press-1")
 
     assert response.status_code == 409, response.text
     assert _error(response) == "idempotency_key_reused"
@@ -282,7 +282,7 @@ def test_a_draw_the_balance_cannot_cover_is_refused_and_writes_nothing(
     gacha = _create(client, home)
     rolls.append(0)
 
-    response = _draw_response(client, home.ledger, home.headers, gacha, key="press-1")
+    response = _draw_response(client, home.ledger, gacha, headers=home.headers, key="press-1")
 
     assert response.status_code == 409, response.text
     assert _error(response) == "insufficient_balance"
@@ -308,7 +308,7 @@ def test_a_machine_of_another_ledger_cannot_be_drawn_through_this_one(
     gacha = _create(client, home)
     rolls.append(0)
 
-    response = _draw_response(client, home.sibling, home.headers, gacha, key="press-1")
+    response = _draw_response(client, home.sibling, gacha, headers=home.headers, key="press-1")
 
     assert response.status_code == 404, response.text
     assert _error(response) == "gacha_not_found"
@@ -325,7 +325,7 @@ def test_a_child_draws_on_their_own_ledger(client: TestClient, home: Home, rolls
     assert (board["can_modify"], board["can_draw"]) == (False, True)
     rolls.append(0)
 
-    response = _draw_response(client, home.ledger, child, gacha, key="press-1")
+    response = _draw_response(client, home.ledger, gacha, headers=child, key="press-1")
 
     assert response.status_code == 201, response.text
     assert response.json()["draw"]["prize_name"] == "チョコ"
@@ -337,7 +337,7 @@ def test_a_child_cannot_draw_on_a_siblings_ledger(client: TestClient, home: Home
     sibling_gacha = client.post(_gachas_path(home.sibling), headers=home.headers, json=_SNACKS).json()
     child = _child_headers(client, home)
 
-    response = _draw_response(client, home.sibling, child, sibling_gacha, key="press-1")
+    response = _draw_response(client, home.sibling, sibling_gacha, headers=child, key="press-1")
 
     assert response.status_code == 403, response.text
     assert _error(response) == "family_access_denied"
@@ -359,7 +359,7 @@ def test_someone_outside_the_family_cannot_draw(client: TestClient, home: Home, 
     gacha = _create(client, home)
     stranger = create_account(client, admin_headers, username="stranger", role="member", display_name="よそのひと")
 
-    response = _draw_response(client, home.ledger, stranger.headers, gacha, key="press-1")
+    response = _draw_response(client, home.ledger, gacha, headers=stranger.headers, key="press-1")
 
     assert response.status_code == 403, response.text
 
