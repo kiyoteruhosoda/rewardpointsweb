@@ -2,8 +2,9 @@
  * The pet on a child's ledger (ADR-0061).
  *
  * It comes with the ledger response (`Ledger.pet`) and starts as an egg. Choosing its species
- * hands the egg over; from then on it grows with the points added. Spending never shrinks it.
- * The parents or the child choose its species.
+ * hands the egg over — once; it cannot change while the pet grows. From then on it grows with
+ * the points added; spending never shrinks it. Once fully grown, the next pet can be chosen and
+ * starts again from an egg. The parents or the child choose.
  *
  * Each screen remembers the last stage it showed per ledger. When the stage has gone up since,
  * that screen celebrates once — the child's phone and a display device each get their own
@@ -26,8 +27,13 @@ export interface Pet {
   current_threshold: number
   /** null at the final stage. */
   next_threshold: number | null
-  /** Whether the viewer may choose the species (parents, and the child for their own). */
+  /**
+   * Whether the viewer may choose a pet now: allowed (parents, and the child for their own) and
+   * there is an egg to receive — none chosen yet, or the current pet is fully grown.
+   */
   can_choose: boolean
+  /** Species of the pets already raised, oldest first. */
+  raised: PetSpecies[]
 }
 
 /** Progress within the current stage, 0..1 (1 at the final stage). */

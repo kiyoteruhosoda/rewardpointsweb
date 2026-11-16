@@ -37,6 +37,7 @@ describe('PetPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.removeItem('pet-seen-stage:20')
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
   it('shows the stage and how many points the next one needs', () => {
@@ -65,7 +66,14 @@ describe('PetPanel', () => {
     choose.mockResolvedValue(chosen)
     const onChanged = vi.fn<(pet: Pet) => void>()
     renderPanel(
-      pet({ species: null, stage: 0, earned: 0, current_threshold: 0, next_threshold: 30 }),
+      pet({
+        species: null,
+        stage: 0,
+        earned: 0,
+        current_threshold: 0,
+        next_threshold: 30,
+        can_choose: true,
+      }),
       onChanged,
     )
 
@@ -89,7 +97,7 @@ describe('PetPanel', () => {
       current_threshold: 0,
       next_threshold: 100,
     })
-    choose.mockResolvedValue({ ...egg, species: 'dragon' })
+    choose.mockResolvedValue({ ...egg, species: 'dragon', can_choose: false })
     renderWithProviders(<WithState initial={egg} />)
     expect(screen.getByText('Egg')).toBeInTheDocument()
 
@@ -99,6 +107,43 @@ describe('PetPanel', () => {
       expect(choose).toHaveBeenCalledWith('dragon')
     })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('a growing pet offers no way to change its kind', () => {
+    renderPanel(pet({ species: 'cat', stage: 2, can_choose: false }))
+
+    expect(screen.queryByRole('button', { name: 'Bunny' })).not.toBeInTheDocument()
+  })
+
+  it('asks before choosing, since the kind cannot change later', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderPanel(pet({ species: null, stage: 0, earned: 0, can_choose: true }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bunny' }))
+
+    await waitFor(() => {
+      expect(confirm).toHaveBeenCalledWith("Choose Bunny? It can't be changed while it grows.")
+    })
+    expect(choose).not.toHaveBeenCalled()
+  })
+
+  it('a fully grown pet offers the next one, and the raised ones are listed', () => {
+    renderPanel(
+      pet({
+        species: 'cat',
+        stage: 5,
+        earned: 12000,
+        current_threshold: 10000,
+        next_threshold: null,
+        can_choose: true,
+        raised: ['rabbit'],
+      }),
+    )
+
+    expect(screen.getByText('Fully grown! Raise the next one?')).toBeInTheDocument()
+    expect(screen.getByText('The next one starts again from an egg at 0 pt.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Birdie' })).toBeInTheDocument()
+    expect(screen.getByText('Raised so far: 1')).toBeInTheDocument()
   })
 
   it('someone who cannot choose sees no picker', () => {

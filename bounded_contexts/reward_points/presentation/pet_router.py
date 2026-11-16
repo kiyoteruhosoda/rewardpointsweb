@@ -1,8 +1,8 @@
 """API for choosing the pet on a ledger (ADR-0061).
 
 The pet itself is read with the ledger (``GET .../ledgers/{id}`` returns ``pet``). Choosing
-the species needs ``pet:choose`` (parents and children), and the family role decides which
-ledger: parents any child's, a child their own.
+needs ``pet:choose`` (parents and children), and the family role decides which ledger:
+parents any child's, a child their own.
 """
 
 from __future__ import annotations
@@ -34,7 +34,10 @@ ChoosePetDep = Annotated[ChoosePetUseCase, Depends(get_choose_pet_use_case)]
 
 @router.put("/{family_id}/ledgers/{ledger_id}/pet", response_model=PetResponse)
 def choose_pet(*, ledger_id: int, body: PetChooseRequest, use_case: ChoosePetDep, principal: PetChooser) -> PetResponse:
-    """Choose or change the pet's species. Growth comes from the ledger and does not change."""
+    """Receive an egg of *species*: the first pet, or the next one after the current reached the final stage.
+
+    While the current pet is growing its species cannot change (409 ``pet_already_chosen``).
+    """
     dto = use_case.execute(ChoosePetCommand(ledger_id=ledger_id, account_id=principal.user_id, species=body.species))
     logger.info("pet_chosen", extra={"ledger_id": ledger_id, "species": body.species.value})
     return to_pet_response(dto)

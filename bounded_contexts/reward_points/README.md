@@ -204,8 +204,10 @@ DB の ID・冪等キー。
 - 育ちの値は **たまごを渡した日（種類を初めて選んだとき）から後にもらったポイント**（プラスの行の合計。打ち消しと打ち消された行は組で外す・
   使った行は数えない・起きた日時がたまごより前の行は数えない）。`LedgerStatement.earned_points_since`。段階は保存せず、読むたびにここから出す
 - 段階は 6 つ（0 たまご〜5 スター）。区切りは `domain/entities/pet.py` の `STAGE_THRESHOLDS`
-- 保存するのは種類と、たまごを渡した日（`pets.created_at`）。無ければ「まだ選んでいないたまご」（育ちの値は 0）
-- 種類を選ぶ（`PUT .../ledgers/{id}/pet`）のは親と、自分の台帳の子（`pet:choose` ＋ `can_choose_pet`）。表示端末は選べない
+- 保存は 1 匹 1 行（`pet_generations`、`UNIQUE (ledger_id, generation)`）。いちばん新しい世代が今の子で、それより前は育て終えた子。
+  行の `created_at` がたまごを渡した日。行が無ければ「まだ選んでいないたまご」（育ちの値は 0）
+- 選ぶ（`PUT .../ledgers/{id}/pet`）のは親と、自分の台帳の子（`pet:choose` ＋ `can_choose_pet`）。表示端末は選べない。
+  選べるのは、まだ選んでいないときと、今の子が最後の段階まで育ったとき（次の子）だけ。育っている間は 409 `pet_already_chosen`
 - お祝いを出すかは画面が決める（端末ごとに最後に見せた段階を覚える）
 - 控え（上）には入らない
 
@@ -219,7 +221,7 @@ DB の ID・冪等キー。
 | `point_transactions` | 記録（追記専用）。`amount` / `reversal_of_id` / `corrects_id` / `idempotency_key` |
 | `family_invitations` | 招待。`code_hash`・`role`・`target_membership_id`・有効期限 |
 | `gachas` / `gacha_prizes` | ガチャの機械と景品（並び順 `position`・重み・はずれ） |
-| `pets` | ペットの種類（台帳に 1 行。育ちは台帳から出す） |
+| `pet_generations` | 育てたペット（1 匹 1 行・世代・種類。育ちは台帳から出す） |
 | `gacha_draws` | 引いた 1 回。写した名前・値段・`transaction_id`・`idempotency_key`・`handed_over_at` |
 
 定義の正本は `infrastructure/reward_points_models.py`。DDL の変更は Alembic で行う。

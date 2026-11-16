@@ -221,6 +221,7 @@ def to_pet_response(dto: PetDTO) -> PetResponse:
         current_threshold=dto.current_threshold,
         next_threshold=dto.next_threshold,
         can_choose=dto.can_choose,
+        raised=list(dto.raised),
     )
 
 

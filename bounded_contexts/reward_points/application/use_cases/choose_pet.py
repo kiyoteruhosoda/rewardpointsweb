@@ -1,17 +1,19 @@
-"""Choose (or change) the species of the pet on a ledger (ADR-0061).
+"""Choose the pet to raise on a ledger (ADR-0061).
 
-The child chooses their own; parents can choose for any child. The first choice hands the
-egg over: growth counts from then. Changing the species later keeps that day, so the stage
-does not change.
+The child chooses their own; parents can choose for any child. Choosing hands the egg over,
+and growth counts from then. The species is chosen once: while the pet is growing it cannot
+be changed. When it reaches the final stage, the next pet can be chosen and starts from an
+egg at 0; the earlier one stays as a raised pet.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from bounded_contexts.reward_points.application.dto.pet_dto import PetDTO, to_dto
+from bounded_contexts.reward_points.application.dto.pet_dto import PetDTO, growth_of, to_dto
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
 from bounded_contexts.reward_points.domain.entities.pet import PetSpecies
+from bounded_contexts.reward_points.domain.exceptions import PetAlreadyChosenError
 from bounded_contexts.reward_points.domain.repositories.pet_repository import IPetRepository
 from bounded_contexts.reward_points.domain.repositories.point_transaction_repository import (
     IPointTransactionRepository,
@@ -36,9 +38,16 @@ class ChoosePetUseCase:
 
     def execute(self, command: ChoosePetCommand) -> PetDTO:
         found = self._access.pet_owner_ledger(ledger_id=command.ledger_id, account_id=command.account_id)
-        pet = self._pets.choose_species(ledger_id=found.ledger.id, species=command.species)
         statement = LedgerStatement(self._transactions.list_by_ledger(found.ledger.id))
-        return to_dto(pet, statement=statement, can_choose=True)
+        current = self._pets.current(found.ledger.id)
+        # Still growing: its species stays. A resent choice also lands here (the egg it asked for exists)
+        if current is not None and not growth_of(current, statement).is_final:
+            raise PetAlreadyChosenError
+        generation = 1 if current is None else current.generation + 1
+        adopted = self._pets.adopt(ledger_id=found.ledger.id, species=command.species, generation=generation)
+        if adopted is None:
+            raise PetAlreadyChosenError
+        return to_dto(adopted, raised=self._pets.raised(found.ledger.id), statement=statement, allowed_to_choose=True)
 
 
 __all__ = ["ChoosePetCommand", "ChoosePetUseCase"]

@@ -1,9 +1,12 @@
 """A pet that grows with the points a child has earned (ADR-0061).
 
-One per child ledger. The egg is handed over when a species is first chosen (``adopted_at``),
-and the pet moves up through fixed stages as the points added **since then** grow
+One at a time per child ledger. The egg is handed over when its species is chosen
+(``adopted_at``) — once; it cannot be changed while growing. The pet moves up through fixed
+stages as the points added **since then** grow
 (:meth:`~...ledger_statement.LedgerStatement.earned_points_since`). Spending never shrinks it;
-reversing an addition does (that addition never happened).
+reversing an addition does (that addition never happened). Once it reaches the final stage,
+the next pet can be chosen and starts again from an egg at 0; the earlier ones stay as
+"raised" pets (``generation`` counts them from 1).
 
 The stage is not stored: it is worked out from the ledger on every read, so it can never
 drift from the history. Only the species and the day the egg was handed over are stored.
@@ -34,8 +37,10 @@ class AdoptedPet:
     """A pet whose species has been chosen. Growth counts from ``adopted_at``."""
 
     species: PetSpecies
-    #: When the egg was handed over (the first choice). Changing the species keeps it
+    #: When the egg was handed over (its species chosen)
     adopted_at: datetime
+    #: 1 for the first pet on the ledger, 2 for the next one raised after it, and so on
+    generation: int = 1
 
 
 @dataclass(frozen=True, kw_only=True)
