@@ -96,6 +96,7 @@ describe('PetPanel', () => {
       earned: 0,
       current_threshold: 0,
       next_threshold: 100,
+      can_choose: true,
     })
     choose.mockResolvedValue({ ...egg, species: 'dragon', can_choose: false })
     renderWithProviders(<WithState initial={egg} />)
