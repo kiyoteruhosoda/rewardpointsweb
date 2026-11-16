@@ -142,13 +142,43 @@ def test_a_corrected_addition_counts_at_its_new_amount(client: TestClient, home:
     assert (pet["stage"], pet["earned"]) == (1, STAGE_THRESHOLDS[1])
 
 
-def test_changing_the_species_keeps_the_growth(client: TestClient, home: Home) -> None:
+def _error(response: Any) -> str:
+    return str(response.json()["detail"]["error"])
+
+
+def test_the_species_cannot_change_while_the_pet_is_growing(client: TestClient, home: Home) -> None:
     _adopt(client, home, "rabbit")
     home.ledger.record(client, home.parent.headers, amount=STAGE_THRESHOLDS[1], reason="おてつだい", key="k1")
 
     changed = _choose(client, home.ledger, headers=home.parent.headers, species="dragon")
 
-    assert changed.status_code == 200, changed.text
+    assert changed.status_code == 409, changed.text
+    assert _error(changed) == "pet_already_chosen"
+    pet = _pet(client, home.ledger, home.parent.headers)
+    assert (pet["species"], pet["stage"], pet["can_choose"]) == ("rabbit", 1, False)
+
+
+def test_a_fully_grown_pet_lets_the_next_one_start_from_an_egg(client: TestClient, home: Home) -> None:
+    _adopt(client, home, "cat")
+    home.ledger.record(client, home.parent.headers, amount=STAGE_THRESHOLDS[-1] + 50, reason="がんばった", key="k1")
+    grown = _pet(client, home.ledger, home.parent.headers)
+
+    nxt = _choose(client, home.ledger, headers=home.parent.headers, species="bird")
+
+    assert (grown["stage"], grown["can_choose"]) == (len(STAGE_THRESHOLDS) - 1, True)
+    assert nxt.status_code == 200, nxt.text
+    pet = _pet(client, home.ledger, home.parent.headers)
+    assert (pet["species"], pet["stage"], pet["earned"], pet["raised"]) == ("bird", 0, 0, ["cat"])
+    assert pet["can_choose"] is False
+
+
+def test_the_next_pet_counts_only_points_after_its_egg(client: TestClient, home: Home) -> None:
+    _adopt(client, home, "cat")
+    home.ledger.record(client, home.parent.headers, amount=STAGE_THRESHOLDS[-1], reason="がんばった", key="k1")
+    _adopt(client, home, "dragon")
+
+    home.ledger.record(client, home.parent.headers, amount=STAGE_THRESHOLDS[1], reason="おてつだい", key="k2")
+
     pet = _pet(client, home.ledger, home.parent.headers)
     assert (pet["species"], pet["stage"], pet["earned"]) == ("dragon", 1, STAGE_THRESHOLDS[1])
 
@@ -162,11 +192,12 @@ def test_an_unknown_species_is_refused(client: TestClient, home: Home) -> None:
 def test_a_child_chooses_their_own_pet_but_not_a_siblings(client: TestClient, home: Home) -> None:
     child = _child_headers(client, home)
 
+    before = _pet(client, home.ledger, child)
     own = _choose(client, home.ledger, headers=child, species="cat")
     siblings = _choose(client, home.sibling, headers=child, species="cat")
 
+    assert before["can_choose"] is True
     assert own.status_code == 200, own.text
-    assert _pet(client, home.ledger, child)["can_choose"] is True
     assert siblings.status_code == 403, siblings.text
 
 

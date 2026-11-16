@@ -354,6 +354,16 @@ class GachaNeedsAPrizeError(RewardPointsError):
     code = "gacha_needs_a_prize"
 
 
+class PetAlreadyChosenError(RewardPointsError):
+    """Attempted to choose a pet while the current one is still growing (ADR-0061).
+
+    The species is chosen once, when the egg is handed over. The next pet can be chosen only
+    after the current one reaches the final stage.
+    """
+
+    code = "pet_already_chosen"
+
+
 class InsufficientBalanceError(RewardPointsError):
     """The balance does not cover the price of one draw (ADR-0060).
 
@@ -400,6 +410,7 @@ __all__ = [
     "MembershipNotFoundError",
     "MembershipNotLinkedError",
     "MissCannotBeHandedOverError",
+    "PetAlreadyChosenError",
     "ReversalOfReversalError",
     "RewardEventCompletedError",
     "RewardEventDeadlinePassedError",

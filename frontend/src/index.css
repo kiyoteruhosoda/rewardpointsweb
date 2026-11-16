@@ -2749,10 +2749,24 @@ tr.reversed {
   color: var(--accent);
 }
 
-.pet-panel-change summary {
-  cursor: pointer;
+.pet-panel-raised-title {
+  margin: 0 0 0.3rem;
   color: var(--text-muted);
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.pet-panel-raised ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pet-panel-raised li {
+  width: 3.2rem;
 }
 
 .pet-picker {

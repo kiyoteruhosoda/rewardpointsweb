@@ -340,8 +340,11 @@ class PetResponse(BaseModel):
     current_threshold: int
     # null at the final stage
     next_threshold: int | None
-    # Whether the viewer may choose the species (parents, and the child for their own)
+    # Whether the viewer may choose a pet now: allowed (parents, and the child for their own)
+    # and there is an egg to receive (none chosen yet, or the current pet is fully grown)
     can_choose: bool
+    # Species of the pets already raised, oldest first
+    raised: list[PetSpecies]
 
 
 class PetChooseRequest(BaseModel):

@@ -45,6 +45,7 @@ from bounded_contexts.reward_points.domain.exceptions import (
     MembershipNotFoundError,
     MembershipNotLinkedError,
     MissCannotBeHandedOverError,
+    PetAlreadyChosenError,
     ReversalOfReversalError,
     RewardEventCompletedError,
     RewardEventDeadlinePassedError,
@@ -74,6 +75,8 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     # The balance moved since the screen was drawn, or the button was forced (ADR-0060)
     InsufficientBalanceError: status.HTTP_409_CONFLICT,
     MissCannotBeHandedOverError: status.HTTP_409_CONFLICT,
+    # The screen is looking at a stale pet (chosen elsewhere, or not fully grown yet)
+    PetAlreadyChosenError: status.HTTP_409_CONFLICT,
     GachaNeedsAPrizeError: status.HTTP_400_BAD_REQUEST,
     # The screen is looking at a stale state (ADR-0042). Reloading reveals the right number
     RewardEventCompletedError: status.HTTP_409_CONFLICT,

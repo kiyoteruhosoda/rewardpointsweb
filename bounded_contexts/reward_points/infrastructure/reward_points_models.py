@@ -281,18 +281,24 @@ class GachaDrawModel(Base):
 
 
 class PetModel(Base):
-    """The species chosen for the pet on a child ledger (ADR-0061).
+    """One pet raised on a child ledger (ADR-0061).
 
+    The latest ``generation`` is the pet being raised now; earlier ones are already raised.
     Growth is not stored (it comes from the ledger, counting from ``created_at`` — the day the
     egg was handed over). No row means "an egg, not chosen yet".
     """
 
-    __tablename__ = "pets"
+    __tablename__ = "pet_generations"
+    __table_args__ = (
+        sa.UniqueConstraint("ledger_id", "generation", name="uq_pet_generations_generation"),
+        sa.CheckConstraint("generation >= 1", name="ck_pet_generations_generation_positive"),
+    )
 
     id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
     ledger_id: Mapped[int] = mapped_column(
-        BigIntPk, sa.ForeignKey("point_ledgers.id", ondelete="CASCADE"), nullable=False, unique=True
+        BigIntPk, sa.ForeignKey("point_ledgers.id", ondelete="CASCADE"), nullable=False
     )
+    generation: Mapped[int] = mapped_column(sa.Integer(), nullable=False)
     species: Mapped[str] = mapped_column(PET_SPECIES, nullable=False)
     created_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow)
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)

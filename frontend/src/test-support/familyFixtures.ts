@@ -51,7 +51,8 @@ export function pet(overrides: Partial<Pet> = {}): Pet {
     earned: 40,
     current_threshold: 30,
     next_threshold: 100,
-    can_choose: true,
+    can_choose: false,
+    raised: [],
     ...overrides,
   }
 }

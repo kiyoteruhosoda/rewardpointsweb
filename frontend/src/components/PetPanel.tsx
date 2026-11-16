@@ -45,6 +45,8 @@ export function PetPanel({ familyId, ledgerId, pet, onChanged }: Props) {
   }, [chosen, ledgerId, pet.stage])
 
   const [choose, choosing] = usePendingAction(async (species: PetSpecies) => {
+    // The kind cannot be changed while the pet grows, so a mis-tap is asked about first
+    if (!window.confirm(t('pet.confirmChoose', { species: t(`pet.species.${species}`) }))) return
     try {
       onChanged(await petApi.choose(familyId, ledgerId, species))
       notify('success', t('pet.chosen', { species: t(`pet.species.${species}`) }))
@@ -104,19 +106,30 @@ export function PetPanel({ familyId, ledgerId, pet, onChanged }: Props) {
         </div>
       </div>
 
-      {!chosen && pet.can_choose && (
+      {pet.can_choose && (
         <div className="pet-panel-choose">
-          <p className="pet-panel-choose-title">{t('pet.choose')}</p>
-          <p className="pet-panel-hint">{t('pet.chooseStarts')}</p>
+          {/* The first egg, or the next one once the current pet is fully grown */}
+          <p className="pet-panel-choose-title">{chosen ? t('pet.nextTitle') : t('pet.choose')}</p>
+          <p className="pet-panel-hint">{chosen ? t('pet.nextHint') : t('pet.chooseStarts')}</p>
           {picker}
         </div>
       )}
       {!chosen && !pet.can_choose && <p className="pet-panel-hint">{t('pet.notChosen')}</p>}
-      {chosen && pet.can_choose && (
-        <details className="pet-panel-change">
-          <summary>{t('pet.change')}</summary>
-          {picker}
-        </details>
+
+      {pet.raised.length > 0 && (
+        <div className="pet-panel-raised">
+          <p className="pet-panel-raised-title">
+            {t('pet.raisedTitle', { count: pet.raised.length })}
+          </p>
+          <ul>
+            {pet.raised.map((species, index) => (
+              <li key={`${index}-${species}`} title={t(`pet.species.${species}`)}>
+                <PetArt species={species} stage={pet.stage_count - 1} />
+                <span className="visually-hidden">{t(`pet.species.${species}`)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {celebrating && pet.species !== null && (
