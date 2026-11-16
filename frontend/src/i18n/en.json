@@ -268,7 +268,7 @@
   "events.gridShape": "The card will be {columns} × {rows}.",
   "events.inProgressSection": "In progress",
   "events.open": "Events",
-  "events.peel": "Undo",
+  "events.peel": "Peel off the last sticker",
   "events.progress": "{count} / {goal}",
   "events.progressLabel": "{count} of {goal} stickers",
   "events.readOnly": "Only parents can add stickers.",
@@ -621,5 +621,7 @@
   "pet.nextHint": "The next one starts again from an egg at 0 pt.",
   "pet.raisedTitle": "Raised so far: {count}",
   "pet.confirmChoose": "Choose {species}? It can't be changed while it grows.",
-  "error.pet_already_chosen": "The pet is already chosen. Reload the screen."
+  "error.pet_already_chosen": "The pet is already chosen. Reload the screen.",
+  "events.fixSummary": "Made a mistake?",
+  "events.confirmPeel": "Peel off sticker {number}? Use this only to undo a mis-tap."
 }

@@ -154,17 +154,6 @@ export function RewardEventCard({
         )}
         {canModify && !completed && !expired && (
           <div className="event-card-actions">
-            {count > 0 && (
-              <ActionButton
-                type="button"
-                className="event-card-quiet"
-                pending={pending === 'peel'}
-                disabled={busy}
-                onClick={onPeel}
-              >
-                {t('events.peel')}
-              </ActionButton>
-            )}
             <ActionButton
               type="button"
               className="event-card-achieve"
@@ -178,6 +167,22 @@ export function RewardEventCard({
           </div>
         )}
       </footer>
+
+      {/* Peeling is only for undoing a mis-tap, so it stays folded away (task #1049) */}
+      {canModify && !completed && !expired && count > 0 && (
+        <details className="event-card-fix">
+          <summary>{t('events.fixSummary')}</summary>
+          <ActionButton
+            type="button"
+            className="event-card-quiet"
+            pending={pending === 'peel'}
+            disabled={busy}
+            onClick={onPeel}
+          >
+            {t('events.peel')}
+          </ActionButton>
+        </details>
+      )}
     </article>
   )
 }

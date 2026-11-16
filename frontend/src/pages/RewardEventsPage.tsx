@@ -133,6 +133,7 @@ export function RewardEventsPage() {
 
   const peel = (event: RewardEvent) => {
     const number = event.stickers.length
+    if (!window.confirm(t('events.confirmPeel', { number }))) return
     void runForRow(event.id, 'peel', async () => {
       try {
         replace(await rewardEvents.peel(family, ledger, event.id, number))
