@@ -12,15 +12,7 @@
  * recent growth continues, not a certain value, so it is drawn differently from the solid line, and below
  * the chart a sentence states how many pt in how many days and the basis of the estimate (growth per day).
  */
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type PointerEvent,
-} from 'react'
+import { useEffect, useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react'
 
 import { useI18n } from '../i18n'
 import {
@@ -49,12 +41,17 @@ function withSign(amount: number): string {
   return amount > 0 ? `+${amount}` : String(amount)
 }
 
-/** Tracks the width of the drawing area. Where it cannot be measured (e.g. jsdom in tests), draw at the default width. */
+/**
+ * Tracks the width of the drawing area. Where it cannot be measured (e.g. jsdom in tests), draw at the default width.
+ *
+ * The frame is only in the DOM once there is something to draw (an empty ledger shows a note
+ * instead), so it is observed through a callback ref: the observer attaches whenever the frame
+ * appears, not just on the first render.
+ */
 function useWidth(fallback: number) {
-  const ref = useRef<HTMLDivElement>(null)
+  const [element, setElement] = useState<HTMLDivElement | null>(null)
   const [width, setWidth] = useState(fallback)
   useEffect(() => {
-    const element = ref.current
     if (element === null || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setWidth(Math.max(240, Math.floor(entry.contentRect.width)))
@@ -63,8 +60,8 @@ function useWidth(fallback: number) {
     return () => {
       observer.disconnect()
     }
-  }, [])
-  return [ref, width] as const
+  }, [element])
+  return [setElement, width] as const
 }
 
 export function BalanceTrend({ transactions, asOf }: Props) {
