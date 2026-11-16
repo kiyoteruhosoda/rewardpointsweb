@@ -40,7 +40,7 @@ export function PetCelebration({ species, stage, onClose }: Props) {
         aria-labelledby="pet-celebration-title"
       >
         <div className="gacha-reveal-stage">
-          <SparklesArt />
+          <SparklesArt delay={0.2} />
           <PetArt species={species} stage={stage} className="pet-celebration-art" />
         </div>
         <h2 id="pet-celebration-title" className="gacha-reveal-title">

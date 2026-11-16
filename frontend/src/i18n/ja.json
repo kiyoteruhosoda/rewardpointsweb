@@ -581,6 +581,7 @@
   "gacha.takeBack": "取り消す",
   "gacha.takeBackFor": "{name} を渡したのを取り消す",
   "gacha.unavailable": "ガチャを読み込めませんでした。",
+  "gacha.turning": "ガラガラ…",
   "gacha.try": "ためしに引く（無料）",
   "gacha.tryFor": "{name} を ポイントを使わずに ためしに引く",
   "gacha.trialBadge": "おためし（確認用）",
