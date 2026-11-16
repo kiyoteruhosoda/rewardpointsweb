@@ -268,7 +268,7 @@
   "events.gridShape": "{columns} 列 × {rows} 行のカードになります。",
   "events.inProgressSection": "挑戦中",
   "events.open": "イベント",
-  "events.peel": "はがす",
+  "events.peel": "さいごの シールを 1 まい はがす",
   "events.progress": "{count} / {goal}",
   "events.progressLabel": "シール {count} / {goal} 枚",
   "events.readOnly": "シールを貼れるのはおうちの人だけです。",
@@ -621,5 +621,7 @@
   "pet.nextHint": "つぎの子は たまごから 0 pt で はじまるよ。",
   "pet.raisedTitle": "そだてた子: {count}",
   "pet.confirmChoose": "{species} に する？ そだっている あいだは かえられないよ。",
-  "error.pet_already_chosen": "ペットは もう えらばれています。画面を読み直してください。"
+  "error.pet_already_chosen": "ペットは もう えらばれています。画面を読み直してください。",
+  "events.fixSummary": "まちがえたとき",
+  "events.confirmPeel": "{number} まいめの シールを はがしますか？ まちがえて はったときだけ つかってください。"
 }

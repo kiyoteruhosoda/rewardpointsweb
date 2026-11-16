@@ -1494,6 +1494,17 @@ tr.reversed {
   margin-left: auto;
 }
 
+/* "Made a mistake?": the folded emergency peel, small and out of the way (task #1049) */
+.event-card-fix summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.event-card-fix[open] summary {
+  margin-bottom: 0.3rem;
+}
+
 .event-card .event-card-quiet {
   background: none;
   border-color: transparent;
