@@ -24,7 +24,7 @@ import { useRefreshOnReturn } from '../hooks/useRefreshOnReturn'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { newIdempotencyKey } from '../services/families'
-import { waitForTurn } from '../services/gachaShow'
+import { waitForDispense, waitForTurn } from '../services/gachaShow'
 import {
   gacha as gachaApi,
   type Gacha,
@@ -72,6 +72,8 @@ export function GachaPage() {
   const pressKeys = useRef<Map<number, string>>(new Map())
 
   const [summary, setSummary] = useState<BundleSummary | null>(null)
+  // The capsule coming out of a machine's chute, between the turn and the result
+  const [dispensing, setDispensing] = useState<{ gachaId: number; color: string } | null>(null)
   // Resolves when the open result is closed (a bundle then moves on to its next draw)
   const nextRef = useRef<(() => void) | null>(null)
   const bundleKeys = useRef<Map<number, string>>(new Map())
@@ -120,8 +122,8 @@ export function GachaPage() {
       try {
         const result = await gachaApi.draw(family, ledger, machine.id, key)
         pressKeys.current.delete(machine.id)
-        // The handle keeps turning for the whole show, however fast the answer came (task #1045)
-        await waitForTurn(startedAt)
+        // The handle keeps turning for the whole show, however fast the answer came (task #1048)
+        await turnAndDispense(machine.id, colorOf(machine, result.draw), startedAt)
         setBoard((current) =>
           current === null
             ? current
@@ -138,6 +140,17 @@ export function GachaPage() {
         await reload()
       }
     })
+  }
+
+  /**
+   * The show before a result opens (task #1048): the handle turns, then a capsule of the
+   * prize's colour pops out of this machine's chute.
+   */
+  const turnAndDispense = async (gachaId: number, color: string, startedAt: number) => {
+    await waitForTurn(startedAt)
+    setDispensing({ gachaId, color })
+    await waitForDispense()
+    setDispensing(null)
   }
 
   /** Shows one result and resolves once it is closed. */
@@ -161,7 +174,7 @@ export function GachaPage() {
         bundleKeys.current.delete(machine.id)
         const colors = result.draws.map((won) => colorOf(machine, won))
         for (const [index, won] of result.draws.entries()) {
-          await waitForTurn(startedAt)
+          await turnAndDispense(machine.id, colors[index] ?? colorOf(machine, won), startedAt)
           await showAndWait({
             draw: won,
             color: colors[index] ?? colorOf(machine, won),
@@ -194,7 +207,7 @@ export function GachaPage() {
       const startedAt = Date.now()
       try {
         const result = await gachaApi.trial(family, ledger, machine.id)
-        await waitForTurn(startedAt)
+        await turnAndDispense(machine.id, colorOf(machine, result), startedAt)
         setRevealed({ draw: result, color: colorOf(machine, result), balance: null, trial: true })
       } catch (error) {
         notify('error', t(errorMessageKey(error)))
@@ -311,6 +324,7 @@ export function GachaPage() {
                 onDrawBundle={() => {
                   drawBundle(machine)
                 }}
+                dispensing={dispensing?.gachaId === machine.id ? dispensing.color : null}
                 onEdit={() => {
                   setEditing(machine.id)
                 }}

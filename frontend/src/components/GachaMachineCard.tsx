@@ -23,6 +23,8 @@ interface Props {
   onTry: () => void
   /** Ten draws plus one free (task #1047). */
   onDrawBundle: () => void
+  /** Colour of the capsule coming out of this machine's chute, or null. */
+  dispensing: string | null
   onEdit: () => void
   onRemove: () => void
 }
@@ -36,6 +38,7 @@ export function GachaMachineCard({
   onDraw,
   onTry,
   onDrawBundle,
+  dispensing,
   onEdit,
   onRemove,
 }: Props) {
@@ -52,7 +55,7 @@ export function GachaMachineCard({
       </header>
 
       <div className="gacha-card-machine">
-        <GachaMachineArt spinning={turning} />
+        <GachaMachineArt spinning={turning && dispensing === null} dispensing={dispensing} />
       </div>
       {turning && (
         <p className="gacha-card-turning" role="status">
