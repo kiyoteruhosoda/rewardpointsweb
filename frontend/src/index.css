@@ -1978,9 +1978,17 @@ tr.reversed {
   background: var(--surface-inset);
 }
 
+/* The heading sits inside the box like the other field labels, not on its border line
+   (float takes the legend out of the border; the next element clears it) */
 .gacha-form-prizes legend {
-  padding: 0 0.3rem;
+  float: left;
+  width: 100%;
+  padding: 0;
   font-weight: 700;
+}
+
+.gacha-form-prizes legend + * {
+  clear: both;
 }
 
 .gacha-form-prizes ul {
