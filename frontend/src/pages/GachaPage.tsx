@@ -23,6 +23,7 @@ import { useRefreshOnReturn } from '../hooks/useRefreshOnReturn'
 import { useI18n } from '../i18n'
 import { errorMessageKey } from '../services/api'
 import { newIdempotencyKey } from '../services/families'
+import { waitForTurn } from '../services/gachaShow'
 import {
   gacha as gachaApi,
   type Gacha,
@@ -94,9 +95,12 @@ export function GachaPage() {
     void machines.runForRow(machine.id, 'draw', async () => {
       const key = pressKeys.current.get(machine.id) ?? newIdempotencyKey()
       pressKeys.current.set(machine.id, key)
+      const startedAt = Date.now()
       try {
         const result = await gachaApi.draw(family, ledger, machine.id, key)
         pressKeys.current.delete(machine.id)
+        // The handle keeps turning for the whole show, however fast the answer came (task #1045)
+        await waitForTurn(startedAt)
         setBoard((current) =>
           current === null
             ? current
@@ -118,8 +122,10 @@ export function GachaPage() {
   /** A parent's trial draw: the same show and pick, with nothing spent or recorded. */
   const tryDraw = (machine: Gacha) => {
     void machines.runForRow(machine.id, 'trial', async () => {
+      const startedAt = Date.now()
       try {
         const result = await gachaApi.trial(family, ledger, machine.id)
+        await waitForTurn(startedAt)
         setRevealed({ draw: result, color: colorOf(machine, result), balance: null })
       } catch (error) {
         notify('error', t(errorMessageKey(error)))

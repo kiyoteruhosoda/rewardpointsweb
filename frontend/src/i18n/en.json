@@ -581,6 +581,7 @@
   "gacha.takeBack": "Undo",
   "gacha.takeBackFor": "Undo handing over {name}",
   "gacha.unavailable": "Could not load the gacha.",
+  "gacha.turning": "Rattle, rattle…",
   "gacha.try": "Try it (free)",
   "gacha.tryFor": "Try {name} without spending points",
   "gacha.trialBadge": "Trial — just for checking",

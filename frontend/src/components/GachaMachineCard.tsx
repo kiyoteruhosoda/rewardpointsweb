@@ -49,6 +49,11 @@ export function GachaMachineCard({
       <div className="gacha-card-machine">
         <GachaMachineArt spinning={pending === 'draw' || pending === 'trial'} />
       </div>
+      {(pending === 'draw' || pending === 'trial') && (
+        <p className="gacha-card-turning" role="status">
+          {t('gacha.turning')}
+        </p>
+      )}
 
       {canDraw && (
         <div className="gacha-card-draw">

@@ -113,8 +113,8 @@ export function CapsuleArt({ color, opening }: CapsuleProps) {
   )
 }
 
-/** Four-pointed sparkles around a won prize. */
-export function SparklesArt() {
+/** Four-pointed sparkles around a won prize. They start twinkling *delay* seconds in. */
+export function SparklesArt({ delay = 3 }: { delay?: number }) {
   const sparkle = 'M 0 -10 L 3 -3 L 10 0 L 3 3 L 0 10 L -3 3 L -10 0 L -3 -3 Z'
   const spots: readonly (readonly [number, number, number, string])[] = [
     [-70, -30, 1.4, '#ffd23f'],
@@ -136,7 +136,7 @@ export function SparklesArt() {
           d={sparkle}
           fill={color}
           transform={`translate(${x} ${y}) scale(${scale})`}
-          style={{ animationDelay: `${1.1 + index * 0.08}s` }}
+          style={{ animationDelay: `${delay + index * 0.08}s` }}
         />
       ))}
     </svg>

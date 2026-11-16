@@ -2222,6 +2222,26 @@ tr.reversed {
   animation: gacha-turn 0.7s linear infinite;
 }
 
+/* The capsules in the dome tumble while the handle turns */
+.gacha-art-dome-capsules {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.gacha-machine-art.is-spinning .gacha-art-dome-capsules {
+  animation: gacha-tumble 0.9s ease-in-out infinite;
+}
+
+.gacha-card-turning {
+  margin: 0;
+  font-family: var(--font-round);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--accent);
+  text-align: center;
+  animation: gacha-pulse 0.9s ease-in-out infinite;
+}
+
 .gacha-card-draw {
   display: flex;
   flex-direction: column;
@@ -2413,7 +2433,9 @@ tr.reversed {
 
 .gacha-reveal-capsule {
   width: 9rem;
-  animation: gacha-drop 0.6s cubic-bezier(0.3, 1.4, 0.6, 1) both;
+  animation:
+    gacha-drop 1s cubic-bezier(0.3, 1.4, 0.6, 1) both,
+    gacha-wobble 1.2s 1s ease-in-out both;
 }
 
 .gacha-capsule-art {
@@ -2430,12 +2452,12 @@ tr.reversed {
 
 .gacha-capsule-art.is-opening .gacha-capsule-top {
   transform-origin: left bottom;
-  animation: gacha-open-top 0.45s 0.7s ease-out both;
+  animation: gacha-open-top 0.5s 2.4s ease-out both;
 }
 
 .gacha-capsule-art.is-opening .gacha-capsule-bottom {
   transform-origin: left top;
-  animation: gacha-open-bottom 0.45s 0.7s ease-out both;
+  animation: gacha-open-bottom 0.5s 2.4s ease-out both;
 }
 
 .gacha-reveal-prize {
@@ -2452,7 +2474,7 @@ tr.reversed {
   text-shadow:
     0 0 0.4rem var(--surface-raised),
     0 0 0.8rem var(--surface-raised);
-  animation: gacha-pop 0.45s 1.05s cubic-bezier(0.3, 1.6, 0.6, 1) both;
+  animation: gacha-pop 0.5s 2.9s cubic-bezier(0.3, 1.6, 0.6, 1) both;
 }
 
 .gacha-reveal.is-miss .gacha-reveal-prize {
@@ -2517,6 +2539,50 @@ tr.reversed {
   }
 }
 
+@keyframes gacha-tumble {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+
+  25% {
+    transform: rotate(-6deg) translateY(-3%);
+  }
+
+  75% {
+    transform: rotate(6deg) translateY(2%);
+  }
+}
+
+@keyframes gacha-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes gacha-wobble {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  20% {
+    transform: rotate(-14deg);
+  }
+
+  40% {
+    transform: rotate(10deg);
+  }
+
+  60% {
+    transform: rotate(-6deg);
+  }
+
+  80% {
+    transform: rotate(3deg);
+  }
+}
+
 @keyframes gacha-turn {
   to {
     transform: rotate(360deg);
@@ -2574,6 +2640,8 @@ tr.reversed {
 @media (prefers-reduced-motion: reduce) {
   .gacha-machine-art.is-spinning,
   .gacha-machine-art.is-spinning .gacha-art-handle,
+  .gacha-machine-art.is-spinning .gacha-art-dome-capsules,
+  .gacha-card-turning,
   .gacha-reveal-backdrop,
   .gacha-reveal-capsule,
   .gacha-reveal-prize,
@@ -2735,10 +2803,6 @@ tr.reversed {
   font-family: var(--font-round);
   font-size: 1.2rem;
   font-weight: 800;
-}
-
-.pet-celebration .gacha-sparkles path {
-  animation-delay: 0.2s;
 }
 
 .display-pet {

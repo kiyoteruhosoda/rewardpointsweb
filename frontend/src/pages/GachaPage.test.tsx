@@ -23,6 +23,13 @@ vi.mock('../services/families', () => ({
   parseUtc: (value: string) => new Date(value),
 }))
 
+/** Resolves the wait for the handle to turn. Immediate unless a test holds it. */
+let turned: Promise<void> = Promise.resolve()
+
+vi.mock('../services/gachaShow', () => ({
+  waitForTurn: () => turned,
+}))
+
 vi.mock('../services/gacha', async (importOriginal) => {
   const actual = await importOriginal<typeof GachaModule>()
   return {
@@ -96,6 +103,7 @@ describe('GachaPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     keys = 0
+    turned = Promise.resolve()
   })
 
   it('shows each prize with its chance', async () => {
@@ -231,5 +239,28 @@ describe('GachaPage', () => {
     expect(
       screen.queryByRole('button', { name: /without spending points/ }),
     ).not.toBeInTheDocument()
+  })
+
+  it('keeps the handle turning until the show is due, then shows the prize', async () => {
+    board.mockResolvedValue(boardOf())
+    draw.mockResolvedValue({ draw: won(), balance: 70 })
+    let finishTurning: () => void = () => undefined
+    turned = new Promise((resolve) => {
+      finishTurning = resolve
+    })
+    renderPage()
+
+    fireEvent.click(await drawButton())
+
+    expect(await screen.findByText('Rattle, rattle…')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(draw).toHaveBeenCalled()
+    })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    finishTurning()
+
+    expect(await screen.findByRole('dialog', { name: 'You got it!' })).toBeInTheDocument()
+    expect(screen.queryByText('Rattle, rattle…')).not.toBeInTheDocument()
   })
 })
