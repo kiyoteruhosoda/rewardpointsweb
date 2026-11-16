@@ -33,9 +33,12 @@ vi.mock('../services/families', () => ({
 
 /** Resolves the wait for the handle to turn. Immediate unless a test holds it. */
 let turned: Promise<void> = Promise.resolve()
+/** Resolves the wait for the capsule to come out of the chute. */
+let dispensed: Promise<void> = Promise.resolve()
 
 vi.mock('../services/gachaShow', () => ({
   waitForTurn: () => turned,
+  waitForDispense: () => dispensed,
 }))
 
 vi.mock('../services/gacha', async (importOriginal) => {
@@ -115,6 +118,7 @@ describe('GachaPage', () => {
     vi.clearAllMocks()
     keys = 0
     turned = Promise.resolve()
+    dispensed = Promise.resolve()
   })
 
   it('shows each prize with its chance', async () => {
@@ -259,7 +263,11 @@ describe('GachaPage', () => {
     turned = new Promise((resolve) => {
       finishTurning = resolve
     })
-    renderPage()
+    let finishDispensing: () => void = () => undefined
+    dispensed = new Promise((resolve) => {
+      finishDispensing = resolve
+    })
+    const { container } = renderPage()
 
     fireEvent.click(await drawButton())
 
@@ -271,7 +279,16 @@ describe('GachaPage', () => {
 
     finishTurning()
 
+    // A capsule comes out of the chute before the result opens
+    await waitFor(() => {
+      expect(container.querySelector('.gacha-art-dispensed')).not.toBeNull()
+    })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    finishDispensing()
+
     expect(await screen.findByRole('dialog', { name: 'You got it!' })).toBeInTheDocument()
+    expect(container.querySelector('.gacha-art-dispensed')).toBeNull()
     expect(screen.queryByText('Rattle, rattle…')).not.toBeInTheDocument()
   })
 

@@ -2232,6 +2232,13 @@ tr.reversed {
   animation: gacha-tumble 0.9s ease-in-out infinite;
 }
 
+/* The won capsule pops out of the chute, drops and bounces (task #1048) */
+.gacha-art-dispensed-ball {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: gacha-dispense 1s cubic-bezier(0.3, 0.9, 0.5, 1) both;
+}
+
 .gacha-card-turning {
   margin: 0;
   font-family: var(--font-round);
@@ -2482,8 +2489,8 @@ tr.reversed {
 .gacha-reveal-capsule {
   width: 9rem;
   animation:
-    gacha-drop 1s cubic-bezier(0.3, 1.4, 0.6, 1) both,
-    gacha-wobble 1.2s 1s ease-in-out both;
+    gacha-drop 0.35s cubic-bezier(0.3, 1.4, 0.6, 1) both,
+    gacha-wobble 0.5s 0.35s ease-in-out both;
 }
 
 .gacha-capsule-art {
@@ -2500,12 +2507,12 @@ tr.reversed {
 
 .gacha-capsule-art.is-opening .gacha-capsule-top {
   transform-origin: left bottom;
-  animation: gacha-open-top 0.5s 2.4s ease-out both;
+  animation: gacha-open-top 0.4s 0.85s ease-out both;
 }
 
 .gacha-capsule-art.is-opening .gacha-capsule-bottom {
   transform-origin: left top;
-  animation: gacha-open-bottom 0.5s 2.4s ease-out both;
+  animation: gacha-open-bottom 0.4s 0.85s ease-out both;
 }
 
 .gacha-reveal-prize {
@@ -2522,7 +2529,7 @@ tr.reversed {
   text-shadow:
     0 0 0.4rem var(--surface-raised),
     0 0 0.8rem var(--surface-raised);
-  animation: gacha-pop 0.5s 2.9s cubic-bezier(0.3, 1.6, 0.6, 1) both;
+  animation: gacha-pop 0.45s 1.1s cubic-bezier(0.3, 1.6, 0.6, 1) both;
 }
 
 .gacha-reveal.is-miss .gacha-reveal-prize {
@@ -2584,6 +2591,34 @@ tr.reversed {
 
   75% {
     transform: rotate(2deg);
+  }
+}
+
+@keyframes gacha-dispense {
+  0% {
+    opacity: 0;
+    transform: translate(0, -6px) scale(0.3);
+  }
+
+  25% {
+    opacity: 1;
+    transform: translate(4px, 10px) scale(1.1);
+  }
+
+  45% {
+    transform: translate(10px, 30px) scale(1.25) rotate(90deg);
+  }
+
+  62% {
+    transform: translate(13px, 20px) scale(1.25) rotate(150deg);
+  }
+
+  80% {
+    transform: translate(16px, 30px) scale(1.25) rotate(200deg);
+  }
+
+  100% {
+    transform: translate(18px, 28px) scale(1.25) rotate(220deg);
   }
 }
 
@@ -2689,6 +2724,7 @@ tr.reversed {
   .gacha-machine-art.is-spinning,
   .gacha-machine-art.is-spinning .gacha-art-handle,
   .gacha-machine-art.is-spinning .gacha-art-dome-capsules,
+  .gacha-art-dispensed-ball,
   .gacha-card-turning,
   .gacha-reveal-backdrop,
   .gacha-reveal-capsule,

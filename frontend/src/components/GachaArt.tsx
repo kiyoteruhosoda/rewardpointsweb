@@ -36,9 +36,11 @@ const DOME_CAPSULES: readonly (readonly [number, number, number])[] = [
 interface MachineProps {
   /** Turning the handle and shaking while the draw is on its way. */
   spinning: boolean
+  /** Colour of the capsule coming out of the chute, or null when none is. */
+  dispensing?: string | null
 }
 
-export function GachaMachineArt({ spinning }: MachineProps) {
+export function GachaMachineArt({ spinning, dispensing = null }: MachineProps) {
   return (
     <svg
       className={spinning ? 'gacha-machine-art is-spinning' : 'gacha-machine-art'}
@@ -72,6 +74,16 @@ export function GachaMachineArt({ spinning }: MachineProps) {
       </g>
       {/* Chute */}
       <rect x="70" y="116" width="24" height="20" rx="6" className="gacha-art-chute" />
+      {/* The won capsule pops out of the chute and bounces (task #1048) */}
+      {dispensing !== null && (
+        <g className="gacha-art-dispensed" transform="translate(82 126)">
+          <g className="gacha-art-dispensed-ball">
+            <path d="M -10 0 A 10 10 0 0 1 10 0 Z" fill={dispensing} />
+            <path d="M -10 0 A 10 10 0 0 0 10 0 Z" fill="#ffffff" />
+            <circle r="10" fill="none" stroke="rgb(0 0 0 / 25%)" strokeWidth="1.5" />
+          </g>
+        </g>
+      )}
     </svg>
   )
 }
@@ -114,7 +126,7 @@ export function CapsuleArt({ color, opening }: CapsuleProps) {
 }
 
 /** Four-pointed sparkles around a won prize. They start twinkling *delay* seconds in. */
-export function SparklesArt({ delay = 3 }: { delay?: number }) {
+export function SparklesArt({ delay = 1.2 }: { delay?: number }) {
   const sparkle = 'M 0 -10 L 3 -3 L 10 0 L 3 3 L 0 10 L -3 3 L -10 0 L -3 -3 Z'
   const spots: readonly (readonly [number, number, number, string])[] = [
     [-70, -30, 1.4, '#ffd23f'],
