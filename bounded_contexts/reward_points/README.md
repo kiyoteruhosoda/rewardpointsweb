@@ -193,6 +193,7 @@ DB の ID・冪等キー。
 - 残高が値段に届かなければ 409 `insufficient_balance`。台帳の行を `FOR UPDATE` で押さえてから残高を読む
 - 同じ鍵の再送は前の結果を返す。同じ鍵で別の機械なら 409 `idempotency_key_reused`
 - 当たりは機械の名前・景品・値段を写して持つ。機械を直しても消しても変わらない（消すと `gacha_id` が NULL）
+- 親の「ためしに引く」（`POST .../gachas/{id}/trials`、`point:manage`）は、同じように選ぶが何も書かない（残高不足でも試せる）
 - 全部はずれの機械は 400 `gacha_needs_a_prize`。はずれに「渡した」は 409 `miss_cannot_be_handed_over`
 - 控え（上）には入らない
 

@@ -6,13 +6,14 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as GachaModule from '../services/gacha'
-import type { Gacha, GachaBoard, GachaDraw, GachaDrawResult } from '../services/gacha'
+import type { Gacha, GachaBoard, GachaDraw, GachaDrawResult, GachaTrial } from '../services/gacha'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { GachaPage } from './GachaPage'
 
 const board = vi.fn<() => Promise<GachaBoard>>()
 const draw = vi.fn<(gachaId: number, key: string) => Promise<GachaDrawResult>>()
 const handOver = vi.fn<(drawId: number) => Promise<GachaDraw>>()
+const trial = vi.fn<(gachaId: number) => Promise<GachaTrial>>()
 const create = vi.fn<() => Promise<Gacha>>()
 
 let keys = 0
@@ -30,6 +31,7 @@ vi.mock('../services/gacha', async (importOriginal) => {
       board: () => board(),
       draw: (_family: number, _ledger: number, gachaId: number, key: string) => draw(gachaId, key),
       handOver: (_family: number, _ledger: number, drawId: number) => handOver(drawId),
+      trial: (_family: number, _ledger: number, gachaId: number) => trial(gachaId),
       takeBackHandOver: () => Promise.reject(new Error('not used')),
       create: () => create(),
       update: () => Promise.reject(new Error('not used')),
@@ -201,5 +203,33 @@ describe('GachaPage', () => {
       'Add at least one prize that is not a miss.',
     )
     expect(screen.getByRole('button', { name: 'Make' })).toBeDisabled()
+  })
+
+  it("a parent's trial draw shows the prize marked as a trial and changes nothing", async () => {
+    board.mockResolvedValue(boardOf({ balance: 0 }))
+    trial.mockResolvedValue({ gacha_name: 'おかしガチャ', prize_name: 'チョコ', is_miss: false })
+    renderPage()
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Try おかしガチャ without spending points' }),
+    )
+
+    const dialog = await screen.findByRole('dialog', { name: 'You got it!' })
+    expect(within(dialog).getByText('チョコ')).toBeInTheDocument()
+    expect(within(dialog).getByText('Trial — just for checking')).toBeInTheDocument()
+    expect(within(dialog).getByText(/No points used, nothing recorded/)).toBeInTheDocument()
+    expect(trial).toHaveBeenCalledWith(7)
+    expect(draw).not.toHaveBeenCalled()
+    expect(screen.getByText('Nothing drawn yet.')).toBeInTheDocument()
+  })
+
+  it('a child has no trial draw', async () => {
+    board.mockResolvedValue(boardOf({ can_modify: false }))
+    renderPage()
+
+    await drawButton()
+    expect(
+      screen.queryByRole('button', { name: /without spending points/ }),
+    ).not.toBeInTheDocument()
   })
 })

@@ -14,12 +14,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from bounded_contexts.reward_points.application.use_cases.draw_gacha import DrawGachaUseCase
+from bounded_contexts.reward_points.application.use_cases.draw_gacha import DrawGachaUseCase, TryGachaUseCase
 from bounded_contexts.reward_points.presentation.dependencies import AccessDep, TransactionRepoDep
 from bounded_contexts.reward_points.presentation.gacha_dependencies import (
     GachaDrawRepoDep,
     GachaRepoDep,
     get_draw_gacha_use_case,
+    get_try_gacha_use_case,
 )
 from tests.integration.api.family_support import (
     Account,
@@ -82,9 +83,14 @@ def rolls(app: FastAPI) -> Iterator[list[int]]:
             access=access, gachas=gachas, draws=draws, transactions=transactions, roll=lambda _bound: queue.pop(0)
         )
 
+    def build_trial(access: AccessDep, gachas: GachaRepoDep) -> TryGachaUseCase:
+        return TryGachaUseCase(access, gachas, roll=lambda _bound: queue.pop(0))
+
     app.dependency_overrides[get_draw_gacha_use_case] = build
+    app.dependency_overrides[get_try_gacha_use_case] = build_trial
     yield queue
     app.dependency_overrides.pop(get_draw_gacha_use_case, None)
+    app.dependency_overrides.pop(get_try_gacha_use_case, None)
 
 
 def _gachas_path(ledger: Ledger) -> str:
@@ -414,5 +420,46 @@ def test_a_child_cannot_mark_their_own_prize_handed_over(client: TestClient, hom
     child = _child_headers(client, home)
 
     response = client.put(_handed_over_path(home, draw), headers=child)
+
+    assert response.status_code == 403, response.text
+
+
+# --- Trial draw (ADR-0060 addendum, task #1043) ----------------------------------------------
+
+
+def _try(client: TestClient, home: Home, gacha: dict[str, Any], *, headers: dict[str, str] | None = None) -> Any:
+    return client.post(f"{_gachas_path(home.ledger)}/{gacha['id']}/trials", headers=headers or home.headers)
+
+
+def test_a_guardians_trial_draw_wins_by_weight_but_spends_and_records_nothing(
+    client: TestClient, home: Home, rolls: list[int]
+) -> None:
+    home.ledger.record(client, home.headers, amount=100, reason="おてつだい", key="k1")
+    gacha = _create(client, home)
+    rolls.append(2)
+
+    response = _try(client, home, gacha)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"gacha_name": "おかしガチャ", "prize_name": "グミ", "is_miss": False}
+    assert _balance(client, home) == 100
+    assert _board(client, home)["draws"] == []
+
+
+def test_a_trial_draw_works_without_enough_points(client: TestClient, home: Home, rolls: list[int]) -> None:
+    gacha = _create(client, home)
+    rolls.append(3)
+
+    response = _try(client, home, gacha)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["is_miss"] is True
+
+
+def test_a_child_cannot_trial_draw(client: TestClient, home: Home) -> None:
+    gacha = _create(client, home)
+    child = _child_headers(client, home)
+
+    response = _try(client, home, gacha, headers=child)
 
     assert response.status_code == 403, response.text

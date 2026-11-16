@@ -73,6 +73,14 @@ class GachaDrawResultResponse(BaseModel):
     balance: int
 
 
+class GachaTrialResponse(BaseModel):
+    """What a parent's trial draw won. Nothing was spent or recorded."""
+
+    gacha_name: str
+    prize_name: str
+    is_miss: bool
+
+
 class GachaBoardResponse(BaseModel):
     ledger_id: int
     display_name: str
@@ -95,4 +103,5 @@ __all__ = [
     "GachaPrizeResponse",
     "GachaResponse",
     "GachaSaveRequest",
+    "GachaTrialResponse",
 ]

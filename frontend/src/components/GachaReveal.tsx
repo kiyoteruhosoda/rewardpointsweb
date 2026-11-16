@@ -11,14 +11,16 @@
 import { useEffect, useRef } from 'react'
 
 import { useI18n } from '../i18n'
-import type { GachaDraw } from '../services/gacha'
+import type { GachaTrial } from '../services/gacha'
 import { CapsuleArt, SparklesArt } from './GachaArt'
 
 interface Props {
-  draw: GachaDraw
+  /** A real draw or a parent's trial draw (both carry these). */
+  draw: GachaTrial
   /** Colour of the capsule (the prize's colour in the list). */
   color: string
-  balance: number
+  /** Balance right after a real draw. null for a trial draw (nothing was spent). */
+  balance: number | null
   onClose: () => void
 }
 
@@ -53,13 +55,14 @@ export function GachaReveal({ draw, color, balance, onClose }: Props) {
           </div>
           <p className="gacha-reveal-prize">{draw.prize_name}</p>
         </div>
+        {balance === null && <p className="gacha-reveal-trial">{t('gacha.trialBadge')}</p>}
         <h2 id="gacha-reveal-title" className="gacha-reveal-title">
           {draw.is_miss ? t('gacha.resultMiss') : t('gacha.resultTitle')}
         </h2>
         <p className="gacha-reveal-meta">
           {t('gacha.resultFrom', { name: draw.gacha_name })}
           {' · '}
-          {t('gacha.resultBalance', { points: balance })}
+          {balance === null ? t('gacha.trialNote') : t('gacha.resultBalance', { points: balance })}
         </p>
         <button ref={closeRef} type="button" className="gacha-reveal-close" onClick={onClose}>
           {draw.is_miss ? t('gacha.resultCloseMiss') : t('gacha.resultClose')}

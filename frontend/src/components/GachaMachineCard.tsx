@@ -10,7 +10,7 @@ import { chanceOf, type Gacha } from '../services/gacha'
 import { ActionButton } from './ActionButton'
 import { GachaMachineArt, capsuleColor } from './GachaArt'
 
-export type GachaAction = 'draw' | 'remove'
+export type GachaAction = 'draw' | 'trial' | 'remove'
 
 interface Props {
   gacha: Gacha
@@ -19,6 +19,8 @@ interface Props {
   canModify: boolean
   pending: GachaAction | null
   onDraw: () => void
+  /** A parent's trial draw (nothing spent or recorded). */
+  onTry: () => void
   onEdit: () => void
   onRemove: () => void
 }
@@ -30,6 +32,7 @@ export function GachaMachineCard({
   canModify,
   pending,
   onDraw,
+  onTry,
   onEdit,
   onRemove,
 }: Props) {
@@ -44,7 +47,7 @@ export function GachaMachineCard({
       </header>
 
       <div className="gacha-card-machine">
-        <GachaMachineArt spinning={pending === 'draw'} />
+        <GachaMachineArt spinning={pending === 'draw' || pending === 'trial'} />
       </div>
 
       {canDraw && (
@@ -61,6 +64,20 @@ export function GachaMachineCard({
           </ActionButton>
           {short > 0 && <p className="gacha-card-short">{t('gacha.short', { points: short })}</p>}
         </div>
+      )}
+
+      {canModify && (
+        // Lets a parent see the show and the odds before the child uses it
+        <ActionButton
+          type="button"
+          className="gacha-trial-button"
+          pending={pending === 'trial'}
+          disabled={pending !== null}
+          aria-label={t('gacha.tryFor', { name: gacha.name })}
+          onClick={onTry}
+        >
+          {t('gacha.try')}
+        </ActionButton>
       )}
 
       <details className="gacha-card-prizes">

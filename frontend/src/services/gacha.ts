@@ -44,6 +44,13 @@ export interface GachaDrawResult {
   balance: number
 }
 
+/** What a parent's trial draw won. Nothing was spent or recorded (ADR-0060 addendum). */
+export interface GachaTrial {
+  gacha_name: string
+  prize_name: string
+  is_miss: boolean
+}
+
 export interface GachaBoard {
   ledger_id: number
   display_name: string
@@ -101,6 +108,10 @@ export const gacha = {
     api.post<GachaDrawResult>(`${gachasPath(familyId, ledgerId)}/${gachaId}/draws`, {
       idempotency_key: idempotencyKey,
     }),
+
+  /** A parent's trial draw: same pick, nothing spent or recorded. */
+  trial: (familyId: number, ledgerId: number, gachaId: number) =>
+    api.post<GachaTrial>(`${gachasPath(familyId, ledgerId)}/${gachaId}/trials`),
 
   handOver: (familyId: number, ledgerId: number, drawId: number) =>
     api.put<GachaDraw>(handedOverPath(familyId, ledgerId, drawId)),

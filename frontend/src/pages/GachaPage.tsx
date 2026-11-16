@@ -29,17 +29,19 @@ import {
   type GachaBoard,
   type GachaDesign,
   type GachaDraw,
+  type GachaTrial,
 } from '../services/gacha'
 import { useFamily } from '../store/FamilyContext'
 
 interface Revealed {
-  draw: GachaDraw
+  draw: GachaTrial
   color: string
-  balance: number
+  /** null for a parent's trial draw */
+  balance: number | null
 }
 
 /** Colour of the capsule for a won prize: the prize's colour in the machine's list. */
-function colorOf(machine: Gacha, draw: GachaDraw): string {
+function colorOf(machine: Gacha, draw: GachaTrial): string {
   const index = machine.prizes.findIndex((prize) => prize.name === draw.prize_name)
   return draw.is_miss ? '#c3c8d8' : capsuleColor(Math.max(index, 0))
 }
@@ -109,6 +111,18 @@ export function GachaPage() {
       } catch (error) {
         notify('error', t(errorMessageKey(error)))
         await reload()
+      }
+    })
+  }
+
+  /** A parent's trial draw: the same show and pick, with nothing spent or recorded. */
+  const tryDraw = (machine: Gacha) => {
+    void machines.runForRow(machine.id, 'trial', async () => {
+      try {
+        const result = await gachaApi.trial(family, ledger, machine.id)
+        setRevealed({ draw: result, color: colorOf(machine, result), balance: null })
+      } catch (error) {
+        notify('error', t(errorMessageKey(error)))
       }
     })
   }
@@ -215,6 +229,9 @@ export function GachaPage() {
                 pending={machines.pendingActionOf(machine.id)}
                 onDraw={() => {
                   draw(machine)
+                }}
+                onTry={() => {
+                  tryDraw(machine)
                 }}
                 onEdit={() => {
                   setEditing(machine.id)

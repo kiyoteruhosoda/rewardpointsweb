@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from bounded_contexts.reward_points.application.dto.gacha_dto import (
     GachaDrawDTO,
     GachaDrawResultDTO,
+    GachaTrialDTO,
     draw_to_dto,
 )
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver, LedgerAccess
@@ -126,6 +127,27 @@ class DrawGachaUseCase:
         )
 
 
+class TryGachaUseCase:
+    """A parent's trial draw: pick a prize the same way, but spend and record nothing.
+
+    Lets a parent check the machine and its show before a child uses it. Only those who can
+    change the ledger may try (a child would get free draws otherwise).
+    """
+
+    def __init__(self, access: FamilyAccessResolver, gachas: IGachaRepository, roll: Roll = secrets.randbelow) -> None:
+        self._access = access
+        self._gachas = gachas
+        self._roll = roll
+
+    def execute(self, *, ledger_id: int, gacha_id: int, account_id: int) -> GachaTrialDTO:
+        found = self._access.modifiable_ledger(ledger_id=ledger_id, account_id=account_id)
+        gacha = self._gachas.find_in_ledger(ledger_id=found.ledger.id, gacha_id=gacha_id)
+        if gacha is None:
+            raise GachaNotFoundError
+        prize = gacha.design.pick(self._roll(gacha.design.total_weight))
+        return GachaTrialDTO(gacha_name=gacha.design.name, prize_name=prize.name, is_miss=prize.is_miss)
+
+
 @dataclass(frozen=True, kw_only=True)
 class HandOverCommand:
     ledger_id: int
@@ -169,4 +191,5 @@ __all__ = [
     "HandOverCommand",
     "HandOverGachaPrizeUseCase",
     "Roll",
+    "TryGachaUseCase",
 ]
