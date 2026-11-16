@@ -1034,6 +1034,9 @@ tr.reversed {
 
 .trend-frame svg {
   display: block;
+  /* Never wider than the frame, even before it has been measured (the drawing scales down) */
+  max-width: 100%;
+  height: auto;
   /* Don't block vertical scrolling while swiping horizontally to pick a record */
   touch-action: pan-y;
 }
