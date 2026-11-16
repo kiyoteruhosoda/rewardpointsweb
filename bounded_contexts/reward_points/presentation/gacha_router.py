@@ -5,7 +5,7 @@ Same two-stage authorization as the rest of the context: the scope is declared h
 :class:`~bounded_contexts.reward_points.application.family_access_resolver.FamilyAccessResolver`.
 
 - view: ``point:view`` (anyone who can view the ledger)
-- create, edit, delete, hand over: ``point:manage`` (parents)
+- create, edit, delete, hand over, trial draw: ``point:manage`` (parents)
 - draw: ``gacha:draw`` (parents, and the child on their own ledger)
 """
 
@@ -25,6 +25,7 @@ from bounded_contexts.reward_points.presentation.gacha_dependencies import (
     DrawGachaDep,
     HandOverGachaPrizeDep,
     SaveGachaDep,
+    TryGachaDep,
     ViewGachaBoardDep,
 )
 from bounded_contexts.reward_points.presentation.gacha_schemas import (
@@ -35,6 +36,7 @@ from bounded_contexts.reward_points.presentation.gacha_schemas import (
     GachaPrizeResponse,
     GachaResponse,
     GachaSaveRequest,
+    GachaTrialResponse,
 )
 from presentation.fastapi.dependencies.auth import require_permission
 from shared.application.authenticated_principal import AuthenticatedPrincipal
@@ -156,6 +158,14 @@ def draw_gacha(
         extra={"ledger_id": ledger_id, "gacha_id": gacha_id, "draw_id": result.draw.id, "miss": result.draw.is_miss},
     )
     return GachaDrawResultResponse(draw=_to_draw(result.draw), balance=result.balance)
+
+
+@router.post(_gacha_path("/{gacha_id}/trials"), response_model=GachaTrialResponse)
+def try_gacha(*, ledger_id: int, gacha_id: int, use_case: TryGachaDep, principal: PointManager) -> GachaTrialResponse:
+    """A parent's trial draw: a prize picked the same way, with nothing spent or recorded."""
+    dto = use_case.execute(ledger_id=ledger_id, gacha_id=gacha_id, account_id=principal.user_id)
+    logger.info("gacha_tried", extra={"ledger_id": ledger_id, "gacha_id": gacha_id, "miss": dto.is_miss})
+    return GachaTrialResponse(gacha_name=dto.gacha_name, prize_name=dto.prize_name, is_miss=dto.is_miss)
 
 
 @router.put(_draw_path("/{draw_id}/handed-over"), response_model=GachaDrawResponse)

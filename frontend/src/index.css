@@ -2242,6 +2242,28 @@ tr.reversed {
   background: var(--accent-strong);
 }
 
+/* A parent's trial draw: a quiet outlined button under the real one */
+.gacha-card .gacha-trial-button {
+  align-self: center;
+  padding: 0.35rem 0.9rem;
+  border-color: var(--accent);
+  border-radius: 999px;
+  background: none;
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.gacha-reveal-trial {
+  margin: 0;
+  padding: 0.1rem 0.7rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 .gacha-card-short {
   margin: 0;
   color: var(--text-muted);

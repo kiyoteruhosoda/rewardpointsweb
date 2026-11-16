@@ -47,6 +47,15 @@ class GachaDrawResultDTO:
 
 
 @dataclass(frozen=True, kw_only=True)
+class GachaTrialDTO:
+    """What a trial draw would have won. Nothing is written anywhere."""
+
+    gacha_name: str
+    prize_name: str
+    is_miss: bool
+
+
+@dataclass(frozen=True, kw_only=True)
 class GachaBoardDTO:
     """One child's machines and recent draws, with what the screen needs to decide what to show."""
 
@@ -92,6 +101,7 @@ __all__ = [
     "GachaDrawDTO",
     "GachaDrawResultDTO",
     "GachaPrizeDTO",
+    "GachaTrialDTO",
     "draw_to_dto",
     "gacha_to_dto",
 ]
