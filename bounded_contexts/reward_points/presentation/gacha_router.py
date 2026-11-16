@@ -6,7 +6,7 @@ Same two-stage authorization as the rest of the context: the scope is declared h
 
 - view: ``point:view`` (anyone who can view the ledger)
 - create, edit, delete, hand over, trial draw: ``point:manage`` (parents)
-- draw: ``gacha:draw`` (parents, and the child on their own ledger)
+- draw, bundle draw: ``gacha:draw`` (parents, and the child on their own ledger)
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from bounded_contexts.reward_points.application.use_cases.manage_gachas import S
 from bounded_contexts.reward_points.domain.entities.gacha import GachaDesign, GachaPrize
 from bounded_contexts.reward_points.presentation.gacha_dependencies import (
     DeleteGachaDep,
+    DrawGachaBundleDep,
     DrawGachaDep,
     HandOverGachaPrizeDep,
     SaveGachaDep,
@@ -30,6 +31,7 @@ from bounded_contexts.reward_points.presentation.gacha_dependencies import (
 )
 from bounded_contexts.reward_points.presentation.gacha_schemas import (
     GachaBoardResponse,
+    GachaBundleResultResponse,
     GachaDrawRequest,
     GachaDrawResponse,
     GachaDrawResultResponse,
@@ -78,6 +80,7 @@ def _to_draw(dto: GachaDrawDTO) -> GachaDrawResponse:
         price=dto.price,
         drawn_at=dto.drawn_at,
         handed_over_at=dto.handed_over_at,
+        is_bonus=dto.is_bonus,
     )
 
 
@@ -158,6 +161,29 @@ def draw_gacha(
         extra={"ledger_id": ledger_id, "gacha_id": gacha_id, "draw_id": result.draw.id, "miss": result.draw.is_miss},
     )
     return GachaDrawResultResponse(draw=_to_draw(result.draw), balance=result.balance)
+
+
+@router.post(
+    _gacha_path("/{gacha_id}/bundles"), status_code=status.HTTP_201_CREATED, response_model=GachaBundleResultResponse
+)
+def draw_gacha_bundle(
+    *, ledger_id: int, gacha_id: int, body: GachaDrawRequest, use_case: DrawGachaBundleDep, principal: GachaDrawer
+) -> GachaBundleResultResponse:
+    """Draw ten times and get one more free: eleven ordinary draws, ten paid (task #1047).
+
+    The balance must cover ten draws (409 ``insufficient_balance``). Resending the same
+    ``idempotency_key`` returns the bundle already drawn.
+    """
+    result = use_case.execute(
+        DrawGachaCommand(
+            ledger_id=ledger_id,
+            gacha_id=gacha_id,
+            account_id=principal.user_id,
+            idempotency_key=body.idempotency_key,
+        )
+    )
+    logger.info("gacha_bundle_drawn", extra={"ledger_id": ledger_id, "gacha_id": gacha_id, "draws": len(result.draws)})
+    return GachaBundleResultResponse(draws=[_to_draw(draw) for draw in result.draws], balance=result.balance)
 
 
 @router.post(_gacha_path("/{gacha_id}/trials"), response_model=GachaTrialResponse)

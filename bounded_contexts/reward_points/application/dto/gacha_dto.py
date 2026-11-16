@@ -36,6 +36,8 @@ class GachaDrawDTO:
     price: int
     drawn_at: datetime
     handed_over_at: datetime | None
+    #: The free extra draw of a bundle
+    is_bonus: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -43,6 +45,14 @@ class GachaDrawResultDTO:
     """A draw and the ledger balance right after it."""
 
     draw: GachaDrawDTO
+    balance: int
+
+
+@dataclass(frozen=True, kw_only=True)
+class GachaBundleResultDTO:
+    """The draws of a bundle in the order they were drawn, and the balance right after."""
+
+    draws: tuple[GachaDrawDTO, ...]
     balance: int
 
 
@@ -92,11 +102,13 @@ def draw_to_dto(draw: GachaDraw) -> GachaDrawDTO:
         price=draw.price,
         drawn_at=draw.drawn_at,
         handed_over_at=draw.handed_over_at,
+        is_bonus=draw.is_bonus,
     )
 
 
 __all__ = [
     "GachaBoardDTO",
+    "GachaBundleResultDTO",
     "GachaDTO",
     "GachaDrawDTO",
     "GachaDrawResultDTO",

@@ -117,6 +117,15 @@ class SqlGachaDrawRepository(IGachaDrawRepository):
         )
         return _to_draw(row) if row else None
 
+    def find_by_keys(self, *, ledger_id: int, idempotency_keys: list[str]) -> list[GachaDraw]:
+        rows = self._session.scalars(
+            select(GachaDrawModel)
+            .where(GachaDrawModel.ledger_id == ledger_id, GachaDrawModel.idempotency_key.in_(idempotency_keys))
+            .with_for_update()
+        ).all()
+        by_key = {row.idempotency_key: row for row in rows}
+        return [_to_draw(by_key[key]) for key in idempotency_keys if key in by_key]
+
     def add(self, new_draw: NewGachaDraw) -> GachaDraw:
         row = GachaDrawModel(
             ledger_id=new_draw.ledger_id,
@@ -129,6 +138,7 @@ class SqlGachaDrawRepository(IGachaDrawRepository):
             transaction_id=new_draw.transaction_id,
             drawn_by_membership_id=new_draw.drawn_by_membership_id,
             drawn_at=new_draw.drawn_at,
+            is_bonus=new_draw.is_bonus,
         )
         self._session.add(row)
         self._session.flush()
@@ -169,6 +179,7 @@ def _to_draw(row: GachaDrawModel) -> GachaDraw:
         price=row.price,
         drawn_at=row.drawn_at,
         handed_over_at=row.handed_over_at,
+        is_bonus=row.is_bonus,
     )
 
 

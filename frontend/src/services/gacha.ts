@@ -36,7 +36,20 @@ export interface GachaDraw {
   drawn_at: string
   /** When a parent handed the prize over. null if not yet (always null for a miss). */
   handed_over_at: string | null
+  /** The free extra draw of a bundle (10 paid + 1 free). */
+  is_bonus: boolean
 }
+
+/** Eleven draws in the order drawn (the last one free), and the balance right after. */
+export interface GachaBundleResult {
+  draws: GachaDraw[]
+  balance: number
+}
+
+/** A bundle pays for this many draws... (same as the server's BUNDLE_PAID_DRAWS) */
+export const BUNDLE_PAID_DRAWS = 10
+/** ...and gives this many more free. */
+export const BUNDLE_BONUS_DRAWS = 1
 
 export interface GachaDrawResult {
   draw: GachaDraw
@@ -106,6 +119,12 @@ export const gacha = {
   /** Draw once. Resending the same key returns the draw already made. */
   draw: (familyId: number, ledgerId: number, gachaId: number, idempotencyKey: string) =>
     api.post<GachaDrawResult>(`${gachasPath(familyId, ledgerId)}/${gachaId}/draws`, {
+      idempotency_key: idempotencyKey,
+    }),
+
+  /** Draw ten times and get one more free: eleven ordinary draws, ten paid (task #1047). */
+  bundle: (familyId: number, ledgerId: number, gachaId: number, idempotencyKey: string) =>
+    api.post<GachaBundleResult>(`${gachasPath(familyId, ledgerId)}/${gachaId}/bundles`, {
       idempotency_key: idempotencyKey,
     }),
 

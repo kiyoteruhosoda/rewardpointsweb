@@ -35,7 +35,12 @@ export function GachaHistory({ draws, canModify, pendingOf, onToggleHandOver }: 
             {draws.map((draw) => (
               <li key={draw.id} className={draw.is_miss ? 'is-miss' : undefined}>
                 <div className="gacha-history-what">
-                  <span className="gacha-history-prize">{draw.prize_name}</span>
+                  <span className="gacha-history-prize">
+                    {draw.prize_name}
+                    {draw.is_bonus && (
+                      <span className="gacha-bundle-bonus">{t('gacha.bonus')}</span>
+                    )}
+                  </span>
                   <span className="gacha-history-meta">
                     {draw.gacha_name} · {parseUtc(draw.drawn_at).toLocaleString(locale)}
                   </span>
