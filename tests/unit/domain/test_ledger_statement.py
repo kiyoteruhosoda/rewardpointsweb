@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from dataclasses import replace
+from datetime import datetime, timedelta
 
 from bounded_contexts.reward_points.domain.entities.point_transaction import PointTransaction
 from bounded_contexts.reward_points.domain.services.ledger_statement import LedgerStatement
@@ -60,13 +61,31 @@ def test_order_is_left_to_the_repository() -> None:
     assert [t.id for t in LedgerStatement(rows).transactions] == [2, 1]
 
 
-# --- Points ever earned (the pet; ADR-0061) -------------------------------------------
+# --- Points earned since the egg was handed over (the pet; ADR-0061) -----------------
+
+_EGG_DAY = datetime(2026, 11, 16, 0, 0, 0)
+
+
+def _at(transaction: PointTransaction, moment: datetime) -> PointTransaction:
+    return replace(transaction, occurred_at=moment)
 
 
 def test_spending_never_lowers_what_was_earned() -> None:
     statement = LedgerStatement([_transaction(id=1, amount=100), _transaction(id=2, amount=-80)])
 
-    assert statement.earned_points == 100
+    assert statement.earned_points_since(_MOMENT) == 100
+
+
+def test_points_from_before_the_egg_was_handed_over_do_not_count() -> None:
+    statement = LedgerStatement(
+        [
+            _at(_transaction(id=1, amount=10_000), _EGG_DAY - timedelta(days=1)),
+            _at(_transaction(id=2, amount=40), _EGG_DAY),
+            _at(_transaction(id=3, amount=60), _EGG_DAY + timedelta(hours=3)),
+        ]
+    )
+
+    assert statement.earned_points_since(_EGG_DAY) == 100
 
 
 def test_a_reversed_addition_was_never_earned() -> None:
@@ -78,7 +97,7 @@ def test_a_reversed_addition_was_never_earned() -> None:
         ]
     )
 
-    assert statement.earned_points == 100
+    assert statement.earned_points_since(_MOMENT) == 100
 
 
 def test_reversing_a_spending_earns_nothing_new() -> None:
@@ -90,7 +109,7 @@ def test_reversing_a_spending_earns_nothing_new() -> None:
         ]
     )
 
-    assert statement.earned_points == 100
+    assert statement.earned_points_since(_MOMENT) == 100
 
 
 def test_a_corrected_addition_counts_at_its_corrected_amount() -> None:
@@ -102,4 +121,18 @@ def test_a_corrected_addition_counts_at_its_corrected_amount() -> None:
         ]
     )
 
-    assert statement.earned_points == 10
+    assert statement.earned_points_since(_MOMENT) == 10
+
+
+def test_correcting_a_record_from_before_the_egg_does_not_make_it_count() -> None:
+    before = _EGG_DAY - timedelta(days=3)
+    statement = LedgerStatement(
+        [
+            _at(_transaction(id=1, amount=100), before),
+            _at(_transaction(id=2, amount=-100, reversal_of_id=1), _EGG_DAY + timedelta(hours=1)),
+            # The restated row keeps the original's occurrence time (ADR-0022)
+            _at(_transaction(id=3, amount=10, corrects_id=1), before),
+        ]
+    )
+
+    assert statement.earned_points_since(_EGG_DAY) == 0

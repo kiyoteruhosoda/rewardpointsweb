@@ -1,7 +1,8 @@
 """The pet on a child's ledger (ADR-0061).
 
-It comes with the ledger, starts as an egg, and grows with the points ever added: spending
-never shrinks it, a reversed addition does. The parents or the child choose its species.
+It comes with the ledger and starts as an egg. Choosing its species hands the egg over; from
+then on it grows with the points added: spending never shrinks it, a reversed addition does,
+and points from before the egg was handed over do not count.
 """
 
 from __future__ import annotations
@@ -80,9 +81,26 @@ def test_a_new_ledger_has_an_egg_with_no_species(client: TestClient, home: Home)
     assert pet["can_choose"] is True
 
 
+def _adopt(client: TestClient, home: Home, species: str = "cat") -> None:
+    response = _choose(client, home.ledger, headers=home.parent.headers, species=species)
+    assert response.status_code == 200, response.text
+
+
+def test_points_from_before_the_egg_was_handed_over_do_not_count(client: TestClient, home: Home) -> None:
+    home.ledger.record(client, home.parent.headers, amount=STAGE_THRESHOLDS[-1], reason="これまで", key="k0")
+
+    before = _pet(client, home.ledger, home.parent.headers)
+    _adopt(client, home)
+    adopted = _pet(client, home.ledger, home.parent.headers)
+
+    assert (before["species"], before["stage"], before["earned"]) == (None, 0, 0)
+    assert (adopted["species"], adopted["stage"], adopted["earned"]) == ("cat", 0, 0)
+
+
 def test_the_pet_grows_with_points_added_and_does_not_shrink_when_they_are_spent(
     client: TestClient, home: Home
 ) -> None:
+    _adopt(client, home)
     home.ledger.record(client, home.parent.headers, amount=STAGE_THRESHOLDS[2], reason="おてつだい", key="k1")
     grown = _pet(client, home.ledger, home.parent.headers)
 
@@ -95,6 +113,7 @@ def test_the_pet_grows_with_points_added_and_does_not_shrink_when_they_are_spent
 
 
 def test_a_reversed_addition_is_taken_out_of_the_growth(client: TestClient, home: Home) -> None:
+    _adopt(client, home)
     added = home.ledger.record(client, home.parent.headers, amount=STAGE_THRESHOLDS[1], reason="まちがい", key="k1")
 
     reversed_ = client.post(
@@ -109,6 +128,7 @@ def test_a_reversed_addition_is_taken_out_of_the_growth(client: TestClient, home
 
 
 def test_a_corrected_addition_counts_at_its_new_amount(client: TestClient, home: Home) -> None:
+    _adopt(client, home)
     added = home.ledger.record(client, home.parent.headers, amount=STAGE_THRESHOLDS[2], reason="おてつだい", key="k1")
 
     corrected = client.post(
@@ -122,16 +142,15 @@ def test_a_corrected_addition_counts_at_its_new_amount(client: TestClient, home:
     assert (pet["stage"], pet["earned"]) == (1, STAGE_THRESHOLDS[1])
 
 
-def test_a_guardian_chooses_the_species_and_the_growth_stays(client: TestClient, home: Home) -> None:
+def test_changing_the_species_keeps_the_growth(client: TestClient, home: Home) -> None:
+    _adopt(client, home, "rabbit")
     home.ledger.record(client, home.parent.headers, amount=STAGE_THRESHOLDS[1], reason="おてつだい", key="k1")
 
-    chosen = _choose(client, home.ledger, headers=home.parent.headers, species="rabbit")
     changed = _choose(client, home.ledger, headers=home.parent.headers, species="dragon")
 
-    assert chosen.status_code == 200, chosen.text
-    assert changed.json()["species"] == "dragon"
+    assert changed.status_code == 200, changed.text
     pet = _pet(client, home.ledger, home.parent.headers)
-    assert (pet["species"], pet["stage"]) == ("dragon", 1)
+    assert (pet["species"], pet["stage"], pet["earned"]) == ("dragon", 1, STAGE_THRESHOLDS[1])
 
 
 def test_an_unknown_species_is_refused(client: TestClient, home: Home) -> None:

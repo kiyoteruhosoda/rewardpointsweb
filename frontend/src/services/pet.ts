@@ -1,8 +1,9 @@
 /**
  * The pet on a child's ledger (ADR-0061).
  *
- * It comes with the ledger response (`Ledger.pet`), starts as an egg and grows with the points
- * ever added. Spending never shrinks it. The parents or the child choose its species.
+ * It comes with the ledger response (`Ledger.pet`) and starts as an egg. Choosing its species
+ * hands the egg over; from then on it grows with the points added. Spending never shrinks it.
+ * The parents or the child choose its species.
  *
  * Each screen remembers the last stage it showed per ledger. When the stage has gone up since,
  * that screen celebrates once — the child's phone and a display device each get their own
@@ -20,7 +21,7 @@ export interface Pet {
   /** 0 is the egg. */
   stage: number
   stage_count: number
-  /** Points ever added (spending does not lower it). */
+  /** Points added since the egg was handed over (spending does not lower it). 0 before. */
   earned: number
   current_threshold: number
   /** null at the final stage. */

@@ -283,7 +283,8 @@ class GachaDrawModel(Base):
 class PetModel(Base):
     """The species chosen for the pet on a child ledger (ADR-0061).
 
-    Growth is not stored (it comes from the ledger). No row means "an egg, not chosen yet".
+    Growth is not stored (it comes from the ledger, counting from ``created_at`` — the day the
+    egg was handed over). No row means "an egg, not chosen yet".
     """
 
     __tablename__ = "pets"

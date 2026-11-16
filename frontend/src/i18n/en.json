@@ -592,7 +592,7 @@
   "pet.stage.3": "Kid",
   "pet.stage.4": "Grown-up",
   "pet.stage.5": "Star",
-  "pet.earned": "Points earned so far: {points} pt",
+  "pet.earned": "Points earned since the egg arrived: {points} pt",
   "pet.toNext": "{points} pt to the next stage",
   "pet.final": "Fully grown!",
   "pet.progressLabel": "Growth to the next stage",
@@ -600,10 +600,10 @@
   "pet.chooseHint": "Spending points never makes it smaller.",
   "pet.change": "Change the kind",
   "pet.notChosen": "The kind isn't chosen yet.",
-  "pet.eggWaiting": "Hatching soon! Choose what it will be.",
   "pet.celebrateTitle": "It grew!",
   "pet.celebrateStage": "Now: {stage}",
   "pet.celebrateClose": "Yay!",
   "pet.chosen": "Chose {species}.",
-  "display.petGrew": "{name}'s pet grew!"
+  "display.petGrew": "{name}'s pet grew!",
+  "pet.chooseStarts": "It grows with the points earned from the day you choose."
 }

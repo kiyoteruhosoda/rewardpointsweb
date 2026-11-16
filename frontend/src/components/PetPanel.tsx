@@ -106,9 +106,8 @@ export function PetPanel({ familyId, ledgerId, pet, onChanged }: Props) {
 
       {!chosen && pet.can_choose && (
         <div className="pet-panel-choose">
-          <p className="pet-panel-choose-title">
-            {pet.stage > 0 ? t('pet.eggWaiting') : t('pet.choose')}
-          </p>
+          <p className="pet-panel-choose-title">{t('pet.choose')}</p>
+          <p className="pet-panel-hint">{t('pet.chooseStarts')}</p>
           {picker}
         </div>
       )}

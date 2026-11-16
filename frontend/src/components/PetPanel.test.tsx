@@ -43,7 +43,7 @@ describe('PetPanel', () => {
     renderPanel(pet({ stage: 1, earned: 40, next_threshold: 100 }))
 
     expect(screen.getByText('Just hatched')).toBeInTheDocument()
-    expect(screen.getByText('Points earned so far: 40 pt')).toBeInTheDocument()
+    expect(screen.getByText('Points earned since the egg arrived: 40 pt')).toBeInTheDocument()
     expect(screen.getByText('60 pt to the next stage')).toBeInTheDocument()
     expect(screen.getByText('Spending points never makes it smaller.')).toBeInTheDocument()
   })
@@ -70,6 +70,9 @@ describe('PetPanel', () => {
     )
 
     expect(screen.getByText('Which one will it be?')).toBeInTheDocument()
+    expect(
+      screen.getByText('It grows with the points earned from the day you choose.'),
+    ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Bunny' }))
 
     await waitFor(() => {
@@ -78,14 +81,24 @@ describe('PetPanel', () => {
     expect(onChanged).toHaveBeenCalledWith(chosen)
   })
 
-  it('a grown egg without a kind is still called an egg', () => {
-    renderPanel(
-      pet({ species: null, stage: 2, earned: 120, current_threshold: 100, next_threshold: 300 }),
-    )
-
+  it('an egg without a kind is called an egg and does not celebrate when chosen', async () => {
+    const egg = pet({
+      species: null,
+      stage: 0,
+      earned: 0,
+      current_threshold: 0,
+      next_threshold: 100,
+    })
+    choose.mockResolvedValue({ ...egg, species: 'dragon' })
+    renderWithProviders(<WithState initial={egg} />)
     expect(screen.getByText('Egg')).toBeInTheDocument()
-    expect(screen.getByText('Hatching soon! Choose what it will be.')).toBeInTheDocument()
-    expect(screen.getByText('180 pt to the next stage')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dragon' }))
+
+    await waitFor(() => {
+      expect(choose).toHaveBeenCalledWith('dragon')
+    })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('someone who cannot choose sees no picker', () => {
@@ -106,23 +119,6 @@ describe('PetPanel', () => {
 
     renderPanel(pet({ stage: 2 }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  it('choosing the kind of a grown egg shows it hatch', async () => {
-    const egg = pet({
-      species: null,
-      stage: 2,
-      earned: 120,
-      current_threshold: 100,
-      next_threshold: 300,
-    })
-    choose.mockResolvedValue({ ...egg, species: 'dragon' })
-    renderWithProviders(<WithState initial={egg} />)
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Dragon' }))
-
-    expect(await screen.findByRole('dialog', { name: 'It grew!' })).toHaveTextContent('Now: Baby')
   })
 
   it('the first time a screen sees the pet it only remembers the stage', () => {
