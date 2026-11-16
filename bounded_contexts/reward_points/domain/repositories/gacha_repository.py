@@ -44,9 +44,11 @@ class NewGachaDraw:
     price: int
     #: The key the client sent (not the derived ledger key)
     idempotency_key: str
-    transaction_id: int
+    #: The ledger row that paid for it. ``None`` for a bundle's free draw
+    transaction_id: int | None
     drawn_by_membership_id: int
     drawn_at: datetime
+    is_bonus: bool = False
 
 
 class IGachaDrawRepository(ABC):
@@ -61,6 +63,10 @@ class IGachaDrawRepository(ABC):
     @abstractmethod
     def find_by_key(self, *, ledger_id: int, idempotency_key: str) -> GachaDraw | None:
         """The draw already made with this client key (a resend), read past any snapshot."""
+
+    @abstractmethod
+    def find_by_keys(self, *, ledger_id: int, idempotency_keys: list[str]) -> list[GachaDraw]:
+        """The draws made with these keys, in the order of *idempotency_keys* (missing ones left out)."""
 
     @abstractmethod
     def add(self, new_draw: NewGachaDraw) -> GachaDraw: ...

@@ -98,17 +98,44 @@ class DrawGachaUseCase:
         return GachaDrawResultDTO(draw=draw_to_dto(draw), balance=balance - gacha.design.price)
 
     def _draw(self, found: LedgerAccess, gacha: Gacha, client_key: str) -> GachaDraw:
+        return GachaDrawWriter(transactions=self._transactions, draws=self._draws, roll=self._roll).draw(
+            found, gacha, OneDraw(draw_key=client_key, ledger_key=draw_ledger_key(client_key))
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
+class OneDraw:
+    """Keys of one draw: its own key, and its ledger row's (``None`` for a free draw)."""
+
+    draw_key: str
+    ledger_key: str | None
+    is_bonus: bool = False
+
+
+class GachaDrawWriter:
+    """Picks one prize and writes it: the ledger row that pays for it (unless free) and the draw."""
+
+    def __init__(self, *, transactions: IPointTransactionRepository, draws: IGachaDrawRepository, roll: Roll) -> None:
+        self._transactions = transactions
+        self._draws = draws
+        self._roll = roll
+
+    def draw(self, found: LedgerAccess, gacha: Gacha, keys: OneDraw) -> GachaDraw:
         design = gacha.design
         prize = design.pick(self._roll(design.total_weight))
         now = utcnow()
-        spent = self._transactions.append(
-            NewTransaction(
-                ledger_id=found.ledger.id,
-                amount=-design.price,
-                reason=ledger_reason(gacha_name=design.name, prize_name=prize.name),
-                granted_by_membership_id=found.membership.id,
-                occurred_at=now,
-                idempotency_key=draw_ledger_key(client_key),
+        spent = (
+            None
+            if keys.ledger_key is None
+            else self._transactions.append(
+                NewTransaction(
+                    ledger_id=found.ledger.id,
+                    amount=-design.price,
+                    reason=ledger_reason(gacha_name=design.name, prize_name=prize.name),
+                    granted_by_membership_id=found.membership.id,
+                    occurred_at=now,
+                    idempotency_key=keys.ledger_key,
+                )
             )
         )
         return self._draws.add(
@@ -119,10 +146,11 @@ class DrawGachaUseCase:
                 prize_name=prize.name,
                 is_miss=prize.is_miss,
                 price=design.price,
-                idempotency_key=client_key,
-                transaction_id=spent.id,
+                idempotency_key=keys.draw_key,
+                transaction_id=None if spent is None else spent.id,
                 drawn_by_membership_id=found.membership.id,
                 drawn_at=now,
+                is_bonus=keys.is_bonus,
             )
         )
 
@@ -188,8 +216,10 @@ class HandOverGachaPrizeUseCase:
 __all__ = [
     "DrawGachaCommand",
     "DrawGachaUseCase",
+    "GachaDrawWriter",
     "HandOverCommand",
     "HandOverGachaPrizeUseCase",
+    "OneDraw",
     "Roll",
     "TryGachaUseCase",
 ]

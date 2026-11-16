@@ -6,11 +6,11 @@
  * are still needed (the server refuses such a draw too). Parents also get edit and delete.
  */
 import { useI18n } from '../i18n'
-import { chanceOf, type Gacha } from '../services/gacha'
+import { BUNDLE_BONUS_DRAWS, BUNDLE_PAID_DRAWS, chanceOf, type Gacha } from '../services/gacha'
 import { ActionButton } from './ActionButton'
 import { GachaMachineArt, capsuleColor } from './GachaArt'
 
-export type GachaAction = 'draw' | 'trial' | 'remove'
+export type GachaAction = 'draw' | 'bundle' | 'trial' | 'remove'
 
 interface Props {
   gacha: Gacha
@@ -21,6 +21,8 @@ interface Props {
   onDraw: () => void
   /** A parent's trial draw (nothing spent or recorded). */
   onTry: () => void
+  /** Ten draws plus one free (task #1047). */
+  onDrawBundle: () => void
   onEdit: () => void
   onRemove: () => void
 }
@@ -33,11 +35,14 @@ export function GachaMachineCard({
   pending,
   onDraw,
   onTry,
+  onDrawBundle,
   onEdit,
   onRemove,
 }: Props) {
   const { t } = useI18n()
   const short = gacha.price - balance
+  const bundleCost = gacha.price * BUNDLE_PAID_DRAWS
+  const turning = pending === 'draw' || pending === 'bundle' || pending === 'trial'
 
   return (
     <article className="card gacha-card" aria-label={gacha.name}>
@@ -47,9 +52,9 @@ export function GachaMachineCard({
       </header>
 
       <div className="gacha-card-machine">
-        <GachaMachineArt spinning={pending === 'draw' || pending === 'trial'} />
+        <GachaMachineArt spinning={turning} />
       </div>
-      {(pending === 'draw' || pending === 'trial') && (
+      {turning && (
         <p className="gacha-card-turning" role="status">
           {t('gacha.turning')}
         </p>
@@ -68,6 +73,25 @@ export function GachaMachineCard({
             {t('gacha.draw', { points: gacha.price })}
           </ActionButton>
           {short > 0 && <p className="gacha-card-short">{t('gacha.short', { points: short })}</p>}
+          <ActionButton
+            type="button"
+            className="gacha-bundle-button"
+            pending={pending === 'bundle'}
+            disabled={bundleCost > balance || pending !== null}
+            aria-label={t('gacha.bundleFor', {
+              name: gacha.name,
+              points: bundleCost,
+              paid: BUNDLE_PAID_DRAWS,
+              total: BUNDLE_PAID_DRAWS + BUNDLE_BONUS_DRAWS,
+            })}
+            onClick={onDrawBundle}
+          >
+            {t('gacha.bundle', {
+              paid: BUNDLE_PAID_DRAWS,
+              bonus: BUNDLE_BONUS_DRAWS,
+              points: bundleCost,
+            })}
+          </ActionButton>
         </div>
       )}
 

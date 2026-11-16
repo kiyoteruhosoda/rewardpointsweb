@@ -6,7 +6,7 @@ the ledger and wins one prize picked on the server. The parent marks real prizes
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,10 +15,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from bounded_contexts.reward_points.application.use_cases.draw_gacha import DrawGachaUseCase, TryGachaUseCase
+from bounded_contexts.reward_points.application.use_cases.draw_gacha_bundle import DrawGachaBundleUseCase
 from bounded_contexts.reward_points.presentation.dependencies import AccessDep, TransactionRepoDep
 from bounded_contexts.reward_points.presentation.gacha_dependencies import (
     GachaDrawRepoDep,
     GachaRepoDep,
+    get_draw_gacha_bundle_use_case,
     get_draw_gacha_use_case,
     get_try_gacha_use_case,
 )
@@ -86,11 +88,22 @@ def rolls(app: FastAPI) -> Iterator[list[int]]:
     def build_trial(access: AccessDep, gachas: GachaRepoDep) -> TryGachaUseCase:
         return TryGachaUseCase(access, gachas, roll=lambda _bound: queue.pop(0))
 
-    app.dependency_overrides[get_draw_gacha_use_case] = build
-    app.dependency_overrides[get_try_gacha_use_case] = build_trial
+    def build_bundle(
+        *, access: AccessDep, gachas: GachaRepoDep, draws: GachaDrawRepoDep, transactions: TransactionRepoDep
+    ) -> DrawGachaBundleUseCase:
+        return DrawGachaBundleUseCase(
+            access=access, gachas=gachas, draws=draws, transactions=transactions, roll=lambda _bound: queue.pop(0)
+        )
+
+    overrides: dict[Callable[..., object], Callable[..., object]] = {
+        get_draw_gacha_use_case: build,
+        get_try_gacha_use_case: build_trial,
+        get_draw_gacha_bundle_use_case: build_bundle,
+    }
+    app.dependency_overrides.update(overrides)
     yield queue
-    app.dependency_overrides.pop(get_draw_gacha_use_case, None)
-    app.dependency_overrides.pop(get_try_gacha_use_case, None)
+    for dependency in overrides:
+        app.dependency_overrides.pop(dependency, None)
 
 
 def _gachas_path(ledger: Ledger) -> str:
@@ -463,3 +476,71 @@ def test_a_child_cannot_trial_draw(client: TestClient, home: Home) -> None:
     response = _try(client, home, gacha, headers=child)
 
     assert response.status_code == 403, response.text
+
+
+# --- Ten draws plus one free (task #1047) ---------------------------------------------------
+
+
+def _bundle_response(client: TestClient, home: Home, gacha: dict[str, Any], *, key: str) -> Any:
+    return client.post(
+        f"{_gachas_path(home.ledger)}/{gacha['id']}/bundles", headers=home.headers, json={"idempotency_key": key}
+    )
+
+
+def test_a_bundle_pays_for_ten_draws_and_gives_eleven(client: TestClient, home: Home, rolls: list[int]) -> None:
+    home.ledger.record(client, home.headers, amount=300, reason="おてつだい", key="k1")
+    gacha = _create(client, home)
+    rolls.extend([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2])
+
+    response = _bundle_response(client, home, gacha, key="press-1")
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["balance"] == 0
+    assert [d["prize_name"] for d in body["draws"]] == [
+        "チョコ",
+        "グミ",
+        "グミ",
+        "はずれ",
+        "チョコ",
+        "グミ",
+        "グミ",
+        "はずれ",
+        "チョコ",
+        "グミ",
+        "グミ",
+    ]
+    assert [d["is_bonus"] for d in body["draws"]] == [False] * 10 + [True]
+    ledger = client.get(home.ledger.path(), headers=home.headers).json()
+    spent = [t["amount"] for t in ledger["transactions"] if t["amount"] < 0]
+    assert spent == [-30] * 10
+    assert len(_board(client, home)["draws"]) == 11
+
+
+def test_a_bundle_the_balance_cannot_cover_is_refused_and_writes_nothing(
+    client: TestClient, home: Home, rolls: list[int]
+) -> None:
+    home.ledger.record(client, home.headers, amount=299, reason="おてつだい", key="k1")
+    gacha = _create(client, home)
+    rolls.extend([0] * 11)
+
+    response = _bundle_response(client, home, gacha, key="press-1")
+
+    assert response.status_code == 409, response.text
+    assert _error(response) == "insufficient_balance"
+    assert _balance(client, home) == 299
+    assert _board(client, home)["draws"] == []
+
+
+def test_resending_a_bundle_does_not_draw_it_twice(client: TestClient, home: Home, rolls: list[int]) -> None:
+    home.ledger.record(client, home.headers, amount=1000, reason="おてつだい", key="k1")
+    gacha = _create(client, home)
+    rolls.extend([0] * 22)
+
+    first = _bundle_response(client, home, gacha, key="press-1")
+    again = _bundle_response(client, home, gacha, key="press-1")
+
+    assert again.status_code == 201, again.text
+    assert again.json()["draws"] == first.json()["draws"]
+    assert _balance(client, home) == 700
+    assert len(_board(client, home)["draws"]) == 11

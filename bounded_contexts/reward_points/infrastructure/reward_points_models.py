@@ -275,6 +275,8 @@ class GachaDrawModel(Base):
     )
     drawn_at = mapped_column(sa.DateTime(), nullable=False)
     handed_over_at = mapped_column(sa.DateTime(), nullable=True)
+    # The free extra draw of a bundle (task #1047). ``price`` still shows the machine's price
+    is_bonus: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False, default=False, server_default=sa.false())
     handed_over_by_membership_id: Mapped[int | None] = mapped_column(
         BigIntPk, sa.ForeignKey("family_memberships.id", ondelete="SET NULL"), nullable=True
     )

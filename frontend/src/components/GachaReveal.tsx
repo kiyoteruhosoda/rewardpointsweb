@@ -19,12 +19,16 @@ interface Props {
   draw: GachaTrial
   /** Colour of the capsule (the prize's colour in the list). */
   color: string
-  /** Balance right after a real draw. null for a trial draw (nothing was spent). */
+  /** Balance right after a real draw. null for a trial draw or a draw within a bundle. */
   balance: number | null
+  /** A parent's trial draw (nothing spent or recorded). */
+  trial?: boolean
+  /** Where this draw is within a bundle (1-based). The button then moves on to the next one. */
+  position?: { index: number; total: number; bonus: boolean }
   onClose: () => void
 }
 
-export function GachaReveal({ draw, color, balance, onClose }: Props) {
+export function GachaReveal({ draw, color, balance, trial = false, position, onClose }: Props) {
   const { t } = useI18n()
   const closeRef = useRef<HTMLButtonElement>(null)
 
@@ -55,17 +59,29 @@ export function GachaReveal({ draw, color, balance, onClose }: Props) {
           </div>
           <p className="gacha-reveal-prize">{draw.prize_name}</p>
         </div>
-        {balance === null && <p className="gacha-reveal-trial">{t('gacha.trialBadge')}</p>}
+        {trial && <p className="gacha-reveal-trial">{t('gacha.trialBadge')}</p>}
+        {position !== undefined && (
+          <p className="gacha-reveal-trial">
+            {t('gacha.bundlePosition', { index: position.index, total: position.total })}
+            {position.bonus && ` · ${t('gacha.bonus')}`}
+          </p>
+        )}
         <h2 id="gacha-reveal-title" className="gacha-reveal-title">
           {draw.is_miss ? t('gacha.resultMiss') : t('gacha.resultTitle')}
         </h2>
         <p className="gacha-reveal-meta">
           {t('gacha.resultFrom', { name: draw.gacha_name })}
-          {' · '}
-          {balance === null ? t('gacha.trialNote') : t('gacha.resultBalance', { points: balance })}
+          {trial && ` · ${t('gacha.trialNote')}`}
+          {balance !== null && ` · ${t('gacha.resultBalance', { points: balance })}`}
         </p>
         <button ref={closeRef} type="button" className="gacha-reveal-close" onClick={onClose}>
-          {draw.is_miss ? t('gacha.resultCloseMiss') : t('gacha.resultClose')}
+          {position !== undefined
+            ? position.index < position.total
+              ? t('gacha.bundleNext')
+              : t('gacha.bundleSummaryOpen')
+            : draw.is_miss
+              ? t('gacha.resultCloseMiss')
+              : t('gacha.resultClose')}
         </button>
       </div>
     </div>

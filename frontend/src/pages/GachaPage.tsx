@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { capsuleColor } from '../components/GachaArt'
+import { GachaBundleSummary } from '../components/GachaBundleSummary'
 import { GachaForm } from '../components/GachaForm'
 import { GachaHistory } from '../components/GachaHistory'
 import { GachaMachineCard, type GachaAction } from '../components/GachaMachineCard'
@@ -37,8 +38,17 @@ import { useFamily } from '../store/FamilyContext'
 interface Revealed {
   draw: GachaTrial
   color: string
-  /** null for a parent's trial draw */
+  /** null for a parent's trial draw and for draws within a bundle */
   balance: number | null
+  trial?: boolean
+  /** Where the draw is within a bundle */
+  position?: { index: number; total: number; bonus: boolean }
+}
+
+interface BundleSummary {
+  draws: GachaDraw[]
+  colors: string[]
+  balance: number
 }
 
 /** Colour of the capsule for a won prize: the prize's colour in the machine's list. */
@@ -61,8 +71,19 @@ export function GachaPage() {
   // One key per press, per machine. Kept until the press succeeds (ADR-0010)
   const pressKeys = useRef<Map<number, string>>(new Map())
 
+  const [summary, setSummary] = useState<BundleSummary | null>(null)
+  // Resolves when the open result is closed (a bundle then moves on to its next draw)
+  const nextRef = useRef<(() => void) | null>(null)
+  const bundleKeys = useRef<Map<number, string>>(new Map())
+  const closeSummary = useCallback(() => {
+    setSummary(null)
+  }, [])
+
   const closeReveal = useCallback(() => {
     setRevealed(null)
+    const next = nextRef.current
+    nextRef.current = null
+    next?.()
   }, [])
 
   const family = Number(familyId)
@@ -119,6 +140,54 @@ export function GachaPage() {
     })
   }
 
+  /** Shows one result and resolves once it is closed. */
+  const showAndWait = (value: Revealed) =>
+    new Promise<void>((resolve) => {
+      nextRef.current = resolve
+      setRevealed(value)
+    })
+
+  /**
+   * Ten draws plus one free (task #1047): the server draws all eleven at once, then each is
+   * shown with the full turn of the handle, one after another, and a summary at the end.
+   */
+  const drawBundle = (machine: Gacha) => {
+    void machines.runForRow(machine.id, 'bundle', async () => {
+      const key = bundleKeys.current.get(machine.id) ?? newIdempotencyKey()
+      bundleKeys.current.set(machine.id, key)
+      let startedAt = Date.now()
+      try {
+        const result = await gachaApi.bundle(family, ledger, machine.id, key)
+        bundleKeys.current.delete(machine.id)
+        const colors = result.draws.map((won) => colorOf(machine, won))
+        for (const [index, won] of result.draws.entries()) {
+          await waitForTurn(startedAt)
+          await showAndWait({
+            draw: won,
+            color: colors[index] ?? colorOf(machine, won),
+            balance: null,
+            position: { index: index + 1, total: result.draws.length, bonus: won.is_bonus },
+          })
+          startedAt = Date.now()
+        }
+        setBoard((current) =>
+          current === null
+            ? current
+            : {
+                ...current,
+                balance: result.balance,
+                draws: [...[...result.draws].reverse(), ...current.draws],
+              },
+        )
+        setSummary({ draws: result.draws, colors, balance: result.balance })
+        await reloadFamily()
+      } catch (error) {
+        notify('error', t(errorMessageKey(error)))
+        await reload()
+      }
+    })
+  }
+
   /** A parent's trial draw: the same show and pick, with nothing spent or recorded. */
   const tryDraw = (machine: Gacha) => {
     void machines.runForRow(machine.id, 'trial', async () => {
@@ -126,7 +195,7 @@ export function GachaPage() {
       try {
         const result = await gachaApi.trial(family, ledger, machine.id)
         await waitForTurn(startedAt)
-        setRevealed({ draw: result, color: colorOf(machine, result), balance: null })
+        setRevealed({ draw: result, color: colorOf(machine, result), balance: null, trial: true })
       } catch (error) {
         notify('error', t(errorMessageKey(error)))
       }
@@ -239,6 +308,9 @@ export function GachaPage() {
                 onTry={() => {
                   tryDraw(machine)
                 }}
+                onDrawBundle={() => {
+                  drawBundle(machine)
+                }}
                 onEdit={() => {
                   setEditing(machine.id)
                 }}
@@ -263,7 +335,17 @@ export function GachaPage() {
           draw={revealed.draw}
           color={revealed.color}
           balance={revealed.balance}
+          {...(revealed.trial === true ? { trial: true } : {})}
+          {...(revealed.position === undefined ? {} : { position: revealed.position })}
           onClose={closeReveal}
+        />
+      )}
+      {summary !== null && (
+        <GachaBundleSummary
+          draws={summary.draws}
+          colors={summary.colors}
+          balance={summary.balance}
+          onClose={closeSummary}
         />
       )}
     </div>

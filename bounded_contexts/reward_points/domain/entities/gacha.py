@@ -34,6 +34,11 @@ MAX_WEIGHT = 1000
 #: Step of the idempotency key for the ledger row of a draw
 IDEMPOTENCY_STEP = "gacha"
 
+#: A bundle: pay for this many draws at once...
+BUNDLE_PAID_DRAWS = 10
+#: ...and get this many more for free (task #1047)
+BUNDLE_BONUS_DRAWS = 1
+
 
 def _check_name(value: str, *, what: str) -> None:
     if not value.strip():
@@ -114,6 +119,8 @@ class GachaDraw:
     drawn_at: datetime
     #: When a parent handed the real prize over. ``None`` if not yet (always ``None`` for a miss)
     handed_over_at: datetime | None = None
+    #: The free extra draw of a bundle (nothing was paid for it)
+    is_bonus: bool = False
 
     @property
     def is_handed_over(self) -> bool:
@@ -134,7 +141,22 @@ def draw_ledger_key(client_key: str) -> str:
     return IdempotencyKey(client_key).for_step(IDEMPOTENCY_STEP).value
 
 
+def bundle_draw_key(client_key: str, number: int) -> str:
+    """Key of draw *number* (1..) of the bundle sent with *client_key*, e.g. ``<key>#3``.
+
+    ``#`` never appears in client keys, so these never collide with a single draw's key.
+    """
+    return IdempotencyKey(client_key).for_step(str(number)).value
+
+
+def bundle_ledger_key(client_key: str, number: int) -> str:
+    """Idempotency key of the ledger row paying for draw *number* of a bundle (``<key>#g3``)."""
+    return IdempotencyKey(client_key).for_step(f"g{number}").value
+
+
 __all__ = [
+    "BUNDLE_BONUS_DRAWS",
+    "BUNDLE_PAID_DRAWS",
     "IDEMPOTENCY_STEP",
     "MAX_PRIZES",
     "MAX_WEIGHT",
@@ -143,6 +165,8 @@ __all__ = [
     "GachaDesign",
     "GachaDraw",
     "GachaPrize",
+    "bundle_draw_key",
+    "bundle_ledger_key",
     "draw_ledger_key",
     "ledger_reason",
 ]

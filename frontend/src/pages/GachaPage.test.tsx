@@ -6,7 +6,14 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as GachaModule from '../services/gacha'
-import type { Gacha, GachaBoard, GachaDraw, GachaDrawResult, GachaTrial } from '../services/gacha'
+import type {
+  Gacha,
+  GachaBoard,
+  GachaBundleResult,
+  GachaDraw,
+  GachaDrawResult,
+  GachaTrial,
+} from '../services/gacha'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { GachaPage } from './GachaPage'
 
@@ -14,6 +21,7 @@ const board = vi.fn<() => Promise<GachaBoard>>()
 const draw = vi.fn<(gachaId: number, key: string) => Promise<GachaDrawResult>>()
 const handOver = vi.fn<(drawId: number) => Promise<GachaDraw>>()
 const trial = vi.fn<(gachaId: number) => Promise<GachaTrial>>()
+const bundle = vi.fn<(gachaId: number, key: string) => Promise<GachaBundleResult>>()
 const create = vi.fn<() => Promise<Gacha>>()
 
 let keys = 0
@@ -39,6 +47,8 @@ vi.mock('../services/gacha', async (importOriginal) => {
       draw: (_family: number, _ledger: number, gachaId: number, key: string) => draw(gachaId, key),
       handOver: (_family: number, _ledger: number, drawId: number) => handOver(drawId),
       trial: (_family: number, _ledger: number, gachaId: number) => trial(gachaId),
+      bundle: (_family: number, _ledger: number, gachaId: number, key: string) =>
+        bundle(gachaId, key),
       takeBackHandOver: () => Promise.reject(new Error('not used')),
       create: () => create(),
       update: () => Promise.reject(new Error('not used')),
@@ -73,6 +83,7 @@ function won(overrides: Partial<GachaDraw> = {}): GachaDraw {
     price: 30,
     drawn_at: '2026-11-15T01:00:00Z',
     handed_over_at: null,
+    is_bonus: false,
     ...overrides,
   }
 }
@@ -262,5 +273,52 @@ describe('GachaPage', () => {
 
     expect(await screen.findByRole('dialog', { name: 'You got it!' })).toBeInTheDocument()
     expect(screen.queryByText('Rattle, rattle…')).not.toBeInTheDocument()
+  })
+
+  it('ten at once shows each of the eleven draws in turn, then all of them', async () => {
+    board.mockResolvedValue(boardOf({ balance: 400 }))
+    const draws = Array.from({ length: 11 }, (_, index) =>
+      won({
+        id: 200 + index,
+        prize_name: index === 10 ? 'えほん' : 'グミ',
+        is_bonus: index === 10,
+      }),
+    )
+    bundle.mockResolvedValue({ draws, balance: 100 })
+    renderPage()
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Draw おかしガチャ 10 times for 300 pt and get 11 prizes',
+      }),
+    )
+
+    for (let index = 1; index <= 10; index++) {
+      const dialog = await screen.findByRole('dialog', { name: 'You got it!' })
+      expect(within(dialog).getByText(`${index} / 11`)).toBeInTheDocument()
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Next' }))
+      await waitFor(() => {
+        expect(screen.queryByText(`${index} / 11`)).not.toBeInTheDocument()
+      })
+    }
+    const last = await screen.findByRole('dialog', { name: 'You got it!' })
+    expect(within(last).getByText('11 / 11 · Bonus')).toBeInTheDocument()
+    fireEvent.click(within(last).getByRole('button', { name: 'See all' }))
+
+    const summary = await screen.findByRole('dialog', { name: 'Results: 11 prizes!' })
+    expect(within(summary).getAllByRole('listitem')).toHaveLength(11)
+    expect(within(summary).getByText('Bonus')).toBeInTheDocument()
+    expect(bundle).toHaveBeenCalledTimes(1)
+  })
+
+  it('ten at once cannot be pressed when the balance does not cover ten draws', async () => {
+    board.mockResolvedValue(boardOf({ balance: 299 }))
+    renderPage()
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Draw おかしガチャ 10 times for 300 pt and get 11 prizes',
+      }),
+    ).toBeDisabled()
   })
 })

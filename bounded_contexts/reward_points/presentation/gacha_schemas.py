@@ -65,11 +65,20 @@ class GachaDrawResponse(BaseModel):
     drawn_at: UtcDatetime
     # When a parent handed the prize over. null if not yet (always null for a miss)
     handed_over_at: UtcDatetime | None
+    # The free extra draw of a bundle (10 paid + 1 free)
+    is_bonus: bool
 
 
 class GachaDrawResultResponse(BaseModel):
     draw: GachaDrawResponse
     # Ledger balance right after the draw
+    balance: int
+
+
+class GachaBundleResultResponse(BaseModel):
+    """Eleven draws in the order drawn (the last one free), and the balance right after."""
+
+    draws: list[GachaDrawResponse]
     balance: int
 
 
@@ -96,6 +105,7 @@ class GachaBoardResponse(BaseModel):
 
 __all__ = [
     "GachaBoardResponse",
+    "GachaBundleResultResponse",
     "GachaDrawRequest",
     "GachaDrawResponse",
     "GachaDrawResultResponse",
