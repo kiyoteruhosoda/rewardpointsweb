@@ -62,8 +62,8 @@ class ViewPointLedgerUseCase:
             # Returned with the ledger (like the bonus) so the ledger screen and display devices
             # show the pet without another round trip (ADR-0061)
             pet=pet_to_dto(
-                species=self._pets.species_of(ledger_id),
-                earned=statement.earned_points,
+                self._pets.find(ledger_id),
+                statement=statement,
                 can_choose=family_access_policy.can_choose_pet(found.membership, found.ledger),
             ),
         )

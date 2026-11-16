@@ -1,7 +1,8 @@
 """Choose (or change) the species of the pet on a ledger (ADR-0061).
 
-The child chooses their own; parents can choose for any child. Growth comes from the ledger,
-so changing the species never changes the stage.
+The child chooses their own; parents can choose for any child. The first choice hands the
+egg over: growth counts from then. Changing the species later keeps that day, so the stage
+does not change.
 """
 
 from __future__ import annotations
@@ -35,9 +36,9 @@ class ChoosePetUseCase:
 
     def execute(self, command: ChoosePetCommand) -> PetDTO:
         found = self._access.pet_owner_ledger(ledger_id=command.ledger_id, account_id=command.account_id)
-        self._pets.choose_species(ledger_id=found.ledger.id, species=command.species)
+        pet = self._pets.choose_species(ledger_id=found.ledger.id, species=command.species)
         statement = LedgerStatement(self._transactions.list_by_ledger(found.ledger.id))
-        return to_dto(species=command.species, earned=statement.earned_points, can_choose=True)
+        return to_dto(pet, statement=statement, can_choose=True)
 
 
 __all__ = ["ChoosePetCommand", "ChoosePetUseCase"]

@@ -11,6 +11,7 @@ without looking each row up again.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 
 from bounded_contexts.reward_points.domain.entities.point_transaction import PointTransaction
 from bounded_contexts.reward_points.domain.value_objects.point_balance import PointBalance
@@ -29,14 +30,14 @@ class LedgerStatement:
     def balance(self) -> PointBalance:
         return PointBalance(sum(transaction.signed_points for transaction in self._transactions))
 
-    @property
-    def earned_points(self) -> int:
-        """Points ever added, as the ledger stands now (ADR-0061).
+    def earned_points_since(self, start: datetime) -> int:
+        """Points added for things that happened at or after *start*, as the ledger stands now (ADR-0061).
 
         Spending never lowers it. Reversed records and the reversal rows themselves are left
         out as pairs, the same as the balance trend (ADR-0050): a reversed addition never
         happened, and a reversed spending gives nothing new. A correction's restated row is an
-        ordinary row and counts if it adds.
+        ordinary row and counts if it adds; it keeps the original's occurrence time, so
+        correcting a record from before *start* does not make it count.
         """
         reversed_ids = self.reversed_transaction_ids
         return sum(
@@ -45,6 +46,7 @@ class LedgerStatement:
             if transaction.amount.value > 0
             and transaction.reversal_of_id is None
             and transaction.id not in reversed_ids
+            and transaction.occurred_at >= start
         )
 
     @property

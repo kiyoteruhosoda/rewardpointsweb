@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from bounded_contexts.reward_points.domain.entities.pet import STAGE_THRESHOLDS, PetGrowth, PetSpecies
+from bounded_contexts.reward_points.domain.entities.pet import STAGE_THRESHOLDS, AdoptedPet, PetGrowth, PetSpecies
+from bounded_contexts.reward_points.domain.services.ledger_statement import LedgerStatement
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -14,7 +15,7 @@ class PetDTO:
     #: 0 is the egg
     stage: int
     stage_count: int
-    #: Points ever added (spending does not lower it)
+    #: Points added since the egg was handed over (spending does not lower it). 0 before
     earned: int
     #: Earned total where the current stage began
     current_threshold: int
@@ -24,10 +25,12 @@ class PetDTO:
     can_choose: bool
 
 
-def to_dto(*, species: PetSpecies | None, earned: int, can_choose: bool) -> PetDTO:
+def to_dto(pet: AdoptedPet | None, *, statement: LedgerStatement, can_choose: bool) -> PetDTO:
+    """*pet* is ``None`` while the egg has not been handed over (nothing counts yet)."""
+    earned = 0 if pet is None else statement.earned_points_since(pet.adopted_at)
     growth = PetGrowth(earned=earned)
     return PetDTO(
-        species=species,
+        species=None if pet is None else pet.species,
         stage=growth.stage,
         stage_count=len(STAGE_THRESHOLDS),
         earned=earned,
