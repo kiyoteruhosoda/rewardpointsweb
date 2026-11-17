@@ -5,6 +5,7 @@ import { Footer } from './components/Footer'
 import { Header } from './components/Header'
 import { RequireScope } from './components/RequireScope'
 import { Sidebar } from './components/Sidebar'
+import { useHistoryScroll } from './hooks/useHistoryScroll'
 import { useI18n } from './i18n'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ConfigPage } from './pages/ConfigPage'
@@ -98,6 +99,8 @@ function RequireAuth() {
 }
 
 export default function App() {
+  // Back/forward returns to where the reader was, on every screen (ADR-0062)
+  useHistoryScroll()
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
