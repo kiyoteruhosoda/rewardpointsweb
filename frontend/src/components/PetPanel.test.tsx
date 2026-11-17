@@ -44,7 +44,9 @@ describe('PetPanel', () => {
     renderPanel(pet({ stage: 1, earned: 40, next_threshold: 100 }))
 
     expect(screen.getByText('Just hatched')).toBeInTheDocument()
-    expect(screen.getByText('Points earned since the egg arrived: 40 pt')).toBeInTheDocument()
+    expect(
+      screen.getByText('Points earned since the egg arrived (not counting the daily bonus): 40 pt'),
+    ).toBeInTheDocument()
     expect(screen.getByText('60 pt to the next stage')).toBeInTheDocument()
     expect(screen.getByText('Spending points never makes it smaller.')).toBeInTheDocument()
   })
@@ -79,7 +81,9 @@ describe('PetPanel', () => {
 
     expect(screen.getByText('Which one will it be?')).toBeInTheDocument()
     expect(
-      screen.getByText('It grows with the points earned from the day you choose.'),
+      screen.getByText(
+        'It grows with the points earned from the day you choose (not the daily bonus).',
+      ),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Bunny' }))
 

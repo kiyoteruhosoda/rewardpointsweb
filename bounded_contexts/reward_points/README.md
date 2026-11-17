@@ -205,6 +205,8 @@ DB の ID・冪等キー。
 
 - 育ちの値は **たまごを渡した日（種類を初めて選んだとき）から後にもらったポイント**（プラスの行の合計。打ち消しと打ち消された行は組で外す・
   使った行は数えない・起きた日時がたまごより前の行は数えない）。`LedgerStatement.earned_points_since`。段階は保存せず、読むたびにここから出す
+- **まいにちのボーナス（ADR-0024）の行は育ちに数えない**。行の冪等キー（`daily-bonus#日付`）で見分ける（`PointTransaction.is_daily_bonus`）。
+  ボーナスの行を訂正した言い直しの行もボーナスとして外す
 - 段階は 6 つ（0 たまご〜5 スター）。区切りは `domain/entities/pet.py` の `STAGE_THRESHOLDS`
 - 保存は 1 匹 1 行（`pet_generations`、`UNIQUE (ledger_id, generation)`）。いちばん新しい世代が今の子で、それより前は育て終えた子。
   行の `created_at` がたまごを渡した日。行が無ければ「まだ選んでいないたまご」（育ちの値は 0）

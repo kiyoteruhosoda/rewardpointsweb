@@ -339,6 +339,19 @@ def test_the_entry_says_nobody_recorded_it(client: TestClient, home: Home, db_se
     assert entry["occurred_at"] == f"{start.isoformat()}T00:00:00Z"
 
 
+def test_the_bonus_does_not_grow_the_pet(client: TestClient, home: Home, db_session: Session) -> None:
+    """The pet grows with what the child earned; the bonus arrives on its own (ADR-0061)."""
+    adopted = client.put(f"{home.ledger.path()}/pet", headers=home.headers, json={"species": "cat"})
+    assert adopted.status_code == 200, adopted.text
+    start = _starting_day(_configure(client, home.headers, home.ledger, amount=10))
+
+    _grant(db_session, now=_noon(start, plus_days=1))
+
+    body = _view(client, home.headers, home.ledger)
+    assert body["balance"] == 20
+    assert body["pet"]["earned"] == 0
+
+
 def test_a_stopped_bonus_stops_arriving(client: TestClient, home: Home, db_session: Session) -> None:
     start = _starting_day(_configure(client, home.headers, home.ledger, amount=10))
     _grant(db_session, now=_noon(start))

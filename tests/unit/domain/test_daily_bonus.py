@@ -14,6 +14,7 @@ import pytest
 from bounded_contexts.reward_points.domain.entities.daily_bonus import (
     DailyBonus,
     idempotency_key_for,
+    is_daily_bonus_key,
 )
 from bounded_contexts.reward_points.domain.services.day_boundary import DayBoundary
 from bounded_contexts.reward_points.domain.value_objects.idempotency_key import is_derived
@@ -109,6 +110,14 @@ def test_the_same_day_always_produces_the_same_key() -> None:
 def test_the_key_cannot_collide_with_one_sent_by_a_client() -> None:
     """A staged key (containing ``#``) is a form the API does not accept."""
     assert is_derived(idempotency_key_for(date(2026, 8, 9)))
+
+
+def test_a_bonus_row_is_told_apart_by_its_key() -> None:
+    """The pet leaves bonus rows out of its growth (ADR-0061), so they must be recognisable."""
+    assert is_daily_bonus_key(idempotency_key_for(date(2026, 8, 9)))
+    assert not is_daily_bonus_key("daily-bonus")
+    assert not is_daily_bonus_key("import-t1")
+    assert not is_daily_bonus_key("gacha-1#g1")
 
 
 # --- Where a day ends ----------------------------------------------------------

@@ -15,6 +15,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
+from bounded_contexts.reward_points.domain.entities.daily_bonus import is_daily_bonus_key
 from bounded_contexts.reward_points.domain.entities.point_transaction import PointTransaction
 from bounded_contexts.reward_points.domain.repositories.point_transaction_repository import (
     IPointTransactionRepository,
@@ -162,6 +163,7 @@ def _to_transaction(row: PointTransactionModel) -> PointTransaction:
         created_at=row.created_at,
         reversal_of_id=row.reversal_of_id,
         corrects_id=row.corrects_id,
+        is_daily_bonus=is_daily_bonus_key(row.idempotency_key),
     )
 
 

@@ -58,6 +58,8 @@ class PointTransaction:
     reversal_of_id: int | None
     # For a corrected row, the ID of the row it restates (ADR-0022)
     corrects_id: int | None
+    # Written by the daily bonus (ADR-0024), not by a person. The pet does not grow with it (ADR-0061)
+    is_daily_bonus: bool = False
 
     @property
     def is_reversal(self) -> bool:
