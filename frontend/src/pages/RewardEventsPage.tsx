@@ -1,7 +1,7 @@
 /**
  * Shows one child's events (effort cards) on a single screen (ADR-0042).
  *
- * Cards sit in a grid, in-progress first and completed ones after. Tapping "achieved"
+ * Cards sit in a grid, in-progress first and completed ones after. Tapping the next empty cell
  * puts a sticker on the spot (shown without waiting for the reply), then replaced by the
  * server's version once the reply arrives. On failure, reload and remove the sticker shown.
  *
