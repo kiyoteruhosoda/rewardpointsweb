@@ -81,7 +81,9 @@ describe('PetPanel', () => {
 
     expect(screen.getByText('Which one will it be?')).toBeInTheDocument()
     expect(
-      screen.getByText('It grows with the points earned from the day you choose.'),
+      screen.getByText(
+        'It grows with the points earned from the day you choose (not the daily bonus).',
+      ),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Bunny' }))
 
