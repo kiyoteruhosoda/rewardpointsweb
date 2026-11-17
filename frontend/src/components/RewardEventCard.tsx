@@ -5,6 +5,9 @@
  * sticker, and when all cells are filled the stamp is pressed. The cell layout (number of columns) is
  * derived from the count (`gridColumns`), so 10 fits as 5 x 2, 30 as 6 x 5, and so on, on one card.
  *
+ * A sticker is stuck by tapping the next empty cell itself; that one cell is the only one that
+ * reacts. Every other cell (stuck ones and the ones after the next) does nothing when tapped.
+ *
  * Entries to stick, peel off and delete appear only when `canModify`. The child themself only
  * views the same card.
  *
@@ -58,6 +61,9 @@ export function RewardEventCard({
   const completed = event.completed_at !== null
   const expired = event.is_expired
   const busy = pending !== null
+  const canStick = canModify && !completed && !expired
+  // The only cell that takes a tap: the first empty one
+  const nextNumber = canStick && count < event.goal_count ? count + 1 : null
   const squares = Array.from({ length: event.goal_count }, (_, index) => index + 1)
   const sheetStyle = { '--sheet-columns': gridColumns(event.goal_count) } as CSSProperties
 
@@ -113,6 +119,28 @@ export function RewardEventCard({
           {squares.map((number) => {
             const look = stickerLook(event.id, number)
             const stuck = number <= count
+            if (number === nextNumber) {
+              return (
+                <li key={number} className="sticker-slot sticker-slot-next">
+                  <button
+                    type="button"
+                    className="sticker-slot-button"
+                    disabled={busy}
+                    aria-busy={pending === 'stick'}
+                    aria-label={t('events.achieveFor', { title: event.title })}
+                    onClick={onStick}
+                  >
+                    {pending === 'stick' ? (
+                      <span className="spinner" aria-hidden="true" />
+                    ) : (
+                      <span className="sticker-slot-number" aria-hidden="true">
+                        {number}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              )
+            }
             return (
               <li
                 key={number}
@@ -152,24 +180,15 @@ export function RewardEventCard({
             <strong>{count}</strong> / {event.goal_count}
           </p>
         )}
-        {canModify && !completed && !expired && (
-          <div className="event-card-actions">
-            <ActionButton
-              type="button"
-              className="event-card-achieve"
-              pending={pending === 'stick'}
-              disabled={busy}
-              aria-label={t('events.achieveFor', { title: event.title })}
-              onClick={onStick}
-            >
-              {t('events.achieve')}
-            </ActionButton>
-          </div>
+        {nextNumber !== null && (
+          <p className="event-card-hint" aria-hidden="true">
+            {t('events.tapToStick')}
+          </p>
         )}
       </footer>
 
       {/* Peeling is only for undoing a mis-tap, so it stays folded away (task #1049) */}
-      {canModify && !completed && !expired && count > 0 && (
+      {canStick && count > 0 && (
         <details className="event-card-fix">
           <summary>{t('events.fixSummary')}</summary>
           <ActionButton
