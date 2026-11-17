@@ -25,7 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from bounded_contexts.reward_points.domain.value_objects.idempotency_key import IdempotencyKey
+from bounded_contexts.reward_points.domain.value_objects.idempotency_key import STEP_SEPARATOR, IdempotencyKey
 from bounded_contexts.reward_points.domain.value_objects.point_amount import PointAmount
 from bounded_contexts.reward_points.domain.value_objects.transaction_reason import TransactionReason
 
@@ -36,6 +36,15 @@ IDEMPOTENCY_BASE = "daily-bonus"
 def idempotency_key_for(day: date) -> str:
     """Idempotency key for the grant of *day*. The same day always yields the same value."""
     return IdempotencyKey(IDEMPOTENCY_BASE).for_step(day.isoformat()).value
+
+
+def is_daily_bonus_key(key: str) -> bool:
+    """Whether a ledger row with this idempotency key was written by the daily bonus.
+
+    Keys sent by users never contain the step separator, so only the grant above
+    yields this prefix.
+    """
+    return key.startswith(f"{IDEMPOTENCY_BASE}{STEP_SEPARATOR}")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -82,4 +91,4 @@ class DailyBonus:
         )
 
 
-__all__ = ["IDEMPOTENCY_BASE", "DailyBonus", "DueDays", "idempotency_key_for"]
+__all__ = ["IDEMPOTENCY_BASE", "DailyBonus", "DueDays", "idempotency_key_for", "is_daily_bonus_key"]

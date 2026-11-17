@@ -38,16 +38,31 @@ class LedgerStatement:
         happened, and a reversed spending gives nothing new. A correction's restated row is an
         ordinary row and counts if it adds; it keeps the original's occurrence time, so
         correcting a record from before *start* does not make it count.
+
+        Daily bonus rows (ADR-0024) do not count: they arrive without the child doing anything.
+        A restated row of a daily bonus is still that bonus, so it is left out as well.
         """
         reversed_ids = self.reversed_transaction_ids
+        bonus_ids = self._daily_bonus_ids()
         return sum(
             transaction.amount.value
             for transaction in self._transactions
             if transaction.amount.value > 0
             and transaction.reversal_of_id is None
             and transaction.id not in reversed_ids
+            and transaction.id not in bonus_ids
             and transaction.occurred_at >= start
         )
+
+    def _daily_bonus_ids(self) -> frozenset[int]:
+        """IDs of daily bonus rows and of the rows that restate them, however many times over."""
+        ids: set[int] = set()
+        # A restated row always gets a later ID than the row it restates, so one pass in ID
+        # order follows a chain of corrections to its end
+        for transaction in sorted(self._transactions, key=lambda row: row.id):
+            if transaction.is_daily_bonus or transaction.corrects_id in ids:
+                ids.add(transaction.id)
+        return frozenset(ids)
 
     @property
     def reversed_transaction_ids(self) -> frozenset[int]:

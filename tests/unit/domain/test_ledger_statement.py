@@ -14,7 +14,12 @@ _MOMENT = datetime(2026, 8, 1, 0, 0, 0)
 
 
 def _transaction(
-    *, id: int, amount: int, reversal_of_id: int | None = None, corrects_id: int | None = None
+    *,
+    id: int,
+    amount: int,
+    reversal_of_id: int | None = None,
+    corrects_id: int | None = None,
+    is_daily_bonus: bool = False,
 ) -> PointTransaction:
     return PointTransaction(
         id=id,
@@ -26,6 +31,7 @@ def _transaction(
         created_at=_MOMENT,
         reversal_of_id=reversal_of_id,
         corrects_id=corrects_id,
+        is_daily_bonus=is_daily_bonus,
     )
 
 
@@ -136,3 +142,31 @@ def test_correcting_a_record_from_before_the_egg_does_not_make_it_count() -> Non
     )
 
     assert statement.earned_points_since(_EGG_DAY) == 0
+
+
+def test_daily_bonus_points_do_not_grow_the_pet() -> None:
+    statement = LedgerStatement(
+        [
+            _transaction(id=1, amount=100),
+            _transaction(id=2, amount=10, is_daily_bonus=True),
+        ]
+    )
+
+    assert statement.earned_points_since(_MOMENT) == 100
+    # They still count towards the balance
+    assert statement.balance.value == 110
+
+
+def test_a_corrected_daily_bonus_is_still_a_bonus() -> None:
+    statement = LedgerStatement(
+        [
+            _transaction(id=1, amount=10, is_daily_bonus=True),
+            _transaction(id=2, amount=-10, reversal_of_id=1),
+            _transaction(id=3, amount=20, corrects_id=1),
+            _transaction(id=4, amount=-20, reversal_of_id=3),
+            _transaction(id=5, amount=30, corrects_id=3),
+            _transaction(id=6, amount=100),
+        ]
+    )
+
+    assert statement.earned_points_since(_MOMENT) == 100
