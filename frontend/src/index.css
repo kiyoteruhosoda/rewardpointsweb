@@ -3031,3 +3031,43 @@ tr.reversed {
     transition: none;
   }
 }
+
+/* Maintenance / outage screen (ADR-0064). Only this is shown; the app stays hidden. */
+.maintenance-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: var(--surface);
+}
+
+.maintenance-card {
+  width: 100%;
+  max-width: 32rem;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+
+.maintenance-card h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.4rem;
+}
+
+.maintenance-card p {
+  margin: 0 0 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.maintenance-reason,
+.maintenance-note {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.maintenance-until {
+  font-weight: 600;
+}

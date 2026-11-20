@@ -623,5 +623,14 @@
   "pet.confirmChoose": "{species} に する？ そだっている あいだは かえられないよ。",
   "error.pet_already_chosen": "ペットは もう えらばれています。画面を読み直してください。",
   "events.fixSummary": "まちがえたとき",
-  "events.confirmPeel": "{number} まいめの シールを はがしますか？ まちがえて はったときだけ つかってください。"
+  "events.confirmPeel": "{number} まいめの シールを はがしますか？ まちがえて はったときだけ つかってください。",
+  "maintenance.title": "メンテナンス中です",
+  "maintenance.body": "予定したメンテナンスのため、いまは使えません。終わると元の画面に戻ります。",
+  "maintenance.stoppedTitle": "停止中です",
+  "maintenance.stoppedBody": "いまはサービスが止まっていて使えません。動き出すと元の画面に戻ります。",
+  "maintenance.reason": "理由: {reason}",
+  "maintenance.until": "{time} ごろに戻る見込みです",
+  "maintenance.autoCheck": "1 分ごとに確かめ直しています。",
+  "maintenance.checkNow": "いま確かめる",
+  "error.service_unavailable": "いまは使えません。"
 }
