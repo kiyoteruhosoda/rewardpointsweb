@@ -1,6 +1,8 @@
 /** Simple toast notification at the bottom right of the screen. */
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 
+import { currentOutage } from '../services/maintenance'
+
 interface Toast {
   id: number
   kind: 'success' | 'error'
@@ -17,6 +19,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const notify = useCallback((kind: Toast['kind'], text: string) => {
+    // Failures while the front tier is closed are told by the maintenance screen (ADR-0064)
+    if (kind === 'error' && currentOutage()) return
     const id = Date.now() + Math.random()
     setToasts((prev) => [...prev, { id, kind, text }])
     setTimeout(() => {

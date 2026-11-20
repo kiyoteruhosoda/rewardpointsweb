@@ -623,5 +623,14 @@
   "pet.confirmChoose": "Choose {species}? It can't be changed while it grows.",
   "error.pet_already_chosen": "The pet is already chosen. Reload the screen.",
   "events.fixSummary": "Made a mistake?",
-  "events.confirmPeel": "Peel off sticker {number}? Use this only to undo a mis-tap."
+  "events.confirmPeel": "Peel off sticker {number}? Use this only to undo a mis-tap.",
+  "maintenance.title": "Under maintenance",
+  "maintenance.body": "This service is down for scheduled maintenance. This screen goes back to where you were once it is over.",
+  "maintenance.stoppedTitle": "Service stopped",
+  "maintenance.stoppedBody": "This service is not running right now. This screen goes back to where you were once it is running again.",
+  "maintenance.reason": "Reason: {reason}",
+  "maintenance.until": "Expected back around {time}",
+  "maintenance.autoCheck": "Checking again every minute.",
+  "maintenance.checkNow": "Check now",
+  "error.service_unavailable": "The service is unavailable right now."
 }

@@ -5,6 +5,7 @@
  * as initial values while the user has not chosen anything. They are needed before login too,
  * so they are fetched once before authentication (`main.tsx`).
  */
+import { outageFrom, reportOutage } from './maintenance'
 
 export interface UiSettings {
   languages: string[]
@@ -22,7 +23,12 @@ export const FALLBACK_UI_SETTINGS: UiSettings = {
 export async function loadUiSettings(): Promise<UiSettings> {
   try {
     const response = await fetch('/api/ui/settings')
-    if (!response.ok) return FALLBACK_UI_SETTINGS
+    if (!response.ok) {
+      // If the front tier is closed, show the maintenance screen from the first paint (ADR-0064)
+      const outage = outageFrom(response.status, await response.json().catch(() => null))
+      if (outage) reportOutage(outage)
+      return FALLBACK_UI_SETTINGS
+    }
     return (await response.json()) as UiSettings
   } catch {
     return FALLBACK_UI_SETTINGS

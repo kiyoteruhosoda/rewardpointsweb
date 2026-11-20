@@ -8,7 +8,10 @@
  *   (ADR-0058, `silentRenewal.ts`). If it cannot continue, emit "the login has ended".
  * - The backend returns error codes ({"error": "..."}). Converting them to display text is
  *   done by i18n (on the frontend).
+ * - A 503 in which the front tier (edge) says it is closed is passed to the maintenance screen
+ *   (ADR-0064). The exception is still thrown (the caller stops; no toast is shown).
  */
+import { currentOutage, outageFrom, reportOutage, reportReopened } from './maintenance'
 import { reportSessionEnded } from './sessionEnded'
 import { oneAtATime, renewInFrame } from './silentRenewal'
 import { clearSilentSsoMarks, markSilentSsoTried, signedOutHere } from './silentSso'
@@ -136,7 +139,12 @@ export async function openDisplaySession(): Promise<DisplaySessionOutcome> {
     clearTokens()
     return 'removed'
   }
-  if (!response.ok) return 'unreachable'
+  if (!response.ok) {
+    // A closed front tier shows the maintenance screen on the display too (ADR-0064)
+    const outage = outageFrom(response.status, await response.json().catch(() => null))
+    if (outage) reportOutage(outage)
+    return 'unreachable'
+  }
   const session = (await response.json()) as { access_token: string }
   // There is no refresh token. When it expires, re-obtain with the credential
   localStorage.setItem(ACCESS_KEY, session.access_token)
@@ -208,6 +216,19 @@ interface TokenPair {
 }
 
 /** The continuation currently running. Requests that hit 401 at the same time wait on this one. */
+/**
+ * The exception for a failed response. A 503 in which the front tier says it is closed also goes
+ * to the maintenance screen (ADR-0064).
+ */
+function apiErrorFrom(status: number, payload: unknown): ApiError {
+  const outage = outageFrom(status, payload)
+  if (outage) {
+    reportOutage(outage)
+    return new ApiError(status, 'service_unavailable')
+  }
+  return new ApiError(status, errorCodeOf(status, payload), extractErrorFields(payload))
+}
+
 let continuing: Promise<boolean> | null = null
 
 function tryRefresh(): Promise<boolean> {
@@ -325,12 +346,10 @@ async function requestResponse(
     } catch {
       /* non-JSON response */
     }
-    throw new ApiError(
-      response.status,
-      errorCodeOf(response.status, payload),
-      extractErrorFields(payload),
-    )
+    throw apiErrorFrom(response.status, payload)
   }
+  // An answer came back = not closed (leave the maintenance screen if it is shown)
+  if (currentOutage()) reportReopened()
   return response
 }
 

@@ -12,6 +12,7 @@ import {
   hasTokens,
   setTokens,
 } from './api'
+import { currentOutage, reportOutage, resetOutageForTests } from './maintenance'
 import { subscribeSessionEnded } from './sessionEnded'
 
 const { renewInFrame } = vi.hoisted(() => ({ renewInFrame: vi.fn() }))
@@ -285,5 +286,55 @@ describe('continuing the session', () => {
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(renewInFrame).not.toHaveBeenCalled()
+  })
+})
+
+/** A 503 in which the front tier (edge) says it is closed (ADR-0064). */
+describe('503 from a closed front tier', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    resetOutageForTests()
+    fetchMock.mockReset()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    resetOutageForTests()
+  })
+
+  function respond(status: number, body: unknown) {
+    fetchMock.mockResolvedValueOnce({
+      ok: status >= 200 && status < 300,
+      status,
+      json: () => Promise.resolve(body),
+    })
+  }
+
+  it('tells the maintenance screen and throws service_unavailable', async () => {
+    respond(503, { error: 'service_unavailable', reason: 'maintenance', message: 'Test.' })
+
+    await expect(api.get('/api/items')).rejects.toMatchObject({
+      status: 503,
+      code: 'service_unavailable',
+    })
+    expect(currentOutage()).toMatchObject({ reason: 'maintenance', message: 'Test.' })
+  })
+
+  it("does not treat the app's own 503 as maintenance", async () => {
+    respond(503, { detail: { error: 'restart_request_failed' } })
+
+    await expect(api.get('/api/items')).rejects.toMatchObject({ code: 'restart_request_failed' })
+    expect(currentOutage()).toBeNull()
+  })
+
+  it('clears the closed state once an answer comes back', async () => {
+    reportOutage({ reason: 'stopped', title: null, body: null, message: null, until: null })
+    respond(200, {})
+
+    await api.get('/api/items')
+
+    expect(currentOutage()).toBeNull()
   })
 })

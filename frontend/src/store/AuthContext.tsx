@@ -10,6 +10,7 @@ import {
   hasTokens,
   setTokens,
 } from '../services/api'
+import { currentOutage, subscribeOutage } from '../services/maintenance'
 import { subscribeSessionEnded } from '../services/sessionEnded'
 import { exchangeSsoTicket } from '../services/sso'
 import { clearSilentSsoMarks, markSignedOut } from '../services/silentSso'
@@ -91,6 +92,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Once the front tier opens, ask again right away (a screen opened while closed does not yet know who is signed in)
+  useEffect(
+    () =>
+      subscribeOutage(() => {
+        if (!currentOutage()) void refreshMe()
+      }),
+    [refreshMe],
+  )
+
   // Could not continue the session (ADR-0058). Moves to login (destination and drafts are kept)
   useEffect(
     () =>
@@ -103,6 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!unreachable) return
     const timer = window.setInterval(() => {
+      // While the front tier is closed, do not ask again. The maintenance screen rechecks (ADR-0064)
+      if (currentOutage()) return
       void refreshMe()
     }, RECONNECT_INTERVAL_MS)
     return () => {
