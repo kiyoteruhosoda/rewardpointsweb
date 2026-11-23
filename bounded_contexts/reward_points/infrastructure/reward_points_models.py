@@ -22,6 +22,7 @@ from shared.kernel.database.db import Base
 
 FAMILY_ROLE = sa.Enum("owner", "parent", "child", "display", name="family_role", native_enum=False)
 PET_SPECIES = sa.Enum("cat", "rabbit", "bird", "dragon", name="pet_species", native_enum=False)
+PET_CARE_KIND = sa.Enum("feed", "pat", "play", "bath", name="pet_care_kind", native_enum=False)
 
 
 class FamilyModel(Base):
@@ -306,6 +307,29 @@ class PetModel(Base):
     updated_at = mapped_column(sa.DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 
 
+class PetCareModel(Base):
+    """One care given to a hatched pet (ADR-0061, task #1128).
+
+    Care is free and does not touch growth; the mood and the friendship are worked out from
+    these rows. They go with the pet.
+    """
+
+    __tablename__ = "pet_cares"
+    __table_args__ = (sa.Index("ix_pet_cares_pet_cared", "pet_id", "cared_at"),)
+
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    pet_id: Mapped[int] = mapped_column(
+        BigIntPk, sa.ForeignKey("pet_generations.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(PET_CARE_KIND, nullable=False)
+    cared_at = mapped_column(sa.DateTime(), nullable=False)
+    # The day under the family's day boundary; friendship counts distinct days
+    care_day: Mapped[date] = mapped_column(sa.Date(), nullable=False)
+    cared_by_membership_id: Mapped[int | None] = mapped_column(
+        BigIntPk, sa.ForeignKey("family_memberships.id", ondelete="SET NULL"), nullable=True
+    )
+
+
 class FamilyInvitationModel(Base):
     __tablename__ = "family_invitations"
 
@@ -327,6 +351,7 @@ class FamilyInvitationModel(Base):
 
 __all__ = [
     "FAMILY_ROLE",
+    "PET_CARE_KIND",
     "PET_SPECIES",
     "DailyBonusModel",
     "FamilyInvitationModel",
@@ -335,6 +360,7 @@ __all__ = [
     "GachaDrawModel",
     "GachaModel",
     "GachaPrizeModel",
+    "PetCareModel",
     "PetModel",
     "PointLedgerModel",
     "PointTransactionModel",

@@ -18,6 +18,7 @@ from bounded_contexts.reward_points.application.family_access_resolver import Fa
 from bounded_contexts.reward_points.application.family_archive_writer import FamilyArchiveWriter
 from bounded_contexts.reward_points.application.family_overview_builder import FamilyOverviewBuilder
 from bounded_contexts.reward_points.application.invitation_binder import InvitationBinder
+from bounded_contexts.reward_points.application.pet_reader import PetReader
 from bounded_contexts.reward_points.application.use_cases.accept_invitation import AcceptInvitationUseCase
 from bounded_contexts.reward_points.application.use_cases.add_child_membership import (
     AddChildMembershipUseCase,
@@ -91,6 +92,7 @@ from bounded_contexts.reward_points.infrastructure.sql_family_membership_reposit
     SqlFamilyMembershipRepository,
 )
 from bounded_contexts.reward_points.infrastructure.sql_family_repository import SqlFamilyRepository
+from bounded_contexts.reward_points.infrastructure.sql_pet_care_repository import SqlPetCareRepository
 from bounded_contexts.reward_points.infrastructure.sql_pet_repository import SqlPetRepository
 from bounded_contexts.reward_points.infrastructure.sql_point_ledger_repository import (
     SqlPointLedgerRepository,
@@ -414,13 +416,27 @@ def get_pet_repository(db: DbDep) -> SqlPetRepository:
 PetRepoDep = Annotated[SqlPetRepository, Depends(get_pet_repository)]
 
 
+def get_pet_care_repository(db: DbDep) -> SqlPetCareRepository:
+    return SqlPetCareRepository(db)
+
+
+PetCareRepoDep = Annotated[SqlPetCareRepository, Depends(get_pet_care_repository)]
+
+
+def get_pet_reader(pets: PetRepoDep, cares: PetCareRepoDep) -> PetReader:
+    return PetReader(pets, cares)
+
+
+PetReaderDep = Annotated[PetReader, Depends(get_pet_reader)]
+
+
 def get_view_ledger_use_case(
     *,
     access: AccessDep,
     transactions: TransactionRepoDep,
     memberships: MembershipRepoDep,
     bonuses: DailyBonusRepoDep,
-    pets: PetRepoDep,
+    pets: PetReaderDep,
 ) -> ViewPointLedgerUseCase:
     return ViewPointLedgerUseCase(
         access=access, transactions=transactions, memberships=memberships, bonuses=bonuses, pets=pets
@@ -568,6 +584,8 @@ __all__ = [
     "ListInvitationsDep",
     "MembershipRepoDep",
     "PeelRewardEventStickerDep",
+    "PetCareRepoDep",
+    "PetReaderDep",
     "PetRepoDep",
     "ProposeIndependenceDep",
     "RecordTransactionDep",

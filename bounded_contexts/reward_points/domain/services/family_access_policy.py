@@ -50,6 +50,15 @@ def can_choose_pet(membership: FamilyMembership, ledger: PointLedger) -> bool:
     return can_modify_ledger(membership, ledger) or _is_own_ledger(membership, ledger)
 
 
+def can_care_for_pet(membership: FamilyMembership, ledger: PointLedger) -> bool:
+    """Whether one can care for the pet on this ledger (ADR-0061, task #1128).
+
+    The same people as choosing it: parents for any child, a child for their own pet. Display
+    devices only look.
+    """
+    return can_modify_ledger(membership, ledger) or _is_own_ledger(membership, ledger)
+
+
 def _is_own_ledger(membership: FamilyMembership, ledger: PointLedger) -> bool:
     """The child who holds this ledger."""
     return (
@@ -163,6 +172,7 @@ def can_issue_temporary_password_for(actor: FamilyMembership, target: FamilyMemb
 
 __all__ = [
     "can_administer_family",
+    "can_care_for_pet",
     "can_choose_pet",
     "can_create_child",
     "can_detach_display",

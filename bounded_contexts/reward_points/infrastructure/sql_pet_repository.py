@@ -42,7 +42,7 @@ class SqlPetRepository(IPetRepository):
 
 
 def _to_pet(row: PetModel) -> AdoptedPet:
-    return AdoptedPet(species=PetSpecies(row.species), adopted_at=row.created_at, generation=row.generation)
+    return AdoptedPet(id=row.id, species=PetSpecies(row.species), adopted_at=row.created_at, generation=row.generation)
 
 
 __all__ = ["SqlPetRepository"]

@@ -24,6 +24,7 @@ def test_admin_role_has_everything_except_family_and_points() -> None:
         "point:manage",
         "gacha:draw",
         "pet:choose",
+        "pet:care",
         "display:approve",
     }
     granted = set(master_data.ROLE_PERMISSIONS["admin"])
@@ -42,7 +43,7 @@ def test_display_role_only_views() -> None:
     granted = set(master_data.ROLE_PERMISSIONS["display"])
     assert {"family:view", "point:view"} <= granted
     assert not {code for code in granted if code.endswith(":manage") or code == "display:approve"}
-    assert not granted & {"gacha:draw", "pet:choose"}
+    assert not granted & {"gacha:draw", "pet:choose", "pet:care"}
 
 
 def test_parents_and_children_may_draw_a_gacha() -> None:
@@ -75,4 +76,10 @@ def test_superseded_hashes_do_not_contain_the_current_default() -> None:
 def test_parents_and_children_may_choose_a_pet() -> None:
     """Choosing the pet is the household's, like the gacha — not admin, operator or display (ADR-0061)."""
     holders = {role for role, codes in master_data.ROLE_PERMISSIONS.items() if "pet:choose" in codes}
+    assert holders == {"member", "guest"}
+
+
+def test_parents_and_children_may_care_for_a_pet() -> None:
+    """Caring for the pet is the household's, like choosing it — display devices only look (task #1128)."""
+    holders = {role for role, codes in master_data.ROLE_PERMISSIONS.items() if "pet:care" in codes}
     assert holders == {"member", "guest"}

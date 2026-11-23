@@ -46,6 +46,7 @@ from bounded_contexts.reward_points.domain.exceptions import (
     MembershipNotLinkedError,
     MissCannotBeHandedOverError,
     PetAlreadyChosenError,
+    PetNotHatchedError,
     ReversalOfReversalError,
     RewardEventCompletedError,
     RewardEventDeadlinePassedError,
@@ -77,6 +78,8 @@ _STATUS_BY_ERROR: dict[type[RewardPointsError], int] = {
     MissCannotBeHandedOverError: status.HTTP_409_CONFLICT,
     # The screen is looking at a stale pet (chosen elsewhere, or not fully grown yet)
     PetAlreadyChosenError: status.HTTP_409_CONFLICT,
+    # The screen is looking at a stale pet (the egg was handed over again elsewhere)
+    PetNotHatchedError: status.HTTP_409_CONFLICT,
     GachaNeedsAPrizeError: status.HTTP_400_BAD_REQUEST,
     # The screen is looking at a stale state (ADR-0042). Reloading reveals the right number
     RewardEventCompletedError: status.HTTP_409_CONFLICT,
