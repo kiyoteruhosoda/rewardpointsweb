@@ -10,15 +10,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from bounded_contexts.reward_points.application.dto.pet_dto import PetDTO, growth_of, to_dto
+from bounded_contexts.reward_points.application.dto.pet_dto import PetDTO, PetPermissions, growth_of
 from bounded_contexts.reward_points.application.family_access_resolver import FamilyAccessResolver
+from bounded_contexts.reward_points.application.pet_reader import PetReader
 from bounded_contexts.reward_points.domain.entities.pet import PetSpecies
 from bounded_contexts.reward_points.domain.exceptions import PetAlreadyChosenError
 from bounded_contexts.reward_points.domain.repositories.pet_repository import IPetRepository
 from bounded_contexts.reward_points.domain.repositories.point_transaction_repository import (
     IPointTransactionRepository,
 )
+from bounded_contexts.reward_points.domain.services import family_access_policy
 from bounded_contexts.reward_points.domain.services.ledger_statement import LedgerStatement
+from shared.kernel.timestamps import utcnow
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -30,11 +33,17 @@ class ChoosePetCommand:
 
 class ChoosePetUseCase:
     def __init__(
-        self, access: FamilyAccessResolver, pets: IPetRepository, transactions: IPointTransactionRepository
+        self,
+        access: FamilyAccessResolver,
+        pets: IPetRepository,
+        transactions: IPointTransactionRepository,
+        *,
+        reader: PetReader,
     ) -> None:
         self._access = access
         self._pets = pets
         self._transactions = transactions
+        self._reader = reader
 
     def execute(self, command: ChoosePetCommand) -> PetDTO:
         found = self._access.pet_owner_ledger(ledger_id=command.ledger_id, account_id=command.account_id)
@@ -47,7 +56,10 @@ class ChoosePetUseCase:
         adopted = self._pets.adopt(ledger_id=found.ledger.id, species=command.species, generation=generation)
         if adopted is None:
             raise PetAlreadyChosenError
-        return to_dto(adopted, raised=self._pets.raised(found.ledger.id), statement=statement, allowed_to_choose=True)
+        permissions = PetPermissions(
+            choose=True, care=family_access_policy.can_care_for_pet(found.membership, found.ledger)
+        )
+        return self._reader.describe(found.ledger.id, statement=statement, permissions=permissions, now=utcnow())
 
 
 __all__ = ["ChoosePetCommand", "ChoosePetUseCase"]

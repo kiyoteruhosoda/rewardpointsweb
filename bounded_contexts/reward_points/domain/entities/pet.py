@@ -36,6 +36,8 @@ STAGE_THRESHOLDS: tuple[int, ...] = (0, 100, 500, 1500, 4000, 10000)
 class AdoptedPet:
     """A pet whose species has been chosen. Growth counts from ``adopted_at``."""
 
+    #: Identifies this pet (one generation on one ledger); its care records hang off it
+    id: int
     species: PetSpecies
     #: When the egg was handed over (its species chosen)
     adopted_at: datetime
@@ -53,6 +55,11 @@ class PetGrowth:
     def stage(self) -> int:
         """0 is the egg; the last index is the final stage."""
         return max(index for index, threshold in enumerate(STAGE_THRESHOLDS) if self.earned >= threshold)
+
+    @property
+    def has_hatched(self) -> bool:
+        """Out of the egg (stage 1 or later). Only a hatched pet can be cared for."""
+        return self.stage > 0
 
     @property
     def is_final(self) -> bool:

@@ -29,7 +29,7 @@ from bounded_contexts.reward_points.application.dto.family_dto import (
     RedeemedInvitationDTO,
 )
 from bounded_contexts.reward_points.application.dto.ledger_dto import CorrectionDTO, TransactionDTO
-from bounded_contexts.reward_points.application.dto.pet_dto import PetDTO
+from bounded_contexts.reward_points.application.dto.pet_dto import PetCareDTO, PetDTO
 from bounded_contexts.reward_points.application.dto.reward_event_dto import RewardEventDTO
 from bounded_contexts.reward_points.application.use_cases.accept_invitation import AcceptInvitationCommand
 from bounded_contexts.reward_points.application.use_cases.add_child_membership import (
@@ -113,6 +113,7 @@ from bounded_contexts.reward_points.presentation.schemas import (
     LedgerResponse,
     MemberOrderRequest,
     MembershipResponse,
+    PetCareResponse,
     PetResponse,
     RedeemedInvitationResponse,
     ReversalCreateRequest,
@@ -222,6 +223,18 @@ def to_pet_response(dto: PetDTO) -> PetResponse:
         next_threshold=dto.next_threshold,
         can_choose=dto.can_choose,
         raised=list(dto.raised),
+        care=None if dto.care is None else _to_pet_care(dto.care),
+        can_care=dto.can_care,
+    )
+
+
+def _to_pet_care(dto: PetCareDTO) -> PetCareResponse:
+    return PetCareResponse(
+        mood=dto.mood,
+        mood_level=dto.mood_level,
+        days_cared=dto.days_cared,
+        last_kind=dto.last_kind,
+        last_cared_at=dto.last_cared_at,
     )
 
 

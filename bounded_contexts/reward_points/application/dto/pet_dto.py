@@ -4,9 +4,33 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from bounded_contexts.reward_points.domain.entities.pet import STAGE_THRESHOLDS, AdoptedPet, PetGrowth, PetSpecies
+from bounded_contexts.reward_points.domain.entities.pet_care import PetCareKind, PetMoodLevel
 from bounded_contexts.reward_points.domain.services.ledger_statement import LedgerStatement
+
+
+@dataclass(frozen=True, kw_only=True)
+class PetCareDTO:
+    """How a hatched pet feels (task #1128). Care never touches growth."""
+
+    #: 0..100, made of the recent cares
+    mood: int
+    mood_level: PetMoodLevel
+    #: On how many days it was cared for
+    days_cared: int
+    #: The latest care, so a screen that did not give it (a display device) can react to it
+    last_kind: PetCareKind | None
+    last_cared_at: datetime | None
+
+
+@dataclass(frozen=True, kw_only=True)
+class PetPermissions:
+    """What the viewer's role in the family allows on this pet (parents, and the child for their own)."""
+
+    choose: bool
+    care: bool
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -28,6 +52,10 @@ class PetDTO:
     can_choose: bool
     #: Species of the pets already raised, oldest first
     raised: tuple[PetSpecies, ...]
+    #: How it feels. ``None`` until it hatches (an egg is not cared for)
+    care: PetCareDTO | None
+    #: Whether the viewer may care for it **now**: allowed, and it has hatched
+    can_care: bool
 
 
 def growth_of(pet: AdoptedPet | None, statement: LedgerStatement) -> PetGrowth:
@@ -40,7 +68,8 @@ def to_dto(
     *,
     raised: Sequence[AdoptedPet],
     statement: LedgerStatement,
-    allowed_to_choose: bool,
+    permissions: PetPermissions,
+    care: PetCareDTO | None,
 ) -> PetDTO:
     growth = growth_of(pet, statement)
     return PetDTO(
@@ -50,9 +79,11 @@ def to_dto(
         earned=growth.earned,
         current_threshold=growth.current_threshold,
         next_threshold=growth.next_threshold,
-        can_choose=allowed_to_choose and (pet is None or growth.is_final),
+        can_choose=permissions.choose and (pet is None or growth.is_final),
         raised=tuple(earlier.species for earlier in raised),
+        care=care,
+        can_care=permissions.care and care is not None,
     )
 
 
-__all__ = ["PetDTO", "growth_of", "to_dto"]
+__all__ = ["PetCareDTO", "PetDTO", "PetPermissions", "growth_of", "to_dto"]

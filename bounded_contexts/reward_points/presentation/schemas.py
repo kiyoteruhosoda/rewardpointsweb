@@ -13,6 +13,7 @@ from typing import Annotated
 from pydantic import AfterValidator, BaseModel, Field, model_validator
 
 from bounded_contexts.reward_points.domain.entities.pet import PetSpecies
+from bounded_contexts.reward_points.domain.entities.pet_care import PetCareKind, PetMoodLevel
 from bounded_contexts.reward_points.domain.entities.reward_event import (
     MAX_GOAL_COUNT as EVENT_GOAL_COUNT_MAX,
 )
@@ -328,6 +329,20 @@ class CorrectionResponse(BaseModel):
     correction: TransactionResponse
 
 
+class PetCareResponse(BaseModel):
+    """How a hatched pet feels (task #1128). Care is free and never touches growth."""
+
+    # 0..100, made of the recent cares
+    mood: int
+    # lonely is only a face: the pet never weakens, shrinks or leaves
+    mood_level: PetMoodLevel
+    # On how many days it was cared for (friendship)
+    days_cared: int
+    # The latest care, so a screen that did not give it can react to it
+    last_kind: PetCareKind | None
+    last_cared_at: UtcDatetime | None
+
+
 class PetResponse(BaseModel):
     """The pet on a ledger (ADR-0061). Grows with points ever added; spending never shrinks it."""
 
@@ -345,10 +360,19 @@ class PetResponse(BaseModel):
     can_choose: bool
     # Species of the pets already raised, oldest first
     raised: list[PetSpecies]
+    # null until the pet hatches (an egg is not cared for)
+    care: PetCareResponse | None
+    # Whether the viewer may care for it now: allowed (parents, and the child for their own)
+    # and it has hatched. Display devices never can
+    can_care: bool
 
 
 class PetChooseRequest(BaseModel):
     species: PetSpecies
+
+
+class PetCareRequest(BaseModel):
+    kind: PetCareKind
 
 
 class LedgerResponse(BaseModel):

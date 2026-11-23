@@ -194,3 +194,21 @@ def test_a_display_device_never_chooses_a_pet() -> None:
     display = _membership(id=5, role=FamilyRole.DISPLAY)
 
     assert not family_access_policy.can_choose_pet(display, _ledger(id=10, membership_id=2))
+
+
+@pytest.mark.parametrize("role", [FamilyRole.OWNER, FamilyRole.PARENT])
+def test_guardians_care_for_any_childs_pet(role: FamilyRole) -> None:
+    assert family_access_policy.can_care_for_pet(_membership(id=1, role=role), _ledger(id=10, membership_id=2))
+
+
+def test_a_child_cares_only_for_their_own_pet() -> None:
+    child = _membership(id=2, role=FamilyRole.CHILD)
+
+    assert family_access_policy.can_care_for_pet(child, _ledger(id=10, membership_id=2))
+    assert not family_access_policy.can_care_for_pet(child, _ledger(id=11, membership_id=3))
+
+
+def test_a_display_device_only_looks_at_a_pet() -> None:
+    display = _membership(id=5, role=FamilyRole.DISPLAY)
+
+    assert not family_access_policy.can_care_for_pet(display, _ledger(id=10, membership_id=2))

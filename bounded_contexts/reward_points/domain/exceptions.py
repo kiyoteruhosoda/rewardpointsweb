@@ -364,6 +364,15 @@ class PetAlreadyChosenError(RewardPointsError):
     code = "pet_already_chosen"
 
 
+class PetNotHatchedError(RewardPointsError):
+    """Attempted to care for a pet that has not hatched yet (task #1128).
+
+    No species chosen, or still an egg. Care starts once it is out of the egg.
+    """
+
+    code = "pet_not_hatched"
+
+
 class InsufficientBalanceError(RewardPointsError):
     """The balance does not cover the price of one draw (ADR-0060).
 
@@ -411,6 +420,7 @@ __all__ = [
     "MembershipNotLinkedError",
     "MissCannotBeHandedOverError",
     "PetAlreadyChosenError",
+    "PetNotHatchedError",
     "ReversalOfReversalError",
     "RewardEventCompletedError",
     "RewardEventDeadlinePassedError",
