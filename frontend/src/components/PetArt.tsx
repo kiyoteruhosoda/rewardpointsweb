@@ -234,7 +234,7 @@ function Mouth({
   const line = { fill: 'none', stroke: OUTLINE, strokeWidth: 3.5, strokeLinecap: 'round' as const }
   return (
     <g className="pet-art-mouth">
-      {mood === 'happy' && <path d="M -11 7 Q 0 24 11 7 Z" fill={OUTLINE} {...line} />}
+      {mood === 'happy' && <path d="M -11 7 Q 0 24 11 7 Z" {...line} fill={OUTLINE} />}
       {mood === 'calm' && <path d="M -9 8 Q -4 14 0 9 Q 4 14 9 8" {...line} />}
       {mood === 'lonely' && <path d="M -8 15 Q 0 8 8 15" {...line} />}
     </g>
