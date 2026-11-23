@@ -1,6 +1,7 @@
 /**
  * The celebration when a pet reaches a new stage (ADR-0061): the pet bounces in big with
- * sparkles and the new stage's name. Shown once per screen for each stage up. The motion is
+ * sparkles and the new stage's name. When it comes out of the egg, the egg cracks open first
+ * (task #1128). Shown once per screen for each stage up. The motion is
  * CSS only and stops for people who ask for reduced motion.
  */
 import { useEffect, useRef } from 'react'
@@ -13,10 +14,12 @@ import { PetArt } from './PetArt'
 interface Props {
   species: PetSpecies
   stage: number
+  /** It came out of the egg this time. */
+  hatching: boolean
   onClose: () => void
 }
 
-export function PetCelebration({ species, stage, onClose }: Props) {
+export function PetCelebration({ species, stage, hatching, onClose }: Props) {
   const { t } = useI18n()
   const closeRef = useRef<HTMLButtonElement>(null)
 
@@ -41,10 +44,16 @@ export function PetCelebration({ species, stage, onClose }: Props) {
       >
         <div className="gacha-reveal-stage">
           <SparklesArt delay={0.2} />
-          <PetArt species={species} stage={stage} className="pet-celebration-art" />
+          <PetArt
+            species={species}
+            stage={stage}
+            hatching={hatching}
+            mood="happy"
+            className="pet-celebration-art"
+          />
         </div>
         <h2 id="pet-celebration-title" className="gacha-reveal-title">
-          {t('pet.celebrateTitle')}
+          {hatching ? t('pet.hatchedTitle') : t('pet.celebrateTitle')}
         </h2>
         <p className="pet-celebration-stage">
           {t('pet.celebrateStage', { stage: t(`pet.stage.${stage}`) })}

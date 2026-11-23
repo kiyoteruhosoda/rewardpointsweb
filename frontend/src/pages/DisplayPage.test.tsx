@@ -8,6 +8,7 @@ import type * as ApiModule from '../services/api'
 import type { DisplaySessionOutcome, Fetched } from '../services/api'
 import type { ClaimOutcome, StartedPairing } from '../services/display'
 import type { FamilyDetail, FamilySummary, Ledger } from '../services/families'
+import type { Pet } from '../services/pet'
 import { familyOf, member, pet } from '../test-support/familyFixtures'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { DisplayPage } from './DisplayPage'
@@ -46,6 +47,11 @@ const STARTED: StartedPairing = {
   // Poll without waiting in tests
   interval: 0.01,
   qr_code: 'data:image/svg+xml;base64,AAAA',
+}
+
+function ledgerWithPet(value: Pet): Fetched<Ledger> {
+  const base = ledgerOf(70)
+  return { ...base, data: { ...base.data, pet: value } }
 }
 
 function ledgerOf(balance: number): Fetched<Ledger> {
@@ -147,11 +153,42 @@ describe('DisplayPage', () => {
 
   it('celebrates in place when a pet grew since the display last showed it', async () => {
     localStorage.setItem('display_credential', 'device-credential')
-    localStorage.setItem('pet-seen-stage:20', '0')
+    localStorage.setItem('pet-seen-stage:20', '1')
+    viewLedger.mockResolvedValue(ledgerWithPet(pet({ stage: 2 })))
 
     renderWithProviders(<DisplayPage />)
 
     expect(await screen.findByRole('status')).toHaveTextContent("ハナ's pet grew!")
+  })
+
+  it('says the pet hatched when it came out of the egg since the last look (task #1128)', async () => {
+    localStorage.setItem('display_credential', 'device-credential')
+    localStorage.setItem('pet-seen-stage:20', '0')
+
+    renderWithProviders(<DisplayPage />)
+
+    expect(await screen.findByRole('status')).toHaveTextContent("ハナ's pet hatched!")
+  })
+
+  it('reacts when someone cared for the pet since the last read, without care buttons (task #1128)', async () => {
+    localStorage.setItem('display_credential', 'device-credential')
+    localStorage.setItem('pet-seen-care:20', '2026-11-23T01:00:00Z')
+    const cared = pet({
+      care: {
+        mood: 75,
+        mood_level: 'happy',
+        days_cared: 2,
+        last_kind: 'feed',
+        last_cared_at: '2026-11-23T02:00:00Z',
+      },
+    })
+    viewLedger.mockResolvedValue(ledgerWithPet(cared))
+
+    renderWithProviders(<DisplayPage />)
+
+    expect(await screen.findByRole('status')).toHaveTextContent("Someone gave ハナ's pet: Food!")
+    expect(screen.getByText('Mood: Happy')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Food' })).not.toBeInTheDocument()
   })
 
   it('returns to the pairing screen when removed (session is removed)', async () => {

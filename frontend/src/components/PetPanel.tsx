@@ -3,7 +3,9 @@
  *
  * Shows the pet, its stage, the points earned so far and how many more the next stage needs.
  * The child (on their own ledger) and parents choose the species; until then it stays an egg.
- * When the stage has gone up since this screen last showed it, a celebration opens once.
+ * When the stage has gone up since this screen last showed it, a celebration opens once (an
+ * egg cracks open when it hatches). Once hatched, they can care for it (task #1128): the pet
+ * plays the care's move and its mood goes up; growth stays as it is.
  */
 import { useCallback, useEffect, useState } from 'react'
 
@@ -16,9 +18,11 @@ import {
   stageProgress,
   takeStageUp,
   type Pet,
+  type PetCareKind,
   type PetSpecies,
 } from '../services/pet'
 import { PetArt } from './PetArt'
+import { PetCareBar } from './PetCareBar'
 import { PetCelebration } from './PetCelebration'
 import { useToast } from './ToastNotification'
 
@@ -29,20 +33,61 @@ interface Props {
   onChanged: (pet: Pet) => void
 }
 
+/** How long a care's move plays before the pet goes back to idling. */
+export const CARE_MOVE_MS = 1800
+
+interface CareMove {
+  kind: PetCareKind
+  /** Bumped on every press, so pressing the same care again replays it. */
+  round: number
+}
+
 export function PetPanel({ familyId, ledgerId, pet, onChanged }: Props) {
   const { t } = useI18n()
   const { notify } = useToast()
-  const [celebrating, setCelebrating] = useState(false)
+  // null: no celebration. Otherwise whether it hatched (came out of the egg) this time
+  const [celebration, setCelebration] = useState<{ hatching: boolean } | null>(null)
+  const [move, setMove] = useState<CareMove | null>(null)
+  const [careStatus, setCareStatus] = useState('')
   const chosen = pet.species !== null
   const closeCelebration = useCallback(() => {
-    setCelebrating(false)
+    setCelebration(null)
   }, [])
 
   // A pet without a species is drawn as an egg, so that is what this screen remembers having
   // shown (stage 0) — choosing then shows it hatch at its real stage
   useEffect(() => {
-    if (takeStageUp(ledgerId, chosen ? pet.stage : 0) && chosen) setCelebrating(true)
+    const from = takeStageUp(ledgerId, chosen ? pet.stage : 0)
+    if (from !== null && chosen) setCelebration({ hatching: from === 0 })
   }, [chosen, ledgerId, pet.stage])
+
+  // A care's move plays for a while, then the pet goes back to idling
+  useEffect(() => {
+    if (move === null) return
+    const timer = window.setTimeout(() => {
+      setMove(null)
+    }, CARE_MOVE_MS)
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [move])
+
+  const [care, caring] = usePendingAction(async (kind: PetCareKind) => {
+    // The move starts at once; the answer only brings the new mood
+    setMove((previous) => ({ kind, round: (previous?.round ?? 0) + 1 }))
+    try {
+      const next = await petApi.care(familyId, ledgerId, kind)
+      onChanged(next)
+      const mood =
+        next.care === null
+          ? ''
+          : ` ${t('pet.moodLine', { mood: t(`pet.mood.${next.care.mood_level}`) })}`
+      setCareStatus(`${t(`pet.cared.${kind}`)}${mood}`)
+    } catch (error) {
+      setMove(null)
+      notify('error', t(errorMessageKey(error)))
+    }
+  })
 
   const [choose, choosing] = usePendingAction(async (species: PetSpecies) => {
     // The kind cannot be changed while the pet grows, so a mis-tap is asked about first
@@ -81,7 +126,15 @@ export function PetPanel({ familyId, ledgerId, pet, onChanged }: Props) {
   return (
     <section className="card pet-panel" aria-label={t('pet.heading')}>
       <div className="pet-panel-main">
-        <PetArt species={pet.species} stage={pet.stage} className="pet-panel-art" />
+        <PetArt
+          key={move === null ? 'idle' : `${move.kind}-${move.round}`}
+          species={pet.species}
+          stage={pet.stage}
+          mood={pet.care?.mood_level ?? 'calm'}
+          action={move?.kind ?? null}
+          idle={move === null}
+          className="pet-panel-art"
+        />
         <div className="pet-panel-info">
           <p className="pet-panel-stage">
             {/* Until a species is chosen it is drawn as an egg, so it is named one too */}
@@ -105,6 +158,15 @@ export function PetPanel({ familyId, ledgerId, pet, onChanged }: Props) {
           <p className="pet-panel-hint">{t('pet.chooseHint')}</p>
         </div>
       </div>
+
+      <PetCareBar
+        pet={pet}
+        status={careStatus}
+        busy={caring}
+        onCare={(kind) => {
+          care(kind)
+        }}
+      />
 
       {pet.can_choose && (
         <div className="pet-panel-choose">
@@ -132,8 +194,13 @@ export function PetPanel({ familyId, ledgerId, pet, onChanged }: Props) {
         </div>
       )}
 
-      {celebrating && pet.species !== null && (
-        <PetCelebration species={pet.species} stage={pet.stage} onClose={closeCelebration} />
+      {celebration !== null && pet.species !== null && (
+        <PetCelebration
+          species={pet.species}
+          stage={pet.stage}
+          hatching={celebration.hatching}
+          onClose={closeCelebration}
+        />
       )}
     </section>
   )

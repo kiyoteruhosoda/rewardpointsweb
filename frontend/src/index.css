@@ -38,6 +38,11 @@
   --gacha-done-soft: #dcf5e3;
   --gacha-done-ink: #1f6b35;
   --gacha-backdrop: rgb(20 22 40 / 55%);
+  /* Pet mood (task #1128): bright pink for happy, sky blue for lonely — never orange */
+  --pet-happy-soft: #ffe3f0;
+  --pet-happy-ink: #a3195c;
+  --pet-lonely-soft: #dcefff;
+  --pet-lonely-ink: #1d5a92;
 }
 
 :root[data-theme='dark'] {
@@ -68,6 +73,10 @@
   --gacha-done-soft: #183824;
   --gacha-done-ink: #8fe0a6;
   --gacha-backdrop: rgb(0 0 0 / 65%);
+  --pet-happy-soft: #4a1e35;
+  --pet-happy-ink: #ff9fcd;
+  --pet-lonely-soft: #1b2f45;
+  --pet-lonely-ink: #9fd2ff;
 }
 
 :root {
@@ -3020,6 +3029,368 @@ tr.reversed {
   }
 }
 
+/* --- Pet care and motion (task #1128) ------------------------------------------ */
+
+.pet-care {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pet-care p {
+  margin: 0;
+}
+
+.pet-care-feelings {
+  display: grid;
+  grid-template-columns: auto minmax(5rem, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.pet-care-mood {
+  padding: 0.1rem 0.7rem;
+  border-radius: 999px;
+  background: var(--surface-inset);
+  font-family: var(--font-round);
+  font-weight: 800;
+}
+
+.pet-care-mood.is-happy {
+  background: var(--pet-happy-soft);
+  color: var(--pet-happy-ink);
+}
+
+.pet-care-mood.is-lonely {
+  background: var(--pet-lonely-soft);
+  color: var(--pet-lonely-ink);
+}
+
+.pet-mood-meter {
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--surface-inset);
+  overflow: hidden;
+}
+
+.pet-mood-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5ab8ff, #9b6bff, #ff5fa2);
+  transition: width 0.6s ease-out;
+}
+
+.pet-care-friendship {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pet-care-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.pet-care-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-height: 3.5rem;
+  padding: 0.4rem 0.3rem;
+  border-radius: 0.9rem;
+  font-weight: 700;
+}
+
+.pet-care-icon {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+
+.pet-care-status {
+  min-height: 1.5em;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+@media (width <= 30rem) {
+  .pet-care-feelings {
+    grid-template-columns: auto 1fr;
+  }
+
+  .pet-care-friendship {
+    grid-column: 1 / -1;
+  }
+
+  .pet-care-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.display-pet.is-reacting {
+  background: var(--pet-happy-soft);
+}
+
+/* Parts move around their own box, not the drawing's origin */
+.pet-art .pet-art-eyes,
+.pet-art .pet-art-mouth,
+.pet-art .pet-art-tail,
+.pet-art .pet-art-wings,
+.pet-art .pet-art-body,
+.pet-art .pet-art-hatch-egg,
+.pet-art .pet-art-hatchling,
+.pet-art .pet-art-food,
+.pet-art .pet-art-hearts,
+.pet-art .pet-art-ball,
+.pet-art .pet-art-bubbles {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+.pet-art.is-idle .pet-art-eyes {
+  animation: pet-blink 4.5s ease-in-out infinite;
+}
+
+.pet-art.is-idle .pet-art-tail {
+  transform-origin: 0% 100%;
+  animation: pet-wag 0.8s ease-in-out infinite alternate;
+}
+
+.pet-art.is-idle .pet-art-wings {
+  animation: pet-flap 1.6s ease-in-out infinite;
+}
+
+/* A lonely pet hardly moves its tail and blinks slowly */
+.pet-art.is-idle.is-mood-lonely .pet-art-tail {
+  animation-duration: 2.4s;
+}
+
+.pet-art.is-idle.is-mood-lonely .pet-art-eyes {
+  animation-duration: 7s;
+}
+
+.pet-art.is-mood-lonely .pet-art-tear {
+  animation: pet-tear 2.4s ease-in infinite;
+}
+
+/* Feed: the mouth munches and the bowl empties */
+.pet-art.is-care-feed .pet-art-mouth {
+  animation: pet-munch 0.3s ease-in-out 5;
+}
+
+.pet-art.is-care-feed .pet-art-food {
+  animation: pet-food 1.7s ease-in both;
+}
+
+/* Pat: a squish and hearts rising */
+.pet-art.is-care-pat .pet-art-body {
+  transform-origin: 50% 100%;
+  animation: pet-squish 0.45s ease-in-out 3;
+}
+
+.pet-art.is-care-pat .pet-art-hearts {
+  animation: pet-rise 1.7s ease-out both;
+}
+
+/* Play: hops with a bouncing ball */
+.pet-art.is-care-play .pet-art-body {
+  animation: pet-hop 0.55s ease-in-out 3;
+}
+
+.pet-art.is-care-play .pet-art-ball {
+  animation: pet-hop 0.55s ease-in-out 3 0.25s;
+}
+
+/* Bath: a wiggle among rising bubbles */
+.pet-art.is-care-bath .pet-art-body {
+  animation: pet-wiggle 0.4s ease-in-out 4;
+}
+
+.pet-art.is-care-bath .pet-art-bubbles {
+  animation: pet-rise 1.7s ease-out both;
+}
+
+/* Hatching: the egg wobbles, cracks, and falls away; then the pet pops out */
+.pet-art.is-hatching .pet-art-hatch-egg {
+  transform-origin: 50% 100%;
+  animation:
+    pet-egg-wobble 0.3s ease-in-out 4,
+    pet-egg-away 0.4s ease-in 1.3s forwards;
+}
+
+.pet-art.is-hatching .pet-art-crack {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: pet-crack 0.6s ease-out 0.5s forwards;
+}
+
+.pet-art.is-hatching .pet-art-hatchling {
+  animation: pet-bounce-in 0.6s cubic-bezier(0.3, 1.6, 0.6, 1) 1.5s both;
+}
+
+@keyframes pet-blink {
+  0%,
+  90%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  94% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes pet-wag {
+  from {
+    transform: rotate(-10deg);
+  }
+
+  to {
+    transform: rotate(10deg);
+  }
+}
+
+@keyframes pet-flap {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  50% {
+    transform: scaleY(0.85);
+  }
+}
+
+@keyframes pet-tear {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  30% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes pet-munch {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  50% {
+    transform: scaleY(0.4);
+  }
+}
+
+@keyframes pet-food {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  15%,
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes pet-squish {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+
+  50% {
+    transform: scale(1.08, 0.9);
+  }
+}
+
+@keyframes pet-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(20%) scale(0.6);
+  }
+
+  25% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-35%) scale(1.05);
+  }
+}
+
+@keyframes pet-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  45% {
+    transform: translateY(-22%);
+  }
+}
+
+@keyframes pet-wiggle {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+
+  25% {
+    transform: rotate(-5deg);
+  }
+
+  75% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes pet-egg-wobble {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+
+  25% {
+    transform: rotate(-7deg);
+  }
+
+  75% {
+    transform: rotate(7deg);
+  }
+}
+
+@keyframes pet-egg-away {
+  to {
+    opacity: 0;
+    transform: translateY(12%) scale(1.15);
+  }
+}
+
+@keyframes pet-crack {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pet-panel-art,
   .pet-celebration .pet-celebration-art,
@@ -3027,8 +3398,23 @@ tr.reversed {
     animation: none;
   }
 
-  .pet-progress span {
+  .pet-progress span,
+  .pet-mood-meter span {
     transition: none;
+  }
+
+  /* No idle motion, no care moves, no cracking egg: the text says what happened */
+  .pet-art *,
+  .pet-art.is-hatching .pet-art-hatchling {
+    animation: none !important;
+  }
+
+  .pet-art .pet-art-food,
+  .pet-art .pet-art-hearts,
+  .pet-art .pet-art-ball,
+  .pet-art .pet-art-bubbles,
+  .pet-art.is-hatching .pet-art-hatch-egg {
+    display: none;
   }
 }
 
