@@ -653,6 +653,6 @@
   "pet.careAfterHatch": "うまれたら おせわが できるよ。",
   "pet.hatchedTitle": "うまれたよ！",
   "display.petHatched": "{name} の ペットが うまれた！",
-  "display.petCared": "{name} の ペットに {care}！",
+  "display.petCared": "{name} の ペットが おせわして もらったよ（{care}）！",
   "error.pet_not_hatched": "まだ たまごなので、おせわは できません。画面を読み直してください。"
 }

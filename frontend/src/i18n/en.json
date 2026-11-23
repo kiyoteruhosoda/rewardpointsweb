@@ -653,6 +653,6 @@
   "pet.careAfterHatch": "You can care for it once it hatches.",
   "pet.hatchedTitle": "It hatched!",
   "display.petHatched": "{name}'s pet hatched!",
-  "display.petCared": "Someone gave {name}'s pet: {care}!",
+  "display.petCared": "{name}'s pet got some care ({care})!",
   "error.pet_not_hatched": "It's still an egg, so it can't be cared for yet. Please reload the screen."
 }

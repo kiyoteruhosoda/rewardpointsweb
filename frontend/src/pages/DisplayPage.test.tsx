@@ -186,7 +186,7 @@ describe('DisplayPage', () => {
 
     renderWithProviders(<DisplayPage />)
 
-    expect(await screen.findByRole('status')).toHaveTextContent("Someone gave ハナ's pet: Food!")
+    expect(await screen.findByRole('status')).toHaveTextContent("ハナ's pet got some care (Food)!")
     expect(screen.getByText('Mood: Happy')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Food' })).not.toBeInTheDocument()
   })
