@@ -3,11 +3,16 @@
  * with each stage. Drawn in SVG and shipped with the app (no image service).
  *
  * Colours are bright and fixed per species (no orange), with a dark outline so the shape reads
- * on both light and dark backgrounds. Decoration only: the screen says the stage in text.
+ * on both light and dark backgrounds. Decoration only: the screen says the stage, the mood and
+ * what a care did in text.
+ *
+ * Motion (task #1128) is CSS only, keyed off class names on the parts: the eyes blink and the
+ * tail wags while idle, each care plays its own move (munching, hearts, a hop, bubbles), and an
+ * egg cracks open when it hatches. All of it stops under prefers-reduced-motion.
  */
 import type { ReactElement } from 'react'
 
-import type { PetSpecies } from '../services/pet'
+import type { PetCareKind, PetMoodLevel, PetSpecies } from '../services/pet'
 
 interface Palette {
   body: string
@@ -90,6 +95,46 @@ function Ears({
   }
 }
 
+/** A small tail for the young ones (stages 1 and 2). */
+function BabyTail({ species, palette }: { species: PetSpecies; palette: Palette }) {
+  switch (species) {
+    case 'cat':
+      return (
+        <path
+          className="pet-art-tail"
+          d="M 50 44 Q 76 40 70 18"
+          fill="none"
+          {...stroke}
+          strokeWidth={10}
+          stroke={palette.body}
+          strokeLinecap="round"
+        />
+      )
+    case 'rabbit':
+      return (
+        <circle className="pet-art-tail" cx="54" cy="46" r="11" fill={palette.belly} {...stroke} />
+      )
+    case 'bird':
+      return (
+        <path
+          className="pet-art-tail"
+          d="M 50 30 L 74 20 L 72 44 Z"
+          fill={palette.body}
+          {...stroke}
+        />
+      )
+    case 'dragon':
+      return (
+        <path
+          className="pet-art-tail"
+          d="M 48 40 Q 74 48 76 26 L 66 30"
+          fill={palette.body}
+          {...stroke}
+        />
+      )
+  }
+}
+
 /** Wings, tails and such that come with growing up (stage 3 and later). */
 function Extras({
   species,
@@ -100,11 +145,12 @@ function Extras({
   palette: Palette
   stage: number
 }) {
-  if (stage < 3) return null
+  if (stage < 3) return <BabyTail species={species} palette={palette} />
   switch (species) {
     case 'cat':
       return (
         <path
+          className="pet-art-tail"
           d="M 52 40 Q 96 30 84 -10 Q 80 -24 70 -18"
           fill="none"
           {...stroke}
@@ -113,46 +159,130 @@ function Extras({
         />
       )
     case 'rabbit':
-      return <circle cx="56" cy="44" r="16" fill={palette.belly} {...stroke} />
+      return (
+        <circle className="pet-art-tail" cx="56" cy="44" r="16" fill={palette.belly} {...stroke} />
+      )
     case 'bird':
       return (
-        <g fill={palette.body} {...stroke}>
+        <g className="pet-art-wings" fill={palette.body} {...stroke}>
           <path d="M -54 0 Q -96 10 -78 46 Q -64 30 -50 30 Z" />
           <path d="M 54 0 Q 96 10 78 46 Q 64 30 50 30 Z" />
         </g>
       )
     case 'dragon':
       return stage >= 4 ? (
-        <g fill={palette.accent} opacity="0.9" {...stroke}>
+        <g className="pet-art-wings" fill={palette.accent} opacity="0.9" {...stroke}>
           <path d="M -46 -10 L -100 -40 L -88 -6 L -104 6 L -84 18 L -54 22 Z" />
           <path d="M 46 -10 L 100 -40 L 88 -6 L 104 6 L 84 18 L 54 22 Z" />
         </g>
       ) : (
-        <path d="M 50 40 Q 90 50 92 20 L 80 26" fill={palette.body} {...stroke} />
+        <path
+          className="pet-art-tail"
+          d="M 50 40 Q 90 50 92 20 L 80 26"
+          fill={palette.body}
+          {...stroke}
+        />
       )
   }
 }
 
-function Face({ species, palette }: { species: PetSpecies; palette: Palette }) {
+const TEAR = '#5ab8ff'
+
+function Eyes({ mood }: { mood: PetMoodLevel }) {
+  if (mood === 'happy') {
+    // Smiling eyes: upturned arcs
+    return (
+      <g
+        className="pet-art-eyes"
+        fill="none"
+        stroke={OUTLINE}
+        strokeWidth={4}
+        strokeLinecap="round"
+      >
+        <path d="M -28 -6 Q -20 -18 -12 -6" />
+        <path d="M 12 -6 Q 20 -18 28 -6" />
+      </g>
+    )
+  }
+  const look = mood === 'lonely' ? 3 : 0
+  return (
+    <g className="pet-art-eyes">
+      <ellipse cx="-20" cy={-8 + look} rx="7" ry={mood === 'lonely' ? 7 : 9} fill={OUTLINE} />
+      <ellipse cx="20" cy={-8 + look} rx="7" ry={mood === 'lonely' ? 7 : 9} fill={OUTLINE} />
+      <circle cx="-17" cy={-12 + look} r="2.6" fill="#ffffff" />
+      <circle cx="23" cy={-12 + look} r="2.6" fill="#ffffff" />
+    </g>
+  )
+}
+
+function Mouth({
+  species,
+  palette,
+  mood,
+}: {
+  species: PetSpecies
+  palette: Palette
+  mood: PetMoodLevel
+}) {
+  if (species === 'bird') {
+    return (
+      <g className="pet-art-mouth">
+        <path d="M -9 6 L 9 6 L 0 18 Z" fill={palette.accent} {...stroke} strokeWidth={3} />
+      </g>
+    )
+  }
+  const line = { fill: 'none', stroke: OUTLINE, strokeWidth: 3.5, strokeLinecap: 'round' as const }
+  return (
+    <g className="pet-art-mouth">
+      {mood === 'happy' && <path d="M -11 7 Q 0 24 11 7 Z" {...line} fill={OUTLINE} />}
+      {mood === 'calm' && <path d="M -9 8 Q -4 14 0 9 Q 4 14 9 8" {...line} />}
+      {mood === 'lonely' && <path d="M -8 15 Q 0 8 8 15" {...line} />}
+    </g>
+  )
+}
+
+function Face({
+  species,
+  palette,
+  mood,
+}: {
+  species: PetSpecies
+  palette: Palette
+  mood: PetMoodLevel
+}) {
   return (
     <g>
-      <ellipse cx="-20" cy="-8" rx="7" ry="9" fill={OUTLINE} />
-      <ellipse cx="20" cy="-8" rx="7" ry="9" fill={OUTLINE} />
-      <circle cx="-17" cy="-12" r="2.6" fill="#ffffff" />
-      <circle cx="23" cy="-12" r="2.6" fill="#ffffff" />
-      <ellipse cx="-36" cy="10" rx="9" ry="6" fill={palette.accent} opacity="0.55" />
-      <ellipse cx="36" cy="10" rx="9" ry="6" fill={palette.accent} opacity="0.55" />
-      {species === 'bird' ? (
-        <path d="M -9 6 L 9 6 L 0 18 Z" fill={palette.accent} {...stroke} strokeWidth={3} />
+      <Eyes mood={mood} />
+      {mood === 'lonely' ? (
+        <g>
+          {/* Brows tilted up in the middle, and a tear: lonely, nothing worse */}
+          <g stroke={OUTLINE} strokeWidth={3} strokeLinecap="round">
+            <line x1="-28" y1="-24" x2="-12" y2="-28" />
+            <line x1="28" y1="-24" x2="12" y2="-28" />
+          </g>
+          <path className="pet-art-tear" d="M 27 4 Q 31 12 27 15 Q 23 12 27 4 Z" fill={TEAR} />
+        </g>
       ) : (
-        <path
-          d="M -9 8 Q -4 14 0 9 Q 4 14 9 8"
-          fill="none"
-          stroke={OUTLINE}
-          strokeWidth={3.5}
-          strokeLinecap="round"
-        />
+        <g>
+          <ellipse
+            cx="-36"
+            cy="10"
+            rx="9"
+            ry="6"
+            fill={palette.accent}
+            opacity={mood === 'happy' ? 0.85 : 0.55}
+          />
+          <ellipse
+            cx="36"
+            cy="10"
+            rx="9"
+            ry="6"
+            fill={palette.accent}
+            opacity={mood === 'happy' ? 0.85 : 0.55}
+          />
+        </g>
       )}
+      <Mouth species={species} palette={palette} mood={mood} />
       {species === 'cat' && (
         <g stroke={OUTLINE} strokeWidth={2.5} strokeLinecap="round">
           <line x1="-30" y1="2" x2="-54" y2="-2" />
@@ -165,7 +295,15 @@ function Face({ species, palette }: { species: PetSpecies; palette: Palette }) {
   )
 }
 
-function Creature({ species, stage }: { species: PetSpecies; stage: number }) {
+function Creature({
+  species,
+  stage,
+  mood,
+}: {
+  species: PetSpecies
+  stage: number
+  mood: PetMoodLevel
+}) {
   const palette = PALETTES[species]
   // Babies are rounder (a big head), grown-ups a little taller
   const height = stage >= 3 ? 62 : 56
@@ -187,7 +325,7 @@ function Creature({ species, stage }: { species: PetSpecies; stage: number }) {
           <circle cx="8" cy="48" r="4" />
         </g>
       )}
-      <Face species={species} palette={palette} />
+      <Face species={species} palette={palette} mood={mood} />
     </g>
   )
 }
@@ -216,20 +354,108 @@ function Shell() {
   )
 }
 
+const HEART =
+  'M 0 6 C -10 -2 -12 -12 -5 -14 C -2 -15 0 -12 0 -10 C 0 -12 2 -15 5 -14 C 12 -12 10 -2 0 6 Z'
+
+/** What a care shows next to the pet while it plays. */
+function CareProps({ action }: { action: PetCareKind }) {
+  switch (action) {
+    case 'feed':
+      return (
+        <g className="pet-art-food" transform="translate(66 52)">
+          <path
+            d="M -26 -4 L 26 -4 Q 22 22 0 22 Q -22 22 -26 -4 Z"
+            fill="#5ab8ff"
+            {...stroke}
+            strokeWidth={3}
+          />
+          <path
+            d="M -20 -4 Q -18 -22 0 -22 Q 18 -22 20 -4 Z"
+            fill="#ffffff"
+            {...stroke}
+            strokeWidth={3}
+          />
+        </g>
+      )
+    case 'pat':
+      return (
+        <g className="pet-art-hearts" fill="#ff5fa2" {...stroke} strokeWidth={2.5}>
+          <path d={HEART} transform="translate(-52 -70) scale(1.4)" />
+          <path d={HEART} transform="translate(50 -82) scale(1.8)" />
+          <path d={HEART} transform="translate(6 -108) scale(1.2)" />
+        </g>
+      )
+    case 'play':
+      return (
+        <g className="pet-art-ball" transform="translate(-74 62)">
+          <circle r="16" fill="#ffd23f" {...stroke} strokeWidth={3} />
+          <path d="M -16 0 Q 0 -8 16 0" fill="none" stroke="#9b6bff" strokeWidth={4} />
+        </g>
+      )
+    case 'bath':
+      return (
+        <g className="pet-art-bubbles" fill="#d9f1ff" stroke="#5ab8ff" strokeWidth={3}>
+          <circle cx="-56" cy="10" r="12" />
+          <circle cx="58" cy="-6" r="15" />
+          <circle cx="-30" cy="-70" r="9" />
+          <circle cx="36" cy="-80" r="11" />
+          <circle cx="0" cy="40" r="8" />
+        </g>
+      )
+  }
+}
+
+/** The egg splitting open: it wobbles, a crack runs across, and the shell falls away. */
+function HatchingEgg({ palette }: { palette: Palette }) {
+  return (
+    <g className="pet-art-hatch-egg">
+      <Egg palette={palette} />
+      <path
+        className="pet-art-crack"
+        d="M -62 10 L -40 -6 L -24 12 L -6 -8 L 10 10 L 28 -6 L 44 10 L 62 -4"
+        fill="none"
+        stroke={OUTLINE}
+        strokeWidth={4}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        pathLength={1}
+      />
+    </g>
+  )
+}
+
 interface Props {
   species: PetSpecies | null
   stage: number
   /** Shown bigger and bouncing on the celebration. */
   className?: string
+  /** The face. Calm when not given (eggs, the picker, raised pets). */
+  mood?: PetMoodLevel
+  /** A care playing right now. Remount (change the key) to play it again. */
+  action?: PetCareKind | null
+  /** Blink and wag while nothing else happens. */
+  idle?: boolean
+  /** It has just hatched: show the egg cracking open first. */
+  hatching?: boolean
 }
 
-export function PetArt({ species, stage, className }: Props) {
+function classNames(props: Props): string {
+  const names = ['pet-art', `is-mood-${props.mood ?? 'calm'}`]
+  if (props.idle === true) names.push('is-idle')
+  if (props.action !== undefined && props.action !== null) names.push(`is-care-${props.action}`)
+  if (props.hatching === true) names.push('is-hatching')
+  if (props.className !== undefined) names.push(props.className)
+  return names.join(' ')
+}
+
+export function PetArt(props: Props) {
+  const { species, stage, mood = 'calm', action = null, hatching = false } = props
   const scale = SCALE[Math.min(stage, SCALE.length - 1)] ?? 1
   // Until a species is chosen, the pet stays drawn as an egg (it still grows underneath)
   const hatched = species !== null && stage > 0
   return (
     <svg
-      className={className === undefined ? 'pet-art' : `pet-art ${className}`}
+      className={classNames(props)}
       viewBox="-110 -130 220 230"
       aria-hidden="true"
       focusable="false"
@@ -237,11 +463,17 @@ export function PetArt({ species, stage, className }: Props) {
       <ellipse cx="0" cy="92" rx="70" ry="8" className="pet-art-shadow" />
       {hatched ? (
         <>
-          <g transform={`translate(0 ${stage === 1 ? -8 : 88 - 68 * scale}) scale(${scale})`}>
-            <Creature species={species} stage={stage} />
-            {stage === SCALE.length - 1 && <Crown />}
+          <g className={hatching ? 'pet-art-hatchling' : undefined}>
+            <g transform={`translate(0 ${stage === 1 ? -8 : 88 - 68 * scale}) scale(${scale})`}>
+              <g className="pet-art-body">
+                <Creature species={species} stage={stage} mood={mood} />
+                {stage === SCALE.length - 1 && <Crown />}
+              </g>
+            </g>
+            {stage === 1 && <Shell />}
           </g>
-          {stage === 1 && <Shell />}
+          {action !== null && <CareProps action={action} />}
+          {hatching && <HatchingEgg palette={PALETTES[species]} />}
         </>
       ) : (
         <Egg palette={species === null ? null : PALETTES[species]} />

@@ -42,7 +42,10 @@ export function dailyBonus(overrides: Partial<DailyBonus> = {}): DailyBonus {
   }
 }
 
-/** A pet (ADR-0061). The default is a cat at stage 1 with 40 pt earned. */
+/**
+ * A pet (ADR-0061). The default is a cat at stage 1 with 40 pt earned, calm, that the viewer
+ * cannot care for (task #1128).
+ */
 export function pet(overrides: Partial<Pet> = {}): Pet {
   return {
     species: 'cat',
@@ -53,6 +56,14 @@ export function pet(overrides: Partial<Pet> = {}): Pet {
     next_threshold: 100,
     can_choose: false,
     raised: [],
+    care: {
+      mood: 50,
+      mood_level: 'calm',
+      days_cared: 3,
+      last_kind: null,
+      last_cared_at: null,
+    },
+    can_care: false,
     ...overrides,
   }
 }

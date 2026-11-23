@@ -1,23 +1,26 @@
 /**
  * The pet panel on the ledger screen (ADR-0061): how far to the next stage, choosing the kind,
- * and a celebration once per screen when the stage has gone up.
+ * a celebration once per screen when the stage has gone up, and caring for a hatched pet
+ * (task #1128).
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as PetModule from '../services/pet'
-import type { Pet, PetSpecies } from '../services/pet'
+import type { Pet, PetCareKind, PetSpecies } from '../services/pet'
 import { pet } from '../test-support/familyFixtures'
 import { renderWithProviders } from '../test-support/renderWithProviders'
 import { PetPanel } from './PetPanel'
 
 const choose = vi.fn<(species: PetSpecies) => Promise<Pet>>()
+const care = vi.fn<(kind: PetCareKind) => Promise<Pet>>()
 
 vi.mock('../services/pet', async (importOriginal) => ({
   ...(await importOriginal<typeof PetModule>()),
   petApi: {
     choose: (_family: number, _ledger: number, species: PetSpecies) => choose(species),
+    care: (_family: number, _ledger: number, kind: PetCareKind) => care(kind),
   },
 }))
 
@@ -37,6 +40,7 @@ describe('PetPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.removeItem('pet-seen-stage:20')
+    localStorage.removeItem('pet-seen-care:20')
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
@@ -176,5 +180,108 @@ describe('PetPanel', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(localStorage.getItem('pet-seen-stage:20')).toBe('3')
+  })
+
+  it('celebrates a hatching when the pet came out of the egg since the last look', () => {
+    localStorage.setItem('pet-seen-stage:20', '0')
+
+    renderPanel(pet({ stage: 1 }))
+
+    expect(screen.getByRole('dialog', { name: 'It hatched!' })).toHaveTextContent(
+      'Now: Just hatched',
+    )
+  })
+
+  it('a hatched pet shows its mood and friendship, and the four cares when allowed', () => {
+    renderPanel(
+      pet({
+        can_care: true,
+        care: {
+          mood: 75,
+          mood_level: 'happy',
+          days_cared: 4,
+          last_kind: null,
+          last_cared_at: null,
+        },
+      }),
+    )
+
+    expect(screen.getByText('Mood: Happy')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Mood' })).toHaveAttribute('aria-valuenow', '75')
+    expect(screen.getByText('Friendship: 4 days')).toBeInTheDocument()
+    for (const name of ['Food', 'Pat', 'Play', 'Bath']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    }
+    expect(
+      screen.getByText("Caring costs no points, and it doesn't change how it grows."),
+    ).toBeInTheDocument()
+  })
+
+  it('a care plays and then says in words what happened and how the pet feels', async () => {
+    const before = pet({ can_care: true })
+    care.mockResolvedValue({
+      ...before,
+      care: {
+        mood: 75,
+        mood_level: 'happy',
+        days_cared: 4,
+        last_kind: 'feed',
+        last_cared_at: '2026-11-23T02:00:00Z',
+      },
+    })
+    renderWithProviders(<WithState initial={before} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'You gave it food. Munch munch! Mood: Happy',
+      )
+    })
+    expect(care).toHaveBeenCalledWith('feed')
+    // Growth stays as it was
+    expect(screen.getByText('60 pt to the next stage')).toBeInTheDocument()
+  })
+
+  it('someone who may not care for it sees the mood but no buttons', () => {
+    renderPanel(pet({ can_care: false }))
+
+    expect(screen.getByText('Mood: Okay')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Food' })).not.toBeInTheDocument()
+  })
+
+  it('a lonely pet says so and that caring cheers it up', () => {
+    renderPanel(
+      pet({
+        can_care: true,
+        care: {
+          mood: 10,
+          mood_level: 'lonely',
+          days_cared: 2,
+          last_kind: 'pat',
+          last_cared_at: null,
+        },
+      }),
+    )
+
+    expect(screen.getByText('Mood: Lonely')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'It has been a while without care, so it looks lonely. Caring for it cheers it up.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Just hatched')).toBeInTheDocument()
+  })
+
+  it('an egg has no care buttons, and a chosen egg says caring starts once it hatches', () => {
+    const { unmount } = renderPanel(
+      pet({ species: null, stage: 0, earned: 0, care: null, can_care: false }),
+    )
+    expect(screen.queryByRole('button', { name: 'Food' })).not.toBeInTheDocument()
+    unmount()
+
+    renderPanel(pet({ species: 'cat', stage: 0, earned: 20, care: null, can_care: false }))
+    expect(screen.getByText('You can care for it once it hatches.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Food' })).not.toBeInTheDocument()
   })
 })
