@@ -362,19 +362,22 @@ function CareProps({ action }: { action: PetCareKind }) {
   switch (action) {
     case 'feed':
       return (
-        <g className="pet-art-food" transform="translate(66 52)">
-          <path
-            d="M -26 -4 L 26 -4 Q 22 22 0 22 Q -22 22 -26 -4 Z"
-            fill="#5ab8ff"
-            {...stroke}
-            strokeWidth={3}
-          />
-          <path
-            d="M -20 -4 Q -18 -22 0 -22 Q 18 -22 20 -4 Z"
-            fill="#ffffff"
-            {...stroke}
-            strokeWidth={3}
-          />
+        // The place is on an outer group: the CSS move would replace a transform on the moving one
+        <g transform="translate(66 52)">
+          <g className="pet-art-food">
+            <path
+              d="M -26 -4 L 26 -4 Q 22 22 0 22 Q -22 22 -26 -4 Z"
+              fill="#5ab8ff"
+              {...stroke}
+              strokeWidth={3}
+            />
+            <path
+              d="M -20 -4 Q -18 -22 0 -22 Q 18 -22 20 -4 Z"
+              fill="#ffffff"
+              {...stroke}
+              strokeWidth={3}
+            />
+          </g>
         </g>
       )
     case 'pat':
@@ -387,9 +390,11 @@ function CareProps({ action }: { action: PetCareKind }) {
       )
     case 'play':
       return (
-        <g className="pet-art-ball" transform="translate(-74 62)">
-          <circle r="16" fill="#ffd23f" {...stroke} strokeWidth={3} />
-          <path d="M -16 0 Q 0 -8 16 0" fill="none" stroke="#9b6bff" strokeWidth={4} />
+        <g transform="translate(-74 62)">
+          <g className="pet-art-ball">
+            <circle r="16" fill="#ffd23f" {...stroke} strokeWidth={3} />
+            <path d="M -16 0 Q 0 -8 16 0" fill="none" stroke="#9b6bff" strokeWidth={4} />
+          </g>
         </g>
       )
     case 'bath':
